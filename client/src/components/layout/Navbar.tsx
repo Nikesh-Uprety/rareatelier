@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, Search, Menu, User, Sun, Moon, Coffee } from "lucide-react";
+import { ShoppingBag, Search, Menu, User, Sun, Moon, Coffee, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useThemeStore } from "@/store/theme";
 import { useCartStore } from "@/store/cart";
@@ -15,49 +15,34 @@ export default function Navbar() {
   if (!isStorefront) return null;
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-background border-b border-gray-100 dark:border-border">
       <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
         <div className="flex justify-between items-center h-20">
-          <nav className="hidden md:flex items-center space-x-8">
-            <Link href="/products" className="text-sm font-medium hover:text-primary/60 transition-colors">Store</Link>
-            <Link href="/products?collection=exclusive" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Exclusive</Link>
-            <Link href="/stories" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Stories</Link>
-          </nav>
-
-          <div className="flex-1 md:flex-none md:absolute md:left-1/2 md:-translate-x-1/2">
-            <Link href="/" className="text-2xl font-bold tracking-[0.2em] uppercase">
-              Urban Threads
+          <div className="flex items-center">
+            <Link href="/" className="text-2xl font-black tracking-tighter uppercase">
+              RARENP
             </Link>
           </div>
 
-          <div className="flex items-center space-x-6">
-            <button className="text-muted-foreground hover:text-primary transition-colors">
-              <Search className="w-5 h-5" />
-            </button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="text-muted-foreground hover:text-primary transition-colors">
-                  {theme === 'light' && <Sun className="w-5 h-5" />}
-                  {theme === 'dark' && <Moon className="w-5 h-5" />}
-                  {theme === 'warm' && <Coffee className="w-5 h-5" />}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('warm')}>Warm</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <nav className="hidden md:flex items-center bg-gray-50 dark:bg-muted/50 rounded-full px-2 py-1 space-x-1">
+            <Link href="/" className={`text-sm font-medium px-4 py-2 rounded-full transition-colors ${location === '/' ? 'bg-white dark:bg-background shadow-sm' : 'text-muted-foreground hover:text-primary'}`}>Home</Link>
+            <Link href="/products" className={`text-sm font-medium px-4 py-2 rounded-full transition-colors ${location === '/products' ? 'bg-white dark:bg-background shadow-sm' : 'text-muted-foreground hover:text-primary'}`}>Shop</Link>
+            <Link href="/products?collection=new" className={`text-sm font-medium px-4 py-2 rounded-full transition-colors ${location.includes('collection=new') ? 'bg-white dark:bg-background shadow-sm' : 'text-muted-foreground hover:text-primary'}`}>New Collection</Link>
+            <Link href="/contact" className={`text-sm font-medium px-4 py-2 rounded-full transition-colors ${location === '/contact' ? 'bg-white dark:bg-background shadow-sm' : 'text-muted-foreground hover:text-primary'}`}>Contact</Link>
+          </nav>
 
-            <Link href="/admin" className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
-              Account
+          <div className="flex items-center space-x-4">
+            <Link href="/cart" className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative">
+              <ShoppingBag className="w-5 h-5" />
+              {cartItemsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[10px]">{cartItemsCount}</span>
+              )}
             </Link>
             
-            <Link href="/cart" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5" />
-              <span className="hidden sm:inline">My Bag ({cartItemsCount})</span>
-              {cartItemsCount > 0 && <span className="sm:hidden bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[10px]">{cartItemsCount}</span>}
+            <Link href="/login">
+              <Button variant="default" className="rounded-full px-6 bg-black hover:bg-gray-800 text-white dark:bg-white dark:text-black dark:hover:bg-gray-200">
+                Login
+              </Button>
             </Link>
           </div>
         </div>

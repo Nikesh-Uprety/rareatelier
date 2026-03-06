@@ -13,81 +13,66 @@ export interface Product {
 export const MOCK_PRODUCTS: Product[] = [
   {
     id: "p_1",
-    name: "Winds In The North Hoodie",
+    name: "KEHARMETTEN JENUE",
     sku: "SKU-1024",
-    price: 120.00,
+    price: 278.00,
     stock: 12,
     category: "Tops",
     images: ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=800"],
     variants: [
-      { size: "M", color: "Navy" },
-      { size: "L", color: "Navy" }
+      { size: "S", color: "Black" },
+      { size: "M", color: "Black" },
+      { size: "L", color: "Black" },
+      { size: "XL", color: "Black" }
     ],
-    description: "A heavy-duty pullover hoodie designed for the elements. Features a double-lined hood and reinforced stitching."
+    description: "Discover the pinnacle of street fashion with the Keharmetten Jenue jacket. This piece is meticulously crafted for those who command attention and appreciate the fine details in urban wear."
   },
   {
     id: "p_2",
-    name: "North Expedition Parka",
+    name: "RED DSTR WASS",
     sku: "SKU-0882",
-    price: 380.00,
+    price: 359.00,
     stock: 5,
     category: "Tops",
-    images: ["https://images.unsplash.com/photo-1539533018447-63fcce2678e3?auto=format&fit=crop&q=80&w=800"],
+    images: ["https://images.unsplash.com/photo-1578587018452-892bacefd3f2?auto=format&fit=crop&q=80&w=800"],
     variants: [
-      { size: "M", color: "Slate" },
-      { size: "L", color: "Slate" }
-    ],
-    description: "Our signature parka, tested in the harshest conditions. Fur-lined hood and waterproof exterior."
+      { size: "M", color: "Black" }
+    ]
   },
   {
     id: "p_3",
-    name: "Wine in the Sheater",
+    name: "MACIAH WARR",
     sku: "SKU-1156",
-    price: 95.00,
+    price: 179.00,
     stock: 15,
     category: "Tops",
-    images: ["https://images.unsplash.com/photo-1620799140408-edc6dcb6d633?auto=format&fit=crop&q=80&w=800"],
+    images: ["https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=800"],
     variants: [
-      { size: "M", color: "Charcoal" },
-      { size: "L", color: "Charcoal" }
+      { size: "M", color: "Black" }
     ]
   },
   {
     id: "p_4",
-    name: "New Artislenist Tee",
+    name: "SCREAM LIGHT-SHIRT",
     sku: "SKU-0991",
-    price: 65.00,
+    price: 280.00,
     stock: 25,
     category: "Tops",
-    images: ["https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800"],
+    images: ["https://images.unsplash.com/photo-1544022613-e87ce71c8599?auto=format&fit=crop&q=80&w=800"],
     variants: [
-      { size: "S", color: "Navy" },
-      { size: "M", color: "Navy" }
+      { size: "M", color: "Black" }
     ]
   },
   {
     id: "p_5",
-    name: "The Manang Sweatshirt",
+    name: "WFKSHLETT-SHIRT",
     sku: "SKU-2041",
-    price: 145.00,
+    price: 139.00,
     stock: 10,
-    category: "Tops",
-    images: ["https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&q=80&w=800"],
+    category: "Bottoms",
+    images: ["https://images.unsplash.com/photo-1594633312681-425c7b97ccd1?auto=format&fit=crop&q=80&w=800"],
     variants: [
-      { size: "M", color: "Sage" },
-      { size: "L", color: "Sage" }
-    ]
-  },
-  {
-    id: "p_6",
-    name: "Haade-Herris Jacket",
-    sku: "SKU-2055",
-    price: 210.00,
-    stock: 8,
-    category: "Tops",
-    images: ["https://images.unsplash.com/photo-1544022613-e87ce71c8599?auto=format&fit=crop&q=80&w=800"],
-    variants: [
-      { size: "M", color: "Light Grey" }
+      { size: "M", color: "Black" }
     ]
   }
 ];
@@ -105,6 +90,4 @@ export interface Order {
 
 export const MOCK_ORDERS: Order[] = [
   { id: "o_1", orderNumber: "UX-2025-0042", customerName: "Mia Laurent", customerEmail: "mia.laurent@email.com", date: "Mar 1, 2025", items: 3, status: "Completed", amount: 485.00 },
-  { id: "o_2", orderNumber: "UX-2025-0041", customerName: "James Okafor", customerEmail: "james.o@email.com", date: "Mar 1, 2025", items: 1, status: "Pending", amount: 120.00 },
-  { id: "o_3", orderNumber: "UX-2025-0040", customerName: "Sofia Reyes", customerEmail: "s.reyes@email.com", date: "Feb 28, 2025", items: 2, status: "Completed", amount: 275.00 },
 ];

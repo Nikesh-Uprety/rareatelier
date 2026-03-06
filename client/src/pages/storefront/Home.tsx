@@ -56,7 +56,7 @@ export default function Home() {
                   <h3 className="text-lg font-medium">{product.name}</h3>
                   <p className="text-muted-foreground text-sm uppercase tracking-wider mt-1">{product.category}</p>
                 </div>
-                <p className="font-medium text-lg">${product.price.toFixed(2)}</p>
+                <p className="font-medium text-lg">Rs.{product.price.toFixed(2)}</p>
               </div>
             </Link>
           ))}
@@ -97,31 +97,55 @@ export default function Home() {
               </div>
               <div className="mt-4">
                 <h3 className="text-sm font-medium">{product.name}</h3>
-                <p className="text-muted-foreground text-xs mt-1">${product.price.toFixed(2)}</p>
+                <p className="text-muted-foreground text-xs mt-1">Rs.{product.price.toFixed(2)}</p>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Newsletter */}
-      <section className="py-32 bg-muted/50 text-center border-y">
-        <div className="max-w-xl mx-auto px-6">
-          <h2 className="text-3xl font-serif font-medium mb-4">Join the Urban Community</h2>
-          <p className="text-muted-foreground mb-10">Sign up for early access to new drops and exclusive stories.</p>
-          <form className="flex flex-col sm:flex-row gap-0 max-w-md mx-auto">
-            <input 
-              className="flex-grow bg-background border border-border px-6 py-4 focus:outline-none focus:ring-1 focus:ring-primary" 
-              placeholder="Enter your email" 
-              type="email"
-              required
-            />
-            <button className="bg-primary text-primary-foreground px-10 py-4 font-medium text-sm tracking-widest uppercase hover:opacity-90 transition-opacity">
-              Subscribe
-            </button>
-          </form>
+      {/* Footer / Newsletter */}
+      <footer className="bg-[#111111] text-white py-20">
+        <div className="container mx-auto px-6 max-w-7xl">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
+            <div className="col-span-1 md:col-span-1">
+              <h2 className="text-3xl font-black tracking-tighter mb-6">RARE</h2>
+              <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+                Khusibu, Nayabazar, Kathmandu<br />
+                (+977)-9705208960<br />
+                rarenepal999@gmail.com
+              </p>
+            </div>
+            <div>
+              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">Legals</h4>
+              <ul className="space-y-4 text-sm text-gray-400">
+                <li><Link href="/shipping" className="hover:text-white transition-colors">Shipping Policy</Link></li>
+                <li><Link href="/refund" className="hover:text-white transition-colors">Refund Policy</Link></li>
+                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-white transition-colors">Terms of service</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">FIND US</h4>
+              <ul className="space-y-4 text-sm text-gray-400">
+                <li><a href="#" className="hover:text-white transition-colors">Facebook</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Instagram</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">Newsletter</h4>
+              <p className="text-sm text-gray-400 mb-4">Join the community for early access.</p>
+              <form className="flex">
+                <input className="bg-transparent border-b border-gray-700 py-2 flex-1 focus:outline-none focus:border-white transition-colors text-sm" placeholder="Email Address" />
+                <button className="ml-4 text-sm font-bold uppercase tracking-widest">Join</button>
+              </form>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-[0.2em] text-gray-500">
+            <p>© 2025 Rare Nepal. All rights reserved.</p>
+          </div>
         </div>
-      </section>
+      </footer>
     </div>
   );
 }
