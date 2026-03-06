@@ -99,26 +99,12 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary">
-                  {theme === "light" && <Sun className="w-5 h-5" />}
-                  {theme === "dark" && <Moon className="w-5 h-5" />}
-                  {theme === "warm" && <Coffee className="w-5 h-5" />}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setTheme("light")}>
-                  Light
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("dark")}>
-                  Dark
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme("warm")}>
-                  Warm
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button 
+              onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+            >
+              {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
 
             {user && (user.role === "admin" || user.role === "staff") && (
               <button

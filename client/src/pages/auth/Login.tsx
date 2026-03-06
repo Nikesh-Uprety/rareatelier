@@ -83,7 +83,7 @@ export default function LoginPage() {
             RARE.NP
           </p>
           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-            Urban Threads
+            Rare Atelier
           </p>
         </div>
 
@@ -153,6 +153,12 @@ export default function LoginPage() {
           </Button>
         </form>
 
+        <div className="mt-8 pt-8 border-t border-[var(--border)] text-center">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            &copy; 2025 Rare Atelier. All rights reserved.
+          </p>
+        </div>
+
         <details className="mt-6 text-[11px] text-muted-foreground">
           <summary className="cursor-pointer select-none">
             Developer credentials
@@ -166,4 +172,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

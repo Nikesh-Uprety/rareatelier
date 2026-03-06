@@ -32,7 +32,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       </main>
       <footer className="py-12 border-t mt-auto">
         <div className="container mx-auto px-4 text-center text-muted-foreground text-sm">
-          &copy; 2025 Urban Threads. All rights reserved.
+          &copy; 2025 Rare Atelier. All rights reserved.
         </div>
       </footer>
     </div>
