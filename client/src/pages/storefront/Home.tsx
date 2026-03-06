@@ -9,73 +9,80 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen pt-20">
       {/* Hero Section */}
-      <section className="relative h-[calc(100vh-80px)] w-full overflow-hidden">
+      <section className="relative h-[90vh] w-full overflow-hidden">
         <img 
-          alt="Minimalist street style" 
+          alt="Luxury street style campaign" 
           className="w-full h-full object-cover" 
-          src="https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&q=80&w=2000"
+          src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=2000"
         />
-        <div className="absolute inset-0 bg-black/20" />
-        <div className="absolute inset-0 flex items-center justify-center text-center text-white p-4">
-          <div className="animate-in fade-in slide-in-from-bottom-8 duration-1000">
-            <h1 className="font-serif text-5xl md:text-7xl lg:text-9xl font-bold leading-tight tracking-tight">
+        <div className="absolute inset-0 bg-black/10 dark:bg-black/30" />
+        <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">
+          <div className="animate-in fade-in slide-in-from-left-8 duration-1000 max-w-4xl text-white">
+            <h1 className="font-serif text-6xl md:text-8xl lg:text-9xl font-bold leading-none tracking-tighter mb-8">
               Beyond Trends.<br />Beyond Time.
             </h1>
-            <p className="mt-6 text-lg md:text-xl tracking-[0.3em] uppercase opacity-90">
+            <p className="text-lg md:text-xl tracking-[0.4em] uppercase opacity-90 font-light mb-12">
               Authenticity In Motion
             </p>
+            <Button size="lg" asChild className="rounded-none bg-white text-black hover:bg-white/90 px-12 h-16 text-sm uppercase tracking-widest font-bold">
+              <Link href="/products">Explore Shop</Link>
+            </Button>
           </div>
         </div>
       </section>
 
       {/* Quote Section */}
-      <section className="py-24 md:py-32 bg-muted/30">
-        <div className="max-w-3xl mx-auto px-6 text-center">
-          <p className="text-2xl md:text-4xl italic font-serif text-foreground/80 leading-relaxed">
+      <section className="py-32 md:py-48 bg-background">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <p className="text-3xl md:text-5xl italic font-serif text-foreground/90 leading-tight">
             "Products are made in a factory but brands are created in the mind."
           </p>
-          <p className="mt-8 text-sm tracking-widest uppercase text-muted-foreground">— Walter Landor</p>
+          <p className="mt-12 text-xs tracking-[0.3em] uppercase text-muted-foreground font-bold">— Walter Landor</p>
         </div>
       </section>
 
       {/* Featured Collection */}
       <section className="py-24 container mx-auto px-6 max-w-7xl">
-        <h2 className="text-2xl font-medium mb-12 uppercase tracking-widest">Featured Collection</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+        <div className="flex justify-between items-end mb-16">
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-muted-foreground mb-2">Editor's Choice</h2>
+            <h3 className="text-4xl font-black uppercase tracking-tighter">Featured Collection</h3>
+          </div>
+          <Link href="/products" className="text-xs font-bold uppercase tracking-widest border-b border-black pb-1 hover:opacity-60 transition-opacity">View All</Link>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
           {featuredProducts.map((product) => (
             <Link key={product.id} href={`/product/${product.id}`} className="group cursor-pointer">
-              <div className="overflow-hidden bg-muted aspect-[4/5]">
+              <div className="overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5]">
                 <img 
                   src={product.images[0]} 
                   alt={product.name} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" 
                 />
               </div>
-              <div className="mt-6 flex justify-between items-start">
-                <div>
-                  <h3 className="text-lg font-medium">{product.name}</h3>
-                  <p className="text-muted-foreground text-sm uppercase tracking-wider mt-1">{product.category}</p>
-                </div>
-                <p className="font-medium text-lg">Rs.{product.price.toFixed(2)}</p>
+              <div className="mt-8">
+                <h3 className="text-xl font-bold uppercase tracking-tighter mb-1">{product.name}</h3>
+                <p className="font-medium text-lg text-muted-foreground">Rs.{product.price.toLocaleString()}</p>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Journey Section */}
-      <section className="relative h-[80vh] w-full overflow-hidden">
+      {/* Campaign Banner */}
+      <section className="relative h-[80vh] w-full overflow-hidden my-24">
         <img 
-          alt="Brand journey" 
+          alt="Campaign story" 
           className="w-full h-full object-cover" 
-          src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80&w=2000"
+          src="https://images.unsplash.com/photo-1539109136881-3be061694b93?auto=format&fit=crop&q=80&w=2000"
         />
         <div className="absolute inset-0 bg-black/40" />
         <div className="absolute inset-0 flex items-center justify-center text-center text-white p-4">
-          <div className="max-w-2xl">
-            <h2 className="font-serif text-4xl md:text-6xl font-bold mb-4">Explore the journey behind</h2>
-            <p className="text-xl opacity-90 font-light">our Urban collection.</p>
-            <Button variant="outline" className="mt-8 rounded-none px-12 py-6 border-white text-white hover:bg-white hover:text-black transition-all">
+          <div className="max-w-2xl animate-in zoom-in duration-1000">
+            <h2 className="font-serif text-5xl md:text-7xl font-bold mb-6 tracking-tight">Explore the journey behind</h2>
+            <p className="text-xl opacity-90 font-light tracking-wide">our Winter '25 collection.</p>
+            <Button variant="outline" className="mt-12 rounded-none px-12 h-14 border-white text-white hover:bg-white hover:text-black transition-all uppercase text-xs tracking-widest font-bold">
               Read Story
             </Button>
           </div>
@@ -84,20 +91,21 @@ export default function Home() {
 
       {/* New Arrivals */}
       <section className="py-24 container mx-auto px-6 max-w-7xl">
-        <h2 className="text-2xl font-medium text-center mb-16 uppercase tracking-widest">New Arrivals</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+        <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-center text-muted-foreground mb-4">Latest Drops</h2>
+        <h3 className="text-4xl font-black uppercase tracking-tighter text-center mb-20">New Arrivals</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-16">
           {newArrivals.map((product) => (
             <Link key={product.id} href={`/product/${product.id}`} className="group cursor-pointer">
-              <div className="overflow-hidden bg-muted aspect-[3/4]">
+              <div className="overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6">
                 <img 
                   src={product.images[0]} 
                   alt={product.name} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" 
                 />
               </div>
-              <div className="mt-4">
-                <h3 className="text-sm font-medium">{product.name}</h3>
-                <p className="text-muted-foreground text-xs mt-1">Rs.{product.price.toFixed(2)}</p>
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest truncate mb-1">{product.name}</h3>
+                <p className="text-muted-foreground text-xs font-medium">Rs.{product.price.toLocaleString()}</p>
               </div>
             </Link>
           ))}
@@ -105,44 +113,49 @@ export default function Home() {
       </section>
 
       {/* Footer / Newsletter */}
-      <footer className="bg-[#111111] text-white py-20">
+      <footer className="bg-[#0A0A0A] text-white pt-32 pb-12">
         <div className="container mx-auto px-6 max-w-7xl">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
-            <div className="col-span-1 md:col-span-1">
-              <h2 className="text-3xl font-black tracking-tighter mb-6">RARE</h2>
-              <p className="text-gray-400 text-sm leading-relaxed max-w-xs">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-16 mb-32">
+            <div className="col-span-1">
+              <h2 className="text-4xl font-black tracking-tighter mb-8 italic">RARE</h2>
+              <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
                 Khusibu, Nayabazar, Kathmandu<br />
                 (+977)-9705208960<br />
                 rarenepal999@gmail.com
               </p>
             </div>
             <div>
-              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">Legals</h4>
-              <ul className="space-y-4 text-sm text-gray-400">
-                <li><Link href="/shipping" className="hover:text-white transition-colors">Shipping Policy</Link></li>
-                <li><Link href="/refund" className="hover:text-white transition-colors">Refund Policy</Link></li>
-                <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-                <li><Link href="/terms" className="hover:text-white transition-colors">Terms of service</Link></li>
+              <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Legals</h4>
+              <ul className="space-y-4 text-xs tracking-widest">
+                <li><Link href="/shipping" className="hover:text-gray-400 transition-colors">Shipping Policy</Link></li>
+                <li><Link href="/refund" className="hover:text-gray-400 transition-colors">Refund Policy</Link></li>
+                <li><Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-gray-400 transition-colors">Terms of service</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">FIND US</h4>
-              <ul className="space-y-4 text-sm text-gray-400">
-                <li><a href="#" className="hover:text-white transition-colors">Facebook</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Instagram</a></li>
+              <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Social</h4>
+              <ul className="space-y-4 text-xs tracking-widest">
+                <li><a href="#" className="hover:text-gray-400 transition-colors">Facebook</a></li>
+                <li><a href="#" className="hover:text-gray-400 transition-colors">Instagram</a></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-bold mb-6 uppercase tracking-widest text-xs">Newsletter</h4>
-              <p className="text-sm text-gray-400 mb-4">Join the community for early access.</p>
-              <form className="flex">
-                <input className="bg-transparent border-b border-gray-700 py-2 flex-1 focus:outline-none focus:border-white transition-colors text-sm" placeholder="Email Address" />
-                <button className="ml-4 text-sm font-bold uppercase tracking-widest">Join</button>
+              <h4 className="font-bold mb-8 uppercase tracking-[0.2em] text-[10px] text-gray-400">Newsletter</h4>
+              <p className="text-xs text-gray-500 mb-6 tracking-wide leading-relaxed">Sign up for early access to drops and exclusive stories.</p>
+              <form className="flex group border-b border-gray-800 focus-within:border-white transition-colors pb-2">
+                <input className="bg-transparent py-2 flex-1 focus:outline-none text-sm placeholder:text-gray-700" placeholder="Email Address" />
+                <button className="text-[10px] font-bold uppercase tracking-widest ml-4 hover:opacity-60 transition-opacity">Join</button>
               </form>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-[0.2em] text-gray-500">
-            <p>© 2025 Rare Nepal. All rights reserved.</p>
+          <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] uppercase tracking-[0.3em] text-gray-600 font-bold">
+            <p>© 2025 Rare Nepal. Handcrafted Excellence.</p>
+            <div className="flex gap-8">
+              <span>Visa</span>
+              <span>Mastercard</span>
+              <span>Esewa</span>
+            </div>
           </div>
         </div>
       </footer>
