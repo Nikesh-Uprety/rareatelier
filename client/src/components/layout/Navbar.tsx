@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { ShoppingBag, Search, Menu, User, Sun, Moon, Coffee } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useThemeStore } from "@/store/theme";
@@ -7,62 +7,61 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
+  const [location] = useLocation();
   const cartItemsCount = useCartStore(state => state.items.reduce((acc, item) => acc + item.quantity, 0));
 
+  const isStorefront = !location.startsWith('/admin');
+
+  if (!isStorefront) return null;
+
   return (
-    <nav className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur-md">
-      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-4 lg:hidden">
-          <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-mobile-menu">
-            <Menu className="h-5 w-5" />
-          </Button>
-          <Search className="h-5 w-5 text-muted-foreground lg:hidden" />
-        </div>
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b">
+      <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
+        <div className="flex justify-between items-center h-20">
+          <nav className="hidden md:flex items-center space-x-8">
+            <Link href="/products" className="text-sm font-medium hover:text-primary/60 transition-colors">Store</Link>
+            <Link href="/products?collection=exclusive" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Exclusive</Link>
+            <Link href="/stories" className="text-sm font-medium text-muted-foreground hover:text-primary transition-colors">Stories</Link>
+          </nav>
 
-        <div className="hidden lg:flex items-center gap-8 text-sm font-medium">
-          <Link href="/products?category=tops" className="hover:text-primary transition-colors" data-testid="link-nav-tops">Tops</Link>
-          <Link href="/products?category=bottoms" className="hover:text-primary transition-colors" data-testid="link-nav-bottoms">Bottoms</Link>
-          <Link href="/products?category=accessories" className="hover:text-primary transition-colors" data-testid="link-nav-accessories">Accessories</Link>
-        </div>
+          <div className="flex-1 md:flex-none md:absolute md:left-1/2 md:-translate-x-1/2">
+            <Link href="/" className="text-2xl font-bold tracking-[0.2em] uppercase">
+              Urban Threads
+            </Link>
+          </div>
 
-        <Link href="/" className="text-2xl font-serif font-bold tracking-tight" data-testid="link-home">
-          Urban Threads.
-        </Link>
-
-        <div className="flex items-center gap-4">
-          <div className="hidden lg:flex items-center gap-4">
-            <Search className="h-5 w-5 text-muted-foreground cursor-pointer hover:text-primary transition-colors" data-testid="icon-search" />
+          <div className="flex items-center space-x-6">
+            <button className="text-muted-foreground hover:text-primary transition-colors">
+              <Search className="w-5 h-5" />
+            </button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" data-testid="button-theme-toggle">
-                  {theme === 'light' && <Sun className="h-5 w-5" />}
-                  {theme === 'dark' && <Moon className="h-5 w-5" />}
-                  {theme === 'warm' && <Coffee className="h-5 w-5" />}
-                </Button>
+                <button className="text-muted-foreground hover:text-primary transition-colors">
+                  {theme === 'light' && <Sun className="w-5 h-5" />}
+                  {theme === 'dark' && <Moon className="w-5 h-5" />}
+                  {theme === 'warm' && <Coffee className="w-5 h-5" />}
+                </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setTheme('light')} data-testid="menu-item-light-theme">Light</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('dark')} data-testid="menu-item-dark-theme">Dark</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTheme('warm')} data-testid="menu-item-warm-theme">Warm</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('light')}>Light</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('dark')}>Dark</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTheme('warm')}>Warm</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link href="/admin" data-testid="link-nav-admin">
-              <User className="h-5 w-5 text-muted-foreground hover:text-primary transition-colors" />
+            <Link href="/admin" className="hidden sm:inline text-sm font-medium text-muted-foreground hover:text-primary transition-colors">
+              Account
+            </Link>
+            
+            <Link href="/cart" className="text-sm font-medium hover:text-primary transition-colors flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5" />
+              <span className="hidden sm:inline">My Bag ({cartItemsCount})</span>
+              {cartItemsCount > 0 && <span className="sm:hidden bg-primary text-primary-foreground rounded-full w-4 h-4 flex items-center justify-center text-[10px]">{cartItemsCount}</span>}
             </Link>
           </div>
-          
-          <Link href="/cart" className="relative flex items-center justify-center w-10 h-10 rounded-full hover:bg-muted transition-colors" data-testid="link-cart">
-            <ShoppingBag className="h-5 w-5 text-foreground" />
-            {cartItemsCount > 0 && (
-              <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm">
-                {cartItemsCount}
-              </span>
-            )}
-          </Link>
         </div>
       </div>
-    </nav>
+    </header>
   );
 }
