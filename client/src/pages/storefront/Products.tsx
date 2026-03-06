@@ -1,26 +1,62 @@
-import { useState } from "react";
-import { useLocation } from "wouter";
-import { Link } from "wouter";
-import { MOCK_PRODUCTS } from "@/lib/mockData";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { useState, useMemo } from "react";
+import { useLocation, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Search } from "lucide-react";
+import { fetchProducts, type ProductApi } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
+
+function ProductsSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="space-y-3">
+          <div className="aspect-[3/4] bg-gray-100 animate-pulse" />
+          <div className="h-3 w-3/4 bg-gray-100 animate-pulse" />
+          <div className="h-3 w-1/2 bg-gray-100 animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function Products() {
   const [location] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
-  const initialCategory = searchParams.get('category');
-  
+  const initialCategory = searchParams.get("category");
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>(initialCategory || "all");
-  
-  const filteredProducts = MOCK_PRODUCTS.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || 
-                         p.sku.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = category === "all" || p.category.toLowerCase() === category.toLowerCase();
-    
-    return matchesSearch && matchesCategory;
+
+  const filters = useMemo(
+    () => ({
+      category: category === "all" ? undefined : category,
+      search: search || undefined,
+      page: 1,
+    }),
+    [category, search],
+  );
+
+  const {
+    data: products,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery<ProductApi[]>({
+    queryKey: ["products", filters],
+    queryFn: () => fetchProducts(filters),
   });
+
+  const filteredProducts = useMemo(() => {
+    if (!products) return [];
+    return products.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(search.toLowerCase()) ||
+        (p.category ?? "").toLowerCase().includes(search.toLowerCase());
+      const matchesCategory =
+        category === "all" || (p.category ?? "") === category;
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, search, category]);
 
   return (
     <div className="container mx-auto px-4 py-20 mt-20">
@@ -46,15 +82,27 @@ export default function Products() {
       <div className="flex gap-8">
         <aside className="hidden lg:block w-48 space-y-10">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-6">Categories</h3>
+            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-6">
+              Categories
+            </h3>
             <div className="space-y-4">
-              {['All', 'Tops', 'Bottoms', 'Accessories'].map(cat => (
-                <button 
-                  key={cat} 
-                  onClick={() => setCategory(cat.toLowerCase())}
-                  className={`block text-xs uppercase tracking-widest transition-colors ${category === cat.toLowerCase() ? 'font-bold text-black' : 'text-muted-foreground hover:text-black'}`}
+              {[
+                { label: "All", value: "all" },
+                { label: "Hoodies", value: "HOODIE" },
+                { label: "Trousers", value: "TROUSER" },
+                { label: "T-Shirts", value: "TSHIRTS" },
+                { label: "Winter '25", value: "WINTER_25" },
+              ].map((cat) => (
+                <button
+                  key={cat.value}
+                  onClick={() => setCategory(cat.value)}
+                  className={`block text-xs uppercase tracking-widest transition-colors ${
+                    category === cat.value
+                      ? "font-bold text-black"
+                      : "text-muted-foreground hover:text-black"
+                  }`}
                 >
-                  {cat}
+                  {cat.label}
                 </button>
               ))}
             </div>
@@ -62,28 +110,54 @@ export default function Products() {
         </aside>
 
         <div className="flex-1">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
-            {filteredProducts.map(product => (
-              <Link key={product.id} href={`/product/${product.id}`} className="group block">
-                <div className="aspect-[3/4] overflow-hidden bg-gray-50 mb-4 relative">
-                  <img 
-                    src={product.images[0]} 
-                    alt={product.name}
-                    className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-bold text-[10px] uppercase tracking-widest truncate">{product.name}</h3>
-                  <p className="text-muted-foreground text-[10px]">Rs.{product.price.toFixed(2)}</p>
-                </div>
-              </Link>
-            ))}
-          </div>
-          
-          {filteredProducts.length === 0 && (
-            <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
-              No products found.
+          {isLoading ? (
+            <ProductsSkeleton />
+          ) : isError ? (
+            <div className="py-20 text-center space-y-4">
+              <p className="uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
+                Failed to load products. Try again.
+              </p>
+              <button
+                onClick={() => refetch()}
+                className="text-[10px] uppercase tracking-widest border px-4 py-2"
+              >
+                Retry
+              </button>
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+                {filteredProducts.map((product) => (
+                  <Link
+                    key={product.id}
+                    href={`/product/${product.id}`}
+                    className="group block"
+                  >
+                    <div className="aspect-[3/4] overflow-hidden bg-gray-50 mb-4 relative">
+                      <img
+                        src={product.imageUrl ?? ""}
+                        alt={product.name}
+                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="mb-2 font-semibold text-[24px] text-[#565656] dark:text-white truncate">
+                        {product.name}
+                      </h3>
+                      <p className="text-muted-foreground text-[10px]">
+                        {formatPrice(product.price)}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+
+              {filteredProducts.length === 0 && !isLoading && !isError && (
+                <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
+                  No products found.
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

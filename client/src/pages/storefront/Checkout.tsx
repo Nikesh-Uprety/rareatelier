@@ -1,46 +1,111 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { CheckCircle2, ChevronRight, Lock } from "lucide-react";
+import { CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { createOrder } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { items, subtotal, clearCart } = useCartStore();
+  const { items, clearCart } = useCartStore();
   const { toast } = useToast();
-  
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  const tax = subtotal * 0.08;
+  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [formError, setFormError] = useState<string | null>(null);
+
   const shipping = 100;
+  const subtotal = useMemo(
+    () =>
+      items.reduce(
+        (sum, item) => sum + item.product.price * item.quantity,
+        0,
+      ),
+    [items],
+  );
   const total = subtotal + shipping;
 
   if (items.length === 0 && step !== 3) {
-    setLocation('/cart');
+    setLocation("/cart");
     return null;
   }
 
-  const handlePlaceOrder = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
+  const { mutateAsync, isPending } = useMutation({
+    mutationFn: createOrder,
+  });
+
+  const handlePlaceOrder = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setFormError(null);
+
+    const formData = new FormData(event.currentTarget);
+
+    const firstName = String(formData.get("firstName") || "").trim();
+    const lastName = String(formData.get("lastName") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const address = String(formData.get("address") || "").trim();
+    const city = String(formData.get("city") || "").trim();
+    const state = String(formData.get("state") || "").trim();
+    const zip = String(formData.get("zip") || "").trim();
+    const phone = String(formData.get("phone") || "").trim();
+
+    if (!firstName || !lastName || !email || !address || !city || !state || !zip) {
+      setFormError("Please fill in all required fields.");
+      return;
+    }
+
+    try {
+      const result = await mutateAsync({
+        items: items.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+          priceAtTime: item.product.price,
+        })),
+        shipping: {
+          firstName,
+          lastName,
+          email,
+          phone,
+          address,
+          city,
+          state,
+          zip,
+          country: "NP",
+        },
+        paymentMethod: "cash_on_delivery",
+      });
+
+      if (!result.success || !result.data) {
+        setFormError(result.error || "Failed to place order.");
+        return;
+      }
+
       clearCart();
       setStep(3);
       toast({ title: "Order Placed" });
-    }, 1500);
+      setLocation(`/checkout/success?orderId=${result.data.order.id}`);
+    } catch (err) {
+      setFormError((err as Error).message || "Failed to place order.");
+    }
   };
 
   if (step === 3) {
     return (
       <div className="container mx-auto px-4 py-32 text-center mt-20">
         <CheckCircle2 className="w-16 h-16 text-black mx-auto mb-8" />
-        <h1 className="text-4xl font-black uppercase tracking-tighter mb-4">Confirmed</h1>
-        <p className="text-muted-foreground mb-12">Your order is being processed.</p>
-        <Button asChild className="rounded-none px-12 h-14 uppercase tracking-widest text-xs font-bold bg-black text-white">
+        <h1 className="text-4xl font-black uppercase tracking-tighter mb-4">
+          Confirmed
+        </h1>
+        <p className="text-muted-foreground mb-12">
+          Your order is being processed.
+        </p>
+        <Button
+          asChild
+          className="rounded-none px-12 h-14 uppercase tracking-widest text-xs font-bold bg-black text-white"
+        >
           <Link href="/">Back Home</Link>
         </Button>
       </div>
@@ -50,35 +115,86 @@ export default function Checkout() {
   return (
     <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
       <div className="flex flex-col lg:flex-row gap-20">
-        <div className="flex-1 space-y-12">
+        <form
+          className="flex-1 space-y-12"
+          onSubmit={handlePlaceOrder}
+        >
           <div>
             <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Contact</h2>
             <div className="space-y-4">
-              <Input placeholder="Mobile Number" className="h-14 rounded-none border-gray-200" />
+              <Input
+                name="email"
+                type="email"
+                placeholder="Email Address"
+                className="h-14 rounded-none border-gray-200"
+                required
+              />
             </div>
           </div>
 
           <div>
             <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Shipping Address</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
-              <Input placeholder="First name" className="h-14 rounded-none border-gray-200" />
-              <Input placeholder="Last name" className="h-14 rounded-none border-gray-200" />
+              <Input
+                name="firstName"
+                placeholder="First name"
+                className="h-14 rounded-none border-gray-200"
+                required
+              />
+              <Input
+                name="lastName"
+                placeholder="Last name"
+                className="h-14 rounded-none border-gray-200"
+                required
+              />
             </div>
             <div className="space-y-4">
-              <Input placeholder="Address" className="h-14 rounded-none border-gray-200" />
+              <Input
+                name="address"
+                placeholder="Address"
+                className="h-14 rounded-none border-gray-200"
+                required
+              />
               <div className="grid grid-cols-3 gap-4">
-                <Input placeholder="City" className="h-14 rounded-none border-gray-200" />
-                <Input placeholder="State" className="h-14 rounded-none border-gray-200" />
-                <Input placeholder="Zip code" className="h-14 rounded-none border-gray-200" />
+                <Input
+                  name="city"
+                  placeholder="City"
+                  className="h-14 rounded-none border-gray-200"
+                  required
+                />
+                <Input
+                  name="state"
+                  placeholder="State"
+                  className="h-14 rounded-none border-gray-200"
+                  required
+                />
+                <Input
+                  name="zip"
+                  placeholder="Zip code"
+                  className="h-14 rounded-none border-gray-200"
+                  required
+                />
               </div>
-              <Input placeholder="Phone" className="h-14 rounded-none border-gray-200" />
+              <Input
+                name="phone"
+                placeholder="Phone"
+                className="h-14 rounded-none border-gray-200"
+              />
             </div>
           </div>
 
-          <Button className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold" onClick={handlePlaceOrder} disabled={isProcessing}>
-            {isProcessing ? "Processing..." : "Pay Now"}
+          {formError && (
+            <p className="text-sm text-red-500">{formError}</p>
+          )}
+
+          <Button
+            type="submit"
+            className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
+            disabled={isPending}
+          >
+            {isPending ? "Processing..." : "Pay Now"}
           </Button>
-        </div>
+        </form>
 
         <div className="w-full lg:w-[450px] bg-gray-50/50 p-10 h-fit">
           <div className="space-y-6 mb-10">
@@ -92,7 +208,9 @@ export default function Checkout() {
                   <h4 className="text-[10px] font-bold uppercase tracking-widest">{item.product.name}</h4>
                   <p className="text-[10px] text-muted-foreground uppercase">{item.variant.size}</p>
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-widest">Rs.{item.product.price.toFixed(2)}</div>
+                <div className="text-[10px] font-bold uppercase tracking-widest">
+                  {formatPrice(item.product.price)}
+                </div>
               </div>
             ))}
           </div>
@@ -105,15 +223,15 @@ export default function Checkout() {
           <div className="space-y-4 text-[10px] uppercase tracking-widest font-medium text-muted-foreground pt-8 border-t border-gray-100">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span className="text-black">Rs.{subtotal.toFixed(2)}</span>
+                <span className="text-black">{formatPrice(subtotal)}</span>
             </div>
             <div className="flex justify-between">
               <span>Shipping</span>
-              <span className="text-black">Rs.{shipping.toFixed(2)}</span>
+                <span className="text-black">{formatPrice(shipping)}</span>
             </div>
             <div className="flex justify-between text-black text-sm font-black pt-4">
               <span>Total</span>
-              <span>Rs.{(subtotal + shipping).toFixed(2)}</span>
+                <span>{formatPrice(subtotal + shipping)}</span>
             </div>
           </div>
         </div>

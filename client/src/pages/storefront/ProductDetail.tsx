@@ -1,31 +1,73 @@
 import { useState } from "react";
-import { useRoute } from "wouter";
-import { MOCK_PRODUCTS } from "@/lib/mockData";
+import { useRoute, Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
-import { ArrowLeft, Minus, Plus, ShoppingBag } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { fetchProductById, type ProductApi } from "@/lib/api";
+import { formatPrice } from "@/lib/format";
 
 export default function ProductDetail() {
-  const [, params] = useRoute("/product/:id");
+  const [, params] = useRoute<{ id: string }>("/product/:id");
   const { toast } = useToast();
-  const product = MOCK_PRODUCTS.find(p => p.id === params?.id);
-  const addItem = useCartStore(state => state.addItem);
-  
-  const [selectedVariant, setSelectedVariant] = useState(product?.variants[0]);
+  const addItem = useCartStore((state) => state.addItem);
+
+  const productId = params?.id ?? "";
+
+  const { data: product, isLoading } = useQuery<ProductApi | null>({
+    queryKey: ["products", productId],
+    queryFn: () => fetchProductById(productId),
+    enabled: !!productId,
+  });
+
   const [quantity, setQuantity] = useState(1);
 
-  if (!product) return null;
+  if (isLoading || !product) {
+    if (isLoading) {
+      return (
+        <div className="container mx-auto px-4 py-32 max-w-7xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16">
+            <div className="aspect-[4/5] bg-muted animate-pulse" />
+            <div className="space-y-4">
+              <div className="h-8 w-3/4 bg-muted animate-pulse" />
+              <div className="h-6 w-1/3 bg-muted animate-pulse" />
+              <div className="h-24 w-full bg-muted animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="container mx-auto px-4 py-32 max-w-7xl text-center">
+        <p className="uppercase text-[10px] tracking-widest font-bold text-muted-foreground">
+          Product not found.
+        </p>
+        <Button asChild className="mt-6 rounded-none px-10">
+          <Link href="/products">Back to collection</Link>
+        </Button>
+      </div>
+    );
+  }
 
-  const colors = Array.from(new Set(product.variants.map(v => v.color)));
-  const sizes = Array.from(new Set(product.variants.map(v => v.size)));
+  const colors: string[] = [];
+  const sizes: string[] = [];
 
   const handleAddToCart = () => {
-    if (selectedVariant) {
-      addItem(product, selectedVariant, quantity);
-      toast({ title: "Added to bag" });
-    }
+    addItem(
+      {
+        id: product.id,
+        name: product.name,
+        price: Number(product.price),
+        stock: product.stock,
+        category: product.category ?? "",
+        images: [product.imageUrl ?? ""],
+        variants: [],
+      },
+      { size: "M", color: "Default" },
+      quantity,
+    );
+    toast({ title: "Added to bag" });
   };
 
   return (
@@ -33,7 +75,7 @@ export default function ProductDetail() {
       <div className="flex flex-col lg:flex-row gap-16">
         <div className="flex-1 space-y-4">
           <div className="aspect-[4/5] bg-muted overflow-hidden">
-            <img src={product.images[0]} className="w-full h-full object-cover" />
+            <img src={product.imageUrl ?? ""} className="w-full h-full object-cover" />
           </div>
           <div className="grid grid-cols-4 gap-4">
             <div className="aspect-square bg-muted border-2 border-black" />
@@ -45,28 +87,45 @@ export default function ProductDetail() {
 
         <div className="w-full lg:w-[450px]">
           <h1 className="text-3xl font-black uppercase tracking-tighter mb-2">{product.name}</h1>
-          <p className="text-2xl font-light mb-8">Rs.{product.price.toFixed(2)}</p>
+          <p className="text-2xl font-light mb-8">
+            {formatPrice(product.price)}
+          </p>
 
           <div className="space-y-8">
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">Color</p>
-              <div className="flex gap-3">
-                {colors.map(c => (
-                  <button key={c} className={`w-8 h-8 rounded-full border-2 ${selectedVariant?.color === c ? 'border-black' : 'border-transparent'}`} style={{ backgroundColor: c.toLowerCase() }} />
-                ))}
+            {colors.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
+                  Color
+                </p>
+                <div className="flex gap-3">
+                  {colors.map((c) => (
+                    <button
+                      key={c}
+                      className="w-8 h-8 rounded-full border-2 border-transparent"
+                      style={{ backgroundColor: c.toLowerCase() }}
+                    />
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
-            <div>
-              <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">Size</p>
-              <div className="flex gap-2">
-                {sizes.map(s => (
-                  <button key={s} className={`w-12 h-10 border text-xs font-medium transition-all ${selectedVariant?.size === s ? 'bg-black text-white border-black' : 'border-gray-200 hover:border-black'}`}>
-                    {s}
-                  </button>
-                ))}
+            {sizes.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
+                  Size
+                </p>
+                <div className="flex gap-2">
+                  {sizes.map((s) => (
+                    <button
+                      key={s}
+                      className="w-12 h-10 border text-xs font-medium transition-all border-gray-200 hover:border-black"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">Quantity</p>
@@ -78,10 +137,16 @@ export default function ProductDetail() {
             </div>
 
             <div className="space-y-3 pt-4">
-              <Button onClick={handleAddToCart} className="w-full h-14 bg-black text-white hover:bg-gray-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold">
+              <Button
+                onClick={handleAddToCart}
+                className="w-full h-14 bg-black text-white hover:bg-gray-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold"
+              >
                 Add to Bag
               </Button>
-              <Button variant="outline" className="w-full h-14 border-black text-black hover:bg-black hover:text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all">
+              <Button
+                variant="outline"
+                className="w-full h-14 border-black text-black hover:bg-black hover:text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all"
+              >
                 Buy Now
               </Button>
             </div>
@@ -104,15 +169,7 @@ export default function ProductDetail() {
       <div className="mt-32">
         <h2 className="text-xl font-black uppercase tracking-tighter text-center mb-16">You May Also Like</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {MOCK_PRODUCTS.filter(p => p.id !== product.id).slice(0, 4).map(p => (
-            <Link key={p.id} href={`/product/${p.id}`} className="group">
-              <div className="aspect-[3/4] bg-muted overflow-hidden mb-4">
-                <img src={p.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-              </div>
-              <h4 className="text-[10px] font-bold uppercase tracking-widest">{p.name}</h4>
-              <p className="text-[10px] text-muted-foreground mt-1">Rs.{p.price.toFixed(2)}</p>
-            </Link>
-          ))}
+          {/* Related products could be fetched here in a follow-up task */}
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import Navbar from "@/components/layout/Navbar";
 import AdminLayout from "@/components/layout/AdminLayout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 import Home from "@/pages/storefront/Home";
 import Products from "@/pages/storefront/Products";
@@ -19,6 +20,7 @@ import AdminCustomers from "@/pages/admin/Customers";
 import AdminPOS from "@/pages/admin/POS";
 import AdminAnalytics from "@/pages/admin/Analytics";
 
+import LoginPage from "@/pages/auth/Login";
 import NotFound from "@/pages/not-found";
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
@@ -45,29 +47,39 @@ function Router() {
         <Redirect to="/admin/analytics" />
       </Route>
       <Route path="/admin/analytics">
-        <AdminLayout>
-          <AdminAnalytics />
-        </AdminLayout>
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminAnalytics />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/products">
-        <AdminLayout>
-          <AdminProducts />
-        </AdminLayout>
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminProducts />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/orders">
-        <AdminLayout>
-          <AdminOrders />
-        </AdminLayout>
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminOrders />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/customers">
-        <AdminLayout>
-          <AdminCustomers />
-        </AdminLayout>
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminCustomers />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
       <Route path="/admin/pos">
-        <AdminLayout>
-          <AdminPOS />
-        </AdminLayout>
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminPOS />
+          </AdminLayout>
+        </ProtectedRoute>
       </Route>
 
       {/* Storefront Routes */}
@@ -92,9 +104,14 @@ function Router() {
         </StorefrontLayout>
       </Route>
       <Route path="/checkout">
-        <StorefrontLayout>
-          <Checkout />
-        </StorefrontLayout>
+        <ProtectedRoute>
+          <StorefrontLayout>
+            <Checkout />
+          </StorefrontLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/login">
+        <LoginPage />
       </Route>
       
       <Route component={NotFound} />

@@ -4,3 +4,6 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+.env
+PROJECT_PROGRESS.md
+CURSOR_BUILD_PROMPTS

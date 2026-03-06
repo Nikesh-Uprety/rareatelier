@@ -1,7 +1,13 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import session from "express-session";
+// @ts-expect-error connect-pg-simple has no default TS export types
+import connectPgSimple from "connect-pg-simple";
+import { passport, configurePassport } from "./auth";
+import { pool } from "./db";
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +27,32 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+const PgSession = connectPgSimple(session);
+
+if (!process.env.SESSION_SECRET) {
+  throw new Error("SESSION_SECRET must be set");
+}
+
+const sessionMiddleware = session({
+  store: new PgSession({
+    pool,
+    createTableIfMissing: true,
+  }),
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  },
+});
+
+app.use(sessionMiddleware);
+configurePassport();
+app.use(passport.initialize());
+app.use(passport.session());
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

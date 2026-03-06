@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Trash2, ArrowRight } from "lucide-react";
+import { formatPrice } from "@/lib/format";
 
 export default function Cart() {
   const [, setLocation] = useLocation();
@@ -40,7 +41,9 @@ export default function Cart() {
                       <h3 className="font-bold uppercase tracking-widest text-xs mb-1">{item.product.name}</h3>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{item.variant.size} / {item.variant.color}</p>
                     </div>
-                    <span className="font-bold text-xs tracking-widest">Rs.{item.product.price.toFixed(2)}</span>
+                    <span className="font-bold text-xs tracking-widest">
+                      {formatPrice(item.product.price)}
+                    </span>
                   </div>
                   
                   <div className="mt-auto flex justify-between items-end">
@@ -64,15 +67,15 @@ export default function Cart() {
             <div className="space-y-4 text-[10px] uppercase tracking-widest font-medium mb-10 text-muted-foreground">
               <div className="flex justify-between">
                 <span>Subtotal</span>
-                <span className="text-black">Rs.{subtotal.toFixed(2)}</span>
+                <span className="text-black">{formatPrice(subtotal)}</span>
               </div>
               <div className="flex justify-between">
                 <span>Shipping</span>
-                <span className="text-black">Rs.{shipping.toFixed(2)}</span>
+                <span className="text-black">{formatPrice(shipping)}</span>
               </div>
               <div className="flex justify-between text-black text-sm font-black pt-6 border-t">
                 <span>Total</span>
-                <span>Rs.{total.toFixed(2)}</span>
+                <span>{formatPrice(total)}</span>
               </div>
             </div>
             
