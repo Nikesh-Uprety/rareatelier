@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Home from "@/pages/storefront/Home";
 import Products from "@/pages/storefront/Products";
 import ProductDetail from "@/pages/storefront/ProductDetail";
+import Contact from "@/pages/storefront/Contact";
 import Cart from "@/pages/storefront/Cart";
 import Checkout from "@/pages/storefront/Checkout";
 
@@ -96,6 +97,11 @@ function Router() {
       <Route path="/product/:id">
         <StorefrontLayout>
           <ProductDetail />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/contact">
+        <StorefrontLayout>
+          <Contact />
         </StorefrontLayout>
       </Route>
       <Route path="/cart">

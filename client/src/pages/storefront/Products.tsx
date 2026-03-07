@@ -98,8 +98,8 @@ export default function Products() {
                   onClick={() => setCategory(cat.value)}
                   className={`block text-xs uppercase tracking-widest transition-colors ${
                     category === cat.value
-                      ? "font-bold text-black"
-                      : "text-muted-foreground hover:text-black"
+                      ? "font-bold text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   {cat.label}
