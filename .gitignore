@@ -6,4 +6,4 @@ vite.config.ts.*
 *.tar.gz
 .env
 PROJECT_PROGRESS.md
-CURSOR_BUILD_PROMPTS
+CURSOR_BUILD_PROMPTS.md
