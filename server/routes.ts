@@ -7,6 +7,7 @@ import { passport } from "./auth";
 import { z } from "zod";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
+import { sendOTPEmail, sendInviteEmail } from "./email";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads", "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
@@ -107,20 +108,72 @@ export async function registerRoutes(
             error: "Invalid email or password",
           });
         }
-        req.logIn(user, (loginErr) => {
-          if (loginErr) {
-            return next(loginErr);
+        (async () => {
+          const fullUser = await storage.getUserById(user.id);
+          if (!fullUser || fullUser.status === "suspended") {
+            return res.status(403).json({
+              success: false,
+              error: "Account is not active",
+            });
           }
-          return res.status(200).json({
-            success: true,
-            data: {
-              id: user.id,
-              email: user.email,
-              name: user.name,
-              role: user.role,
+
+          const twoFactorEnabled = !!fullUser.twoFactorEnabled;
+
+          if (twoFactorEnabled) {
+            // Create OTP entry and send email, but do not create a session yet.
+            const code = Math.floor(100000 + Math.random() * 900000)
+              .toString()
+              .slice(0, 6);
+            const tempToken = crypto.randomUUID();
+            const expiresMinutes = Number(
+              process.env.OTP_EXPIRY_MINUTES ?? "10",
+            );
+            const expiresAt = new Date(
+              Date.now() + expiresMinutes * 60 * 1000,
+            );
+
+            await storage.createOtpToken({
+              id: tempToken,
+              userId: fullUser.id,
+              token: code,
+              expiresAt,
+            });
+
+            await sendOTPEmail(fullUser.username, code, fullUser.username);
+
+            return res.status(200).json({
+              success: true,
+              requires2FA: true,
+              tempToken,
+            });
+          }
+
+          // No 2FA: create session as usual
+          req.logIn(
+            {
+              ...user,
+              twoFactorEnabled: false,
             },
-          });
-        });
+            async (loginErr) => {
+              if (loginErr) {
+                return next(loginErr);
+              }
+
+              await storage.updateLastLoginAt(fullUser.id);
+
+              return res.status(200).json({
+                success: true,
+                data: {
+                  id: user.id,
+                  email: user.email,
+                  name: user.name,
+                  role: user.role,
+                  twoFactorEnabled: false,
+                },
+              });
+            },
+          );
+        })().catch((error) => next(error));
       })(req, res, next);
     },
   );
@@ -152,9 +205,106 @@ export async function registerRoutes(
         email: user.email,
         name: user.name,
         role: user.role,
+        twoFactorEnabled: !!user.twoFactorEnabled,
       },
     });
   });
+
+  const verify2FASchema = z.object({
+    tempToken: z.string().min(1),
+    code: z.string().min(4).max(6),
+  });
+
+  app.post(
+    "/api/auth/verify-2fa",
+    async (req: Request, res: Response, next: NextFunction) => {
+      try {
+        const parsed = verify2FASchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid request body" });
+        }
+
+        const { tempToken, code } = parsed.data;
+        const otp = await storage.consumeOtpToken(tempToken, code);
+        if (!otp) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid or expired code" });
+        }
+
+        const fullUser = await storage.getUserById(otp.userId);
+        if (!fullUser || fullUser.status === "suspended") {
+          return res
+            .status(403)
+            .json({ success: false, error: "Account is not active" });
+        }
+
+        const expressUser: Express.User = {
+          id: fullUser.id,
+          email: fullUser.username,
+          role: fullUser.role,
+          name: fullUser.username,
+          twoFactorEnabled: !!fullUser.twoFactorEnabled,
+          status: fullUser.status,
+        };
+
+        req.logIn(expressUser, async (loginErr) => {
+          if (loginErr) {
+            return next(loginErr);
+          }
+
+          await storage.updateLastLoginAt(fullUser.id);
+
+          return res.status(200).json({
+            success: true,
+            data: {
+              id: expressUser.id,
+              email: expressUser.email,
+              name: expressUser.name,
+              role: expressUser.role,
+              twoFactorEnabled: !!expressUser.twoFactorEnabled,
+            },
+          });
+        });
+      } catch (err) {
+        return next(err);
+      }
+    },
+  );
+
+  const resendOtpSchema = z.object({
+    tempToken: z.string().min(1),
+  });
+
+  app.post(
+    "/api/auth/resend-otp",
+    async (req: Request, res: Response) => {
+      const parsed = resendOtpSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid request body" });
+      }
+
+      const { tempToken } = parsed.data;
+      const refreshed = await storage.refreshOtpToken(tempToken);
+      if (!refreshed) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid or expired session" });
+      }
+
+      await sendOTPEmail(
+        refreshed.email,
+        refreshed.code,
+        refreshed.name ?? refreshed.email,
+      );
+
+      return res.json({ success: true });
+    },
+  );
 
   // Storefront product routes
   app.get("/api/products", async (req: Request, res: Response) => {

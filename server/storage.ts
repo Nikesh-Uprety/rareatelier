@@ -6,12 +6,16 @@ import {
   orders,
   products,
   users,
+  otpTokens,
+  contactMessages,
   type Category,
   type Customer,
   type Order,
   type OrderItem,
   type Product,
   type User,
+  type OtpToken,
+  type ContactMessage,
 } from "@shared/schema";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 
@@ -152,6 +156,22 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | null>;
   getUserById(id: string): Promise<User | null>;
   createUser(data: Omit<User, "id">): Promise<User>;
+  updateLastLoginAt(id: string): Promise<void>;
+
+  // OTP tokens
+  createOtpToken(data: {
+    id: string;
+    userId: string;
+    token: string;
+    expiresAt: Date;
+  }): Promise<OtpToken>;
+  consumeOtpToken(
+    id: string,
+    token: string,
+  ): Promise<OtpToken | null>;
+  refreshOtpToken(
+    id: string,
+  ): Promise<{ email: string; code: string; name?: string } | null>;
 
   // Analytics
   getAnalytics(range: "7d" | "30d" | "90d" | "1y"): Promise<AnalyticsData>;
@@ -733,6 +753,9 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        twoFactorEnabled: users.twoFactorEnabled,
+        lastLoginAt: users.lastLoginAt,
+        status: users.status,
       })
       .from(users)
       .where(eq(users.username, email))
@@ -748,6 +771,9 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        twoFactorEnabled: users.twoFactorEnabled,
+        lastLoginAt: users.lastLoginAt,
+        status: users.status,
       })
       .from(users)
       .where(eq(users.id, id))
@@ -763,15 +789,121 @@ export class PgStorage implements IStorage {
         username: data.username,
         password: data.password,
         role: data.role,
+        twoFactorEnabled: data.twoFactorEnabled ?? 0,
+        status: data.status ?? "active",
       })
       .returning({
         id: users.id,
         username: users.username,
         password: users.password,
         role: users.role,
+        twoFactorEnabled: users.twoFactorEnabled,
+        lastLoginAt: users.lastLoginAt,
+        status: users.status,
       });
 
     return row;
+  }
+
+  async updateLastLoginAt(id: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ lastLoginAt: sql`now()` })
+      .where(eq(users.id, id));
+  }
+
+  async createOtpToken(data: {
+    id: string;
+    userId: string;
+    token: string;
+    expiresAt: Date;
+  }): Promise<OtpToken> {
+    const [row] = await db
+      .insert(otpTokens)
+      .values({
+        id: data.id,
+        userId: data.userId,
+        token: data.token,
+        expiresAt: data.expiresAt,
+        used: 0,
+      })
+      .returning();
+    return row;
+  }
+
+  async consumeOtpToken(
+    id: string,
+    token: string,
+  ): Promise<OtpToken | null> {
+    const now = new Date();
+    const [row] = await db
+      .select()
+      .from(otpTokens)
+      .where(
+        and(
+          eq(otpTokens.id, id),
+          eq(otpTokens.used, 0),
+          sql`${otpTokens.expiresAt} > ${now}`,
+        ),
+      )
+      .limit(1);
+
+    if (!row || row.token !== token) {
+      return null;
+    }
+
+    await db
+      .update(otpTokens)
+      .set({ used: 1 })
+      .where(eq(otpTokens.id, id));
+
+    return row;
+  }
+
+  async refreshOtpToken(
+    id: string,
+  ): Promise<{ email: string; code: string; name?: string } | null> {
+    const now = new Date();
+    const [otp] = await db
+      .select()
+      .from(otpTokens)
+      .where(
+        and(
+          eq(otpTokens.id, id),
+          eq(otpTokens.used, 0),
+          sql`${otpTokens.expiresAt} > ${now}`,
+        ),
+      )
+      .limit(1);
+
+    if (!otp) return null;
+
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, otp.userId))
+      .limit(1);
+
+    if (!user) return null;
+
+    const code = Math.floor(100000 + Math.random() * 900000)
+      .toString()
+      .slice(0, 6);
+    const expiresAt = new Date(
+      Date.now() +
+        Number(process.env.OTP_EXPIRY_MINUTES ?? "10") * 60 * 1000,
+    );
+
+    await db
+      .update(otpTokens)
+      .set({ token: code, expiresAt })
+      .where(eq(otpTokens.id, id));
+
+    return {
+      email: user.username,
+      code,
+      name: user.username,
+    };
   }
 
   async getAnalytics(range: "7d" | "30d" | "90d" | "1y"): Promise<AnalyticsData> {

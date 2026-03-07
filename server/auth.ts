@@ -11,6 +11,8 @@ declare global {
       email: string;
       role: string;
       name?: string;
+      twoFactorEnabled?: boolean;
+      status?: string;
     }
   }
 }
@@ -36,6 +38,8 @@ export function configurePassport(): void {
             email: user.username,
             role: user.role,
             name: user.username,
+            twoFactorEnabled: !!user.twoFactorEnabled,
+            status: user.status,
           };
 
           return done(null, expressUser);
