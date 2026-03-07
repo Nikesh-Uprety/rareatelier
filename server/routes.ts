@@ -759,5 +759,28 @@ export async function registerRoutes(
     },
   );
 
+  app.get(
+    "/api/admin/analytics/calendar",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const yearParam = req.query.year;
+        const year =
+          typeof yearParam === "string" && /^\d{4}$/.test(yearParam)
+            ? Number(yearParam)
+            : 2025;
+
+        const data = await storage.getAnalyticsCalendar(year);
+        return res.json({ success: true, data });
+      } catch (err) {
+        console.error("Error in GET /api/admin/analytics/calendar", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to load analytics calendar",
+        });
+      }
+    },
+  );
+
   return httpServer;
 }

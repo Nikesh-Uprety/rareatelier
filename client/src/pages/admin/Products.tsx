@@ -5,7 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, MoreHorizontal, Pencil, ImageIcon, ArrowLeft, Upload } from "lucide-react";
+import { Search, Plus, MoreHorizontal, Pencil, ImageIcon, ArrowLeft, Upload, ExternalLink } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -736,22 +736,36 @@ export default function AdminProducts() {
                     {product.category ?? "Uncategorized"}
                   </p>
 
-                  <div className="flex items-center justify-between mt-auto">
+                  <div className="flex items-center justify-between mt-auto gap-2">
                     <span className="font-medium">
                       {formatPrice(product.price)}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className={`border-none ${
-                        product.stock > 10
-                          ? "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300"
-                          : product.stock > 0
-                            ? "bg-[#FFF4E5] text-[#8C5A14] dark:bg-yellow-950 dark:text-yellow-300"
-                            : "bg-[#FDECEC] text-[#9A2D2D] dark:bg-red-950 dark:text-red-300"
-                      }`}
-                    >
-                      {product.stock} in stock
-                    </Badge>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          window.open(`/product/${product.id}`, "_blank");
+                        }}
+                        aria-label="Open product in new tab"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                      <Badge
+                        variant="outline"
+                        className={`border-none ${
+                          product.stock > 10
+                            ? "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300"
+                            : product.stock > 0
+                              ? "bg-[#FFF4E5] text-[#8C5A14] dark:bg-yellow-950 dark:text-yellow-300"
+                              : "bg-[#FDECEC] text-[#9A2D2D] dark:bg-red-950 dark:text-red-300"
+                        }`}
+                      >
+                        {product.stock} in stock
+                      </Badge>
+                    </div>
                   </div>
                 </div>
               </div>

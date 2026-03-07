@@ -28,13 +28,29 @@ export interface AdminCustomerDetail extends AdminCustomer {
   orders: AdminOrder[];
 }
 
-export interface AdminAnalytics {
-  totalRevenue: number;
-  totalOrders: number;
+export interface AdminAnalyticsKpisTrends {
+  revenue: number;
+  orders: number;
   avgOrderValue: number;
   newCustomers: number;
+}
+
+export interface AdminAnalyticsKpis {
+  revenue: number;
+  orders: number;
+  avgOrderValue: number;
+  newCustomers: number;
+  trends: AdminAnalyticsKpisTrends;
+}
+
+export interface AdminAnalytics {
+  kpis: AdminAnalyticsKpis;
   revenueByDay: { date: string; revenue: number }[];
-  salesByCategory: { category: string; value: number; percent: number }[];
+  ordersByStatus: { completed: number; pending: number; cancelled: number };
+  topProducts: { name: string; units: number; revenue: number; percent: number }[];
+  salesByCategory: { category: string; revenue: number; percent: number }[];
+  ordersByDayOfWeek: { day: string; count: number }[];
+  paymentMethods: { method: string; count: number; percent: number }[];
 }
 
 export async function fetchAdminProducts(filters?: {
@@ -200,6 +216,27 @@ export async function fetchAnalytics(
   const json = (await res.json()) as {
     success: boolean;
     data: AdminAnalytics;
+  };
+  return json.data;
+}
+
+export interface AdminAnalyticsCalendarDay {
+  date: string;
+  revenue: number;
+  orderCount: number;
+  isHoliday: boolean;
+}
+
+export async function fetchAnalyticsCalendar(
+  year: number,
+): Promise<AdminAnalyticsCalendarDay[]> {
+  const res = await apiRequest(
+    "GET",
+    `/api/admin/analytics/calendar?year=${encodeURIComponent(String(year))}`,
+  );
+  const json = (await res.json()) as {
+    success: boolean;
+    data: AdminAnalyticsCalendarDay[];
   };
   return json.data;
 }

@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
+import { ExternalLink } from "lucide-react";
 
 export default function Home() {
   const featuredProducts = MOCK_PRODUCTS.slice(0, 2);
@@ -77,7 +78,19 @@ export default function Home() {
               href={`/product/${product.id}`}
               className="group cursor-pointer"
             >
-              <div className="overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5]">
+              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5]">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(`/product/${product.id}`, "_blank");
+                  }}
+                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Open product in new tab"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
                 <img
                   src={product.images[0]}
                   alt={product.name}
@@ -138,7 +151,19 @@ export default function Home() {
               href={`/product/${product.id}`}
               className="group cursor-pointer"
             >
-              <div className="overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6">
+              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(`/product/${product.id}`, "_blank");
+                  }}
+                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                  aria-label="Open product in new tab"
+                >
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </button>
                 <img
                   src={product.images[0]}
                   alt={product.name}

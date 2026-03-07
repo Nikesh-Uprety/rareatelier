@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
@@ -142,6 +142,18 @@ export default function Products() {
                     className="group block"
                   >
                     <div className="aspect-[3/4] overflow-hidden bg-gray-50 mb-4 relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          window.open(`/product/${product.id}`, "_blank");
+                        }}
+                        className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label="Open product in new tab"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
                       {product.stock === 0 && (
                         <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
                           Out of Stock

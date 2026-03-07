@@ -40,19 +40,66 @@ export interface RevenueByDay {
   revenue: number;
 }
 
-export interface SalesByCategory {
-  category: string;
-  value: number;
+export interface AnalyticsKpisTrends {
+  revenue: number;
+  orders: number;
+  avgOrderValue: number;
+  newCustomers: number;
+}
+
+export interface AnalyticsKpis {
+  revenue: number;
+  orders: number;
+  avgOrderValue: number;
+  newCustomers: number;
+  trends: AnalyticsKpisTrends;
+}
+
+export interface OrdersByStatus {
+  completed: number;
+  pending: number;
+  cancelled: number;
+}
+
+export interface TopProduct {
+  name: string;
+  units: number;
+  revenue: number;
   percent: number;
 }
 
+export interface SalesByCategory {
+  category: string;
+  revenue: number;
+  percent: number;
+}
+
+export interface OrdersByDayOfWeek {
+  day: string;
+  count: number;
+}
+
+export interface PaymentMethodBreakdown {
+  method: string;
+  count: number;
+  percent: number;
+}
+
+export interface AnalyticsCalendarDay {
+  date: string;
+  revenue: number;
+  orderCount: number;
+  isHoliday: boolean;
+}
+
 export interface AnalyticsData {
-  totalRevenue: number;
-  totalOrders: number;
-  avgOrderValue: number;
-  newCustomers: number;
+  kpis: AnalyticsKpis;
   revenueByDay: RevenueByDay[];
+  ordersByStatus: OrdersByStatus;
+  topProducts: TopProduct[];
   salesByCategory: SalesByCategory[];
+  ordersByDayOfWeek: OrdersByDayOfWeek[];
+  paymentMethods: PaymentMethodBreakdown[];
 }
 
 export interface IStorage {
@@ -108,6 +155,7 @@ export interface IStorage {
 
   // Analytics
   getAnalytics(range: "7d" | "30d" | "90d" | "1y"): Promise<AnalyticsData>;
+  getAnalyticsCalendar(year: number): Promise<AnalyticsCalendarDay[]>;
 
   // Categories
   getCategories(): Promise<Category[]>;
@@ -730,6 +778,7 @@ export class PgStorage implements IStorage {
     const days =
       range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 365;
 
+    // Current period summary
     const [summary] = await db
       .select({
         totalRevenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
@@ -750,6 +799,59 @@ export class PgStorage implements IStorage {
       .from(customers)
       .where(sql.raw(`"created_at" >= now() - interval '${days} days'`));
 
+    // Previous period summary for trends
+    const [prevSummary] = await db
+      .select({
+        totalRevenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
+        totalOrders: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(
+        sql.raw(
+          `"created_at" >= now() - interval '${days * 2} days' AND "created_at" < now() - interval '${days} days'`,
+        ),
+      );
+
+    const [prevNewCustomersRow] = await db
+      .select({
+        count: sql<number>`count(*)`,
+      })
+      .from(customers)
+      .where(
+        sql.raw(
+          `"created_at" >= now() - interval '${days * 2} days' AND "created_at" < now() - interval '${days} days'`,
+        ),
+      );
+
+    const prevAvgOrderValue =
+      prevSummary.totalOrders > 0
+        ? prevSummary.totalRevenue / prevSummary.totalOrders
+        : 0;
+
+    const pctChange = (current: number, previous: number): number => {
+      if (previous === 0) {
+        return current === 0 ? 0 : 100;
+      }
+      return ((current - previous) / previous) * 100;
+    };
+
+    const kpis: AnalyticsKpis = {
+      revenue: summary.totalRevenue,
+      orders: summary.totalOrders,
+      avgOrderValue,
+      newCustomers: newCustomersRow.count,
+      trends: {
+        revenue: pctChange(summary.totalRevenue, prevSummary.totalRevenue),
+        orders: pctChange(summary.totalOrders, prevSummary.totalOrders),
+        avgOrderValue: pctChange(avgOrderValue, prevAvgOrderValue),
+        newCustomers: pctChange(
+          newCustomersRow.count,
+          prevNewCustomersRow.count,
+        ),
+      },
+    };
+
+    // Revenue by day
     const revenueRows = await db
       .select({
         day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
@@ -765,44 +867,207 @@ export class PgStorage implements IStorage {
       revenue: row.revenue,
     }));
 
+    // Orders by status
+    const statusRows = await db
+      .select({
+        status: orders.status,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(orders.status);
+
+    const ordersByStatus: OrdersByStatus = {
+      completed: 0,
+      pending: 0,
+      cancelled: 0,
+    };
+    for (const row of statusRows) {
+      if (row.status === "completed") ordersByStatus.completed = row.count;
+      else if (row.status === "cancelled") ordersByStatus.cancelled = row.count;
+      else if (row.status === "pending") ordersByStatus.pending = row.count;
+    }
+
+    // Top products
+    const topProductRows = await db
+      .select({
+        productId: products.id,
+        name: products.name,
+        units: sql<number>`sum(${orderItems.quantity})`,
+        revenue: sql<number>`sum(${orderItems.quantity} * ${orderItems.unitPrice})`,
+      })
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
+      .innerJoin(products, eq(orderItems.productId, products.id))
+      .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
+      .groupBy(products.id, products.name)
+      .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPrice})`))
+      .limit(10);
+
+    const totalTopRevenue = topProductRows.reduce(
+      (acc, row) => acc + row.revenue,
+      0,
+    );
+
+    const topProducts: TopProduct[] = topProductRows.map((row) => ({
+      name: row.name,
+      units: row.units,
+      revenue: row.revenue,
+      percent:
+        totalTopRevenue > 0 ? (row.revenue / totalTopRevenue) * 100 : 0,
+    }));
+
+    // Sales by category
     const salesCategoryRows = await db
       .select({
         category: products.category,
-        value: sql<number>`sum(${orders.total})`,
+        revenue: sql<number>`sum(${orderItems.quantity} * ${orderItems.unitPrice})`,
       })
-      .from(orders)
-      .innerJoin(
-        orderItems,
-        eq(orderItems.orderId, orders.id),
-      )
+      .from(orderItems)
+      .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
       .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
       .groupBy(products.category);
 
     const totalCategoryRevenue = salesCategoryRows.reduce(
-      (acc, row) => acc + row.value,
+      (acc, row) => acc + row.revenue,
       0,
     );
 
     const salesByCategory: SalesByCategory[] = salesCategoryRows.map(
       (row) => ({
         category: row.category ?? "Uncategorized",
-        value: row.value,
+        revenue: row.revenue,
         percent:
           totalCategoryRevenue > 0
-            ? (row.value / totalCategoryRevenue) * 100
+            ? (row.revenue / totalCategoryRevenue) * 100
             : 0,
       }),
     );
 
+    // Orders by day of week (Mon-Sun)
+    const dayOfWeekRows = await db
+      .select({
+        dow: sql<number>`extract(dow from ${orders.createdAt})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(sql`extract(dow from ${orders.createdAt})`);
+
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+    const ordersByDayOfWeek: OrdersByDayOfWeek[] = dayOfWeekRows.map(
+      (row) => ({
+        day: dayNames[Math.round(row.dow)] ?? "Unknown",
+        count: row.count,
+      }),
+    );
+
+    // Payment methods
+    const paymentRows = await db
+      .select({
+        method: orders.paymentMethod,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .groupBy(orders.paymentMethod);
+
+    const totalPayments = paymentRows.reduce(
+      (acc, row) => acc + row.count,
+      0,
+    );
+
+    const paymentMethods: PaymentMethodBreakdown[] = paymentRows.map(
+      (row) => ({
+        method: row.method ?? "Unknown",
+        count: row.count,
+        percent:
+          totalPayments > 0 ? (row.count / totalPayments) * 100 : 0,
+      }),
+    );
+
     return {
-      totalRevenue: summary.totalRevenue,
-      totalOrders: summary.totalOrders,
-      avgOrderValue,
-      newCustomers: newCustomersRow.count,
+      kpis,
       revenueByDay,
+      ordersByStatus,
+      topProducts,
       salesByCategory,
+      ordersByDayOfWeek,
+      paymentMethods,
     };
+  }
+
+  async getAnalyticsCalendar(year: number): Promise<AnalyticsCalendarDay[]> {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year + 1, 0, 1);
+
+    const rows = await db
+      .select({
+        day: sql<string>`date_trunc('day', ${orders.createdAt})::date`,
+        revenue: sql<number>`sum(${orders.total})`,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(
+        sql.raw(
+          `"created_at" >= '${year}-01-01'::date AND "created_at" < '${
+            year + 1
+          }-01-01'::date`,
+        ),
+      )
+      .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
+      .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
+
+    const byDate = new Map<
+      string,
+      { revenue: number; orderCount: number }
+    >();
+    for (const row of rows) {
+      const d = new Date(row.day);
+      const key = d.toISOString().slice(0, 10);
+      byDate.set(key, { revenue: row.revenue, orderCount: row.count });
+    }
+
+    // Hardcoded Nepal public holidays for 2025 (approximate set)
+    const holidayDates =
+      year === 2025
+        ? new Set([
+            "2025-01-01", // New Year
+            "2025-01-15", // Maghe Sankranti (approx)
+            "2025-03-01", // Maha Shivaratri (approx)
+            "2025-03-14", // Fagu Purnima / Holi (approx)
+            "2025-04-14", // Nepali New Year (approx)
+            "2025-05-01", // Labour Day
+            "2025-05-12", // Buddha Jayanti (approx)
+            "2025-08-19", // Janai Purnima (approx)
+            "2025-09-19", // Constitution Day (approx)
+            "2025-10-01", // Ghatasthapana (approx)
+            "2025-10-06", // Fulpati (approx)
+            "2025-10-07", // Maha Ashtami
+            "2025-10-08", // Maha Navami
+            "2025-10-09", // Vijaya Dashami
+            "2025-10-20", // Laxmi Puja (approx)
+          ])
+        : new Set<string>();
+
+    const days: AnalyticsCalendarDay[] = [];
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      const aggregate = byDate.get(key);
+      const revenue = aggregate?.revenue ?? 0;
+      const orderCount = aggregate?.orderCount ?? 0;
+      const isHoliday = holidayDates.has(key);
+
+      days.push({
+        date: key,
+        revenue,
+        orderCount,
+        isHoliday,
+      });
+    }
+
+    return days;
   }
 }
 
@@ -1017,30 +1282,47 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getCategories(): Promise<Category[]> {
-    return this._categories;
-  }
-
-  async createCategory(data: { name: string; slug: string }): Promise<Category> {
-    const cat: Category = {
-      id: crypto.randomUUID(),
-      name: data.name,
-      slug: data.slug,
-      createdAt: new Date(),
-    };
-    this._categories.push(cat);
-    return cat;
-  }
-
-  async getAnalytics(): Promise<AnalyticsData> {
+  async getAnalytics(
+    _range: "7d" | "30d" | "90d" | "1y",
+  ): Promise<AnalyticsData> {
     return {
-      totalRevenue: 0,
-      totalOrders: 0,
-      avgOrderValue: 0,
-      newCustomers: 0,
+      kpis: {
+        revenue: 0,
+        orders: 0,
+        avgOrderValue: 0,
+        newCustomers: 0,
+        trends: {
+          revenue: 0,
+          orders: 0,
+          avgOrderValue: 0,
+          newCustomers: 0,
+        },
+      },
       revenueByDay: [],
+      ordersByStatus: { completed: 0, pending: 0, cancelled: 0 },
+      topProducts: [],
       salesByCategory: [],
+      ordersByDayOfWeek: [],
+      paymentMethods: [],
     };
+  }
+
+  async getAnalyticsCalendar(year: number): Promise<AnalyticsCalendarDay[]> {
+    const start = new Date(year, 0, 1);
+    const end = new Date(year + 1, 0, 1);
+    const days: AnalyticsCalendarDay[] = [];
+
+    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      days.push({
+        date: key,
+        revenue: 0,
+        orderCount: 0,
+        isHoliday: false,
+      });
+    }
+
+    return days;
   }
 }
 

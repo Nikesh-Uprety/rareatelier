@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Navbar from "@/components/layout/Navbar";
 import AdminLayout from "@/components/layout/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 import Home from "@/pages/storefront/Home";
 import Products from "@/pages/storefront/Products";
@@ -39,6 +40,24 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       </footer>
     </div>
   );
+}
+
+function LoginRoute() {
+  const { user, isLoading } = useCurrentUser();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (user && (user.role === "admin" || user.role === "staff")) {
+    return <Redirect to="/admin" />;
+  }
+
+  if (user) {
+    return <Redirect to="/" />;
+  }
+
+  return <LoginPage />;
 }
 
 function Router() {
@@ -121,7 +140,7 @@ function Router() {
         </StorefrontLayout>
       </Route>
       <Route path="/login">
-        <LoginPage />
+        <LoginRoute />
       </Route>
       
       <Route component={NotFound} />
