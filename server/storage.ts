@@ -157,6 +157,26 @@ export interface IStorage {
   getUserById(id: string): Promise<User | null>;
   createUser(data: Omit<User, "id">): Promise<User>;
   updateLastLoginAt(id: string): Promise<void>;
+  updateUserPassword(id: string, passwordHash: string): Promise<void>;
+  updateUserTwoFactor(id: string, enabled: boolean): Promise<void>;
+  revokeUser(id: string): Promise<void>;
+  getAdminUsers(): Promise<
+    {
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      twoFactorEnabled: boolean;
+      lastLoginAt: Date | null;
+      status: string;
+    }[]
+  >;
+  inviteAdminUser(data: {
+    name: string;
+    email: string;
+    role: string;
+    passwordHash: string;
+  }): Promise<User>;
 
   // OTP tokens
   createOtpToken(data: {
@@ -810,6 +830,85 @@ export class PgStorage implements IStorage {
       .update(users)
       .set({ lastLoginAt: sql`now()` })
       .where(eq(users.id, id));
+  }
+
+  async updateUserPassword(id: string, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ password: passwordHash })
+      .where(eq(users.id, id));
+  }
+
+  async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {
+    await db
+      .update(users)
+      .set({ twoFactorEnabled: enabled ? 1 : 0 })
+      .where(eq(users.id, id));
+  }
+
+  async revokeUser(id: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ status: "suspended" })
+      .where(eq(users.id, id));
+  }
+
+  async getAdminUsers(): Promise<
+    {
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      twoFactorEnabled: boolean;
+      lastLoginAt: Date | null;
+      status: string;
+    }[]
+  > {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.username,
+        name: users.username,
+        role: users.role,
+        twoFactorEnabled: users.twoFactorEnabled,
+        lastLoginAt: users.lastLoginAt,
+        status: users.status,
+      })
+      .from(users)
+      .where(sql`${users.role} IN ('admin', 'staff')`);
+
+    return rows.map((row) => ({
+      ...row,
+      twoFactorEnabled: !!row.twoFactorEnabled,
+    }));
+  }
+
+  async inviteAdminUser(data: {
+    name: string;
+    email: string;
+    role: string;
+    passwordHash: string;
+  }): Promise<User> {
+    const [row] = await db
+      .insert(users)
+      .values({
+        username: data.email,
+        password: data.passwordHash,
+        role: data.role,
+        status: "invited",
+        twoFactorEnabled: 1,
+      })
+      .returning({
+        id: users.id,
+        username: users.username,
+        password: users.password,
+        role: users.role,
+        twoFactorEnabled: users.twoFactorEnabled,
+        lastLoginAt: users.lastLoginAt,
+        status: users.status,
+      });
+
+    return row;
   }
 
   async createOtpToken(data: {

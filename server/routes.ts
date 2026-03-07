@@ -861,6 +861,179 @@ export async function registerRoutes(
     },
   );
 
+  // Admin users & profile
+  app.get(
+    "/api/admin/users",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const users = await storage.getAdminUsers();
+        return res.json({ success: true, data: users });
+      } catch (err) {
+        console.error("Error in GET /api/admin/users", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load users" });
+      }
+    },
+  );
+
+  const updatePasswordSchema = z.object({
+    current: z.string().min(1),
+    newPassword: z.string().min(8),
+    confirm: z.string().min(8),
+  });
+
+  app.put(
+    "/api/admin/profile/password",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const parsed = updatePasswordSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid request body" });
+      }
+
+      const { current, newPassword, confirm } = parsed.data;
+      if (newPassword !== confirm) {
+        return res.status(400).json({
+          success: false,
+          error: "New passwords do not match",
+        });
+      }
+
+      const user = req.user as Express.User | undefined;
+      if (!user) {
+        return res
+          .status(401)
+          .json({ success: false, error: "Not authenticated" });
+      }
+
+      const fullUser = await storage.getUserById(user.id);
+      if (!fullUser) {
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found" });
+      }
+
+      const bcrypt = await import("bcryptjs");
+      const matches = await bcrypt.default.compare(
+        current,
+        fullUser.password,
+      );
+      if (!matches) {
+        return res.status(400).json({
+          success: false,
+          error: "Current password is incorrect",
+        });
+      }
+
+      const hashed = await bcrypt.default.hash(newPassword, 10);
+      await storage.updateUserPassword(fullUser.id, hashed);
+
+      return res.json({ success: true });
+    },
+  );
+
+  const twoFASchema = z.object({
+    enabled: z.boolean(),
+  });
+
+  app.put(
+    "/api/admin/users/:id/2fa",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const parsed = twoFASchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid request body" });
+      }
+
+      try {
+        await storage.updateUserTwoFactor(req.params.id, parsed.data.enabled);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PUT /api/admin/users/:id/2fa", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to update 2FA" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/users/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        await storage.revokeUser(req.params.id);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/users/:id", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to revoke access" });
+      }
+    },
+  );
+
+  const inviteUserSchema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    role: z.enum(["admin", "staff"]),
+  });
+
+  app.post(
+    "/api/admin/users/invite",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const parsed = inviteUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ success: false, error: "Invalid request body" });
+      }
+
+      try {
+        const { name, email, role } = parsed.data;
+        const code = Math.floor(100000 + Math.random() * 900000)
+          .toString()
+          .slice(0, 6);
+
+        const bcrypt = await import("bcryptjs");
+        const hashed = await bcrypt.default.hash(code, 10);
+
+        const created = await storage.inviteAdminUser({
+          name,
+          email,
+          role,
+          passwordHash: hashed,
+        });
+
+        const inviter = req.user as Express.User | undefined;
+
+        await sendInviteEmail(
+          email,
+          name,
+          code,
+          inviter?.name || inviter?.email || "Admin",
+        );
+
+        return res.status(201).json({
+          success: true,
+          data: { id: created.id },
+        });
+      } catch (err) {
+        console.error("Error in POST /api/admin/users/invite", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to invite user" });
+      }
+    },
+  );
+
   app.get(
     "/api/admin/customers/:id",
     requireAdmin,

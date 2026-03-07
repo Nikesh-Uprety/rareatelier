@@ -80,7 +80,10 @@ export default function AdminLayout({
         </nav>
 
         <div className="p-4 border-t border-[#E5E5E0] dark:border-border">
-          <div className="flex items-center gap-3 px-3 py-2">
+          <Link
+            href="/admin/profile"
+            className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/60 transition-colors"
+          >
             <div className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-medium">
               {initials}
             </div>
@@ -90,7 +93,7 @@ export default function AdminLayout({
                 {roleLabel}
               </p>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
 
