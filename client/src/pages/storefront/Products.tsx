@@ -67,11 +67,11 @@ export default function Products() {
         </div>
         
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="relative flex-1 md:w-80 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
             <input 
               placeholder="Search products..." 
-              className="w-full pl-9 h-12 bg-gray-50 border-transparent rounded-none text-sm focus:bg-white focus:ring-1 focus:ring-black transition-all"
+              className="w-full pl-11 pr-4 h-12 bg-gray-50 dark:bg-muted/30 border border-gray-200 dark:border-border rounded-xl text-sm focus:bg-white dark:focus:bg-background focus:ring-2 focus:ring-black dark:focus:ring-white transition-all placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
