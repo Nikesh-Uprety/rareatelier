@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   integer,
+  jsonb,
   numeric,
   pgTable,
   text,
@@ -146,3 +147,63 @@ export const contactMessages = pgTable("contact_messages", {
 });
 
 export type ContactMessage = typeof contactMessages.$inferSelect;
+
+// ── Bills ──────────────────────────────────────────────
+export const bills = pgTable("bills", {
+  id: text("id").primaryKey(),
+  billNumber: text("bill_number").unique().notNull(), // RARE-INV-000123
+  orderId: text("order_id"),
+  customerId: text("customer_id"),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email"),
+  customerPhone: text("customer_phone"),
+  items: jsonb("items").notNull(), // BillItem[]
+  subtotal: numeric("subtotal").notNull(),
+  taxRate: numeric("tax_rate").default("13"), // Nepal VAT 13%
+  taxAmount: numeric("tax_amount").notNull(),
+  discountAmount: numeric("discount_amount").default("0"),
+  totalAmount: numeric("total_amount").notNull(),
+  paymentMethod: text("payment_method").notNull(), // cash|esewa|card|khalti
+  cashReceived: numeric("cash_received"),
+  changeGiven: numeric("change_given"),
+  processedBy: text("processed_by").notNull(),
+  processedById: text("processed_by_id"),
+  notes: text("notes"),
+  billType: text("bill_type").default("sale"), // sale | refund | pos
+  status: text("status").default("issued"), // issued | void
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type Bill = typeof bills.$inferSelect;
+export type NewBill = typeof bills.$inferInsert;
+
+// BillItem shape (stored in items JSONB):
+// {
+//   productId: string
+//   productName: string
+//   variantColor: string
+//   size: string
+//   sku: string
+//   quantity: number
+//   unitPrice: number
+//   lineTotal: number
+// }
+
+// ── POS Sessions ───────────────────────────────────────
+export const posSessions = pgTable("pos_sessions", {
+  id: text("id").primaryKey(),
+  openedBy: text("opened_by").notNull(),
+  openedAt: timestamp("opened_at").defaultNow(),
+  closedAt: timestamp("closed_at"),
+  openingCash: numeric("opening_cash").default("0"),
+  closingCash: numeric("closing_cash"),
+  totalSales: numeric("total_sales").default("0"),
+  totalOrders: integer("total_orders").default(0),
+  totalCashSales: numeric("total_cash_sales").default("0"),
+  totalDigitalSales: numeric("total_digital_sales").default("0"),
+  status: text("status").default("open"), // open | closed
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export type PosSession = typeof posSessions.$inferSelect;

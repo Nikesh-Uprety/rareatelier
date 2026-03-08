@@ -2,17 +2,56 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   exportOrdersCSV,
   fetchAdminOrders,
   updateOrderStatus,
   verifyOrderPayment,
+  fetchBillByOrder,
 } from "@/lib/adminApi";
-import type { AdminOrder } from "@/lib/adminApi";
+import type { AdminOrder, AdminBill } from "@/lib/adminApi";
+import { BillViewer } from "@/components/admin/BillViewer";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
+
+function BillButton({ orderId }: { orderId: string }) {
+  const [showBill, setShowBill] = useState(false);
+
+  const { data, isLoading } = useQuery<AdminBill | null>({
+    queryKey: ["bill", "order", orderId],
+    queryFn: () => fetchBillByOrder(orderId),
+  });
+
+  if (isLoading) return <div className="text-muted-foreground text-xs">Loading bill...</div>;
+
+  if (!data) return (
+    <div className="text-muted-foreground text-xs">
+      Bill not generated yet.
+    </div>
+  );
+
+  return (
+    <>
+      <button
+        onClick={() => setShowBill(true)}
+        className="view-bill-btn"
+      >
+        <Receipt size={14} />
+        View Bill — {data.billNumber}
+      </button>
+
+      {showBill && (
+        <div className="bill-modal-overlay" onClick={() => setShowBill(false)}>
+          <div className="bill-modal" onClick={e => e.stopPropagation()}>
+            <BillViewer bill={data} onClose={() => setShowBill(false)} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function AdminOrders() {
   const [search, setSearch] = useState("");
@@ -288,6 +327,12 @@ export default function AdminOrders() {
                           >
                             {status}
                           </Badge>
+                          {/* Bill button for completed orders */}
+                          {order.status === "completed" && (
+                            <div className="mt-2">
+                              <BillButton orderId={order.id} />
+                            </div>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-right font-medium">
                           {formatPrice(order.total)}

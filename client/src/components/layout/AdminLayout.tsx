@@ -6,6 +6,7 @@ import {
   Package,
   CreditCard,
   ShoppingBag,
+  Receipt,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,6 +16,7 @@ const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard" },
   { href: "/admin/products", icon: Package, label: "Products" },
   { href: "/admin/orders", icon: ShoppingBag, label: "Orders" },
+  { href: "/admin/bills", icon: Receipt, label: "Bills" },
   { href: "/admin/customers", icon: User, label: "Customers" },
   { href: "/admin/analytics", icon: BarChart, label: "Analytics" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale" },

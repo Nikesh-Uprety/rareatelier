@@ -20,6 +20,7 @@ import PaymentProcess from "@/pages/storefront/PaymentProcess";
 
 import AdminProducts from "@/pages/admin/Products";
 import AdminOrders from "@/pages/admin/Orders";
+import AdminBills from "@/pages/admin/Bills";
 import AdminCustomers from "@/pages/admin/Customers";
 import AdminPOS from "@/pages/admin/POS";
 import AdminAnalytics from "@/pages/admin/Analytics";
@@ -106,6 +107,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminCustomers />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/bills">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminBills />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

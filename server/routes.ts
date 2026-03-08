@@ -10,6 +10,10 @@ import { z } from "zod";
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { sendOTPEmail, sendInviteEmail } from "./email";
+import { generateBillFromOrder, generateBillNumber } from "./services/billService";
+import { bills, posSessions } from "../shared/schema";
+import { eq, and, gte, desc } from "drizzle-orm";
+import { db } from "./db";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads", "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
@@ -754,6 +758,22 @@ export async function registerRoutes(
           req.params.id,
           parsed.data.status,
         );
+
+        // Auto-generate bill when order is marked completed
+        if (parsed.data.status === "completed") {
+          try {
+            const user = req.user as any;
+            await generateBillFromOrder(
+              req.params.id,
+              user?.id ?? "system",
+              user?.name ?? user?.email ?? "Admin"
+            );
+            console.log(`✅ Bill auto-generated for order ${req.params.id}`);
+          } catch (billErr) {
+            console.error("Bill generation failed (non-critical):", billErr);
+          }
+        }
+
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PUT /api/admin/orders/:id", err);
@@ -1116,6 +1136,196 @@ export async function registerRoutes(
       }
     },
   );
+
+  // ── Bill Routes ─────────────────────────────────────────
+
+  // GET /api/admin/bills — list all bills
+  app.get("/api/admin/bills", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const allBills = await db
+        .select()
+        .from(bills)
+        .orderBy(desc(bills.createdAt));
+      res.json({ success: true, data: allBills });
+    } catch (err) {
+      console.error("Error in GET /api/admin/bills", err);
+      res.status(500).json({ success: false, error: "Failed to load bills" });
+    }
+  });
+
+  // GET /api/admin/bills/:id — single bill
+  app.get("/api/admin/bills/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const [bill] = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.id, req.params.id))
+        .limit(1);
+      if (!bill) return res.status(404).json({ success: false, error: "Bill not found" });
+      res.json({ success: true, data: bill });
+    } catch (err) {
+      console.error("Error in GET /api/admin/bills/:id", err);
+      res.status(500).json({ success: false, error: "Failed to load bill" });
+    }
+  });
+
+  // GET /api/admin/bills/by-order/:orderId — get bill for a specific order
+  app.get("/api/admin/bills/by-order/:orderId", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const [bill] = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.orderId, req.params.orderId))
+        .limit(1);
+      res.json({ success: true, data: bill ?? null });
+    } catch (err) {
+      console.error("Error in GET /api/admin/bills/by-order/:orderId", err);
+      res.status(500).json({ success: false, error: "Failed to load bill" });
+    }
+  });
+
+  // POST /api/admin/bills/pos — create bill directly from POS (no order record)
+  app.post("/api/admin/bills/pos", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { customerName, customerPhone, items, paymentMethod,
+              cashReceived, discountAmount, notes } = req.body;
+
+      const subtotal = items.reduce((s: number, i: any) => s + i.lineTotal, 0);
+      const taxAmount = Math.round(subtotal * 0.13);
+      const discount = discountAmount ?? 0;
+      const total = subtotal + taxAmount - discount;
+      const change = paymentMethod === "cash" ? ((cashReceived ?? 0) - total) : 0;
+
+      const billNumber = await generateBillNumber();
+      const user = req.user as any;
+
+      const [bill] = await db.insert(bills).values({
+        id: crypto.randomUUID(),
+        billNumber,
+        orderId: null,
+        customerName: customerName || "Walk-in Customer",
+        customerPhone: customerPhone || null,
+        items,
+        subtotal: String(subtotal),
+        taxRate: "13",
+        taxAmount: String(taxAmount),
+        discountAmount: String(discount),
+        totalAmount: String(total),
+        paymentMethod,
+        cashReceived: cashReceived ? String(cashReceived) : null,
+        changeGiven: change > 0 ? String(change) : null,
+        processedBy: user?.name ?? user?.email ?? "Admin",
+        processedById: user?.id ?? null,
+        billType: "pos",
+        status: "issued",
+      }).returning();
+
+      res.json({ success: true, data: bill });
+    } catch (err) {
+      console.error("Error in POST /api/admin/bills/pos", err);
+      res.status(500).json({ success: false, error: "Failed to create POS bill" });
+    }
+  });
+
+  // PUT /api/admin/bills/:id/void — void a bill
+  app.put("/api/admin/bills/:id/void", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const [updated] = await db
+        .update(bills)
+        .set({ status: "void" })
+        .where(eq(bills.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ success: false, error: "Bill not found" });
+      res.json({ success: true, data: updated });
+    } catch (err) {
+      console.error("Error in PUT /api/admin/bills/:id/void", err);
+      res.status(500).json({ success: false, error: "Failed to void bill" });
+    }
+  });
+
+  // ── POS Session Routes ─────────────────────────────────
+
+  app.post("/api/admin/pos/session/open", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { openingCash } = req.body;
+      const user = req.user as any;
+      const [session] = await db.insert(posSessions).values({
+        id: crypto.randomUUID(),
+        openedBy: user?.name ?? user?.email ?? "Admin",
+        openingCash: String(openingCash ?? 0),
+        status: "open",
+      }).returning();
+      res.json({ success: true, data: session });
+    } catch (err) {
+      console.error("Error opening POS session", err);
+      res.status(500).json({ success: false, error: "Failed to open session" });
+    }
+  });
+
+  app.put("/api/admin/pos/session/:id/close", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { closingCash, notes, openedAt } = req.body;
+
+      // Calculate totals from POS bills created during this session
+      const sessionStart = new Date(openedAt);
+      const sessionBills = await db
+        .select()
+        .from(bills)
+        .where(
+          and(
+            eq(bills.billType, "pos"),
+            eq(bills.status, "issued"),
+            gte(bills.createdAt, sessionStart)
+          )
+        );
+
+      const totalSales = sessionBills.reduce((s, b) => s + Number(b.totalAmount), 0);
+      const cashSales = sessionBills
+        .filter(b => b.paymentMethod === "cash")
+        .reduce((s, b) => s + Number(b.totalAmount), 0);
+      const digitalSales = totalSales - cashSales;
+
+      const [session] = await db
+        .update(posSessions)
+        .set({
+          closedAt: new Date(),
+          closingCash: String(closingCash),
+          totalSales: String(totalSales),
+          totalOrders: sessionBills.length,
+          totalCashSales: String(cashSales),
+          totalDigitalSales: String(digitalSales),
+          notes,
+          status: "closed",
+        })
+        .where(eq(posSessions.id, req.params.id))
+        .returning();
+      res.json({ success: true, data: session });
+    } catch (err) {
+      console.error("Error closing POS session", err);
+      res.status(500).json({ success: false, error: "Failed to close session" });
+    }
+  });
+
+  app.get("/api/admin/pos/session/today", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const [session] = await db
+        .select()
+        .from(posSessions)
+        .where(
+          and(
+            eq(posSessions.status, "open"),
+            gte(posSessions.createdAt, today)
+          )
+        )
+        .limit(1);
+      res.json({ success: true, data: session ?? null });
+    } catch (err) {
+      console.error("Error fetching today's POS session", err);
+      res.status(500).json({ success: false, error: "Failed to fetch session" });
+    }
+  });
 
   return httpServer;
 }

@@ -251,3 +251,101 @@ export async function fetchAnalyticsCalendar(
   };
   return json.data;
 }
+
+// ── Bill API helpers ─────────────────────────────────
+
+export interface AdminBill {
+  id: string;
+  billNumber: string;
+  orderId: string | null;
+  customerId: string | null;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  items: any[];
+  subtotal: string;
+  taxRate: string;
+  taxAmount: string;
+  discountAmount: string;
+  totalAmount: string;
+  paymentMethod: string;
+  cashReceived: string | null;
+  changeGiven: string | null;
+  processedBy: string;
+  processedById: string | null;
+  notes: string | null;
+  billType: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function fetchBills(): Promise<AdminBill[]> {
+  const res = await apiRequest("GET", "/api/admin/bills");
+  const json = (await res.json()) as { success: boolean; data: AdminBill[] };
+  return json.data;
+}
+
+export async function fetchBillByOrder(orderId: string): Promise<AdminBill | null> {
+  const res = await apiRequest("GET", `/api/admin/bills/by-order/${orderId}`);
+  const json = (await res.json()) as { success: boolean; data: AdminBill | null };
+  return json.data;
+}
+
+export async function createPosBill(data: {
+  customerName: string;
+  customerPhone?: string;
+  items: any[];
+  paymentMethod: string;
+  cashReceived?: number | null;
+  discountAmount?: number;
+  notes?: string;
+}): Promise<AdminBill> {
+  const res = await apiRequest("POST", "/api/admin/bills/pos", data);
+  const json = (await res.json()) as { success: boolean; data: AdminBill };
+  return json.data;
+}
+
+export async function voidBill(id: string): Promise<AdminBill> {
+  const res = await apiRequest("PUT", `/api/admin/bills/${id}/void`);
+  const json = (await res.json()) as { success: boolean; data: AdminBill };
+  return json.data;
+}
+
+// ── POS Session API helpers ──────────────────────────
+
+export interface POSSession {
+  id: string;
+  openedBy: string;
+  openedAt: string;
+  closedAt: string | null;
+  openingCash: string;
+  closingCash: string | null;
+  totalSales: string;
+  totalOrders: number;
+  totalCashSales: string;
+  totalDigitalSales: string;
+  status: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export async function openPosSession(openingCash: number): Promise<POSSession> {
+  const res = await apiRequest("POST", "/api/admin/pos/session/open", { openingCash });
+  const json = (await res.json()) as { success: boolean; data: POSSession };
+  return json.data;
+}
+
+export async function closePosSession(
+  id: string,
+  data: { closingCash: number; notes?: string; openedAt: string },
+): Promise<POSSession> {
+  const res = await apiRequest("PUT", `/api/admin/pos/session/${id}/close`, data);
+  const json = (await res.json()) as { success: boolean; data: POSSession };
+  return json.data;
+}
+
+export async function fetchTodaySession(): Promise<POSSession | null> {
+  const res = await apiRequest("GET", "/api/admin/pos/session/today");
+  const json = (await res.json()) as { success: boolean; data: POSSession | null };
+  return json.data;
+}
