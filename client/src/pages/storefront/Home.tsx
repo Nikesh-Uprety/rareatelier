@@ -17,10 +17,6 @@ const HERO_IMAGES = [
 const LIFESTYLE_IMAGES = [
   "/images/feature1.webp",
   "/images/feature2.webp",
-  "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80",
-  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=1200&q=80",
-  "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=1200&q=80",
-  "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=1200&q=80",
 ];
 
 
