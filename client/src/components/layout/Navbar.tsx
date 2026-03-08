@@ -47,11 +47,8 @@ export default function Navbar() {
       <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center">
-            <Link
-              href="/"
-              className="text-2xl font-black tracking-tighter uppercase transition-colors hover:opacity-80"
-            >
-              RARENP
+            <Link href="/" className="transition-opacity hover:opacity-80">
+              <img src="/images/logo.webp" alt="Logo" className="h-12 w-auto object-contain" />
             </Link>
           </div>
 
