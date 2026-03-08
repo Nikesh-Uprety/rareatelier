@@ -136,7 +136,16 @@ export default function ProductDetail() {
         </div>
 
         <div className="flex-1 min-w-0 lg:max-w-[440px]">
-          <h1 className="text-2xl lg:text-3xl font-black uppercase tracking-tighter mb-2">
+          <h1 
+            style={{
+              fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
+              fontWeight: 600,
+              fontSize: '24px',
+              lineHeight: '36px',
+              color: 'var(--brand-product-detail)'
+            }}
+            className="uppercase tracking-tight mb-2"
+          >
             {product.name}
           </h1>
           {product.shortDetails && (
@@ -144,7 +153,16 @@ export default function ProductDetail() {
               {product.shortDetails}
             </p>
           )}
-          <p className="text-xl font-light mb-8">
+          <p 
+            style={{
+              fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
+              fontWeight: 600,
+              fontSize: '24px',
+              lineHeight: '36px',
+              color: 'var(--brand-product-detail)'
+            }}
+            className="mb-8"
+          >
             {formatPrice(product.price)}
           </p>
 

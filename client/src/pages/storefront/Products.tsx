@@ -25,6 +25,9 @@ export default function Products() {
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>(initialCategory || "all");
+  const [minPrice, setMinPrice] = useState<number | "">("");
+  const [maxPrice, setMaxPrice] = useState<number | "">("");
+  const [sortBy, setSortBy] = useState("newest");
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -35,9 +38,12 @@ export default function Products() {
     () => ({
       category: category === "all" ? undefined : category,
       search: search || undefined,
+      minPrice: minPrice !== "" ? Number(minPrice) : undefined,
+      maxPrice: maxPrice !== "" ? Number(maxPrice) : undefined,
+      sortBy: sortBy,
       page: 1,
     }),
-    [category, search],
+    [category, search, minPrice, maxPrice, sortBy],
   );
 
   const {
@@ -52,15 +58,37 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
-    return products.filter((p) => {
+    let filtered = products.filter((p) => {
       const matchesSearch =
         p.name.toLowerCase().includes(search.toLowerCase()) ||
         (p.category ?? "").toLowerCase().includes(search.toLowerCase());
       const matchesCategory =
         category === "all" || (p.category ?? "") === category;
-      return matchesSearch && matchesCategory;
+      
+      const price = Number(p.price);
+      const matchesMinPrice = minPrice === "" || price >= minPrice;
+      const matchesMaxPrice = maxPrice === "" || price <= maxPrice;
+
+      return matchesSearch && matchesCategory && matchesMinPrice && matchesMaxPrice;
     });
-  }, [products, search, category]);
+
+    // Apply Sorting
+    switch (sortBy) {
+      case "price-low":
+        filtered.sort((a, b) => Number(a.price) - Number(b.price));
+        break;
+      case "price-high":
+        filtered.sort((a, b) => Number(b.price) - Number(a.price));
+        break;
+      case "newest":
+      default:
+        // Assuming higher ID means newer or we just keep default order
+        filtered.sort((a, b) => Number(b.id) - Number(a.id));
+        break;
+    }
+
+    return filtered;
+  }, [products, search, category, minPrice, maxPrice, sortBy]);
 
   const productsByCategory = useMemo(() => {
     const map = new Map<string | null, ProductApi[]>();
@@ -80,60 +108,126 @@ export default function Products() {
 
   return (
     <div className="container mx-auto px-4 py-20 mt-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-4">
-        <div>
-          <h1 className="text-4xl font-black uppercase tracking-tighter mb-2">Collection</h1>
-          <p className="text-muted-foreground uppercase text-[10px] tracking-widest font-bold">Explore our latest drops</p>
-        </div>
-        
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <div className="relative flex-1 md:w-80 group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-foreground transition-colors" />
-            <input 
-              placeholder="Search products..." 
-              className="w-full pl-11 pr-4 h-12 bg-gray-50 dark:bg-muted/30 border border-gray-200 dark:border-border rounded-xl text-sm focus:bg-white dark:focus:bg-background focus:ring-2 focus:ring-black dark:focus:ring-white transition-all placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
+      <div className="text-center mb-16">
+        <h1 className="text-4xl font-black uppercase tracking-tight mb-2">All Products</h1>
       </div>
 
-      <div className="flex gap-8">
-        <aside className="hidden lg:block w-48 space-y-10">
+      <div className="flex flex-col lg:flex-row gap-12">
+        {/* Sidebar */}
+        <aside className="w-full lg:w-64 space-y-12">
           <div>
-            <h3 className="text-[10px] font-bold uppercase tracking-[0.2em] mb-6">
-              Categories
+            <h3 
+              style={{ fontFamily: 'Roboto, sans-serif' }}
+              className="text-xs font-bold uppercase tracking-[0.2em] mb-6 border-b pb-2"
+            >
+              Filter By:
             </h3>
-            <div className="space-y-4">
-              <button
-                onClick={() => setCategory("all")}
-                className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
-                  category === "all"
-                    ? "font-bold text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => setCategory(cat.slug)}
-                  className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
-                    category === cat.slug
-                      ? "font-bold text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+            
+            <div className="space-y-8">
+              {/* Category Filter */}
+              <div>
+                <h4 
+                  style={{ fontFamily: 'Roboto, sans-serif', fontSize: '12px' }}
+                  className="font-bold uppercase tracking-widest text-foreground dark:text-foreground mb-4"
                 >
-                  {cat.name}
-                </button>
-              ))}
+                  Categories
+                </h4>
+                <div className="space-y-3">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategory(cat.slug)}
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
+                        category === cat.slug
+                          ? "font-bold text-foreground underline underline-offset-4"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Filter */}
+              <div>
+                <h4 
+                  style={{ fontFamily: 'Roboto, sans-serif', fontSize: '12px' }}
+                  className="font-bold uppercase tracking-widest text-foreground dark:text-foreground mb-4"
+                >
+                  Price
+                </h4>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1">
+                    <p 
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className="text-[9px] uppercase font-bold mb-1 opacity-50"
+                    >
+                      From
+                    </p>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className="w-full h-10 px-3 bg-gray-50 dark:bg-muted/30 border border-gray-200 dark:border-border rounded text-xs focus:ring-1 focus:ring-black dark:focus:ring-white transition-all"
+                      value={minPrice}
+                      onChange={(e) => setMinPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                    />
+                  </div>
+                  <span className="mt-4 opacity-30">—</span>
+                  <div className="flex-1">
+                    <p 
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className="text-[9px] uppercase font-bold mb-1 opacity-50"
+                    >
+                      To
+                    </p>
+                    <input
+                      type="number"
+                      placeholder="Max"
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className="w-full h-10 px-3 bg-gray-50 dark:bg-muted/30 border border-gray-200 dark:border-border rounded text-xs focus:ring-1 focus:ring-black dark:focus:ring-white transition-all"
+                      value={maxPrice}
+                      onChange={(e) => setMaxPrice(e.target.value === "" ? "" : Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </aside>
 
-        <div className="flex-1 bg-neutral-950 text-white dark:bg-white dark:text-neutral-950 rounded-xl p-8 md:p-10 border border-neutral-800/50 dark:border-neutral-200 min-h-[400px]">
+        {/* Main Content */}
+        <div className="flex-1">
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100 dark:border-border/50">
+            <p 
+              style={{ fontFamily: 'Roboto, sans-serif' }}
+              className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+            >
+              Showing {filteredProducts.length} results
+            </p>
+            
+            <div className="flex items-center gap-3">
+              <span 
+                style={{ fontFamily: 'Roboto, sans-serif' }}
+                className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+              >
+                Sort By
+              </span>
+              <select 
+                style={{ fontFamily: 'Roboto, sans-serif' }}
+                className="h-10 pl-4 pr-10 bg-white dark:bg-background border border-gray-200 dark:border-border rounded text-[10px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-black dark:focus:ring-white appearance-none cursor-pointer"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+              >
+                <option value="newest">Newest</option>
+                <option value="price-low">Price: Low to High</option>
+                <option value="price-high">Price: High to Low</option>
+              </select>
+            </div>
+          </div>
+
           {isLoading ? (
             <ProductsSkeleton />
           ) : isError ? (
@@ -150,57 +244,59 @@ export default function Products() {
             </div>
           ) : (
             <>
-              {Array.from(productsByCategory.entries()).map(([catSlug, prods]) => (
-                <div key={catSlug ?? "other"} className="mb-16 last:mb-0">
-                  <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-neutral-400 dark:text-neutral-500 mb-6 pb-3 border-b border-neutral-800 dark:border-neutral-200">
-                    {getCategoryDisplayName(catSlug)}
-                  </h2>
-                  <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
-                    {prods.map((product) => (
-                      <Link
-                        key={product.id}
-                        href={`/product/${product.id}`}
-                        className="group block"
-                      >
-                        <div className="aspect-[3/4] overflow-hidden bg-neutral-900 dark:bg-neutral-100 mb-4 relative rounded-sm">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              window.open(`/product/${product.id}`, "_blank");
-                            }}
-                            className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                            aria-label="Open product in new tab"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </button>
-                          {product.stock === 0 && (
-                            <div className="absolute top-3 left-3 z-10 bg-black/80 dark:bg-neutral-800/90 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded">
-                              Out of Stock
-                            </div>
-                          )}
-                          <img
-                            src={product.imageUrl ?? ""}
-                            alt={product.name}
-                            className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <h3 className="mb-2 font-semibold text-base text-white dark:text-neutral-900 truncate group-hover:text-neutral-300 dark:group-hover:text-neutral-600 transition-colors">
-                            {product.name}
-                          </h3>
-                          <p className="text-neutral-400 dark:text-neutral-500 text-[10px] font-medium uppercase tracking-wider">
-                            {formatPrice(product.price)}
-                          </p>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
+              {filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
+                  {filteredProducts.map((product) => (
+                    <Link
+                      key={product.id}
+                      href={`/product/${product.id}`}
+                      className="group block"
+                    >
+                      <div className="aspect-[3/4] overflow-hidden bg-neutral-900 dark:bg-neutral-100 mb-4 relative rounded-sm">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.open(`/product/${product.id}`, "_blank");
+                          }}
+                          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="Open product in new tab"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </button>
+                        {product.stock === 0 && (
+                          <div className="absolute top-3 left-3 z-10 bg-black/80 dark:bg-neutral-800/90 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded">
+                            Out of Stock
+                          </div>
+                        )}
+                        <img
+                          src={product.imageUrl ?? ""}
+                          alt={product.name}
+                          className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <h3 
+                          className="mb-1 truncate transition-colors group-hover:opacity-80"
+                          style={{
+                            fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
+                            fontWeight: 700,
+                            fontSize: '18px',
+                            lineHeight: '27px',
+                            color: 'var(--brand-product-name)'
+                          }}
+                        >
+                          {product.name}
+                        </h3>
+                        <p className="text-neutral-500 dark:text-neutral-400 text-xs font-bold uppercase tracking-wider">
+                          {formatPrice(product.price)}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
                 </div>
-              ))}
-
-              {filteredProducts.length === 0 && !isLoading && !isError && (
+              ) : (
                 <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-400 dark:text-neutral-500">
                   No products found.
                 </div>

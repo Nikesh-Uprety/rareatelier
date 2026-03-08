@@ -66,6 +66,10 @@
   --ring: 0 0% 9%;
   
   --radius: 0px;
+
+  /* Brand Typography Colors */
+  --brand-product-name: oklch(0.373 0.034 259.733);
+  --brand-product-detail: rgb(86, 86, 86);
 }
 
 /* DARK MODE */
@@ -94,9 +98,13 @@
   --destructive: 0 62% 30%;
   --destructive-foreground: 0 0% 98%;
   
-  --border: 0 0% 15%;
-  --input: 0 0% 15%;
-  --ring: 0 0% 83%;
+  --border: 0px 0% 15%;
+  --input: 0px 0% 15%;
+  --ring: 0px 0% 83%;
+
+  /* Brand Typography Colors - Adaptive for Dark Mode */
+  --brand-product-name: oklch(0.85 0.034 259.733);
+  --brand-product-detail: rgb(210, 210, 210);
 }
 
 /* WARM MODE */

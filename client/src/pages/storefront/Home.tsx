@@ -17,6 +17,7 @@ const HERO_IMAGES = [
 const LIFESTYLE_IMAGES = [
   "/images/feature1.webp",
   "/images/feature2.webp",
+  "/images/feature3.webp",
 ];
 
 
@@ -554,12 +555,6 @@ export default function Home() {
             </div>
           </div>
           <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] uppercase tracking-[0.3em] text-gray-600 font-bold">
-            <p>© 2025 Rare Nepal. Handcrafted Excellence.</p>
-            <div className="flex gap-8">
-              <span>Visa</span>
-              <span>Mastercard</span>
-              <span>Esewa</span>
-            </div>
           </div>
         </div>
       </footer>
