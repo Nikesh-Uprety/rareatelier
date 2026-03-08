@@ -169,23 +169,23 @@ export default function Home() {
             />
           </motion.div>
         </AnimatePresence>
-        <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
+        <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
 
-        <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">
-          <div className="animate-in fade-in slide-in-from-left-8 duration-1000 max-w-[700px] text-white flex flex-col gap-y-6 md:gap-y-8">
-            <h1 className="font-serif text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold leading-[1.1] tracking-tighter drop-shadow-sm">
+        <div className="absolute inset-0 flex items-center justify-center container mx-auto px-6">
+          <div className="animate-in fade-in zoom-in duration-1000 max-w-4xl w-full text-white text-center flex flex-col items-center gap-y-6 md:gap-y-8 mx-auto">
+            <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tighter drop-shadow-xl">
               Beyond Trends.
               <br />
               Beyond Time.
             </h1>
-            <p className="text-xs md:text-sm tracking-[0.5em] uppercase opacity-70 font-light">
+            <p className="text-xs md:text-sm tracking-[0.6em] uppercase opacity-80 font-light">
               Authenticity In Motion
             </p>
-            <div className="mt-4 md:mt-6">
+            <div className="mt-4 md:mt-8">
               <Button
                 size="lg"
                 asChild
-                className="rounded-none bg-white text-black hover:bg-white/90 px-12 h-14 md:h-16 text-sm uppercase tracking-widest font-bold transition-all hover:translate-y-[-2px] active:translate-y-[0px]"
+                className="rounded-none bg-white text-black hover:bg-white/90 px-12 h-14 md:h-16 text-sm uppercase tracking-widest font-bold transition-all hover:scale-105 active:scale-95 shadow-xl"
               >
                 <Link href="/products">Explore Shop</Link>
               </Button>
