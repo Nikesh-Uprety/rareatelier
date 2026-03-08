@@ -7,21 +7,22 @@ import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight }
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 const HERO_IMAGES = [
-  "https://i.ibb.co/67cBG904/landing-page.png",
-  "https://i.ibb.co/DDcQv54D/landingpage1.png"
+  "/images/landingpage1.webp",
+  "/images/landingpage2.webp"
 ];
-
 
 const LIFESTYLE_IMAGES = [
   "/images/feature1.webp",
-  "/images/feature2.png",
+  "/images/feature2.webp",
   "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80",
   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=1200&q=80",
   "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=1200&q=80",
   "https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=1200&q=80",
 ];
+
 
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
@@ -39,9 +40,21 @@ export default function Home() {
     queryFn: () => fetchProducts({ limit: 2 }),
   });
 
+  // Preload images to prevent black screen flash
+  useEffect(() => {
+    HERO_IMAGES.forEach((src) => {
+      const img = new Image();
+      img.src = src;
+    });
+    LIFESTYLE_IMAGES.forEach((src) => {
+      if (!src.startsWith('http')) {
+        const img = new Image();
+        img.src = src;
+      }
+    });
+  }, []);
+
   const featuredProducts = apiProducts.slice(0, 2);
-
-
   const newArrivals = MOCK_PRODUCTS.slice(2, 6);
 
   const goToSlide = useCallback((index: number) => {
@@ -92,7 +105,6 @@ export default function Home() {
     };
   }, []);
 
-
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -139,24 +151,24 @@ export default function Home() {
   return (
     <div className="flex flex-col min-h-screen pt-20">
       {/* Hero Section */}
-      <section className="relative h-[90vh] w-full overflow-hidden">
-        <AnimatePresence mode="wait">
+      <section className="relative h-[90vh] w-full overflow-hidden bg-neutral-900">
+        <AnimatePresence mode="popLayout">
           <motion.div
             key={heroIndex}
-            initial={{ opacity: 0.8, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0.8, x: -20 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             transition={{ 
-              duration: 2.5, 
-              ease: [0.22, 1, 0.36, 1], // Custom cubic-bezier for subtle transition
-              opacity: { duration: 2 } 
+              duration: 1.5,
+              ease: "easeInOut"
             }}
             className="absolute inset-0 w-full h-full"
           >
-            <img
-              alt="Luxury street style campaign"
-              className="w-full h-full object-cover scale-105" // slight scale to hide edges during x-shift
+            <OptimizedImage
               src={HERO_IMAGES[heroIndex]}
+              alt="Luxury street style campaign"
+              className="w-full h-full object-cover"
+              priority={true}
             />
           </motion.div>
         </AnimatePresence>
@@ -213,11 +225,13 @@ export default function Home() {
                     clipPath: 'polygon(50% 0%, 93% 25%, 93% 75%, 50% 100%, 7% 75%, 7% 25%)',
                   }}
                 >
-                  <img
-                    src="/images/walter-landor.png"
+                  <OptimizedImage
+                    src="/images/walter-landor.webp"
                     alt="Walter Landor"
                     className="w-full h-full object-cover"
+                    fallbackExt="png"
                   />
+
                 </div>
                 {/* Fading glow around the shape */}
                 <div 

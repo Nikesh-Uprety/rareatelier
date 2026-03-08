@@ -7,3 +7,5 @@ vite.config.ts.*
 .env
 PROJECT_PROGRESS.md
 CURSOR_BUILD_PROMPTS.md
+package-lock.json
+package.json

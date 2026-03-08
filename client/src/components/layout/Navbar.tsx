@@ -48,8 +48,9 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center">
             <Link href="/" className="transition-opacity hover:opacity-80">
-              <img src="/images/logo.webp" alt="Logo" className="h-12 w-auto object-contain" />
+              <img src="/images/logo.webp" alt="Logo" className="h-12 w-auto object-contain dark:brightness-0 dark:invert" />
             </Link>
+
           </div>
 
           <nav className="hidden md:flex items-center bg-gray-50 dark:bg-muted/50 rounded-full px-2 py-1 space-x-1">

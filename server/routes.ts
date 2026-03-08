@@ -4,7 +4,9 @@ import path from "path";
 import fs from "fs";
 import { storage } from "./storage";
 import { passport } from "./auth";
+import sharp from "sharp";
 import { z } from "zod";
+
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { sendOTPEmail, sendInviteEmail } from "./email";
@@ -475,11 +477,15 @@ export async function registerRoutes(
           "base64",
         );
         ensureUploadsDir();
-        const ext = match ? match[1] : "png";
-        const filename = `${orderId}.${ext}`;
+        const filename = `${orderId}.webp`;
         const filePath = path.join(UPLOADS_DIR, filename);
-        fs.writeFileSync(filePath, buffer);
+        
+        await sharp(buffer)
+          .webp({ quality: 80 })
+          .toFile(filePath);
+
         const proofUrl = `/api/uploads/payment-proofs/${filename}`;
+
         await storage.updateOrderPaymentProof(orderId, proofUrl);
         return res.json({ success: true });
       } catch (err) {
@@ -565,11 +571,15 @@ export async function registerRoutes(
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
         ensureProductUploadsDir();
-        const ext = (match ? match[1] : "png").replace("jpeg", "jpg");
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
         const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
-        fs.writeFileSync(filePath, buffer);
+        
+        await sharp(buffer)
+          .webp({ quality: 80 })
+          .toFile(filePath);
+
         const url = `/api/uploads/products/${filename}`;
+
         return res.json({ success: true, url });
       } catch (err) {
         console.error("Error in POST /api/admin/upload-product-image", err);

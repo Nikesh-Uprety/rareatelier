@@ -130,10 +130,11 @@ export default function PaymentProcess() {
             </p>
             <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
               <img
-                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/esewa-qr.png"}
+                src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/esewa-qr.webp"}
                 alt={`${method} QR Code`}
                 className="w-full h-full object-contain"
               />
+
             </div>
             <p className="mt-4 text-xs text-muted-foreground text-center">
               {method === "khalti" ? "Khalti" : "eSewa"} • Nikesh Uprety • 9843010717
