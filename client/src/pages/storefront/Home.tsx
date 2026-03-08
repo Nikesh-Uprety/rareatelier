@@ -6,9 +6,16 @@ import { Link } from "wouter";
 import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
+import { motion, AnimatePresence } from "framer-motion";
+
+const HERO_IMAGES = [
+  "https://i.ibb.co/67cBG904/landing-page.png",
+  "https://i.ibb.co/DDcQv54D/landingpage1.png"
+];
+
 
 const LIFESTYLE_IMAGES = [
-  "/images/feature1.png",
+  "/images/feature1.webp",
   "/images/feature2.png",
   "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=1200&q=80",
   "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=1200&q=80",
@@ -18,6 +25,7 @@ const LIFESTYLE_IMAGES = [
 
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartX = useRef(0);
@@ -32,6 +40,7 @@ export default function Home() {
   });
 
   const featuredProducts = apiProducts.slice(0, 2);
+
 
   const newArrivals = MOCK_PRODUCTS.slice(2, 6);
 
@@ -71,11 +80,18 @@ export default function Home() {
     autoPlayRef.current = setInterval(() => {
       setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
     }, 5000);
+    
+    const heroTimer = setInterval(() => {
+      setHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
+    }, 8000);
+
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
+      clearInterval(heroTimer);
     };
   }, []);
+
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -124,13 +140,28 @@ export default function Home() {
     <div className="flex flex-col min-h-screen pt-20">
       {/* Hero Section */}
       <section className="relative h-[90vh] w-full overflow-hidden">
-        <img
-          alt="Luxury street style campaign"
-          className="w-full h-full object-cover"
-          src="https://i.ibb.co/67cBG904/landing-page.png"
-          // src="https://i.ibb.co/DDcQv54D/landingpage1.png"
-        />
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={heroIndex}
+            initial={{ opacity: 0.8, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0.8, x: -20 }}
+            transition={{ 
+              duration: 2.5, 
+              ease: [0.22, 1, 0.36, 1], // Custom cubic-bezier for subtle transition
+              opacity: { duration: 2 } 
+            }}
+            className="absolute inset-0 w-full h-full"
+          >
+            <img
+              alt="Luxury street style campaign"
+              className="w-full h-full object-cover scale-105" // slight scale to hide edges during x-shift
+              src={HERO_IMAGES[heroIndex]}
+            />
+          </motion.div>
+        </AnimatePresence>
         <div className="absolute inset-0 bg-black/50" />
+
         <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">
           <div className="animate-in fade-in slide-in-from-left-8 duration-1000 max-w-4xl text-white">
             <h1 className="font-serif text-6xl md:text-8xl lg:text-9xl font-bold leading-none tracking-tighter mb-8">
