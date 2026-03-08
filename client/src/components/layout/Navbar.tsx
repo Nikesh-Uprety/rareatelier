@@ -43,7 +43,7 @@ export default function Navbar() {
       .toUpperCase() || (user?.email?.[0] || "U").toUpperCase();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-background border-b border-gray-100 dark:border-border">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-background">
       <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center">

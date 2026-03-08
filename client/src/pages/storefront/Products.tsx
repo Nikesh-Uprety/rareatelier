@@ -10,9 +10,9 @@ function ProductsSkeleton() {
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-8">
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} className="space-y-3">
-          <div className="aspect-[3/4] bg-neutral-800 dark:bg-neutral-200 rounded-sm animate-pulse" />
-          <div className="h-3 w-3/4 bg-neutral-800 dark:bg-neutral-200 rounded animate-pulse" />
-          <div className="h-3 w-1/2 bg-neutral-800 dark:bg-neutral-200 rounded animate-pulse" />
+          <div className="aspect-[3/4] bg-neutral-800 rounded-sm animate-pulse" />
+          <div className="h-3 w-3/4 bg-neutral-800 rounded animate-pulse" />
+          <div className="h-3 w-1/2 bg-neutral-800 rounded animate-pulse" />
         </div>
       ))}
     </div>
@@ -124,32 +124,6 @@ export default function Products() {
             </h3>
             
             <div className="space-y-8">
-              {/* Category Filter */}
-              <div>
-                <h4 
-                  style={{ fontFamily: 'Roboto, sans-serif', fontSize: '12px' }}
-                  className="font-bold uppercase tracking-widest text-foreground dark:text-foreground mb-4"
-                >
-                  Categories
-                </h4>
-                <div className="space-y-3">
-                  {categories.map((cat) => (
-                    <button
-                      key={cat.id}
-                      onClick={() => setCategory(cat.slug)}
-                      style={{ fontFamily: 'Roboto, sans-serif' }}
-                      className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
-                        category === cat.slug
-                          ? "font-bold text-foreground underline underline-offset-4"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {cat.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Price Filter */}
               <div>
                 <h4 
@@ -194,16 +168,42 @@ export default function Products() {
                   </div>
                 </div>
               </div>
+
+              {/* Category Filter */}
+              <div>
+                <h4 
+                  style={{ fontFamily: 'Roboto, sans-serif', fontSize: '12px' }}
+                  className="font-bold uppercase tracking-widest text-foreground dark:text-foreground mb-4"
+                >
+                  Categories
+                </h4>
+                <div className="space-y-3">
+                  {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setCategory(cat.slug)}
+                      style={{ fontFamily: 'Roboto, sans-serif' }}
+                      className={`block text-xs uppercase tracking-widest transition-colors w-full text-left ${
+                        category === cat.slug
+                          ? "font-bold text-foreground underline underline-offset-4"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1">
-          <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100 dark:border-border/50">
+        <div className="flex-1 bg-neutral-950 text-white dark:bg-neutral-950 dark:text-white rounded-xl p-8 md:p-10 border border-neutral-800/50 min-h-[400px]">
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-neutral-800 dark:border-neutral-800">
             <p 
               style={{ fontFamily: 'Roboto, sans-serif' }}
-              className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+              className="text-[10px] font-bold uppercase tracking-widest text-neutral-400"
             >
               Showing {filteredProducts.length} results
             </p>
@@ -211,13 +211,13 @@ export default function Products() {
             <div className="flex items-center gap-3">
               <span 
                 style={{ fontFamily: 'Roboto, sans-serif' }}
-                className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground"
+                className="text-[10px] font-bold uppercase tracking-widest text-neutral-400"
               >
                 Sort By
               </span>
               <select 
                 style={{ fontFamily: 'Roboto, sans-serif' }}
-                className="h-10 pl-4 pr-10 bg-white dark:bg-background border border-gray-200 dark:border-border rounded text-[10px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-black dark:focus:ring-white appearance-none cursor-pointer"
+                className="h-10 pl-4 pr-10 bg-neutral-900 border border-neutral-800 rounded text-[10px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-white appearance-none cursor-pointer text-white"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
@@ -284,12 +284,13 @@ export default function Products() {
                             fontWeight: 700,
                             fontSize: '18px',
                             lineHeight: '27px',
-                            color: 'var(--brand-product-name)'
+                            color: 'white',
+                            textShadow: '0 0 15px rgba(255, 255, 255, 0.3)'
                           }}
                         >
                           {product.name}
                         </h3>
-                        <p className="text-neutral-500 dark:text-neutral-400 text-xs font-bold uppercase tracking-wider">
+                        <p className="text-neutral-400 text-sm font-bold uppercase tracking-wider">
                           {formatPrice(product.price)}
                         </p>
                       </div>
