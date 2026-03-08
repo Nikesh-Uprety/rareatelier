@@ -11,8 +11,22 @@ import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
 import { sendOTPEmail, sendInviteEmail } from "./email";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
-import { bills, posSessions } from "../shared/schema";
-import { eq, and, gte, desc } from "drizzle-orm";
+import {
+  users,
+  customers,
+  orders,
+  insertCustomerSchema,
+  insertOrderSchema,
+  insertProductSchema,
+  products,
+  insertNewsletterSubscriberSchema,
+  newsletterSubscribers,
+  bills,
+  posSessions,
+  insertProductAttributeSchema,
+  Product,
+} from "../shared/schema";
+import { eq, desc, sum, sql, and, gte, lte } from "drizzle-orm";
 import { db } from "./db";
 
 const UPLOADS_DIR = path.join(process.cwd(), "uploads", "payment-proofs");
@@ -64,6 +78,9 @@ export async function registerRoutes(
         username: email,
         password: hashed,
         role: "customer",
+        status: "active",
+        twoFactorEnabled: 0,
+        lastLoginAt: null,
       });
 
       const expressUser: Express.User = {
@@ -609,15 +626,15 @@ export async function registerRoutes(
   // Admin product routes (protected)
   const adminProductSchema = z.object({
     name: z.string().min(1),
-    shortDetails: z.string().optional(),
-    description: z.string().optional(),
+    shortDetails: z.string().optional().nullable(),
+    description: z.string().optional().nullable(),
     price: z.number().positive(),
-    imageUrl: z.string().optional().or(z.literal("")),
-    galleryUrls: z.string().optional(),
-    category: z.string().optional(),
+    imageUrl: z.string().optional().nullable(),
+    galleryUrls: z.string().optional().nullable(),
+    category: z.string().optional().nullable(),
     stock: z.number().int().nonnegative(),
-    colorOptions: z.string().optional(),
-    sizeOptions: z.string().optional(),
+    colorOptions: z.string().optional().nullable(),
+    sizeOptions: z.string().optional().nullable(),
   });
 
   app.get(
@@ -656,8 +673,16 @@ export async function registerRoutes(
         }
 
         const data = {
-          ...parsed.data,
-          imageUrl: parsed.data.imageUrl?.trim() || undefined,
+          name: parsed.data.name,
+          shortDetails: parsed.data.shortDetails || null,
+          description: parsed.data.description || null,
+          price: parsed.data.price.toString(),
+          imageUrl: parsed.data.imageUrl || null,
+          galleryUrls: parsed.data.galleryUrls || null,
+          category: parsed.data.category || null,
+          stock: parsed.data.stock,
+          colorOptions: parsed.data.colorOptions || null,
+          sizeOptions: parsed.data.sizeOptions || null,
         };
         const product = await storage.createProduct(data);
         return res.status(201).json({ success: true, data: product });
@@ -682,9 +707,17 @@ export async function registerRoutes(
             .json({ success: false, error: "Invalid product payload" });
         }
 
-        const data = {
-          ...parsed.data,
-          imageUrl: parsed.data.imageUrl !== undefined ? (parsed.data.imageUrl?.trim() || undefined) : undefined,
+        const data: Partial<Omit<Product, "id">> = {
+          name: parsed.data.name,
+          shortDetails: parsed.data.shortDetails === undefined ? undefined : (parsed.data.shortDetails || null),
+          description: parsed.data.description === undefined ? undefined : (parsed.data.description || null),
+          price: parsed.data.price?.toString(),
+          imageUrl: parsed.data.imageUrl === undefined ? undefined : (parsed.data.imageUrl || null),
+          galleryUrls: parsed.data.galleryUrls === undefined ? undefined : (parsed.data.galleryUrls || null),
+          category: parsed.data.category === undefined ? undefined : (parsed.data.category || null),
+          stock: parsed.data.stock,
+          colorOptions: parsed.data.colorOptions === undefined ? undefined : (parsed.data.colorOptions || null),
+          sizeOptions: parsed.data.sizeOptions === undefined ? undefined : (parsed.data.sizeOptions || null),
         };
         const updated = await storage.updateProduct(
           req.params.id,
@@ -712,6 +745,62 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to delete product" });
+      }
+    },
+  );
+
+  // Admin Attributes
+  app.get(
+    "/api/admin/attributes",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { type } = req.query;
+        const attributes = await storage.getProductAttributes(
+          typeof type === "string" ? type : undefined,
+        );
+        return res.json({ success: true, data: attributes });
+      } catch (err) {
+        console.error("Error in GET /api/admin/attributes", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load attributes" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/attributes",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = insertProductAttributeSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid attribute data" });
+        }
+        const attribute = await storage.createProductAttribute(parsed.data);
+        return res.status(201).json({ success: true, data: attribute });
+      } catch (err) {
+        console.error("Error in POST /api/admin/attributes", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to create attribute" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/attributes/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        await storage.deleteProductAttribute(req.params.id);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/attributes/:id", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to delete attribute" });
       }
     },
   );
@@ -1219,6 +1308,16 @@ export async function registerRoutes(
         billType: "pos",
         status: "issued",
       }).returning();
+
+      // Deduct inventory
+      for (const item of items) {
+        if (item.productId) {
+          await db
+            .update(products)
+            .set({ stock: sql`${products.stock} - ${item.quantity}` })
+            .where(eq(products.id, item.productId));
+        }
+      }
 
       res.json({ success: true, data: bill });
     } catch (err) {

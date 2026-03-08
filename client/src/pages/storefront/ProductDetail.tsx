@@ -3,10 +3,12 @@ import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import useEmblaCarousel from "embla-carousel-react";
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -36,6 +38,9 @@ export default function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const sizes = useMemo(() => parseJsonArray(product?.sizeOptions ?? undefined), [product?.sizeOptions]);
@@ -103,29 +108,57 @@ export default function ProductDetail() {
   return (
     <div className="container mx-auto px-4 py-24 max-w-6xl mt-10">
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
-        {/* Media: slightly smaller main image + gallery */}
-        <div className="lg:max-w-[420px] space-y-4">
-          <div className="aspect-[4/5] bg-muted overflow-hidden rounded-sm relative">
-            {product.stock === 0 && (
-              <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
-                Out of Stock
+        {/* Media Gallery: Mobile Carousel + Desktop Thumbnail Sidebar */}
+        <div className="lg:flex lg:w-3/5 lg:gap-6">
+          {/* Mobile Embla Carousel */}
+          <div className="lg:hidden w-full relative mb-6">
+            <div className="overflow-hidden rounded-sm" ref={emblaRef}>
+              <div className="flex">
+                {allImages.map((url, idx) => (
+                  <div className="flex-[0_0_100%] min-w-0" key={idx}>
+                    <div className="aspect-[4/5] bg-muted relative">
+                      {product.stock === 0 && (
+                        <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
+                          Out of Stock
+                        </div>
+                      )}
+                      <img
+                        src={url || ""}
+                        alt={`${product.name} - view ${idx + 1}`}
+                        className="w-full h-full object-cover select-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {allImages.length > 1 && (
+              <div className="flex justify-center gap-2 mt-4">
+                {allImages.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => emblaApi?.scrollTo(idx)}
+                    className={`w-2 h-2 rounded-full transition-all ${
+                      idx === selectedImageIndex ? "bg-black w-6" : "bg-gray-300"
+                    }`}
+                    aria-label={`Go to slide ${idx + 1}`}
+                  />
+                ))}
               </div>
             )}
-            <img
-              src={displayImage || ""}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
           </div>
+
+          {/* Desktop Thumbnail Sidebar */}
           {allImages.length > 1 && (
-            <div className="flex lg:grid lg:grid-cols-4 gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
+            <div className="hidden lg:flex flex-col gap-3 w-20 flex-shrink-0">
               {allImages.map((url, i) => (
                 <button
                   key={i}
                   type="button"
+                  onMouseEnter={() => setSelectedImageIndex(i)}
                   onClick={() => setSelectedImageIndex(i)}
-                  className={`aspect-square w-20 h-20 lg:w-full lg:h-full flex-shrink-0 bg-muted overflow-hidden rounded-sm border-2 transition-colors ${
-                    selectedImageIndex === i ? "border-black" : "border-transparent hover:border-gray-300"
+                  className={`aspect-[4/5] w-full bg-muted overflow-hidden rounded-sm border-2 transition-all ${
+                    selectedImageIndex === i ? "border-black border-opacity-100" : "border-transparent opacity-60 hover:opacity-100"
                   }`}
                 >
                   <img src={url || ""} alt="" className="w-full h-full object-cover" />
@@ -133,9 +166,37 @@ export default function ProductDetail() {
               ))}
             </div>
           )}
+
+          {/* Desktop Main Zoom Image */}
+          <div className="hidden lg:block flex-1">
+             <div className="aspect-[4/5] bg-muted overflow-hidden rounded-sm relative cursor-zoom-in group">
+                {product.stock === 0 && (
+                  <div className="absolute top-4 left-4 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2">
+                    Out of Stock
+                  </div>
+                )}
+                <TransformWrapper 
+                  initialScale={1} 
+                  initialPositionX={0} 
+                  initialPositionY={0}
+                  doubleClick={{ disabled: false }}
+                  panning={{ disabled: false }}
+                >
+                  <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full cursor-zoom-in">
+                    <img
+                      src={displayImage || ""}
+                      alt={product.name}
+                      onClick={() => setIsLightboxOpen(true)}
+                      className="w-full h-full object-cover transition-transform duration-500"
+                    />
+                  </TransformComponent>
+                </TransformWrapper>
+             </div>
+          </div>
         </div>
 
-        <div className="flex-1 min-w-0 lg:max-w-[440px]">
+        {/* Product Details right column */}
+        <div className="flex-1 min-w-0 lg:max-w-[400px] lg:pl-6 lg:pt-4">
           <h1 
             style={{
               fontFamily: 'Roboto, ui-sans-serif, system-ui, sans-serif',
@@ -180,8 +241,8 @@ export default function ProductDetail() {
                       onClick={() => setSelectedColor(c)}
                       className={`min-w-[2rem] h-8 px-3 border text-xs font-medium transition-all rounded-sm ${
                         effectiveColor === c
-                          ? "border-black bg-black text-white"
-                          : "border-gray-200 hover:border-gray-400"
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {c}
@@ -204,8 +265,8 @@ export default function ProductDetail() {
                       onClick={() => setSelectedSize(s)}
                       className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
                         effectiveSize === s
-                          ? "border-black bg-black text-white"
-                          : "border-gray-200 hover:border-gray-400"
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {s}
@@ -283,6 +344,61 @@ export default function ProductDetail() {
           {/* Related products could be fetched here */}
         </div>
       </div>
+
+      {/* Fullscreen Lightbox */}
+      {isLightboxOpen && (
+        <div 
+          className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4 lg:p-12 animate-in fade-in duration-200"
+          onClick={() => setIsLightboxOpen(false)}
+        >
+          <button 
+            type="button" 
+            className="absolute top-6 right-6 lg:top-10 lg:right-10 w-12 h-12 flex items-center justify-center bg-black hover:bg-gray-800 text-white rounded-full transition-transform hover:scale-105 z-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLightboxOpen(false);
+            }}
+          >
+            <X className="w-6 h-6" />
+          </button>
+          
+          <div 
+            className="relative w-full h-full max-w-6xl max-h-[90vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TransformWrapper 
+              initialScale={1} 
+              initialPositionX={0} 
+              initialPositionY={0}
+            >
+              <TransformComponent wrapperClass="w-full h-full flex items-center justify-center" contentClass="max-w-full max-h-full">
+                <img
+                  src={displayImage || ""}
+                  alt={`${product.name} fullscreen view`}
+                  className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl"
+                />
+              </TransformComponent>
+            </TransformWrapper>
+            
+            {/* Lightbox Thumbnails */}
+            {allImages.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 hidden lg:flex gap-3 bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-gray-200/50">
+                {allImages.map((url, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setSelectedImageIndex(i)}
+                    className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all ${
+                      selectedImageIndex === i ? "border-black scale-110" : "border-transparent opacity-50 hover:opacity-100 hover:scale-105"
+                    }`}
+                  >
+                    <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

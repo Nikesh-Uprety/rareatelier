@@ -1,24 +1,35 @@
-import { useState, useEffect, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Search, Plus, Minus, Trash2, ShoppingCart,
-  DollarSign, CreditCard, Smartphone, Banknote,
-  X, Clock, ParkingCircle, CheckCircle2,
-} from "lucide-react";
-import {
-  fetchAdminProducts,
-  createPosBill,
-  openPosSession,
-  closePosSession,
-  fetchTodaySession,
-} from "@/lib/adminApi";
-import type { AdminProduct, AdminBill, POSSession } from "@/lib/adminApi";
 import { BillViewer } from "@/components/admin/BillViewer";
-import { formatPrice } from "@/lib/format";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useToast } from "@/hooks/use-toast";
+import type { AdminBill, AdminProduct, POSSession } from "@/lib/adminApi";
+import {
+  closePosSession,
+  createPosBill,
+  fetchAdminProducts,
+  fetchTodaySession,
+  openPosSession,
+} from "@/lib/adminApi";
+import { formatPrice } from "@/lib/format";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Banknote,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  DollarSign,
+  Minus,
+  ParkingCircle,
+  Plus,
+  Search,
+  ShoppingCart,
+  Smartphone,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
 interface CartItem {
   productId: string;
@@ -43,13 +54,25 @@ export default function AdminPOS() {
   const [openingCash, setOpeningCash] = useState<string>("");
   const [closingCash, setClosingCash] = useState<string>("");
   const [showEndOfDay, setShowEndOfDay] = useState(false);
-  const [parkedSales, setParkedSales] = useState<{ name: string; cart: CartItem[] }[]>([]);
+  const [parkedSales, setParkedSales] = useState<
+    { name: string; cart: CartItem[] }[]
+  >(() => {
+    try {
+      const saved = localStorage.getItem("rare-pos-parked-sales");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [showQR, setShowQR] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Fetch today's session on mount
   useEffect(() => {
-    fetchTodaySession().then((s) => setSession(s)).catch(() => {});
+    fetchTodaySession()
+      .then((s) => setSession(s))
+      .catch(() => {});
   }, []);
 
   const { data: products } = useQuery<AdminProduct[]>({
@@ -68,13 +91,68 @@ export default function AdminPOS() {
     );
   }, [products, search]);
 
+  // Persist parked sales
+  useEffect(() => {
+    localStorage.setItem("rare-pos-parked-sales", JSON.stringify(parkedSales));
+  }, [parkedSales]);
+
+  // Barcode Scanner Listener
+  // Hardware scanners emulate rapid keyboard typing then "Enter"
+  useEffect(() => {
+    if (!products) return;
+
+    let barcodeBuffer = "";
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in an input/textarea
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+
+      // If time between keystrokes is > 50ms, it's a human typing, reset buffer
+      if (now - lastKeyTime > 50) {
+        barcodeBuffer = "";
+      }
+      lastKeyTime = now;
+
+      if (e.key === "Enter") {
+        if (barcodeBuffer.length > 0) {
+          const scannedProduct = products.find(
+            (p) => p.name.toLowerCase() === barcodeBuffer.toLowerCase(),
+          );
+
+          if (scannedProduct) {
+            addToCart(scannedProduct);
+            toast({ title: `Added ${scannedProduct.name}` });
+          } else {
+            toast({ title: "Product not found", variant: "destructive" });
+          }
+          barcodeBuffer = "";
+        }
+      } else if (e.key.length === 1) {
+        // Collect characters
+        barcodeBuffer += e.key;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [products]);
+
   // Cart calculations
   const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
   const discountAmount = Number(discount) || 0;
   const taxAmount = Math.round(subtotal * 0.13);
   const total = subtotal + taxAmount - discountAmount;
   const cashReceivedNum = Number(cashReceived) || 0;
-  const changeAmount = paymentMethod === "cash" ? Math.max(0, cashReceivedNum - total) : 0;
+  const changeAmount =
+    paymentMethod === "cash" ? Math.max(0, cashReceivedNum - total) : 0;
 
   // Cart operations
   const addToCart = (product: AdminProduct) => {
@@ -83,7 +161,11 @@ export default function AdminPOS() {
       if (existing) {
         return prev.map((i) =>
           i.productId === product.id
-            ? { ...i, quantity: i.quantity + 1, lineTotal: (i.quantity + 1) * i.unitPrice }
+            ? {
+                ...i,
+                quantity: i.quantity + 1,
+                lineTotal: (i.quantity + 1) * i.unitPrice,
+              }
             : i,
         );
       }
@@ -102,15 +184,16 @@ export default function AdminPOS() {
   };
 
   const updateQuantity = (productId: string, delta: number) => {
-    setCart((prev) =>
-      prev
-        .map((i) => {
-          if (i.productId !== productId) return i;
-          const qty = i.quantity + delta;
-          if (qty <= 0) return null;
-          return { ...i, quantity: qty, lineTotal: qty * i.unitPrice };
-        })
-        .filter(Boolean) as CartItem[],
+    setCart(
+      (prev) =>
+        prev
+          .map((i) => {
+            if (i.productId !== productId) return i;
+            const qty = i.quantity + delta;
+            if (qty <= 0) return null;
+            return { ...i, quantity: qty, lineTotal: qty * i.unitPrice };
+          })
+          .filter(Boolean) as CartItem[],
     );
   };
 
@@ -189,7 +272,10 @@ export default function AdminPOS() {
   // Park sale
   const parkSale = () => {
     if (cart.length === 0) return;
-    setParkedSales((prev) => [...prev, { name: customerName, cart: [...cart] }]);
+    setParkedSales((prev) => [
+      ...prev,
+      { name: customerName, cart: [...cart] },
+    ]);
     setCart([]);
     setCustomerName("Walk-in Customer");
     toast({ title: "Sale parked" });
@@ -217,7 +303,9 @@ export default function AdminPOS() {
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground mb-2">
             Point of Sale
           </h1>
-          <p className="text-muted-foreground">Start a new session to begin selling</p>
+          <p className="text-muted-foreground">
+            Start a new session to begin selling
+          </p>
         </div>
         <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-8 w-full max-w-sm space-y-4">
           <div>
@@ -248,7 +336,10 @@ export default function AdminPOS() {
   if (completedBill) {
     return (
       <div className="max-w-lg mx-auto py-8 animate-in fade-in">
-        <BillViewer bill={completedBill} onClose={() => setCompletedBill(null)} />
+        <BillViewer
+          bill={completedBill}
+          onClose={() => setCompletedBill(null)}
+        />
         <div className="text-center mt-6">
           <Button
             className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
@@ -271,13 +362,22 @@ export default function AdminPOS() {
             Point of Sale
           </h1>
           <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="bg-[#E8F3EB] text-[#2C5234] border-none">
+            <Badge
+              variant="outline"
+              className="bg-[#E8F3EB] text-[#2C5234] border-none"
+            >
               <Clock className="h-3 w-3 mr-1" />
               Session active since{" "}
-              {new Date(session.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {new Date(session.openedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </Badge>
             {parkedSales.length > 0 && (
-              <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-none">
+              <Badge
+                variant="outline"
+                className="bg-yellow-50 text-yellow-700 border-none"
+              >
                 <ParkingCircle className="h-3 w-3 mr-1" />
                 {parkedSales.length} parked
               </Badge>
@@ -347,7 +447,9 @@ export default function AdminPOS() {
                       className="w-full h-20 object-cover rounded-lg mb-2"
                     />
                   )}
-                  <div className="text-xs font-medium line-clamp-2 mb-1">{product.name}</div>
+                  <div className="text-xs font-medium line-clamp-2 mb-1">
+                    {product.name}
+                  </div>
                   <div className="text-sm font-bold text-[#2C3E2D] dark:text-foreground">
                     {formatPrice(product.price)}
                   </div>
@@ -390,7 +492,9 @@ export default function AdminPOS() {
             <div className="p-4 border-b border-[#E5E5E0] dark:border-border flex justify-between items-center">
               <div className="flex items-center gap-2">
                 <ShoppingCart className="h-4 w-4" />
-                <span className="font-medium text-sm">Cart ({cart.length})</span>
+                <span className="font-medium text-sm">
+                  Cart ({cart.length})
+                </span>
               </div>
               {cart.length > 0 && (
                 <Button
@@ -416,7 +520,9 @@ export default function AdminPOS() {
                     className="flex items-center gap-3 p-3 border-b border-[#f5f5f5] dark:border-border last:border-none"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">{item.productName}</div>
+                      <div className="text-sm font-medium truncate">
+                        {item.productName}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {formatPrice(item.unitPrice)} × {item.quantity}
                       </div>
@@ -428,7 +534,9 @@ export default function AdminPOS() {
                       >
                         <Minus className="h-3 w-3" />
                       </button>
-                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                      <span className="w-6 text-center text-sm font-medium">
+                        {item.quantity}
+                      </span>
                       <button
                         className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
                         onClick={() => updateQuantity(item.productId, 1)}
@@ -506,7 +614,9 @@ export default function AdminPOS() {
               {paymentMethod === "cash" && (
                 <div className="space-y-2 pt-2">
                   <div>
-                    <label className="text-xs text-muted-foreground">Cash Received</label>
+                    <label className="text-xs text-muted-foreground">
+                      Cash Received
+                    </label>
                     <Input
                       type="number"
                       value={cashReceived}
@@ -571,10 +681,58 @@ export default function AdminPOS() {
                   </>
                 )}
               </Button>
+
+              {(paymentMethod === "esewa" || paymentMethod === "khalti") && (
+                <Button
+                  variant="outline"
+                  className="w-full h-10 mt-2 border-[#2C3E2D] text-[#2C3E2D]"
+                  onClick={() => setShowQR(true)}
+                >
+                  Show QR Code
+                </Button>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {/* QR Code Modal for eSewa/Khalti */}
+      {showQR && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"
+          onClick={() => setShowQR(false)}
+        >
+          <div
+            className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-6 max-w-sm w-full space-y-4 relative text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowQR(false)}
+              className="absolute top-4 right-4"
+            >
+              <X className="h-6 w-6 text-muted-foreground" />
+            </button>
+            <h2 className="text-xl font-serif font-medium mb-4">Scan to Pay</h2>
+            <div className="bg-white border-2 border-[#2C3E2D] rounded-xl p-4 inline-block shadow-sm">
+              <OptimizedImage
+                src="/images/esewa-qr.webp"
+                alt="Payment QR"
+                className="w-full max-w-[250px] mx-auto rounded-lg object-contain"
+              />
+            </div>
+            <p className="text-sm text-muted-foreground mt-4">
+              Please scan this QR code with your eSewa or Khalti app to complete
+              the payment of <strong>{formatPrice(total)}</strong>.
+            </p>
+            <Button
+              className="w-full mt-4 bg-[#2C3E2D] hover:bg-[#1A251B] text-white"
+              onClick={() => setShowQR(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* End of day modal */}
       {showEndOfDay && (

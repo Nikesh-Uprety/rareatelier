@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Printer, Download, X } from "lucide-react";
+import Barcode from "react-barcode";
 import { formatPrice } from "@/lib/format";
 
 interface BillItem {
@@ -109,7 +110,7 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
       <div ref={billRef} className="bill-document">
         {/* Header */}
         <div className="bill-header">
-          <h1>RARE Nepal</h1>
+          <h1>RARE ATELIER</h1>
           <p>Khusibu, Nayabazar, Kathmandu</p>
           <p>(+977)-9705203050 · rarenepal888@gmail.com</p>
           <p>instagram.com/rare.np</p>
@@ -230,10 +231,22 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
         <div className="bill-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
 
         {/* Footer */}
-        <div className="bill-footer">
+        <div className="bill-footer text-center">
           <p>Thank you for shopping at RARE Nepal!</p>
           <p>Exchange within 7 days with receipt.</p>
           <p>No cash refunds.</p>
+        </div>
+
+        {/* Barcode */}
+        <div className="flex justify-center mt-6">
+          <Barcode
+            value={`${window.location.origin}/admin/bills?search=${bill.billNumber}`}
+            width={1.2}
+            height={40}
+            fontSize={12}
+            margin={0}
+            background="transparent"
+          />
         </div>
 
         {bill.status === "void" && (

@@ -8,6 +8,7 @@ import {
   users,
   otpTokens,
   contactMessages,
+  productAttributes,
   type Category,
   type Customer,
   type Order,
@@ -16,6 +17,8 @@ import {
   type User,
   type OtpToken,
   type ContactMessage,
+  type ProductAttribute,
+  type InsertProductAttribute,
 } from "@shared/schema";
 import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 
@@ -156,7 +159,14 @@ export interface IStorage {
   // Users
   getUserByEmail(email: string): Promise<User | null>;
   getUserById(id: string): Promise<User | null>;
-  createUser(data: Omit<User, "id">): Promise<User>;
+  createUser(data: {
+    username: string;
+    password: string;
+    role: string;
+    status?: string;
+    twoFactorEnabled?: number;
+    lastLoginAt?: Date | null;
+  }): Promise<User>;
   updateLastLoginAt(id: string): Promise<void>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
   updateUserTwoFactor(id: string, enabled: boolean): Promise<void>;
@@ -201,6 +211,11 @@ export interface IStorage {
   // Categories
   getCategories(): Promise<Category[]>;
   createCategory(data: { name: string; slug: string }): Promise<Category>;
+
+  // Product Attributes
+  getProductAttributes(type?: string): Promise<ProductAttribute[]>;
+  createProductAttribute(data: InsertProductAttribute): Promise<ProductAttribute>;
+  deleteProductAttribute(id: string): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -373,6 +388,34 @@ export class PgStorage implements IStorage {
       .values({ name: data.name, slug: data.slug })
       .returning();
     return row;
+  }
+
+  // Product Attributes
+  async getProductAttributes(type?: string): Promise<ProductAttribute[]> {
+    const conditions = [];
+    if (type) {
+      conditions.push(eq(productAttributes.type, type));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    return db
+      .select()
+      .from(productAttributes)
+      .where(whereClause)
+      .orderBy(asc(productAttributes.value));
+  }
+
+  async createProductAttribute(data: InsertProductAttribute): Promise<ProductAttribute> {
+    const [row] = await db
+      .insert(productAttributes)
+      .values(data)
+      .returning();
+    return row;
+  }
+
+  async deleteProductAttribute(id: string): Promise<void> {
+    await db.delete(productAttributes).where(eq(productAttributes.id, id));
   }
 
   async getOrders(filters?: {
@@ -1321,6 +1364,7 @@ export class MemStorage implements IStorage {
     { id: "3", name: "T-Shirts", slug: "TSHIRTS", createdAt: new Date() },
     { id: "4", name: "Winter '25", slug: "WINTER_25", createdAt: new Date() },
   ];
+  private _productAttributes: ProductAttribute[] = [];
 
   async getProducts(_filters?: {
     category?: string;
@@ -1387,6 +1431,29 @@ export class MemStorage implements IStorage {
     };
     this._categories.push(cat);
     return cat;
+  }
+
+  async getProductAttributes(type?: string): Promise<ProductAttribute[]> {
+    let attrs = this._productAttributes;
+    if (type) {
+      attrs = attrs.filter((a: ProductAttribute) => a.type === type);
+    }
+    return attrs.sort((a: ProductAttribute, b: ProductAttribute) => a.value.localeCompare(b.value));
+  }
+
+  async createProductAttribute(data: InsertProductAttribute): Promise<ProductAttribute> {
+    const attr: ProductAttribute = {
+      id: crypto.randomUUID(),
+      type: data.type,
+      value: data.value,
+      createdAt: new Date(),
+    };
+    this._productAttributes.push(attr);
+    return attr;
+  }
+
+  async deleteProductAttribute(id: string): Promise<void> {
+    this._productAttributes = this._productAttributes.filter((a: ProductAttribute) => a.id !== id);
   }
 
   async getOrders(): Promise<Order[]> {
@@ -1581,7 +1648,27 @@ export class MemStorage implements IStorage {
 
   async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {}
   async revokeUser(id: string): Promise<void> {}
-  async getAdminUsers(): Promise<User[]> { return []; }
+  async getAdminUsers(): Promise<
+    {
+      id: string;
+      email: string;
+      name: string | null;
+      role: string;
+      twoFactorEnabled: boolean;
+      lastLoginAt: Date | null;
+      status: string;
+    }[]
+  > {
+    return this._users.map((u) => ({
+      id: u.id,
+      email: u.username,
+      name: null,
+      role: u.role,
+      twoFactorEnabled: u.twoFactorEnabled === 1,
+      lastLoginAt: u.lastLoginAt,
+      status: u.status,
+    }));
+  }
 }
 
 export const storage: IStorage = new PgStorage();

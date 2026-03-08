@@ -349,3 +349,34 @@ export async function fetchTodaySession(): Promise<POSSession | null> {
   const json = (await res.json()) as { success: boolean; data: POSSession | null };
   return json.data;
 }
+
+// ── Attributes API helpers ──────────────────────────
+
+export interface ProductAttribute {
+  id: string;
+  type: string;
+  value: string;
+  createdAt: string;
+}
+
+export async function fetchAdminAttributes(type?: string): Promise<ProductAttribute[]> {
+  const params = new URLSearchParams();
+  if (type) params.set("type", type);
+  const url = "/api/admin/attributes" + (params.toString() ? `?${params.toString()}` : "");
+  const res = await apiRequest("GET", url);
+  const json = (await res.json()) as { success: boolean; data: ProductAttribute[] };
+  return json.data;
+}
+
+export async function createAdminAttribute(data: {
+  type: string;
+  value: string;
+}): Promise<ProductAttribute> {
+  const res = await apiRequest("POST", "/api/admin/attributes", data);
+  const json = (await res.json()) as { success: boolean; data: ProductAttribute };
+  return json.data;
+}
+
+export async function deleteAdminAttribute(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/attributes/${id}`);
+}

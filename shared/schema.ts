@@ -44,6 +44,12 @@ export const customers = pgTable("customers", {
     .defaultNow(),
 });
 
+export const insertCustomerSchema = createInsertSchema(customers).pick({
+  firstName: true,
+  lastName: true,
+  email: true,
+});
+
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
@@ -62,6 +68,12 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export type Product = typeof products.$inferSelect;
@@ -101,6 +113,12 @@ export const orders = pgTable("orders", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+});
+
+export const insertOrderSchema = createInsertSchema(orders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 export const orderItems = pgTable("order_items", {
@@ -207,3 +225,33 @@ export const posSessions = pgTable("pos_sessions", {
 });
 
 export type PosSession = typeof posSessions.$inferSelect;
+
+// ── Product Attributes ──────────────────────────────────
+export const productAttributes = pgTable("product_attributes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull(), // "color" | "size"
+  value: text("value").notNull(), // e.g., "Stone Grey", "XXL"
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertProductAttributeSchema = createInsertSchema(productAttributes).pick({
+  type: true,
+  value: true,
+});
+
+export type ProductAttribute = typeof productAttributes.$inferSelect;
+export type InsertProductAttribute = z.infer<typeof insertProductAttributeSchema>;
+
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).pick({
+  email: true,
+});

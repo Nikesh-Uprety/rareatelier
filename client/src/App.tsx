@@ -26,6 +26,7 @@ import AdminPOS from "@/pages/admin/POS";
 import AdminAnalytics from "@/pages/admin/Analytics";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminProfilePage from "@/pages/admin/Profile";
+import AdminAttributes from "@/pages/admin/Attributes";
 
 import LoginPage from "@/pages/auth/Login";
 import NotFound from "@/pages/not-found";
@@ -93,6 +94,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminProducts />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/attributes">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminAttributes />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
