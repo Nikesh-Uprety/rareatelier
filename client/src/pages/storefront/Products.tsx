@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, ExternalLink } from "lucide-react";
+import { Search, ExternalLink, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
@@ -28,6 +29,7 @@ export default function Products() {
   const [minPrice, setMinPrice] = useState<number | "">("");
   const [maxPrice, setMaxPrice] = useState<number | "">("");
   const [sortBy, setSortBy] = useState("newest");
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -112,9 +114,21 @@ export default function Products() {
         <h1 className="text-4xl font-black uppercase tracking-tight mb-2">All Products</h1>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-12">
+      <div className="flex flex-col lg:flex-row gap-8 lg:gap-12">
+        {/* Mobile Filter Toggle */}
+        <button
+          onClick={() => setIsFiltersOpen(!isFiltersOpen)}
+          className="lg:hidden flex items-center justify-between w-full px-6 py-4 bg-muted/30 border border-border rounded-xl mb-4 text-sm font-bold uppercase tracking-widest"
+        >
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4" />
+            <span>Filters</span>
+          </div>
+          {isFiltersOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        </button>
+
         {/* Sidebar */}
-        <aside className="w-full lg:w-64 space-y-12">
+        <aside className={`${isFiltersOpen ? "block" : "hidden"} lg:block w-full lg:w-64 space-y-12`}>
           <div>
             <h3 
               style={{ fontFamily: 'Roboto, sans-serif' }}
@@ -199,7 +213,7 @@ export default function Products() {
         </aside>
 
         {/* Main Content */}
-        <div className="flex-1 bg-neutral-950 text-white dark:bg-neutral-950 dark:text-white rounded-xl p-8 md:p-10 border border-neutral-800/50 min-h-[400px]">
+        <div className="flex-1 bg-neutral-950 text-white dark:bg-neutral-950 dark:text-white rounded-xl p-6 md:p-10 border border-neutral-800/50 min-h-[400px]">
           <div className="flex justify-between items-center mb-8 pb-4 border-b border-neutral-800 dark:border-neutral-800">
             <p 
               style={{ fontFamily: 'Roboto, sans-serif' }}

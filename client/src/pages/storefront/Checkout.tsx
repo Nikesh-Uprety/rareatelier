@@ -11,8 +11,8 @@ import { createOrder } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
 const PAYMENT_OPTIONS = [
-  { id: "esewa", label: "eSewa", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/f/f3/Esewa_logo.webp", logoColor: "bg-[#54B848]" },
-  { id: "khalti", label: "Khalti", logoUrl: "https://upload.wikimedia.org/wikipedia/commons/e/e4/Khalti_Digital_Wallet_Logo.png", logoColor: "bg-white" },
+  { id: "esewa", label: "eSewa", logoUrl: "/images/esewa.webp" },
+  { id: "khalti", label: "Khalti", logoUrl: "/images/khalti.webp", logoColor: "bg-white" },
   { id: "bank", label: "Bank Transfer", icon: Building2, logoColor: "bg-slate-700" },
 ] as const;
 
@@ -49,7 +49,7 @@ export default function Checkout() {
   });
 
   const [manualLocation, setManualLocation] = useState("");
-  const [showManualLocation, setShowManualLocation] = useState(false);
+  const [showManualLocation, setShowManualLocation] = useState(true);
   const [errors, setErrors] = useState<Record<string, boolean>>({});
   
   const fieldRefs = {
@@ -148,7 +148,6 @@ export default function Checkout() {
       clearCart();
       setStep(3);
       toast({ title: "Order Placed" });
-      setLocation(`/checkout/success?orderId=${result.data.order.id}`);
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");
     }
@@ -175,7 +174,7 @@ export default function Checkout() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+    <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
       <div className="flex flex-col lg:flex-row gap-20">
         <form
           className="flex-1 space-y-12"
@@ -275,13 +274,13 @@ export default function Checkout() {
               <div className="pt-2 scroll-mt-20" ref={fieldRefs.location}>
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-sm font-semibold uppercase tracking-wide">Delivery Location</p>
-                  <button 
-                    type="button" 
-                    onClick={() => setShowManualLocation(!showManualLocation)}
-                    className="text-[10px] uppercase font-bold underline hover:text-muted-foreground"
-                  >
-                    {showManualLocation ? "Use Map Instead" : "Type Manually"}
-                  </button>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowManualLocation(!showManualLocation)}
+                      className="text-[10px] uppercase font-bold underline hover:text-muted-foreground"
+                    >
+                      {showManualLocation ? "Use Maps" : "Type Manually"}
+                    </button>
                 </div>
 
                 {showManualLocation ? (
@@ -305,7 +304,7 @@ export default function Checkout() {
                       clearError("location");
                     }} />
                     {!locationCoordinates && errors.location && (
-                      <p className="text-[10px] text-red-500 mt-1 uppercase font-bold">Please select a location on the map or type manually</p>
+                      <p className="text-[10px] text-red-500 mt-1 uppercase font-bold">Please provide a delivery location</p>
                     )}
                   </>
                 )}
@@ -332,10 +331,18 @@ export default function Checkout() {
                     }`}
                   >
                     <span
-                      className={`w-12 h-12 rounded-none flex items-center justify-center text-white shrink-0 overflow-hidden ${opt.logoColor}`}
+                      className={`w-12 h-12 flex items-center justify-center shrink-0 overflow-hidden ${
+                        opt.id === "esewa" ? "rounded-full" : "rounded-none"
+                      } ${"logoColor" in opt ? opt.logoColor : ""}`}
                     >
                       {"logoUrl" in opt ? (
-                        <img src={opt.logoUrl} alt={opt.label} className="w-full h-full object-contain p-1" />
+                        <img 
+                          src={opt.logoUrl} 
+                          alt={opt.label} 
+                          className={`w-full h-full object-contain ${
+                            opt.id === "esewa" ? "scale-150" : "p-1"
+                          }`} 
+                        />
                       ) : opt.icon ? (
                         <opt.icon className="w-6 h-6" />
                       ) : null}
@@ -381,7 +388,7 @@ export default function Checkout() {
           <Button
             type="submit"
             className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
-            disabled={isPending || !locationCoordinates}
+            disabled={isPending || (!locationCoordinates && !manualLocation)}
           >
             {isPending ? "Processing..." : paymentMethod === "cash_on_delivery" ? "Confirm Order" : "Pay Now"}
           </Button>

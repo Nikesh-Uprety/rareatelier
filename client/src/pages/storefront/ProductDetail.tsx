@@ -50,7 +50,7 @@ export default function ProductDetail() {
   if (isLoading || !product) {
     if (isLoading) {
       return (
-        <div className="container mx-auto px-4 py-24 max-w-6xl mt-10">
+        <div className="container mx-auto px-4 py-10 lg:py-24 max-w-6xl mt-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
             <div className="aspect-[4/5] max-w-lg bg-muted animate-pulse rounded-sm" />
             <div className="space-y-6">
@@ -118,13 +118,13 @@ export default function ProductDetail() {
             />
           </div>
           {allImages.length > 1 && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="flex lg:grid lg:grid-cols-4 gap-2 overflow-x-auto lg:overflow-visible pb-2 lg:pb-0 scrollbar-hide">
               {allImages.map((url, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => setSelectedImageIndex(i)}
-                  className={`aspect-square bg-muted overflow-hidden rounded-sm border-2 transition-colors ${
+                  className={`aspect-square w-20 h-20 lg:w-full lg:h-full flex-shrink-0 bg-muted overflow-hidden rounded-sm border-2 transition-colors ${
                     selectedImageIndex === i ? "border-black" : "border-transparent hover:border-gray-300"
                   }`}
                 >

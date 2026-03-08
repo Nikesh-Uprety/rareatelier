@@ -125,16 +125,28 @@ export default function PaymentProcess() {
           </div>
         ) : (
           <>
-            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
-              Scan QR code to pay
-            </p>
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 ${
+                method === "esewa" ? "rounded-full" : "rounded-none"
+              }`}>
+                <img 
+                  src={method === "khalti" ? "/images/khalti.webp" : "/images/esewa.webp"} 
+                  alt={method} 
+                  className={`w-full h-full object-contain ${
+                    method === "esewa" ? "scale-150" : ""
+                  }`}
+                />
+              </div>
+              <p className="text-xs uppercase tracking-widest text-muted-foreground">
+                Scan QR code to pay with {method === "khalti" ? "Khalti" : "eSewa"}
+              </p>
+            </div>
             <div className="w-56 h-56 bg-white rounded-lg flex items-center justify-center overflow-hidden border border-gray-200 p-2">
               <img
                 src={method === "khalti" ? "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=khalti" : "/esewa-qr.webp"}
                 alt={`${method} QR Code`}
                 className="w-full h-full object-contain"
               />
-
             </div>
             <p className="mt-4 text-xs text-muted-foreground text-center">
               {method === "khalti" ? "Khalti" : "eSewa"} • Nikesh Uprety • 9843010717

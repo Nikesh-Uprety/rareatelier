@@ -169,11 +169,11 @@ export default function Home() {
             />
           </motion.div>
         </AnimatePresence>
-        <div className="absolute inset-0 bg-black/50" />
+        <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700" />
 
         <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6 sm:px-12">
           <div className="animate-in fade-in slide-in-from-left-8 duration-1000 max-w-4xl text-white">
-            <h1 className="font-serif text-6xl md:text-8xl lg:text-9xl font-bold leading-none tracking-tighter mb-8">
+            <h1 className="font-serif text-4xl sm:text-6xl md:text-8xl lg:text-9xl font-bold leading-none tracking-tighter mb-8">
               Beyond Trends.
               <br />
               Beyond Time.
@@ -283,7 +283,7 @@ export default function Home() {
 
         {/* Lifestyle carousel — swipeable with slide transitions */}
         <div
-          className="relative aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900 cursor-grab active:cursor-grabbing select-none group/carousel"
+          className="relative aspect-video md:aspect-[21/9] overflow-hidden rounded-sm mb-16 bg-neutral-100 dark:bg-neutral-900 cursor-grab active:cursor-grabbing select-none group/carousel"
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -389,10 +389,10 @@ export default function Home() {
           className="w-full h-full object-cover"
           src="https://i.ibb.co/DPgdPLtS/Chat-GPT-Image-Mar-6-2026-08-28-46-PM.png?auto=format&fit=crop&q=80&w=2000"
         />
-        <div className="absolute inset-0 bg-black/40" />
+        <div className="absolute inset-0 bg-black/30 dark:bg-luminous-glow transition-colors duration-700" />
         <div className="absolute inset-0 flex items-center justify-center text-center text-white p-4">
           <div className="max-w-2xl animate-in zoom-in duration-1000">
-            <h2 className="font-serif text-5xl md:text-7xl font-bold mb-6 tracking-tight">
+            <h2 className="font-serif text-4xl md:text-7xl font-bold mb-6 tracking-tight">
               Explore the journey behind
             </h2>
             <p className="text-xl opacity-90 font-light tracking-wide">
