@@ -560,6 +560,31 @@ export default function Home() {
           </div>
           <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] uppercase tracking-[0.3em] text-gray-600 font-bold">
           </div>
+          <div className="mt-8 text-center">
+            <a 
+              href="https://www.nikeshuprety.com.np/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block text-[10px] uppercase tracking-[0.3em] font-black animate-pulse"
+              style={{
+                background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.8), rgba(255,255,255,0.2))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundSize: '200% auto',
+                animation: 'shimmer 3s ease-in-out infinite',
+                textShadow: 'none',
+                filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.15))',
+              }}
+            >
+              0xn1ku-hacks
+            </a>
+            <style>{`
+              @keyframes shimmer {
+                0%, 100% { background-position: -200% center; opacity: 0.4; }
+                50% { background-position: 200% center; opacity: 1; }
+              }
+            `}</style>
+          </div>
         </div>
       </footer>
     </div>
