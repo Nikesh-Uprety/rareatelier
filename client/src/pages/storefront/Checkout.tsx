@@ -146,32 +146,12 @@ export default function Checkout() {
       }
 
       clearCart();
-      setStep(3);
+      setLocation(`/checkout/success/${result.data.order.id}`);
       toast({ title: "Order Placed" });
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");
     }
   };
-
-  if (step === 3) {
-    return (
-      <div className="container mx-auto px-4 py-32 text-center mt-20">
-        <CheckCircle2 className="w-16 h-16 text-black mx-auto mb-8" />
-        <h1 className="text-4xl font-black uppercase tracking-tighter mb-4">
-          Confirmed
-        </h1>
-        <p className="text-muted-foreground mb-12">
-          Your order is being processed.
-        </p>
-        <Button
-          asChild
-          className="rounded-none px-12 h-14 uppercase tracking-widest text-xs font-bold bg-black text-white"
-        >
-          <Link href="/">Back Home</Link>
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">

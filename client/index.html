@@ -54,25 +54,38 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 15px;
+      gap: 8px;
     }
 
     .loader-logo {
       font-size: 1.25rem;
       font-weight: 600;
-      letter-spacing: 0.8em;
+      letter-spacing: 0.5em; /* Reduced for better mobile fit */
       text-transform: uppercase;
+      display: flex;
+      justify-content: center;
+      margin-bottom: 5px;
+      height: 1.5rem;
+    }
+
+    .letter {
+      display: inline-block;
       opacity: 0;
-      transform: translateY(10px);
-      animation: logo-reveal 1.2s ease forwards;
-      white-space: nowrap;
-      text-indent: 0.8em; /* Offset for letter spacing on last character */
+      transform: translateY(15px);
+      transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      filter: blur(5px);
+    }
+
+    .letter.visible {
+      opacity: 1;
+      transform: translateY(0);
+      filter: blur(0);
     }
 
     .loader-bar-container {
-      width: 120px;
+      width: 175px; /* Manually adjusted to align from A to E */
       height: 1px;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
       overflow: hidden;
       position: relative;
     }
@@ -83,21 +96,48 @@
       left: 0;
       height: 100%;
       width: 0;
-      background: rgba(255, 255, 255, 0.8);
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 1));
       transition: width 0.4s cubic-bezier(0.1, 0.5, 0.1, 1);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
     }
 
-    @keyframes logo-reveal {
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+    .loader-status {
+      font-size: 0.65rem;
+      font-weight: 300;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      opacity: 0.4;
+      margin-top: 12px;
+      font-family: 'Inter', sans-serif;
+    }
+
+
+    /* Safety Skip Button */
+    #loader-skip {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      opacity: 0.3;
+      cursor: pointer;
+      transition: opacity 0.3s;
+      background: none;
+      border: none;
+      color: white;
+      padding: 10px;
+    }
+
+    #loader-skip:hover {
+      opacity: 1;
     }
 
     /* Hide root until loaded to prevent flash of unstyled content */
     #root {
       opacity: 0;
-      transition: opacity 0.8s ease;
+      transition: opacity 1s ease;
     }
 
     #root.ready {
@@ -109,52 +149,89 @@
 <body class="loading">
   <div id="pre-loader">
     <div class="loader-content">
-      <div class="loader-logo">RARE ATELIER</div>
+      <div class="loader-logo" id="brand-loader"></div>
       <div class="loader-bar-container">
         <div id="loader-progress"></div>
       </div>
+      <div class="loader-status">
+        Loading
+      </div>
     </div>
+    <button id="loader-skip" onclick="finishLoading()">Skip Animation</button>
   </div>
 
   <div id="root"></div>
 
   <script>
-    // Handle Reactive Loader Logic
+    // Robust Loader Implementation
+    var finishLoading; // Global for the skip button
+    
     (function() {
-      const loader = document.getElementById('pre-loader');
-      const progress = document.getElementById('loader-progress');
-      const root = document.getElementById('root');
-      const body = document.body;
-      let currentProgress = 0;
-      let interval;
+      var loader = document.getElementById('pre-loader');
+      var progress = document.getElementById('loader-progress');
+      var root = document.getElementById('root');
+      var brandContainer = document.getElementById('brand-loader');
+      var body = document.body;
+      
+      var BRAND_NAME = "RARE ATELIER";
+      var currentProgress = 0;
+      var interval;
 
-      // Initial fast progress
-      function startSimulatedProgress() {
-        interval = setInterval(() => {
-          if (currentProgress < 85) {
-            currentProgress += Math.random() * 5;
-            if (currentProgress > 85) currentProgress = 85;
-            progress.style.width = currentProgress + '%';
+      // Setup letters
+      var chars = BRAND_NAME.split('');
+      for (var i = 0; i < chars.length; i++) {
+        var span = document.createElement('span');
+        var char = chars[i];
+        span.className = char === ' ' ? '' : 'letter';
+        span.textContent = char === ' ' ? '\u00A0' : char;
+        brandContainer.appendChild(span);
+      }
+      
+      var letters = brandContainer.querySelectorAll('.letter');
+
+      function updateUI(prog) {
+        if (!progress) return;
+        progress.style.width = prog + '%';
+        
+        var revealThreshold = Math.floor((prog / 100) * letters.length);
+        for (var j = 0; j < letters.length; j++) {
+          if (j < revealThreshold) {
+            letters[j].classList.add('visible');
           }
-        }, 200);
+        }
       }
 
-      function finishLoading() {
-        clearInterval(interval);
-        progress.style.width = '100%';
+      function startSimulatedProgress() {
+        interval = setInterval(function() {
+          if (currentProgress < 90) {
+            currentProgress += Math.random() * 5;
+            if (currentProgress > 90) currentProgress = 90;
+            updateUI(currentProgress);
+          }
+        }, 150);
+      }
+
+      finishLoading = function() {
+        if (!loader || loader.classList.contains('loaded')) return;
         
-        setTimeout(() => {
+        clearInterval(interval);
+        updateUI(100);
+        
+        setTimeout(function() {
           loader.classList.add('loaded');
           root.classList.add('ready');
           
-          // Remove scroll lock with a slight delay
-          setTimeout(() => {
+          setTimeout(function() {
             body.classList.remove('loading');
+            // Cleanup loader from DOM after fade out
+            setTimeout(function() {
+              if (loader.parentNode) loader.parentNode.removeChild(loader);
+            }, 1000);
           }, 800);
         }, 600);
-      }
+      };
 
-      // Start the progress as soon as this script runs
+      // Start the progress
       startSimulatedProgress();
 
       // Finalize on full load
@@ -164,7 +241,7 @@
         window.addEventListener('load', finishLoading);
       }
 
-      // Safety timeout in case window.onload takes too long
+      // Safety timeout
       setTimeout(finishLoading, 6000);
     })();
   </script>

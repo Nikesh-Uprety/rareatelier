@@ -9,6 +9,7 @@ import {
   otpTokens,
   contactMessages,
   productAttributes,
+  newsletterSubscribers,
   type Category,
   type Customer,
   type Order,
@@ -216,6 +217,9 @@ export interface IStorage {
   getProductAttributes(type?: string): Promise<ProductAttribute[]>;
   createProductAttribute(data: InsertProductAttribute): Promise<ProductAttribute>;
   deleteProductAttribute(id: string): Promise<void>;
+
+  // Newsletter
+  subscribeToNewsletter(email: string): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -815,6 +819,13 @@ export class PgStorage implements IStorage {
       });
 
     return row;
+  }
+
+  async subscribeToNewsletter(email: string): Promise<void> {
+    await db
+      .insert(newsletterSubscribers)
+      .values({ email: email.toLowerCase() })
+      .onConflictDoNothing();
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
@@ -1579,7 +1590,9 @@ export class MemStorage implements IStorage {
     });
   }
 
-
+  async subscribeToNewsletter(email: string): Promise<void> {
+    // No-op for MemStorage in this context or implement simple check
+  }
 
   async getUserByEmail(email: string): Promise<User | null> {
     const lower = email.toLowerCase();

@@ -5,6 +5,7 @@ import { Search, ExternalLink, SlidersHorizontal, ChevronDown, ChevronUp } from 
 import { motion, AnimatePresence } from "framer-motion";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function ProductsSkeleton() {
   return (
@@ -243,7 +244,9 @@ export default function Products() {
           </div>
 
           {isLoading ? (
-            <ProductsSkeleton />
+            <div className="flex items-center justify-center min-h-[400px] w-full col-span-full">
+              <BrandedLoader />
+            </div>
           ) : isError ? (
             <div className="py-20 text-center space-y-4">
               <p className="uppercase text-[10px] tracking-widest font-bold text-neutral-400 dark:text-neutral-500">

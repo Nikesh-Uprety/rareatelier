@@ -8,7 +8,18 @@ import {
   Clock,
   Package,
   User as UserIcon,
+  TrendingUp,
 } from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 import {
   fetchAdminOrders,
   fetchAdminProducts,
@@ -27,6 +38,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { fetchAnalytics, type AdminAnalytics } from "@/lib/adminApi";
 
 function isSameDay(a: Date, b: Date) {
   return (
@@ -61,6 +73,11 @@ export default function AdminDashboard() {
   } = useQuery<AdminCustomer[]>({
     queryKey: ["admin", "customers", "dashboard"],
     queryFn: () => fetchAdminCustomers(),
+  });
+  
+  const { data: analytics } = useQuery<AdminAnalytics>({
+    queryKey: ["admin", "analytics", "dashboard"],
+    queryFn: () => fetchAnalytics("7d"), // Default to 7 days for quick overview
   });
 
   const ordersToday = useMemo(() => {
@@ -232,6 +249,104 @@ export default function AdminDashboard() {
           <span className="text-sm font-medium">Manage Customers</span>
           <ArrowRight className="h-4 w-4 text-muted-foreground" />
         </Button>
+      </section>
+
+      {/* Analytics Charts Section */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Revenue Trend Chart */}
+        <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-emerald-500" />
+                Revenue Trend (Last 7 Days)
+              </h2>
+            </div>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={analytics?.revenueByDay || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E0" />
+                <XAxis 
+                  dataKey="date" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fill: '#888' }}
+                  tickFormatter={(str) => {
+                    const date = new Date(str);
+                    return date.toLocaleDateString('en-NP', { month: 'short', day: 'numeric' });
+                  }}
+                />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#888' }} />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  contentStyle={{ 
+                    borderRadius: '12px', 
+                    border: '1px solid #E5E5E0',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    fontSize: '12px'
+                  }}
+                />
+                <Bar 
+                  dataKey="revenue" 
+                  fill="#2C3E2D" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={32}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Category Performance Chart */}
+        <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground flex items-center gap-2">
+                <Package className="h-4 w-4 text-blue-500" />
+                Sales by Category
+              </h2>
+            </div>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={analytics?.salesByCategory || []} 
+                layout="vertical"
+                margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E5E0" />
+                <XAxis type="number" hide />
+                <YAxis 
+                  dataKey="category" 
+                  type="category" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fill: '#888' }}
+                  width={80}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  contentStyle={{ 
+                    borderRadius: '12px', 
+                    border: '1px solid #E5E5E0',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    fontSize: '12px'
+                  }}
+                />
+                <Bar 
+                  dataKey="revenue" 
+                  radius={[0, 4, 4, 0]} 
+                  barSize={20}
+                >
+                  {(analytics?.salesByCategory || []).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={['#2C3E2D', '#4A6741', '#6B8E23', '#8FBC8F'][index % 4]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </section>
 
       {/* Main content row: Recent Orders + Right column */}

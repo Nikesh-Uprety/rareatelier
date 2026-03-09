@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchOrderById, uploadPaymentProof } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useQuery() {
   if (typeof window === "undefined") return new URLSearchParams();
@@ -87,9 +88,8 @@ export default function PaymentProcess() {
 
   if (!order) {
     return (
-      <div className="container mx-auto px-4 py-32 text-center">
-        <Loader2 className="w-10 h-10 animate-spin mx-auto text-muted-foreground" />
-        <p className="mt-4 text-muted-foreground">Loading order...</p>
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <BrandedLoader />
       </div>
     );
   }
@@ -171,9 +171,14 @@ export default function PaymentProcess() {
           disabled={uploading || uploaded}
         />
         {uploaded ? (
-          <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none">
-            <CheckCircle2 className="w-5 h-5 shrink-0" />
-            <span className="text-sm font-medium">Screenshot uploaded. We will verify your payment shortly.</span>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none">
+              <CheckCircle2 className="w-5 h-5 shrink-0" />
+              <span className="text-sm font-medium">Screenshot uploaded. We will verify your payment shortly.</span>
+            </div>
+            <Button asChild className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold">
+              <Link href={`/checkout/success/${orderId}`}>View Order Summary</Link>
+            </Button>
           </div>
         ) : (
           <Button

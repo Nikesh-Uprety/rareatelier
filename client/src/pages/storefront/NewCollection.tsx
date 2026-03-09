@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { ArrowUpRight } from "lucide-react";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 // Masonry layout assignment: vary aspect ratios for visual interest
 const ASPECT_PATTERNS = [
@@ -159,7 +160,9 @@ export default function NewCollection() {
       {/* Gallery */}
       <section className="py-16 md:py-24 container mx-auto px-4 md:px-6 max-w-7xl">
         {isLoading ? (
-          <GallerySkeleton />
+          <div className="py-20 flex items-center justify-center">
+            <BrandedLoader />
+          </div>
         ) : (
           Array.from(productsByCategory.entries()).map(([catSlug, prods]) => (
             <div key={catSlug} className="mb-20 last:mb-0">

@@ -9,6 +9,7 @@ import { fetchProductById, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import useEmblaCarousel from "embla-carousel-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -55,15 +56,8 @@ export default function ProductDetail() {
   if (isLoading || !product) {
     if (isLoading) {
       return (
-        <div className="container mx-auto px-4 py-10 lg:py-24 max-w-6xl mt-10">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16">
-            <div className="aspect-[4/5] max-w-lg bg-muted animate-pulse rounded-sm" />
-            <div className="space-y-6">
-              <div className="h-8 w-3/4 bg-muted animate-pulse" />
-              <div className="h-6 w-1/3 bg-muted animate-pulse" />
-              <div className="h-24 w-full bg-muted animate-pulse" />
-            </div>
-          </div>
+        <div className="min-h-[80vh] flex items-center justify-center">
+          <BrandedLoader />
         </div>
       );
     }

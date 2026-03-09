@@ -32,12 +32,17 @@ export default function Home() {
   const isDragging = useRef(false);
   const interactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: apiProducts = [] } = useQuery({
-    queryKey: ["products", "featured"],
+  const { data: featuredProducts = [] } = useQuery({
+    queryKey: ["products", "featured", { limit: 2 }],
     queryFn: () => fetchProducts({ limit: 2 }),
   });
 
-  // Preload images to prevent black screen flash
+  const { data: newArrivals = [] } = useQuery({
+    queryKey: ["products", "new-arrivals", { limit: 4 }],
+    queryFn: () => fetchProducts({ limit: 4 }),
+  });
+
+  // Preload static campaign images
   useEffect(() => {
     HERO_IMAGES.forEach((src) => {
       const img = new Image();
@@ -50,9 +55,6 @@ export default function Home() {
       }
     });
   }, []);
-
-  const featuredProducts = apiProducts.slice(0, 2);
-  const newArrivals = MOCK_PRODUCTS.slice(2, 6);
 
   const goToSlide = useCallback((index: number) => {
     if (isTransitioning) return;
@@ -440,7 +442,7 @@ export default function Home() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>
                 <img
-                  src={product.images[0]}
+                  src={product.imageUrl ?? ""}
                   alt={product.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
                 />

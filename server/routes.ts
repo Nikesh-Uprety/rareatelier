@@ -121,7 +121,7 @@ export async function registerRoutes(
           .status(400)
           .json({ success: false, error: "Invalid request body" });
       }
-      passport.authenticate("local", (err, user: Express.User | false) => {
+      passport.authenticate("local", (err: any, user: Express.User | false) => {
         if (err) {
           return next(err);
         }
@@ -352,7 +352,7 @@ export async function registerRoutes(
 
   app.get("/api/products/:id", async (req: Request, res: Response) => {
     try {
-      const product = await storage.getProductById(req.params.id);
+      const product = await storage.getProductById(req.params.id as string);
       if (!product) {
         return res
           .status(404)
@@ -365,6 +365,21 @@ export async function registerRoutes(
       return res
         .status(500)
         .json({ success: false, error: "Failed to load product" });
+    }
+  });
+
+  // Newsletter
+  app.post("/api/newsletter/subscribe", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertNewsletterSubscriberSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid email" });
+      }
+      await storage.subscribeToNewsletter(parsed.data.email);
+      return res.json({ success: true, message: "Subscribed successfully" });
+    } catch (err) {
+      console.error("Error in POST /api/newsletter/subscribe", err);
+      return res.status(500).json({ success: false, error: "Failed to subscribe" });
     }
   });
 
@@ -427,10 +442,10 @@ export async function registerRoutes(
         email: shipping.email,
         fullName: `${shipping.firstName} ${shipping.lastName}`,
         addressLine1: shipping.address,
-        addressLine2: null,
+        addressLine2: null as any,
         city: shipping.city,
         region: "", // state removed
-        locationCoordinates: shipping.locationCoordinates ?? null,
+        locationCoordinates: (shipping.locationCoordinates as string) || null,
         postalCode: shipping.zip,
         country: shipping.country,
         total: orderTotal,
@@ -489,7 +504,7 @@ export async function registerRoutes(
             .status(400)
             .json({ success: false, error: "Invalid payload" });
         }
-        const orderId = req.params.id;
+        const orderId = req.params.id as string;
         await storage.getOrderById(orderId);
         const base64 = parsed.data.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
@@ -519,7 +534,7 @@ export async function registerRoutes(
   );
 
   app.get("/api/uploads/payment-proofs/:filename", (req: Request, res: Response) => {
-    const filename = req.params.filename;
+    const filename = req.params.filename as string;
     if (!/^[a-zA-Z0-9._-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
       return res.status(400).send("Invalid filename");
     }
@@ -610,7 +625,7 @@ export async function registerRoutes(
   );
 
   app.get("/api/uploads/products/:filename", (req: Request, res: Response) => {
-    const filename = req.params.filename;
+    const filename = req.params.filename as string;
     if (!/^[a-zA-Z0-9._-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
       return res.status(400).send("Invalid filename");
     }
@@ -720,7 +735,7 @@ export async function registerRoutes(
           sizeOptions: parsed.data.sizeOptions === undefined ? undefined : (parsed.data.sizeOptions || null),
         };
         const updated = await storage.updateProduct(
-          req.params.id,
+          req.params.id as string,
           data,
         );
         return res.json({ success: true, data: updated });
@@ -738,7 +753,7 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        await storage.deleteProduct(req.params.id);
+        await storage.deleteProduct(req.params.id as string);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in DELETE /api/admin/products/:id", err);
@@ -794,7 +809,7 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        await storage.deleteProductAttribute(req.params.id);
+        await storage.deleteProductAttribute(req.params.id as string);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in DELETE /api/admin/attributes/:id", err);
@@ -1248,7 +1263,7 @@ export async function registerRoutes(
       const [bill] = await db
         .select()
         .from(bills)
-        .where(eq(bills.id, req.params.id))
+        .where(eq(bills.id, req.params.id as string))
         .limit(1);
       if (!bill) return res.status(404).json({ success: false, error: "Bill not found" });
       res.json({ success: true, data: bill });
@@ -1264,7 +1279,7 @@ export async function registerRoutes(
       const [bill] = await db
         .select()
         .from(bills)
-        .where(eq(bills.orderId, req.params.orderId))
+        .where(eq(bills.orderId, req.params.orderId as string))
         .limit(1);
       res.json({ success: true, data: bill ?? null });
     } catch (err) {
@@ -1332,7 +1347,7 @@ export async function registerRoutes(
       const [updated] = await db
         .update(bills)
         .set({ status: "void" })
-        .where(eq(bills.id, req.params.id))
+        .where(eq(bills.id, req.params.id as string))
         .returning();
       if (!updated) return res.status(404).json({ success: false, error: "Bill not found" });
       res.json({ success: true, data: updated });
@@ -1396,7 +1411,7 @@ export async function registerRoutes(
           notes,
           status: "closed",
         })
-        .where(eq(posSessions.id, req.params.id))
+        .where(eq(posSessions.id, req.params.id as string))
         .returning();
       res.json({ success: true, data: session });
     } catch (err) {

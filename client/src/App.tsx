@@ -17,6 +17,7 @@ import Contact from "@/pages/storefront/Contact";
 import Cart from "@/pages/storefront/Cart";
 import Checkout from "@/pages/storefront/Checkout";
 import PaymentProcess from "@/pages/storefront/PaymentProcess";
+import OrderSuccess from "@/pages/storefront/OrderSuccess";
 
 import AdminProducts from "@/pages/admin/Products";
 import AdminOrders from "@/pages/admin/Orders";
@@ -172,6 +173,11 @@ function Router() {
       <Route path="/checkout/payment">
         <StorefrontLayout>
           <PaymentProcess />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/checkout/success/:id">
+        <StorefrontLayout>
+          <OrderSuccess />
         </StorefrontLayout>
       </Route>
       <Route path="/login">
