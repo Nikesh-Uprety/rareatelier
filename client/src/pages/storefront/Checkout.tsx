@@ -304,10 +304,10 @@ export default function Checkout() {
                     key={opt.id}
                     type="button"
                     onClick={() => setPaymentMethod(opt.id)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-colors ${
+                    className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
                       isSelected
-                        ? "border-black bg-black/5"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900/5 dark:bg-white/10"
+                        : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
                     }`}
                   >
                     <span
@@ -327,11 +327,11 @@ export default function Checkout() {
                         <opt.icon className="w-6 h-6" />
                       ) : null}
                     </span>
-                    <span className="font-semibold uppercase tracking-wide text-sm">
+                    <span className="font-semibold uppercase tracking-wide text-sm text-zinc-900 dark:text-zinc-100">
                       {opt.label}
                     </span>
                     {isSelected && (
-                      <CheckCircle2 className="w-5 h-5 text-black ml-auto shrink-0" />
+                      <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 ml-auto shrink-0" />
                     )}
                   </button>
                 );
@@ -341,16 +341,16 @@ export default function Checkout() {
                 <button
                   type="button"
                   onClick={() => setPaymentMethod("cash_on_delivery")}
-                  className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-colors ${
+                  className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
                     paymentMethod === "cash_on_delivery"
-                      ? "border-black bg-amber-50"
-                      : "border-gray-200 hover:border-gray-300"
+                      ? "border-zinc-900 dark:border-zinc-100 bg-amber-50 dark:bg-amber-900/20"
+                      : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
                   }`}
                 >
                   <span className="w-12 h-12 rounded-none flex items-center justify-center text-white shrink-0 bg-amber-600">
                     <Banknote className="w-6 h-6" />
                   </span>
-                  <span className="font-semibold uppercase tracking-wide text-sm text-black">
+                  <span className="font-semibold uppercase tracking-wide text-sm text-black dark:text-white">
                     Cash on Delivery
                   </span>
                   {paymentMethod === "cash_on_delivery" && (
@@ -374,7 +374,7 @@ export default function Checkout() {
           </Button>
         </form>
 
-        <div className="w-full lg:w-[450px] bg-gray-50/50 p-10 h-fit">
+        <div className="w-full lg:w-[450px] bg-zinc-50 dark:bg-zinc-200 p-10 h-fit rounded-2xl border border-zinc-200 dark:border-zinc-300 shadow-sm text-zinc-900">
           <div className="space-y-6 mb-10">
             {items.map(item => (
               <div key={item.id} className="flex gap-4">
@@ -386,7 +386,7 @@ export default function Checkout() {
                   <h4 className="text-[10px] font-bold uppercase tracking-widest">{item.product.name}</h4>
                   <p className="text-[10px] text-muted-foreground uppercase">{item.variant.size}</p>
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-widest">
+                <div className="text-[10px] font-black uppercase tracking-widest text-zinc-900">
                   {formatPrice(item.product.price)}
                 </div>
               </div>
@@ -398,18 +398,18 @@ export default function Checkout() {
             <Button variant="secondary" className="h-12 rounded-none px-6 text-xs uppercase tracking-widest font-bold">Apply</Button>
           </div>
 
-          <div className="space-y-4 text-[10px] uppercase tracking-widest font-medium text-muted-foreground pt-8 border-t border-gray-100">
-            <div className="flex justify-between">
+          <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold text-zinc-600 pt-8 border-t border-zinc-200">
+            <div className="flex justify-between items-center">
               <span>Subtotal</span>
-                <span className="text-black">{formatPrice(subtotal)}</span>
+              <span className="text-zinc-900 font-black">{formatPrice(subtotal)}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center text-zinc-600">
               <span>Shipping</span>
-                <span className="text-black">{formatPrice(shipping)}</span>
+              <span className="text-zinc-900 font-black">{formatPrice(shipping)}</span>
             </div>
-            <div className="flex justify-between text-black text-sm font-black pt-4">
+            <div className="flex justify-between text-zinc-900 text-sm font-extrabold pt-4">
               <span>Total</span>
-                <span>{formatPrice(subtotal + shipping)}</span>
+              <span>{formatPrice(subtotal + shipping)}</span>
             </div>
           </div>
         </div>

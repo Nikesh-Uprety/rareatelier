@@ -139,7 +139,7 @@ export interface IStorage {
     search?: string;
     page?: number;
   }): Promise<Order[]>;
-  getOrderById(id: string): Promise<Order & { items: OrderItem[] }>;
+  getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }>;
   createOrder(data: CreateOrderInput): Promise<Order>;
   updateOrderStatus(id: string, status: string): Promise<Order>;
   updateOrderPaymentProof(id: string, paymentProofUrl: string): Promise<Order>;
@@ -510,7 +510,7 @@ export class PgStorage implements IStorage {
     return rows;
   }
 
-  async getOrderById(id: string): Promise<Order & { items: OrderItem[] }> {
+  async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
     const [orderRow] = await db
       .select({
         id: orders.id,
@@ -547,8 +547,10 @@ export class PgStorage implements IStorage {
         productId: orderItems.productId,
         quantity: orderItems.quantity,
         unitPrice: orderItems.unitPrice,
+        product: products,
       })
       .from(orderItems)
+      .leftJoin(products, eq(orderItems.productId, products.id))
       .where(eq(orderItems.orderId, id))
       .orderBy(asc(orderItems.id));
 
@@ -1580,12 +1582,18 @@ export class MemStorage implements IStorage {
     return this._orders.map(({ items: _items, ...order }) => order);
   }
 
-  async getOrderById(id: string): Promise<Order & { items: OrderItem[] }> {
+  async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
     const order = this._orders.find((o) => o.id === id);
     if (!order) {
       throw new Error("Order not found");
     }
-    return order;
+    
+    const itemsWithProducts = order.items.map(item => ({
+      ...item,
+      product: this._products.find(p => p.id === item.productId)
+    }));
+
+    return { ...order, items: itemsWithProducts };
   }
 
   async createOrder(data: CreateOrderInput): Promise<Order> {

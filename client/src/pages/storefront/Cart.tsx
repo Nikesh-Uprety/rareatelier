@@ -33,8 +33,8 @@ export default function Cart() {
           <div className="divide-y border-t border-b">
             {items.map((item) => (
               <div key={item.id} className="py-8 flex gap-8">
-                <Link href={`/product/${item.product.id}`} className="w-24 h-32 bg-gray-50 shrink-0 block">
-                  <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover" />
+                <Link href={`/product/${item.product.id}`} className="w-28 h-36 bg-white dark:bg-neutral-900 shrink-0 block border border-gray-100 dark:border-white/10 p-1 rounded-sm overflow-hidden flex-shrink-0">
+                  <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover rounded-sm" />
                 </Link>
                 <div className="flex-1 flex flex-col">
                   <div className="flex justify-between items-start mb-2">
@@ -53,7 +53,12 @@ export default function Cart() {
                       <span className="w-8 text-center text-xs font-bold">{item.quantity}</span>
                       <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 flex items-center justify-center text-muted-foreground hover:text-black transition-colors">+</button>
                     </div>
-                    <button onClick={() => removeItem(item.id)} className="text-[10px] uppercase tracking-widest text-muted-foreground hover:text-red-500 transition-colors font-bold">Remove</button>
+                    <button 
+                      onClick={() => removeItem(item.id)} 
+                      className="text-[9px] uppercase tracking-widest text-red-500 hover:bg-red-500 hover:text-white transition-all font-black border border-red-500/30 px-3 py-1.5 rounded-full"
+                    >
+                      Remove
+                    </button>
                   </div>
                 </div>
               </div>
@@ -62,19 +67,19 @@ export default function Cart() {
         </div>
 
         <div className="w-full lg:w-[400px]">
-          <div className="bg-gray-50 p-10 border-none sticky top-32">
+          <div className="bg-gray-50 dark:bg-neutral-900/50 p-10 border border-gray-100 dark:border-white/5 rounded-2xl sticky top-32">
             <h2 className="text-lg font-black uppercase tracking-tighter mb-8">Summary</h2>
             
-            <div className="space-y-4 text-[10px] uppercase tracking-widest font-medium mb-10 text-muted-foreground">
-              <div className="flex justify-between">
+            <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold mb-10 text-muted-foreground">
+              <div className="flex justify-between items-center text-zinc-900 dark:text-zinc-100">
                 <span>Subtotal</span>
-                <span className="text-black">{formatPrice(subtotal)}</span>
+                <span className="text-sm">{formatPrice(subtotal)}</span>
               </div>
-              <div className="flex justify-between">
+              <div className="flex justify-between items-center text-zinc-900 dark:text-zinc-100">
                 <span>Shipping</span>
-                <span className="text-black">{formatPrice(shipping)}</span>
+                <span className="text-sm">{formatPrice(shipping)}</span>
               </div>
-              <div className="flex justify-between text-black text-sm font-black pt-6 border-t">
+              <div className="flex justify-between items-center text-black dark:text-white text-base font-black pt-6 border-t border-gray-200 dark:border-white/10">
                 <span>Total</span>
                 <span>{formatPrice(total)}</span>
               </div>

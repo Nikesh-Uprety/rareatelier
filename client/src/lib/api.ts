@@ -92,13 +92,29 @@ export interface OrderDetail {
   id: string;
   email: string;
   fullName: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  region: string;
+  postalCode: string;
+  country: string;
   total: number;
   status: string;
   paymentMethod: string;
   paymentProofUrl: string | null;
   paymentVerified: string | null;
   locationCoordinates: string | null;
-  items: { id: string; quantity: number; unitPrice: number; productId: string }[];
+  createdAt: string | Date;
+  items: {
+    id: string;
+    quantity: number;
+    unitPrice: number;
+    productId: string;
+    product?: {
+      name: string;
+      images: string[];
+    };
+  }[];
 }
 
 export async function fetchOrderById(id: string): Promise<OrderDetail | null> {

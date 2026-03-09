@@ -5,7 +5,7 @@ import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { fetchProductById, type ProductApi } from "@/lib/api";
+import { fetchProductById, fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import useEmblaCarousel from "embla-carousel-react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
@@ -34,6 +34,16 @@ export default function ProductDetail() {
     queryFn: () => fetchProductById(productId),
     enabled: !!productId,
   });
+
+  const { data: relatedProductsRaw = [] } = useQuery<ProductApi[]>({
+    queryKey: ["products", { category: product?.category, limit: 5 }],
+    queryFn: () => fetchProducts({ category: product?.category || undefined, limit: 5 }),
+    enabled: !!product?.category,
+  });
+
+  const relatedProducts = useMemo(() => {
+    return (relatedProductsRaw || []).filter(p => p.id !== product?.id).slice(0, 4);
+  }, [relatedProductsRaw, product?.id]);
 
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -305,7 +315,7 @@ export default function ProductDetail() {
                 variant="outline"
                 onClick={handleBuyNow}
                 disabled={product.stock === 0}
-                className="w-full h-14 border-black text-black hover:bg-black hover:text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full h-14 border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-900 hover:text-white dark:hover:bg-zinc-100 dark:hover:text-zinc-900 rounded-none uppercase tracking-[0.2em] text-xs font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Buy Now
               </Button>
@@ -335,7 +345,30 @@ export default function ProductDetail() {
           You May Also Like
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {/* Related products could be fetched here */}
+          {relatedProducts.map((p) => (
+            <Link
+              key={p.id}
+              href={`/product/${p.id}`}
+              className="group block"
+              onClick={() => {
+                window.scrollTo(0, 0);
+              }}
+            >
+              <div className="aspect-[3/4] overflow-hidden bg-neutral-100 dark:bg-neutral-900 mb-4 relative rounded-sm">
+                <img
+                  src={p.imageUrl ?? ""}
+                  alt={p.name}
+                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
+                />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold truncate uppercase tracking-tight">{p.name}</h3>
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">
+                  {formatPrice(p.price)}
+                </p>
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
 

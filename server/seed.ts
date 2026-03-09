@@ -447,7 +447,7 @@ async function main() {
         region: "Bagmati",
         postalCode: "00000",
         country: "NP",
-        total: o.total,
+        total: o.total.toString(),
         status: o.status,
       };
     }),

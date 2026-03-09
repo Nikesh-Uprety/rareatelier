@@ -96,7 +96,7 @@ export default function SearchBar() {
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
             placeholder="Search products..."
-            className="w-full bg-transparent border-none focus:ring-0 text-sm placeholder:text-muted-foreground/60 px-2"
+            className="w-full bg-transparent border-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:outline-none text-sm placeholder:text-muted-foreground/60 px-2"
           />
           {query && (
             <button
