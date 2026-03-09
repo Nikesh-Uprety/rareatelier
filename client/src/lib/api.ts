@@ -108,11 +108,18 @@ export interface OrderDetail {
   items: {
     id: string;
     quantity: number;
-    unitPrice: number;
+    unitPrice: number | string;
     productId: string;
     product?: {
+      id: string;
       name: string;
-      images: string[];
+      price: string;
+      imageUrl: string | null;
+      galleryUrls: string | null;
+      category: string | null;
+      stock: number;
+      colorOptions: string | null;
+      sizeOptions: string | null;
     };
   }[];
 }

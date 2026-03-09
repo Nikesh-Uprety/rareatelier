@@ -139,6 +139,7 @@ export default function Checkout() {
 
       if (needsPaymentPage) {
         clearCart();
+        localStorage.setItem("ra_last_order_id", result.data.order.id);
         setLocation(
           `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
         );
@@ -146,6 +147,7 @@ export default function Checkout() {
       }
 
       clearCart();
+      localStorage.setItem("ra_last_order_id", result.data.order.id);
       setLocation(`/checkout/success/${result.data.order.id}`);
       toast({ title: "Order Placed" });
     } catch (err) {
