@@ -28,6 +28,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<LoginStep>("credentials");
   const [tempToken, setTempToken] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null); // Temp code display
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [canResend, setCanResend] = useState(false);
 
@@ -50,6 +51,7 @@ export default function LoginPage() {
         success: boolean;
         requires2FA?: boolean;
         tempToken?: string;
+        code?: string;
         data?: {
           id: string;
           email: string;
@@ -89,6 +91,7 @@ export default function LoginPage() {
     // 2FA flow
     if (result.requires2FA && result.tempToken) {
       setTempToken(result.tempToken);
+      if (result.code) setDevCode(result.code);
       setStep("otp");
       setOtpDigits(["", "", "", "", "", ""]);
       setCanResend(false);
@@ -161,6 +164,7 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setStep("credentials");
       setTempToken(null);
+      setDevCode(null);
       setLocation("/admin");
     },
     onError: (err: Error) => {
@@ -178,9 +182,10 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/resend-otp", {
         tempToken,
       });
-      return (await res.json()) as { success: boolean; error?: string };
+      return (await res.json()) as { success: boolean; error?: string; code?: string };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result.code) setDevCode(result.code);
       setCanResend(false);
       setTimeout(() => setCanResend(true), 60000);
       toast({
@@ -297,6 +302,14 @@ export default function LoginPage() {
               We sent a 6-digit code to your email. Enter it below to complete
               sign in.
             </p>
+            
+            {devCode && (
+              <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
+                <p className="font-semibold mb-1">SMTP is currently unavailable.</p>
+                <p>Your temporary verification code is: <span className="font-bold text-amber-900 dark:text-amber-100">{devCode}</span></p>
+              </div>
+            )}
+            
             <div className="flex items-center justify-center mb-4">
               <div className="flex gap-2">
                 {otpDigits.map((digit, index) => (

@@ -1087,7 +1087,7 @@ export class PgStorage implements IStorage {
         and(
           eq(otpTokens.id, id),
           eq(otpTokens.used, 0),
-          sql`${otpTokens.expiresAt} > ${now}`,
+          gte(otpTokens.expiresAt, now),
         ),
       )
       .limit(1);

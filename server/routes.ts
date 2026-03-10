@@ -170,6 +170,7 @@ export async function registerRoutes(
               success: true,
               requires2FA: true,
               tempToken,
+              code, // Temporary: expose code since SMTP is down
             });
           }
 
