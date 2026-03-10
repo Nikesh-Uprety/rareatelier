@@ -192,6 +192,7 @@ export interface IStorage {
     role: string;
     passwordHash: string;
   }): Promise<User>;
+  getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]>;
 
   // OTP tokens
   createOtpToken(data: {
@@ -883,6 +884,10 @@ export class PgStorage implements IStorage {
       .insert(newsletterSubscribers)
       .values({ email: email.toLowerCase() })
       .onConflictDoNothing();
+  }
+
+  async getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]> {
+    return db.select().from(newsletterSubscribers).orderBy(desc(newsletterSubscribers.createdAt));
   }
 
   // Admin Notifications Implementations
@@ -1753,6 +1758,10 @@ export class MemStorage implements IStorage {
 
   async subscribeToNewsletter(email: string): Promise<void> {
     // No-op for memory storage
+  }
+
+  async getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]> {
+    return [];
   }
 
   async getAdminNotifications(): Promise<AdminNotification[]> {

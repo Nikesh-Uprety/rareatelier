@@ -26,7 +26,10 @@ import {
   Clock,
   ExternalLink,
   ChevronRight,
-  Reply
+  Reply,
+  Download,
+  Users,
+  FileSpreadsheet
 } from "lucide-react";
 import {
   Dialog,
@@ -242,13 +245,37 @@ export default function AdminProfilePage() {
   const [isReplyOpen, setIsReplyOpen] = useState(false);
 
   // Marketing State
-  const [marketingSubject, setMarketingSubject] = useState("");
-  const [marketingBody, setMarketingBody] = useState("");
+  const [marketingSubject, setMarketingSubject] = useState("New Seasonal Collection — RARE ATELIER");
+  const [marketingBody, setMarketingBody] = useState(`<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
+  <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
+  <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
+  
+  <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
+  
+  <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px; text-align: left;">
+    Dear community,
+    <br><br>
+    [Edit your message here...]
+  </p>
+  
+  <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
+     <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
+     <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
+  </div>
 
-  const {
-    data: messagesResponse,
-    isLoading: messagesLoading,
-  } = useQuery<{ success: boolean; data: ContactMessage[] }>({
+  <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
+    <p style="font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">
+      RARE Nepal · Kathmandu · Heritage Meets Future
+    </p>
+    <div style="margin-top: 16px;">
+       <a href="#" style="color: rgba(242, 239, 232, 0.4); text-decoration: underline; font-size: 10px;">Unsubscribe</a>
+    </div>
+  </div>
+</div>`);
+  const [subscriberSearch, setSubscriberSearch] = useState("");
+
+  // Queries
+  const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
     queryKey: ["admin", "messages"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/admin/messages");
@@ -257,7 +284,20 @@ export default function AdminProfilePage() {
     enabled: !!user,
   });
 
-  const messages = messagesResponse?.data ?? [];
+  const subscribersQuery = useQuery<{ success: boolean; data: { email: string; createdAt: string }[] }>({
+    queryKey: ["admin", "newsletter", "subscribers"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/newsletter/subscribers");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const messages = messagesQuery.data?.data ?? [];
+  const subscribers = subscribersQuery.data?.data ?? [];
+  const filteredSubscribers = subscribers.filter(s => 
+    s.email.toLowerCase().includes(subscriberSearch.toLowerCase())
+  );
 
   const replyMutation = useMutation({
     mutationFn: async (payload: { id: string; to: string; subject: string; html: string }) => {
@@ -690,7 +730,7 @@ export default function AdminProfilePage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#F0F0EB] dark:divide-border">
-                  {messagesLoading ? (
+                  {messagesQuery.isLoading ? (
                     Array.from({ length: 3 }).map((_, i) => (
                       <tr key={i}>
                          <td colSpan={5} className="px-6 py-4 animate-pulse">
@@ -805,7 +845,88 @@ export default function AdminProfilePage() {
         </TabsContent>
 
         {/* Marketing tab */}
-        <TabsContent value="marketing" className="mt-4">
+        <TabsContent value="marketing" className="mt-4 space-y-6">
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Newsletter Subscribers
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Manage your community and export your email list.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input 
+                    placeholder="Search emails..." 
+                    className="h-8 w-[200px] pl-9 text-xs"
+                    value={subscriberSearch}
+                    onChange={(e) => setSubscriberSearch(e.target.value)}
+                  />
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-8 text-xs font-mono tracking-tighter"
+                  onClick={() => window.open('/api/admin/newsletter/export', '_blank')}
+                >
+                  <Download className="h-3 w-3 mr-2" />
+                  Export CSV
+                </Button>
+              </div>
+            </div>
+
+            <div className="border border-[#E5E5E0] dark:border-border rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/30 border-b border-[#E5E5E0] dark:border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-semibold">Email Address</th>
+                    <th className="px-4 py-2 text-left font-semibold">Joined At</th>
+                    <th className="px-4 py-2 text-right font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
+                  {subscribersLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i}>
+                        <td className="px-4 py-3"><div className="h-3 w-32 bg-muted animate-pulse rounded" /></td>
+                        <td className="px-4 py-3"><div className="h-3 w-24 bg-muted animate-pulse rounded" /></td>
+                        <td className="px-4 py-3 text-right"><div className="h-3 w-12 bg-muted animate-pulse rounded ml-auto" /></td>
+                      </tr>
+                    ))
+                  ) : filteredSubscribers.length === 0 ? (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground italic">
+                        No subscribers matched your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSubscribers.slice(0, 10).map((s) => (
+                      <tr key={s.email} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-4 py-3 font-medium">{s.email}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {s.createdAt ? format(new Date(s.createdAt), "MMM d, yyyy") : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Badge variant="outline" className="text-[10px] text-green-600 border-green-200 bg-green-50/50">Active</Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                  {filteredSubscribers.length > 10 && (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-2 text-center text-[10px] text-muted-foreground bg-muted/5">
+                        Showing first 10 of {filteredSubscribers.length} subscribers
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
@@ -813,7 +934,7 @@ export default function AdminProfilePage() {
                   Email Marketing Broadcast
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Send a newsletter or announcement to all your subscribers.
+                  Send a newsletter or announcement to {filteredSubscribers.length} subscribers.
                 </p>
               </div>
               <Badge variant="outline" className="bg-[#2D4A35]/5 text-[#2D4A35] dark:text-emerald-400 border-[#2D4A35]/20">
@@ -822,7 +943,7 @@ export default function AdminProfilePage() {
               </Badge>
             </div>
 
-            <div className="grid gap-6 py-4">
+            <div className="grid gap-6 py-2">
               <div className="space-y-2">
                 <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
                   <MessageSquare className="h-3 w-3" />
@@ -843,8 +964,8 @@ export default function AdminProfilePage() {
                 </label>
                 <div className="relative">
                   <Textarea 
-                    placeholder="<p>Hello everyone!</p><p>Explore our latest drop...</p>" 
-                    className="min-h-[300px] font-mono text-sm leading-relaxed p-4"
+                    placeholder="Compose your email..." 
+                    className="min-h-[400px] font-mono text-sm leading-relaxed p-4"
                     value={marketingBody}
                     onChange={(e) => setMarketingBody(e.target.value)}
                   />
@@ -857,16 +978,28 @@ export default function AdminProfilePage() {
 
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E5E0] dark:border-border font-mono text-xs">
               <p className="text-muted-foreground italic mr-auto">
-                Careful: This will send an email immediately to all verified subscribers.
+                Careful: This will send an email immediately to all subscribers.
               </p>
               <Button 
                 variant="outline" 
                 onClick={() => {
-                  setMarketingSubject("");
-                  setMarketingBody("");
+                  setMarketingSubject("New Seasonal Collection — RARE ATELIER");
+                  setMarketingBody(`<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
+  <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
+  <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
+  <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
+  <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px; text-align: left;">Dear community,<br><br>[Edit your message here...]</p>
+  <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
+     <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
+     <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
+  </div>
+  <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
+    <p style="font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">RARE Nepal · Kathmandu · Heritage Meets Future</p>
+  </div>
+</div>`);
                 }}
               >
-                Clear Draft
+                Reset to Template
               </Button>
               <Button 
                 className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90 px-8"

@@ -9,7 +9,11 @@ import { z } from "zod";
 
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
-import { sendOTPEmail, sendInviteEmail, sendContactReplyEmail, sendMarketingBroadcastEmail } from "./email";
+import { sendOTPEmail,  sendInviteEmail,
+  sendContactReplyEmail,
+  sendMarketingBroadcastEmail,
+  sendNewsletterWelcomeEmail,
+} from "./email";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
 import {
   users,
@@ -418,6 +422,12 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, error: "Invalid email" });
       }
       await storage.subscribeToNewsletter(parsed.data.email);
+      
+      // Async send welcome email
+      sendNewsletterWelcomeEmail(parsed.data.email).catch(e => 
+        console.error("Failed to send welcome email:", e)
+      );
+
       return res.json({ success: true, message: "Subscribed successfully" });
     } catch (err) {
       console.error("Error in POST /api/newsletter/subscribe", err);
@@ -876,9 +886,9 @@ export async function registerRoutes(
         const search = getQueryParam(req.query.search);
         const page = getQueryParam(req.query.page);
         const orders = await storage.getOrders({
-          status,
+          status: status as any,
           search,
-          page: page ? Number(page) || 1 : 1,
+          page: page ? parseInt(page) : undefined,
         });
         return res.json({ success: true, data: orders });
       } catch (err) {
@@ -906,8 +916,10 @@ export async function registerRoutes(
             .json({ success: false, error: "Invalid status" });
         }
 
+        const { id } = req.params;
+        if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
         const updated = await storage.updateOrderStatus(
-          req.params.id,
+          id,
           parsed.data.status,
         );
 
@@ -916,11 +928,11 @@ export async function registerRoutes(
           try {
             const user = req.user as any;
             await generateBillFromOrder(
-              req.params.id,
+              id,
               user?.id ?? "system",
               user?.name ?? user?.email ?? "Admin"
             );
-            console.log(`✅ Bill auto-generated for order ${req.params.id}`);
+            console.log(`✅ Bill auto-generated for order ${id}`);
           } catch (billErr) {
             console.error("Bill generation failed (non-critical):", billErr);
           }
@@ -951,8 +963,10 @@ export async function registerRoutes(
             .status(400)
             .json({ success: false, error: "Invalid payload" });
         }
+        const { id } = req.params;
+        if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
         const updated = await storage.updateOrderPaymentVerified(
-          req.params.id,
+          id,
           parsed.data.paymentVerified,
         );
         return res.json({ success: true, data: updated });
@@ -1135,8 +1149,10 @@ export async function registerRoutes(
           .json({ success: false, error: "Invalid request body" });
       }
 
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        await storage.updateUserTwoFactor(req.params.id, parsed.data.enabled);
+        await storage.updateUserTwoFactor(id, parsed.data.enabled);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in PUT /api/admin/users/:id/2fa", err);
@@ -1151,8 +1167,10 @@ export async function registerRoutes(
     "/api/admin/users/:id",
     requireAdmin,
     async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        await storage.revokeUser(req.params.id);
+        await storage.revokeUser(id);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in DELETE /api/admin/users/:id", err);
@@ -1222,10 +1240,10 @@ export async function registerRoutes(
     "/api/admin/customers/:id",
     requireAdmin,
     async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        const customerWithOrders = await storage.getCustomerById(
-          req.params.id,
-        );
+        const customerWithOrders = await storage.getCustomerById(id);
         const last10Orders = customerWithOrders.orders.slice(0, 10);
         return res.json({
           success: true,
@@ -1323,8 +1341,10 @@ export async function registerRoutes(
     "/api/admin/notifications/:id/read",
     requireAdmin,
     async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        await storage.markAdminNotificationRead(req.params.id);
+        await storage.markAdminNotificationRead(id);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in PATCH /api/admin/notifications/:id/read", err);
@@ -1404,6 +1424,45 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to send broadcast" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/newsletter/subscribers",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const subscribers = await storage.getNewsletterSubscribers();
+        return res.json({ success: true, data: subscribers });
+      } catch (err) {
+        console.error("Error in GET /api/admin/newsletter/subscribers", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load subscribers" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/newsletter/export",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const subscribers = await storage.getNewsletterSubscribers();
+        const csv = [
+          "Email,Joined At",
+          ...subscribers.map(s => `${s.email},${s.createdAt ? s.createdAt.toISOString() : ""}`)
+        ].join("\n");
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", "attachment; filename=subscribers.csv");
+        return res.send(csv);
+      } catch (err) {
+        console.error("Error in GET /api/admin/newsletter/export", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to export subscribers" });
       }
     },
   );

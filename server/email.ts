@@ -124,3 +124,36 @@ export async function sendMarketingBroadcastEmail(bccList: string[], subject: st
   }
 }
 
+export async function sendNewsletterWelcomeEmail(to: string) {
+  if (!transporter || !hasSmtp) {
+    console.warn("[DEV] SMTP not configured. Newsletter welcome for", to);
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"RARE Nepal" <${process.env.SMTP_USER}>`,
+      to,
+      subject: "Welcome to the RARE Community",
+      html: `
+      <div style="font-family: 'serif'; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center; border-radius: 24px;">
+        <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
+        <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
+        <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">Welcome to the Inner Circle</h2>
+        <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px;">
+          Thank you for joining our community. You are now part of an exclusive group that appreciates the intersection of luxury, heritage, and streetwear.
+        </p>
+        <p style="font-size: 14px; letter-spacing: 0.1em; color: rgba(242, 239, 232, 0.5); margin-bottom: 40px;">
+          As a member, you'll be the first to know about new collection drops, private events, and archival releases.
+        </p>
+        <a href="https://rarenp.com" style="display: inline-block; padding: 16px 32px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 12px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Discover the Collection</a>
+        <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
+          <p style="font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">RARE Nepal · Khusibu, Nayabazar, Kathmandu</p>
+        </div>
+      </div>
+    `,
+    });
+  } catch (err) {
+    console.warn("[DEV] SMTP send failed. Newsletter welcome for", to, err);
+  }
+}
+
