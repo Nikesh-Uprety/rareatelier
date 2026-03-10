@@ -293,6 +293,8 @@ export default function AdminProfilePage() {
     enabled: !!user,
   });
 
+  const subscribersLoading = subscribersQuery.isLoading;
+
   const messages = messagesQuery.data?.data ?? [];
   const subscribers = subscribersQuery.data?.data ?? [];
   const filteredSubscribers = subscribers.filter(s => 
