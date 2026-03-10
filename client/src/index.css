@@ -210,6 +210,21 @@
   mix-blend-mode: plus-lighter;
 }
 
+.text-outline-white {
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.4);
+  color: transparent;
+}
+
+.group-hover\/banner:hover .text-outline-white {
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.8);
+  transition: all 0.7s ease;
+}
+
+:root {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+}
+
 /* ── Bill Document Styles ───────────────────────── */
 .bill-wrapper {
   max-width: 380px;

@@ -3,19 +3,20 @@ import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
-import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight } from "lucide-react";
+import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 
 const HERO_IMAGES = [
   "/images/landingpage3.webp",
-  "/images/landingpage4.webp"
+  "/images/landingpage4.webp",
+  "/images/hero_premium_1.webp"
 ];
 
 const LIFESTYLE_IMAGES = [
-  "/images/feature1.webp",
+  "/images/feature_premium_1.webp",
   "/images/feature2.webp",
   "/images/feature3.webp",
 ];
@@ -31,6 +32,9 @@ export default function Home() {
   const dragStartX = useRef(0);
   const isDragging = useRef(false);
   const interactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { scrollYProgress } = useScroll();
+  const yParallax = useTransform(scrollYProgress, [0, 1], [0, -200]);
 
   const { data: featuredProducts = [] } = useQuery({
     queryKey: ["products", "featured", { limit: 2 }],
@@ -352,9 +356,51 @@ export default function Home() {
             <Link
               key={product.id}
               href={`/product/${product.id}`}
-              className="group cursor-pointer"
+              className="group cursor-pointer relative"
             >
-              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5]">
+              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-700 hover:shadow-white/5">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    className="absolute inset-0 z-0"
+                    whileHover={{ scale: 1.1 }}
+                    transition={{ duration: 1.5, ease: [0.33, 1, 0.68, 1] }}
+                  >
+                    {/* Primary Image */}
+                    <OptimizedImage
+                      src={product.imageUrl ?? ""}
+                      alt={product.name}
+                      className="w-full h-full object-cover transition-opacity duration-700 group-hover:opacity-0"
+                    />
+                    {/* Secondary Image (Model/Action) */}
+                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700">
+                      <OptimizedImage
+                        src={product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? ""}
+                        alt={`${product.name} lifestyle`}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+
+                {/* Glassmorphism Detail Reveal */}
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileHover={{ opacity: 1, y: 0 }}
+                  className="absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-white/10 border border-white/20 rounded-2xl shadow-xl flex justify-between items-center"
+                >
+                  <div>
+                    <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
+                      {product.name}
+                    </h3>
+                    <p className="text-white/70 font-medium text-lg">
+                      {formatPrice(product.price)}
+                    </p>
+                  </div>
+                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
+                    <ArrowRight className="w-5 h-5" />
+                  </div>
+                </motion.div>
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -362,54 +408,74 @@ export default function Home() {
                     e.stopPropagation();
                     window.open(`/product/${product.id}`, "_blank");
                   }}
-                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Open product in new tab"
+                  className="absolute top-4 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <ExternalLink className="h-4 w-4" />
                 </button>
-                <img
-                  src={product.imageUrl ?? ""}
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                />
-              </div>
-              <div className="mt-8">
-                <h3 className="text-xl font-bold uppercase tracking-tighter mb-1">
-                  {product.name}
-                </h3>
-                <p className="font-medium text-lg text-muted-foreground">
-                  {formatPrice(product.price)}
-                </p>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* Campaign Banner */}
-      <section className="relative h-[80vh] w-full overflow-hidden my-24">
-        <img
-          alt="Campaign story"
-          className="w-full h-full object-cover"
-          src="https://i.ibb.co/DPgdPLtS/Chat-GPT-Image-Mar-6-2026-08-28-46-PM.png?auto=format&fit=crop&q=80&w=2000"
+      {/* Campaign Banner - Final Refined Transparency & Logo Sizing */}
+      <section className="relative h-[80vh] w-full overflow-hidden my-32 group/banner">
+        <motion.div 
+          style={{ y: yParallax }}
+          className="absolute inset-0 w-full h-[120%] -top-[10%]"
+        >
+          <img
+            alt="Campaign story"
+            className="w-full h-full object-cover scale-110"
+            src="/images/landingpage3.webp"
+          />
+        </motion.div>
+        
+        <div 
+          className="absolute inset-0 z-10 pointer-events-none opacity-0 group-hover/banner:opacity-100 transition-opacity duration-1000"
+          onMouseMove={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            e.currentTarget.style.setProperty('--mouse-x', `${x}px`);
+            e.currentTarget.style.setProperty('--mouse-y', `${y}px`);
+          }}
+          style={{
+            background: 'radial-gradient(circle at var(--mouse-x) var(--mouse-y), rgba(255,255,255,0.08) 0%, transparent 40%)'
+          } as any}
         />
-        <div className="absolute inset-0 bg-black/30 dark:bg-luminous-glow transition-colors duration-700" />
-        <div className="absolute inset-0 flex items-center justify-center text-center text-white p-4">
-          <div className="max-w-2xl animate-in zoom-in duration-1000">
-            <h2 className="font-serif text-4xl md:text-7xl font-bold mb-6 tracking-tight">
-              Explore the journey behind
+
+        <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700" />
+        
+        <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-12 z-20">
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 1, ease: "easeOut" }}
+            className="max-w-xl w-full backdrop-blur-[2px] bg-transparent border border-white/10 p-6 md:p-10 text-center text-white rounded-3xl shadow-2xl overflow-hidden relative"
+          >
+            {/* Ambient revolving background elements inside glass */}
+            <div className="absolute top-0 right-0 p-4">
+               <Gem className="w-4 h-4 text-white/10 animate-revolve" />
+            </div>
+            
+            <h2 className="text-[14px] md:text-lg font-black mb-4 tracking-[0.4em] uppercase leading-tight italic">
+              Explore the <br/><span className="not-italic text-outline-white">journey behind.</span>
             </h2>
-            <p className="text-xl opacity-90 font-light tracking-wide">
-              our Winter '25 collection.
+            <p className="text-[10px] md:text-xs opacity-60 font-bold tracking-[0.3em] uppercase max-w-sm mx-auto mb-8 leading-relaxed">
+              Discover the meticulous craftsmanship and story of the Winter '25 collection.
             </p>
             <Button
               variant="outline"
-              className="mt-12 rounded-none px-12 h-14 border-white text-white hover:bg-white hover:text-black transition-all uppercase text-xs tracking-widest font-bold"
+              className="rounded-full px-8 h-12 border-white/20 text-white hover:bg-white hover:text-black transition-all uppercase text-[8px] tracking-[0.4em] font-black group/btn shadow-xl hover:shadow-white/20 active:scale-95"
               asChild
             >
-              <Link href="/products?category=WINTER_25">Read Story</Link>
+              <Link href="/new-collection" className="flex items-center gap-3">
+                Explore Collection <ArrowRight className="w-3 h-3 group-hover/btn:translate-x-1.5 transition-transform" />
+              </Link>
             </Button>
-          </div>
+          </motion.div>
         </div>
       </section>
 
@@ -428,7 +494,21 @@ export default function Home() {
               href={`/product/${product.id}`}
               className="group cursor-pointer"
             >
-              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6">
+              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500">
+                <motion.div
+                  className="w-full h-full"
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ duration: 0.8 }}
+                >
+                  <OptimizedImage
+                    src={product.imageUrl ?? ""}
+                    alt={product.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
+                  />
+                  {/* Hover Secondary View */}
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white" />
+                </motion.div>
+
                 <button
                   type="button"
                   onClick={(e) => {
@@ -436,24 +516,22 @@ export default function Home() {
                     e.stopPropagation();
                     window.open(`/product/${product.id}`, "_blank");
                   }}
-                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white text-neutral-900 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Open product in new tab"
+                  className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity border border-white/30"
                 >
                   <ExternalLink className="h-3.5 w-3.5" />
                 </button>
-                <img
-                  src={product.imageUrl ?? ""}
-                  alt={product.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000"
-                />
+
+                {/* Dynamic Price floating on hover */}
+                <div className="absolute bottom-2 left-2 truncate opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none">
+                   <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase">
+                    {formatPrice(product.price)}
+                   </span>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-widest truncate mb-1">
+              <div className="px-1">
+                <h3 className="text-xs font-black uppercase tracking-widest truncate mb-1 text-foreground/80 group-hover:text-primary transition-colors">
                   {product.name}
                 </h3>
-                <p className="text-muted-foreground text-xs font-medium">
-                  {formatPrice(product.price)}
-                </p>
               </div>
             </Link>
           ))}
