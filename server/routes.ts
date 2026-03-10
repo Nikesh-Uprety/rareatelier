@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { requireAdmin } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
-import { sendOTPEmail, sendInviteEmail } from "./email";
+import { sendOTPEmail, sendInviteEmail, sendContactReplyEmail, sendMarketingBroadcastEmail } from "./email";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
 import {
   users,
@@ -31,8 +31,16 @@ import {
 import { eq, desc, sum, sql, and, gte, lte } from "drizzle-orm";
 import { db } from "./db";
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads", "payment-proofs");
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
+
+function getQueryParam(param: any): string | undefined {
+  if (typeof param === "string") return param;
+  if (Array.isArray(param) && typeof param[0] === "string") return param[0];
+  return undefined;
+}
+
 function ensureUploadsDir() {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -333,6 +341,37 @@ export async function registerRoutes(
   );
 
   // Storefront product routes
+  // Public Contact API
+  app.post("/api/contact", async (req: Request, res: Response) => {
+    try {
+      const { name, email, subject, message } = req.body;
+      if (!name || !email || !subject || !message) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const created = await storage.createContactMessage({
+        name,
+        email,
+        phone: null,
+        subject,
+        message,
+      });
+
+      // Create admin notification
+      await storage.createAdminNotification({
+        title: "New Contact Message",
+        message: `From: ${name} (${subject})`,
+        type: "contact",
+        link: "/admin/profile?tab=messages",
+      });
+
+      return res.status(201).json({ success: true, data: created });
+    } catch (err) {
+      console.error("Error in POST /api/contact", err);
+      return res.status(500).json({ success: false, error: "Failed to send message" });
+    }
+  });
+
   app.get("/api/products", async (req: Request, res: Response) => {
     try {
       const { category, search, page, limit } = req.query;
@@ -445,10 +484,10 @@ export async function registerRoutes(
         email: shipping.email,
         fullName: `${shipping.firstName} ${shipping.lastName}`,
         addressLine1: shipping.address,
-        addressLine2: null as any,
+        addressLine2: undefined,
         city: shipping.city,
         region: "", // state removed
-        locationCoordinates: (shipping.locationCoordinates as string) || null,
+        locationCoordinates: (shipping.locationCoordinates as string) || undefined,
         postalCode: shipping.zip,
         country: shipping.country,
         total: orderTotal,
@@ -660,12 +699,16 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { category, search, page, limit } = req.query;
+        const category = getQueryParam(req.query.category);
+        const search = getQueryParam(req.query.search);
+        const page = getQueryParam(req.query.page);
+        const limit = getQueryParam(req.query.limit);
+
         const products = await storage.getProducts({
-          category: typeof category === "string" ? category : undefined,
-          search: typeof search === "string" ? search : undefined,
-          page: typeof page === "string" ? Number(page) || 1 : undefined,
-          limit: typeof limit === "string" ? Number(limit) || 24 : undefined,
+          category,
+          search,
+          page: page ? Number(page) || 1 : undefined,
+          limit: limit ? Number(limit) || 24 : undefined,
           includeInactive: true,
         });
         return res.json({ success: true, data: products });
@@ -773,9 +816,9 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { type } = req.query;
+        const type = getQueryParam(req.query.type);
         const attributes = await storage.getProductAttributes(
-          typeof type === "string" ? type : undefined,
+          type,
         );
         return res.json({ success: true, data: attributes });
       } catch (err) {
@@ -829,11 +872,13 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { status, search, page } = req.query;
+        const status = getQueryParam(req.query.status);
+        const search = getQueryParam(req.query.search);
+        const page = getQueryParam(req.query.page);
         const orders = await storage.getOrders({
-          status: typeof status === "string" ? status : undefined,
-          search: typeof search === "string" ? search : undefined,
-          page: typeof page === "string" ? Number(page) || 1 : undefined,
+          status,
+          search,
+          page: page ? Number(page) || 1 : 1,
         });
         return res.json({ success: true, data: orders });
       } catch (err) {
@@ -986,9 +1031,9 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { search } = req.query;
+        const search = getQueryParam(req.query.search);
         const customers = await storage.getCustomers(
-          typeof search === "string" ? search : undefined,
+          search,
         );
         return res.json({ success: true, data: customers });
       } catch (err) {
@@ -1201,16 +1246,13 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const rangeParam = req.query.range;
-        const range =
-          rangeParam === "7d" ||
-          rangeParam === "30d" ||
-          rangeParam === "90d" ||
-          rangeParam === "1y"
-            ? rangeParam
+        const range = getQueryParam(req.query.range);
+        const analyticsRange =
+          range === "7d" || range === "30d" || range === "90d" || range === "1y"
+            ? range
             : "30d";
 
-        const data = await storage.getAnalytics(range);
+        const data = await storage.getAnalytics(analyticsRange);
         return res.json({ success: true, data });
       } catch (err) {
         console.error("Error in GET /api/admin/analytics", err);
@@ -1226,13 +1268,13 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const yearParam = req.query.year;
-        const year =
-          typeof yearParam === "string" && /^\d{4}$/.test(yearParam)
-            ? Number(yearParam)
+        const { year } = req.query;
+        const analyticsYear =
+          typeof year === "string" && /^\d{4}$/.test(year)
+            ? Number(year)
             : 2025;
 
-        const data = await storage.getAnalyticsCalendar(year);
+        const data = await storage.getAnalyticsCalendar(analyticsYear);
         return res.json({ success: true, data });
       } catch (err) {
         console.error("Error in GET /api/admin/analytics/calendar", err);
@@ -1289,6 +1331,103 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to mark notification as read" });
+      }
+    },
+  );
+
+  // ── Contact Messages ─────────────────────────────────────
+  app.get(
+    "/api/admin/messages",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const messages = await storage.getContactMessages();
+        return res.json({ success: true, data: messages });
+      } catch (err) {
+        console.error("Error in GET /api/admin/messages", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load messages" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/messages/:id/reply",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        const { html, to, subject } = req.body;
+        if (!html || !to || !subject) {
+          return res.status(400).json({ success: false, error: "Missing fields" });
+        }
+
+        await sendContactReplyEmail(to, subject, html);
+        const updated = await storage.updateContactMessageStatus(id, "replied");
+
+        // Optimistically delete the notification if it exists (for simpler UX)
+        // This is handled via UI state effectively, but if needed we could also look it up and mark read.
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in POST /api/admin/messages/:id/reply", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to send reply" });
+      }
+    },
+  );
+
+  // ── Marketing Broadcast ──────────────────────────────────
+  app.post(
+    "/api/admin/marketing/broadcast",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { subject, html } = req.body;
+        if (!subject || !html) {
+          return res.status(400).json({ success: false, error: "Missing subject or html" });
+        }
+
+        const subscribers = await db.select().from(newsletterSubscribers);
+        if (!subscribers.length) {
+          return res.status(400).json({ success: false, error: "No subscribers found" });
+        }
+
+        const bccList = subscribers.map((s) => s.email);
+        await sendMarketingBroadcastEmail(bccList, subject, html);
+
+        return res.json({ success: true, count: bccList.length });
+      } catch (err) {
+        console.error("Error in POST /api/admin/marketing/broadcast", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to send broadcast" });
+      }
+    },
+  );
+
+  // ── SMTP Test ──────────────────────────────────────────
+  app.post(
+    "/api/admin/test-email",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { email } = req.body;
+        const target = email || "upretynikesh021@gmail.com";
+        
+        // Use a generic send function or one of the existing ones
+        // Since we want to test SMTP, let's use the invite one as a template or add a generic one
+        const { sendInviteEmail } = await import("./email");
+        await sendInviteEmail(target, "Test User", "123456", "System Admin (SMTP Test)");
+
+        return res.json({ success: true, message: `Test email sent to ${target}` });
+      } catch (err) {
+        console.error("Error in POST /api/admin/test-email", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to send test email. Check SMTP logs." });
       }
     },
   );

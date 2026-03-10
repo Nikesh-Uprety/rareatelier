@@ -1,18 +1,51 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import {
   type AdminCustomer,
   type AdminOrder,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
+import { format } from "date-fns";
+import { 
+  Search, 
+  Mail, 
+  MessageSquare, 
+  Send, 
+  MoreHorizontal, 
+  CheckCircle2, 
+  Clock,
+  ExternalLink,
+  ChevronRight,
+  Reply
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface AdminUser {
   id: string;
@@ -36,6 +69,11 @@ interface ContactMessage {
 }
 
 export default function AdminProfilePage() {
+  const [location, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialTab = searchParams.get("tab") || "account";
+
+  const [activeTab, setActiveTab] = useState(initialTab);
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -198,6 +236,79 @@ export default function AdminProfilePage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
 
+  // Messages State
+  const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [isReplyOpen, setIsReplyOpen] = useState(false);
+
+  // Marketing State
+  const [marketingSubject, setMarketingSubject] = useState("");
+  const [marketingBody, setMarketingBody] = useState("");
+
+  const {
+    data: messagesResponse,
+    isLoading: messagesLoading,
+  } = useQuery<{ success: boolean; data: ContactMessage[] }>({
+    queryKey: ["admin", "messages"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/messages");
+      return res.json();
+    },
+    enabled: !!user,
+  });
+
+  const messages = messagesResponse?.data ?? [];
+
+  const replyMutation = useMutation({
+    mutationFn: async (payload: { id: string; to: string; subject: string; html: string }) => {
+      const res = await apiRequest("POST", `/api/admin/messages/${payload.id}/reply`, payload);
+      return res.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: "Reply sent successfully" });
+        setIsReplyOpen(false);
+        setReplyText("");
+        queryClient.invalidateQueries({ queryKey: ["admin", "messages"] });
+      } else {
+        toast({ title: "Failed to send reply", variant: "destructive" });
+      }
+    },
+  });
+
+  const broadcastMutation = useMutation({
+    mutationFn: async (payload: { subject: string; html: string }) => {
+      const res = await apiRequest("POST", "/api/admin/marketing/broadcast", payload);
+      return res.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: `Broadcast sent to ${result.count} subscribers` });
+        setMarketingSubject("");
+        setMarketingBody("");
+      } else {
+        toast({ title: result.error || "Failed to send broadcast", variant: "destructive" });
+      }
+    },
+  });
+
+  const testEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/admin/test-email", { email });
+      return res.json();
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({ title: "Test email sent!", description: result.message });
+      } else {
+        toast({ title: "Failed to send test email", description: result.error, variant: "destructive" });
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const isAdmin = user?.role === "admin";
 
   return (
@@ -213,13 +324,19 @@ export default function AdminProfilePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="account" className="space-y-4">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           {isAdmin && <TabsTrigger value="users">All Admin Users</TabsTrigger>}
           {isAdmin && <TabsTrigger value="invite">Create User</TabsTrigger>}
-          <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="messages" className="relative">
+            Messages
+            {messages.some(m => m.status === 'unread') && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-background" />
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="marketing">Marketing</TabsTrigger>
         </TabsList>
 
         {/* Account tab */}
@@ -266,6 +383,27 @@ export default function AdminProfilePage() {
                   Save Changes
                 </Button>
               </div>
+            </div>
+          </div>
+
+          <div className="mt-6 bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  SMTP Diagnostics
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Send a test email to verify your SMTP configuration.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={testEmailMutation.isPending}
+                onClick={() => testEmailMutation.mutate("upretynikesh021@gmail.com")}
+              >
+                {testEmailMutation.isPending ? "Sending..." : "Send Test to upretynikesh021@gmail.com"}
+              </Button>
             </div>
           </div>
         </TabsContent>
@@ -532,10 +670,217 @@ export default function AdminProfilePage() {
           </TabsContent>
         )}
 
-        {/* Messages tab placeholder - wired in Feature 6 */}
+        {/* Messages tab */}
         <TabsContent value="messages" className="mt-4">
-          <div className="bg-white dark:bg-card rounded-2xl border border-dashed border-[#E5E5E0] dark:border-border p-6 text-sm text-muted-foreground">
-            Contact messages UI will appear here (implemented with Feature 6).
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border overflow-hidden">
+            <div className="p-4 border-b border-[#E5E5E0] dark:border-border bg-muted/30">
+              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                Customer Inquiries
+              </h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-muted/30 text-[11px] uppercase tracking-[0.18em] text-muted-foreground border-b border-[#E5E5E0] dark:border-border">
+                  <tr>
+                    <th className="px-6 py-3 font-semibold">Status</th>
+                    <th className="px-6 py-3 font-semibold">Sender</th>
+                    <th className="px-6 py-3 font-semibold">Subject</th>
+                    <th className="px-6 py-3 font-semibold">Date</th>
+                    <th className="px-6 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#F0F0EB] dark:divide-border">
+                  {messagesLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i}>
+                         <td colSpan={5} className="px-6 py-4 animate-pulse">
+                           <div className="h-4 bg-muted rounded w-full" />
+                         </td>
+                      </tr>
+                    ))
+                  ) : messages.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-10 text-center text-muted-foreground">
+                        No contact messages found.
+                      </td>
+                    </tr>
+                  ) : (
+                    messages.map((msg) => (
+                      <tr key={msg.id} className={cn("hover:bg-muted/20 transition-colors", msg.status === 'unread' && "bg-blue-50/30 dark:bg-blue-900/10")}>
+                        <td className="px-6 py-4">
+                          {msg.status === 'replied' ? (
+                            <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Replied</Badge>
+                          ) : msg.status === 'unread' ? (
+                            <Badge variant="default" className="text-[10px] bg-blue-600">New</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]">Read</Badge>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-[12px]">{msg.name}</div>
+                          <div className="text-[11px] text-muted-foreground">{msg.email}</div>
+                        </td>
+                        <td className="px-6 py-4 max-w-xs">
+                          <div className="font-medium text-[12px] truncate">{msg.subject}</div>
+                          <div className="text-[11px] text-muted-foreground truncate">{msg.message}</div>
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground">
+                          {format(new Date(msg.createdAt), "MMM d, h:mm a")}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0"
+                            onClick={() => {
+                              setSelectedMessage(msg);
+                              setIsReplyOpen(true);
+                            }}
+                          >
+                            <Reply className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Reply to {selectedMessage?.name}</DialogTitle>
+                <DialogDescription>
+                  Send a response to {selectedMessage?.email}
+                </DialogDescription>
+              </DialogHeader>
+              
+              {selectedMessage && (
+                <div className="space-y-4 py-4">
+                  <div className="p-4 bg-muted/40 rounded-lg text-sm border border-border">
+                    <p className="font-semibold mb-2">Original Message — {selectedMessage.subject}</p>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{selectedMessage.message}</p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Your Response</label>
+                    <Textarea 
+                      placeholder="Type your reply here..." 
+                      className="min-h-[150px] resize-none"
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsReplyOpen(false)}>Cancel</Button>
+                <Button 
+                  disabled={replyMutation.isPending || !replyText.trim()}
+                  onClick={() => {
+                    if (!selectedMessage) return;
+                    replyMutation.mutate({
+                      id: selectedMessage.id,
+                      to: selectedMessage.email,
+                      subject: `Re: ${selectedMessage.subject}`,
+                      html: `<div style="font-family: sans-serif; line-height: 1.6; color: #333;">
+                        <p>${replyText.replace(/\n/g, '<br>')}</p>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                        <p style="font-size: 12px; color: #666;">On ${format(new Date(selectedMessage.createdAt), "MMM d, yyyy")}, ${selectedMessage.name} wrote:</p>
+                        <blockquote style="border-left: 3px solid #ddd; margin: 0; padding-left: 15px; color: #777;">
+                          ${selectedMessage.message.replace(/\n/g, '<br>')}
+                        </blockquote>
+                      </div>`
+                    });
+                  }}
+                >
+                  {replyMutation.isPending ? "Sending..." : "Send Reply"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </TabsContent>
+
+        {/* Marketing tab */}
+        <TabsContent value="marketing" className="mt-4">
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Email Marketing Broadcast
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Send a newsletter or announcement to all your subscribers.
+                </p>
+              </div>
+              <Badge variant="outline" className="bg-[#2D4A35]/5 text-[#2D4A35] dark:text-emerald-400 border-[#2D4A35]/20">
+                <Mail className="h-3 w-3 mr-1.5" />
+                Active Campaign
+              </Badge>
+            </div>
+
+            <div className="grid gap-6 py-4">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
+                  <MessageSquare className="h-3 w-3" />
+                  Subject Line
+                </label>
+                <Input 
+                  placeholder="e.g. New Seasonal Collection — RARE ATELIER" 
+                  value={marketingSubject}
+                  onChange={(e) => setMarketingSubject(e.target.value)}
+                  className="h-10 px-4"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
+                  <Send className="h-3 w-3" />
+                  Message Content (HTML Supported)
+                </label>
+                <div className="relative">
+                  <Textarea 
+                    placeholder="<p>Hello everyone!</p><p>Explore our latest drop...</p>" 
+                    className="min-h-[300px] font-mono text-sm leading-relaxed p-4"
+                    value={marketingBody}
+                    onChange={(e) => setMarketingBody(e.target.value)}
+                  />
+                  <div className="absolute bottom-3 right-3 text-[10px] text-muted-foreground bg-background/80 px-2 py-1 rounded">
+                    BCC Broadcast
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E5E0] dark:border-border font-mono text-xs">
+              <p className="text-muted-foreground italic mr-auto">
+                Careful: This will send an email immediately to all verified subscribers.
+              </p>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setMarketingSubject("");
+                  setMarketingBody("");
+                }}
+              >
+                Clear Draft
+              </Button>
+              <Button 
+                className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90 px-8"
+                disabled={broadcastMutation.isPending || !marketingSubject.trim() || !marketingBody.trim()}
+                onClick={() => {
+                  broadcastMutation.mutate({
+                    subject: marketingSubject,
+                    html: marketingBody
+                  });
+                }}
+              >
+                {broadcastMutation.isPending ? "Dispatching..." : "Send Broadcast"}
+              </Button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

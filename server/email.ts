@@ -1,14 +1,14 @@
 import nodemailer from "nodemailer";
 
 const hasSmtp =
-  process.env.SMTP_EMAIL && process.env.SMTP_PASSWORD && process.env.SMTP_EMAIL.trim() && process.env.SMTP_PASSWORD.trim();
+  process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_USER.trim() && process.env.SMTP_PASS.trim();
 
 const transporter = hasSmtp
   ? nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASSWORD,
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
       },
     })
   : null;
@@ -16,7 +16,7 @@ const transporter = hasSmtp
 export async function sendOTPEmail(to: string, code: string, name: string) {
   if (!transporter || !hasSmtp) {
     console.warn(
-      "[DEV] SMTP not configured (SMTP_EMAIL/SMTP_PASSWORD missing). OTP for",
+      "[DEV] SMTP not configured (SMTP_USER/SMTP_PASS missing). OTP for",
       to,
       "->",
       code
@@ -25,7 +25,7 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
   }
   try {
     await transporter.sendMail({
-      from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
+      from: `"RARE Nepal" <${process.env.SMTP_USER}>`,
       to,
       subject: "Your RARE.np verification code",
     html: `
@@ -69,7 +69,7 @@ export async function sendInviteEmail(
   }
   try {
     await transporter.sendMail({
-      from: `"RARE Nepal" <${process.env.SMTP_EMAIL}>`,
+      from: `"RARE Nepal" <${process.env.SMTP_USER}>`,
       to,
       subject: "You've been invited to RARE.np Admin",
       html: `
@@ -87,6 +87,40 @@ export async function sendInviteEmail(
     });
   } catch (err) {
     console.warn("[DEV] SMTP send failed. Invite code for", to, "->", code, err);
+  }
+}
+
+export async function sendContactReplyEmail(to: string, subject: string, html: string) {
+  if (!transporter || !hasSmtp) {
+    console.warn("[DEV] SMTP not configured. Contact reply for", to, "->", subject);
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"RARE Nepal" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.warn("[DEV] SMTP send failed. Contact reply for", to, "->", subject, err);
+  }
+}
+
+export async function sendMarketingBroadcastEmail(bccList: string[], subject: string, html: string) {
+  if (!transporter || !hasSmtp || bccList.length === 0) {
+    console.warn("[DEV] SMTP not configured or empty BCC. Broadcast ->", subject);
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: `"RARE Nepal" <${process.env.SMTP_USER}>`,
+      bcc: bccList,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.warn("[DEV] SMTP send failed. Broadcast ->", subject, err);
   }
 }
 

@@ -11,12 +11,15 @@ import {
   Settings,
   Bell,
   ChevronLeft,
+  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard" },
@@ -36,6 +39,22 @@ export default function AdminLayout({
 }) {
   const [location] = useLocation();
   const { user } = useCurrentUser();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      const res = await apiRequest("POST", "/api/auth/logout");
+      if (res.ok) {
+        window.location.href = "/admin/login";
+      }
+    } catch (error) {
+      toast({
+        title: "Logout failed",
+        description: "Please try again",
+        variant: "destructive",
+      });
+    }
+  };
 
   const initials =
     user?.name
@@ -115,6 +134,15 @@ export default function AdminLayout({
               </p>
             </div>
           </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full mt-2 justify-start gap-3 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         </div>
       </aside>
 

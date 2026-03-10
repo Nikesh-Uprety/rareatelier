@@ -1,11 +1,13 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, MapPin, Phone, MessageSquare } from "lucide-react";
+import { Mail, MapPin, Phone, MessageSquare, Facebook, Instagram, Music2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 const contactSchema = z.object({
   name: z.string().min(2, "Name is too short"),
@@ -18,6 +20,28 @@ type ContactFormValues = z.infer<typeof contactSchema>;
 
 export default function Contact() {
   const { toast } = useToast();
+  
+  const mutation = useMutation({
+    mutationFn: async (data: ContactFormValues) => {
+      const res = await apiRequest("POST", "/api/contact", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Message Sent",
+        description: "Thank you for reaching out. We'll get back to you soon.",
+      });
+      form.reset();
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send message. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
     defaultValues: {
@@ -29,12 +53,7 @@ export default function Contact() {
   });
 
   const onSubmit = (data: ContactFormValues) => {
-    console.log("Contact form submission:", data);
-    toast({
-      title: "Message Sent",
-      description: "Thank you for reaching out. We'll get back to you soon.",
-    });
-    form.reset();
+    mutation.mutate(data);
   };
 
   return (
@@ -89,7 +108,7 @@ export default function Contact() {
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Email Us</p>
-                    <p className="text-sm font-mono">hello@rare.np</p>
+                    <p className="text-sm font-mono leading-relaxed">rarenepal999@gmail.com</p>
                   </div>
                 </div>
 
@@ -100,8 +119,8 @@ export default function Contact() {
                   <div>
                     <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Our Atelier</p>
                     <p className="text-sm font-mono leading-relaxed">
-                      Kathmandu, Nepal<br />
-                      Urban District 44600
+                      Khusibu, Nayabazar<br />
+                      Kathmandu, Nepal
                     </p>
                   </div>
                 </div>
@@ -112,8 +131,34 @@ export default function Contact() {
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Call Us</p>
-                    <p className="text-sm font-mono">+977 (01) 456-7890</p>
+                    <p className="text-sm font-mono leading-relaxed">(+977)-9705208960</p>
+                    
+                    {/* Social Links */}
+                    <div className="flex gap-4 mt-4">
+                      <a href="https://www.facebook.com/rarenp" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full border border-[var(--border)] hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                        <Facebook className="w-4 h-4" />
+                      </a>
+                      <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full border border-[var(--border)] hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                        <Instagram className="w-4 h-4" />
+                      </a>
+                      <a href="https://www.tiktok.com/@rare.np" target="_blank" rel="noopener noreferrer" className="p-2 rounded-full border border-[var(--border)] hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+                        <Music2 className="w-4 h-4" />
+                      </a>
+                    </div>
                   </div>
+                </div>
+
+                {/* Google Maps Embed */}
+                <div className="mt-8 rounded-2xl overflow-hidden border border-[var(--border)] shadow-sm h-[250px]">
+                  <iframe
+                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3531.8123!2d85.3094!3d27.7214!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x39eb18fc!2sKhusibu%2C%20Kathmandu!5e0!3m2!1sen!2snp!4v1710100000000!5m2!1sen!2snp"
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    title="Rare Atelier Location"
+                  ></iframe>
                 </div>
               </div>
             </div>
@@ -172,9 +217,10 @@ export default function Contact() {
 
                 <Button 
                   type="submit" 
-                  className="w-full h-14 bg-black dark:bg-white text-white dark:text-black hover:opacity-90 rounded-xl uppercase tracking-[0.3em] font-bold transition-all"
+                  disabled={mutation.isPending}
+                  className="w-full h-14 bg-black dark:bg-white text-white dark:text-black hover:opacity-90 rounded-xl uppercase tracking-[0.3em] font-bold transition-all disabled:opacity-50"
                 >
-                  Send Message
+                  {mutation.isPending ? "Sending..." : "Send Message"}
                 </Button>
               </form>
             </div>

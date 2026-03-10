@@ -8,6 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 const HERO_IMAGES = [
   "/images/landingpage3.webp",
@@ -23,6 +26,8 @@ const LIFESTYLE_IMAGES = [
 
 
 export default function Home() {
+  const { toast } = useToast();
+  const [newsletterEmail, setNewsletterEmail] = useState("");
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -107,6 +112,33 @@ export default function Home() {
       clearInterval(heroTimer);
     };
   }, []);
+
+  const newsletterMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/newsletter/subscribe", { email });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Subscribed!",
+        description: "You've successfully joined our newsletter.",
+      });
+      setNewsletterEmail("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to subscribe. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleNewsletterSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail) return;
+    newsletterMutation.mutate(newsletterEmail);
+  };
 
   // Touch handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -625,13 +657,20 @@ export default function Home() {
               <p className="text-xs text-gray-500 mb-6 tracking-wide leading-relaxed">
                 Sign up for early access to drops and exclusive stories.
               </p>
-              <form className="flex group border-b border-gray-800 focus-within:border-white transition-colors pb-2">
+              <form onSubmit={handleNewsletterSubmit} className="flex group border-b border-gray-800 focus-within:border-white transition-colors pb-2">
                 <input
+                  type="email"
+                  required
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
                   className="bg-transparent py-2 flex-1 focus:outline-none text-sm placeholder:text-gray-700"
                   placeholder="Email Address"
                 />
-                <button className="text-[10px] font-bold uppercase tracking-widest ml-4 hover:opacity-60 transition-opacity">
-                  Join
+                <button 
+                  disabled={newsletterMutation.isPending}
+                  className="text-[10px] font-bold uppercase tracking-widest ml-4 hover:opacity-60 transition-opacity disabled:opacity-50"
+                >
+                  {newsletterMutation.isPending ? "..." : "Join"}
                 </button>
               </form>
             </div>

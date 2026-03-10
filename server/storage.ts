@@ -24,7 +24,7 @@ import {
   type AdminNotification,
   type InsertAdminNotification,
 } from "@shared/schema";
-import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -229,6 +229,11 @@ export interface IStorage {
   createAdminNotification(data: InsertAdminNotification): Promise<AdminNotification>;
   markAdminNotificationsRead(): Promise<void>;
   markAdminNotificationRead(id: string): Promise<void>;
+
+  // Contact Messages
+  createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage>;
+  getContactMessages(): Promise<ContactMessage[]>;
+  updateContactMessageStatus(id: string, status: "unread" | "read" | "replied"): Promise<ContactMessage>;
 }
 
 export class PgStorage implements IStorage {
@@ -909,6 +914,45 @@ export class PgStorage implements IStorage {
       .update(adminNotifications)
       .set({ isRead: 1 })
       .where(eq(adminNotifications.id, id));
+  }
+
+  // ── Contact Messages ─────────────────────────────────────
+  async createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage> {
+    const [row] = await db
+      .insert(contactMessages)
+      .values({
+        ...data,
+        status: "unread",
+      })
+      .returning();
+
+    // Create an admin notification for the new contact message
+    await this.createAdminNotification({
+      title: "New Contact Message",
+      message: `From ${row.name}: ${row.subject}`,
+      type: "system",
+      link: "/admin/profile?tab=messages",
+    });
+
+    return row;
+  }
+
+  async getContactMessages(): Promise<ContactMessage[]> {
+    return db
+      .select()
+      .from(contactMessages)
+      .orderBy(desc(contactMessages.createdAt));
+  }
+
+  async updateContactMessageStatus(id: string, status: "unread" | "read" | "replied"): Promise<ContactMessage> {
+    const [row] = await db
+      .update(contactMessages)
+      .set({ status })
+      .where(eq(contactMessages.id, id))
+      .returning();
+    
+    if (!row) throw new Error("Contact message not found");
+    return row;
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
@@ -1832,6 +1876,16 @@ export class MemStorage implements IStorage {
       lastLoginAt: u.lastLoginAt,
       status: u.status,
     }));
+  }
+
+  async createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage> {
+    return { ...data, id: "mock", status: "unread", createdAt: new Date() };
+  }
+  async getContactMessages(): Promise<ContactMessage[]> {
+    return [];
+  }
+  async updateContactMessageStatus(id: string, status: "unread" | "read" | "replied"): Promise<ContactMessage> {
+    return { id, name: "mock", email: "mock", phone: null, subject: "mock", message: "mock", status, createdAt: new Date() };
   }
 }
 
