@@ -1,0 +1,10 @@
+Implement admin/staff login redirect logic and /login guard
+Add open-in-new-tab buttons to storefront and admin product views
+Rebuild Analytics page UI and backend analytics endpoints
+Rename Overview to Dashboard and implement enriched dashboard content
+Implement admin profile page with user management and 2FA system including email OTP
+Redesign storefront contact page and implement contact messages backend + admin UI
+
+https://cdn2.blanxer.com/favicon/67cd36dcf133882caba612b4/692dcfc911060a551836d675.webp
+
+https://cdn2.blanxer.com/brand_logo/67cd36dcf133882caba612b4/67d00c07ef86879da12106aa.webp
