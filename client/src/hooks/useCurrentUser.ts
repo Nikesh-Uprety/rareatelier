@@ -6,6 +6,7 @@ export interface CurrentUser {
   email: string;
   name?: string;
   role: string;
+  profileImageUrl?: string | null;
   twoFactorEnabled?: boolean;
 }
 

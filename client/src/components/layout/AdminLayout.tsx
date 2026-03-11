@@ -78,10 +78,18 @@ export default function AdminLayout({
           <div className="flex items-center gap-2">
             <Link
               href="/admin/profile"
-              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold hover:scale-105 transition-transform"
+              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold hover:scale-105 transition-transform overflow-hidden"
               title="View Profile"
             >
-              {initials}
+              {user?.profileImageUrl ? (
+                <img 
+                  src={user.profileImageUrl} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initials
+              )}
             </Link>
             <Link
               href="/admin/profile"
@@ -123,8 +131,16 @@ export default function AdminLayout({
             href="/admin/profile"
             className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/60 transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-medium">
-              {initials}
+            <div className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-medium overflow-hidden">
+              {user?.profileImageUrl ? (
+                <img 
+                  src={user.profileImageUrl} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initials
+              )}
             </div>
             <div className="flex-1 overflow-hidden">
               <p className="text-sm font-medium truncate">{displayName}</p>
@@ -152,9 +168,17 @@ export default function AdminLayout({
           <div className="flex items-center gap-3">
             <Link
               href="/admin/profile"
-              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold"
+              className="w-8 h-8 rounded-full bg-[#2C3E2D] text-white flex items-center justify-center text-xs font-bold overflow-hidden"
             >
-              {initials}
+              {user?.profileImageUrl ? (
+                <img 
+                  src={user.profileImageUrl} 
+                  alt={displayName} 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initials
+              )}
             </Link>
             <Link href="/admin/profile" className="text-sm font-bold tracking-tight text-[#2C3E2D] dark:text-foreground">
               /profile

@@ -16,6 +16,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   role: text("role").notNull().default("user"),
+  displayName: text("display_name"),
+  profileImageUrl: text("profile_image_url"),
   twoFactorEnabled: integer("two_factor_enabled").notNull().default(0),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),

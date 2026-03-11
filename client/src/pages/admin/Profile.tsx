@@ -30,7 +30,11 @@ import {
   Reply,
   Download,
   Users,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Camera,
+  Trash2,
+  PlusCircle,
+  AlertTriangle
 } from "lucide-react";
 import {
   Dialog,
@@ -59,6 +63,7 @@ interface AdminUser {
   twoFactorEnabled: boolean;
   lastLoginAt?: string | null;
   status: string;
+  profileImageUrl?: string | null;
 }
 
 interface ContactMessage {
@@ -175,7 +180,7 @@ export default function AdminProfilePage() {
     },
   });
 
-  const revokeMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest("DELETE", `/api/admin/users/${id}`);
       return (await res.json()) as { success: boolean; error?: string };
@@ -183,7 +188,7 @@ export default function AdminProfilePage() {
     onSuccess: (result) => {
       if (!result.success) {
         toast({
-          title: "Could not revoke access",
+          title: "Could not delete user",
           description: result.error ?? "Please try again.",
           variant: "destructive",
         });
@@ -191,15 +196,96 @@ export default function AdminProfilePage() {
       }
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       toast({
-        title: "Access revoked",
+        title: "User deleted",
+        description: "The user has been permanently removed.",
       });
+      setIsDeleteDialogOpen(false);
+      setDeleteUserId(null);
     },
     onError: (err: Error) => {
       toast({
-        title: "Could not revoke access",
+        title: "Could not delete user",
         description: err.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const profileMutation = useMutation({
+    mutationFn: async (data: { displayName?: string; profileImageUrl?: string }) => {
+      const res = await apiRequest("PUT", "/api/admin/profile/update", data);
+      return (await res.json()) as { success: boolean; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Profile not updated", description: result.error, variant: "destructive" });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Profile updated", description: "Your changes have been saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Profile not updated", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const avatarMutation = useMutation({
+    mutationFn: async (imageBase64: string) => {
+      const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", { imageBase64 });
+      return (await res.json()) as { success: boolean; url?: string; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success || !result.url) {
+        toast({ title: "Upload failed", description: result.error, variant: "destructive" });
+        return;
+      }
+      setProfileImage(result.url);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Profile picture updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const emailChangeMutation = useMutation({
+    mutationFn: async (newEmail: string) => {
+      const res = await apiRequest("POST", "/api/admin/profile/update-email", { newEmail });
+      return (await res.json()) as { success: boolean; tempToken?: string; code?: string; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Email change failed", description: result.error, variant: "destructive" });
+        return;
+      }
+      setEmailTempToken(result.tempToken || "");
+      setEmailOtpCode(result.code || null);
+      setIsEmailVerifyOpen(true);
+      toast({ title: "Verification code sent", description: "Check your new email for the code." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Email change failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const emailVerifyMutation = useMutation({
+    mutationFn: async (data: { tempToken: string; code: string; newEmail: string }) => {
+      const res = await apiRequest("POST", "/api/admin/profile/verify-email", data);
+      return (await res.json()) as { success: boolean; error?: string };
+    },
+    onSuccess: (result) => {
+      if (!result.success) {
+        toast({ title: "Verification failed", description: result.error, variant: "destructive" });
+        return;
+      }
+      setIsEmailVerifyOpen(false);
+      setEmailVerifyCode("");
+      setEmailOtpCode(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      toast({ title: "Email updated", description: "Your email has been changed successfully." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Verification failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -239,6 +325,20 @@ export default function AdminProfilePage() {
   const [inviteName, setInviteName] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "staff">("staff");
+
+  // Profile image upload state
+  const [profileImage, setProfileImage] = useState<string | null>(user?.profileImageUrl || null);
+
+  // Email change state
+  const [editEmail, setEditEmail] = useState(user?.email ?? "");
+  const [isEmailVerifyOpen, setIsEmailVerifyOpen] = useState(false);
+  const [emailTempToken, setEmailTempToken] = useState("");
+  const [emailVerifyCode, setEmailVerifyCode] = useState("");
+  const [emailOtpCode, setEmailOtpCode] = useState<string | null>(null);
+
+  // Delete user state
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   // Messages State
   const [selectedMessage, setSelectedMessage] = useState<ContactMessage | null>(null);
@@ -335,22 +435,6 @@ export default function AdminProfilePage() {
     },
   });
 
-  const testEmailMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const res = await apiRequest("POST", "/api/admin/test-email", { email });
-      return res.json();
-    },
-    onSuccess: (result) => {
-      if (result.success) {
-        toast({ title: "Test email sent!", description: result.message });
-      } else {
-        toast({ title: "Failed to send test email", description: result.error, variant: "destructive" });
-      }
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
 
   const isAdmin = user?.role === "admin";
 
@@ -386,11 +470,41 @@ export default function AdminProfilePage() {
         <TabsContent value="account" className="mt-4">
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
             <div className="flex flex-col items-center gap-3">
-              <div className="w-20 h-20 rounded-full bg-[#2D4A35] text-white flex items-center justify-center text-2xl font-semibold">
-                {(user?.name || user?.email || "U")
-                  .slice(0, 2)
-                  .toUpperCase()}
+              <div 
+                className="relative w-20 h-20 rounded-full bg-[#2D4A35] text-white flex items-center justify-center text-2xl font-semibold overflow-hidden cursor-pointer group"
+                onClick={() => document.getElementById('avatar-upload')?.click()}
+              >
+                {profileImage || user?.profileImageUrl ? (
+                  <img 
+                    src={profileImage || user?.profileImageUrl || ""} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  (user?.name || user?.email || "U")
+                    .slice(0, 2)
+                    .toUpperCase()
+                )}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="h-5 w-5 text-white" />
+                </div>
               </div>
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    const base64 = reader.result as string;
+                    avatarMutation.mutate(base64);
+                  };
+                  reader.readAsDataURL(file);
+                }}
+              />
               <Badge variant="outline" className="text-[11px]">
                 {user?.role === "admin" ? "ADMIN" : "STAFF"}
               </Badge>
@@ -411,45 +525,81 @@ export default function AdminProfilePage() {
                 <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
                   Email
                 </label>
-                <Input
-                  value={user?.email ?? ""}
-                  disabled
-                  className="h-10 bg-muted/40"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="h-10 flex-1"
+                  />
+                  {editEmail !== (user?.email ?? "") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 text-xs"
+                      disabled={emailChangeMutation.isPending}
+                      onClick={() => emailChangeMutation.mutate(editEmail)}
+                    >
+                      {emailChangeMutation.isPending ? "Sending..." : "Verify & Update"}
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button
                   type="button"
-                  disabled
+                  disabled={profileMutation.isPending || displayName === (user?.name ?? "")}
                   className="h-10"
+                  onClick={() => profileMutation.mutate({ displayName })}
                 >
-                  Save Changes
+                  {profileMutation.isPending ? "Saving..." : "Save Changes"}
                 </Button>
               </div>
             </div>
           </div>
-
-          <div className="mt-6 bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  SMTP Diagnostics
-                </h2>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Send a test email to verify your SMTP configuration.
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={testEmailMutation.isPending}
-                onClick={() => testEmailMutation.mutate("upretynikesh021@gmail.com")}
-              >
-                {testEmailMutation.isPending ? "Sending..." : "Send Test to upretynikesh021@gmail.com"}
-              </Button>
-            </div>
-          </div>
         </TabsContent>
+
+        {/* Email Verification Dialog */}
+        <Dialog open={isEmailVerifyOpen} onOpenChange={setIsEmailVerifyOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Verify Email Change</DialogTitle>
+              <DialogDescription>
+                Enter the 6-digit verification code sent to <strong>{editEmail}</strong>
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              {emailOtpCode && (
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Dev Fallback Code:</p>
+                  <p className="text-2xl font-bold tracking-[8px] text-amber-800 dark:text-amber-300 text-center">{emailOtpCode}</p>
+                </div>
+              )}
+              <Input
+                placeholder="Enter 6-digit code"
+                value={emailVerifyCode}
+                onChange={(e) => setEmailVerifyCode(e.target.value)}
+                className="text-center text-lg tracking-[6px] h-12"
+                maxLength={6}
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEmailVerifyOpen(false)}>Cancel</Button>
+              <Button
+                disabled={emailVerifyMutation.isPending || emailVerifyCode.length < 4}
+                onClick={() => {
+                  emailVerifyMutation.mutate({
+                    tempToken: emailTempToken,
+                    code: emailVerifyCode,
+                    newEmail: editEmail,
+                  });
+                }}
+              >
+                {emailVerifyMutation.isPending ? "Verifying..." : "Verify & Update"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Security tab */}
         <TabsContent value="security" className="mt-4 space-y-6">
@@ -619,10 +769,14 @@ export default function AdminProfilePage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="h-7 text-[11px]"
-                                onClick={() => revokeMutation.mutate(u.id)}
+                                className="h-7 text-[11px] text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => {
+                                  setDeleteUserId(u.id);
+                                  setIsDeleteDialogOpen(true);
+                                }}
                               >
-                                Revoke Access
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Delete
                               </Button>
                             )}
                           </td>
@@ -645,12 +799,39 @@ export default function AdminProfilePage() {
           </TabsContent>
         )}
 
+        {/* Delete User Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-500" />
+                Delete User
+              </DialogTitle>
+              <DialogDescription>
+                Are you sure you want to permanently delete this user? This action <strong>cannot be undone</strong>. All associated data including roles and permissions will be removed.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => { setIsDeleteDialogOpen(false); setDeleteUserId(null); }}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleteMutation.isPending}
+                onClick={() => {
+                  if (deleteUserId) deleteMutation.mutate(deleteUserId);
+                }}
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete Permanently"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* Create User tab */}
         {isAdmin && (
           <TabsContent value="invite" className="mt-4">
             <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
               <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                Invite Admin User
+                Create User
               </h2>
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="space-y-2 sm:col-span-1">
@@ -692,6 +873,14 @@ export default function AdminProfilePage() {
                     <option value="admin">Admin</option>
                     <option value="staff">Staff</option>
                   </select>
+                  <button
+                    type="button"
+                    className="ml-2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Custom roles coming soon"
+                    onClick={() => toast({ title: "Coming soon", description: "Custom role creation will be available in a future update." })}
+                  >
+                    <PlusCircle className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
               <div className="flex justify-end">
@@ -706,7 +895,7 @@ export default function AdminProfilePage() {
                     })
                   }
                 >
-                  Send Invite
+                  Create User
                 </Button>
               </div>
             </div>

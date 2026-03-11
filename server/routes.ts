@@ -241,6 +241,7 @@ export async function registerRoutes(
         email: user.email,
         name: user.name,
         role: user.role,
+        profileImageUrl: user.profileImageUrl || null,
         twoFactorEnabled: !!user.twoFactorEnabled,
       },
     });
@@ -1169,6 +1170,189 @@ export async function registerRoutes(
     },
   );
 
+  // Update profile (display name & profile image)
+  const updateProfileSchema = z.object({
+    displayName: z.string().min(1).max(100).optional(),
+    profileImageUrl: z.string().optional(),
+  });
+
+  app.put(
+    "/api/admin/profile/update",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const parsed = updateProfileSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid request body" });
+      }
+
+      const user = req.user as Express.User | undefined;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Not authenticated" });
+      }
+
+      try {
+        await storage.updateUserProfile(user.id, parsed.data);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PUT /api/admin/profile/update", err);
+        return res.status(500).json({ success: false, error: "Failed to update profile" });
+      }
+    },
+  );
+
+  // Upload avatar image
+  app.post(
+    "/api/admin/profile/upload-avatar",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const { imageBase64 } = req.body;
+        if (!imageBase64 || typeof imageBase64 !== "string") {
+          return res.status(400).json({ success: false, error: "Missing imageBase64" });
+        }
+
+        const user = req.user as Express.User | undefined;
+        if (!user) {
+          return res.status(401).json({ success: false, error: "Not authenticated" });
+        }
+
+        // Decode base64 and save
+        const matches = imageBase64.match(/^data:image\/(\w+);base64,(.+)$/);
+        if (!matches) {
+          return res.status(400).json({ success: false, error: "Invalid image format" });
+        }
+
+        const ext = matches[1];
+        const buffer = Buffer.from(matches[2], "base64");
+
+        // Resize image to 100x100 using sharp if available, otherwise save as-is
+        let finalBuffer = buffer;
+        try {
+          const sharp = (await import("sharp")).default;
+          // We use 100x100 since it's only shown as a small circular icon
+          finalBuffer = await sharp(buffer)
+            .resize(100, 100, { fit: "cover" })
+            .webp({ quality: 60 }) // High compression for small icons
+            .toBuffer();
+        } catch (error) {
+          console.warn("Avatar resize failed (using original):", error);
+        }
+
+        const fs = await import("fs");
+        const path = await import("path");
+        const avatarDir = path.join(process.cwd(), "uploads", "avatars");
+        fs.mkdirSync(avatarDir, { recursive: true });
+
+        const filename = `avatar-${user.id}-${Date.now()}.${ext}`;
+        const filepath = path.join(avatarDir, filename);
+        fs.writeFileSync(filepath, finalBuffer);
+
+        const url = `/uploads/avatars/${filename}`;
+        await storage.updateUserProfile(user.id, { profileImageUrl: url });
+
+        return res.json({ success: true, url });
+      } catch (err) {
+        console.error("Error in POST /api/admin/profile/upload-avatar", err);
+        return res.status(500).json({ success: false, error: "Failed to upload avatar" });
+      }
+    },
+  );
+
+  // Initiate email change — sends OTP to the new email
+  const updateEmailSchema = z.object({
+    newEmail: z.string().email(),
+  });
+
+  app.post(
+    "/api/admin/profile/update-email",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const parsed = updateEmailSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid email" });
+      }
+
+      const user = req.user as Express.User | undefined;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Not authenticated" });
+      }
+
+      try {
+        const { newEmail } = parsed.data;
+
+        // Check if email already taken
+        const existing = await storage.getUserByEmail(newEmail);
+        if (existing && existing.id !== user.id) {
+          return res.status(400).json({ success: false, error: "Email already in use" });
+        }
+
+        // Generate OTP
+        const code = Math.floor(100000 + Math.random() * 900000).toString().slice(0, 6);
+        const expiresAt = new Date(Date.now() + Number(process.env.OTP_EXPIRY_MINUTES ?? "10") * 60 * 1000);
+        const tokenId = `email-change-${user.id}-${Date.now()}`;
+
+        await storage.createOtpToken({
+          id: tokenId,
+          userId: user.id,
+          token: code,
+          expiresAt,
+        });
+
+        // Send OTP to new email
+        const { sendOTPEmail } = await import("./email");
+        await sendOTPEmail(newEmail, code, user.name || user.email);
+
+        // Also log it for dev fallback (in case SMTP fails)
+        console.log(`[EMAIL-CHANGE] OTP for ${user.email} -> ${newEmail}: ${code}`);
+
+        return res.json({ success: true, tempToken: tokenId, code });
+      } catch (err) {
+        console.error("Error in POST /api/admin/profile/update-email", err);
+        return res.status(500).json({ success: false, error: "Failed to initiate email change" });
+      }
+    },
+  );
+
+  // Verify email change OTP
+  const verifyEmailChangeSchema = z.object({
+    tempToken: z.string().min(1),
+    code: z.string().min(4).max(6),
+    newEmail: z.string().email(),
+  });
+
+  app.post(
+    "/api/admin/profile/verify-email",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const parsed = verifyEmailChangeSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid request" });
+      }
+
+      const user = req.user as Express.User | undefined;
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Not authenticated" });
+      }
+
+      try {
+        const { tempToken, code, newEmail } = parsed.data;
+
+        const otpResult = await storage.consumeOtpToken(tempToken, code);
+        if (!otpResult) {
+          return res.status(400).json({ success: false, error: "Invalid or expired verification code" });
+        }
+
+        // Update the email (username)
+        await storage.updateUserEmail(user.id, newEmail);
+
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in POST /api/admin/profile/verify-email", err);
+        return res.status(500).json({ success: false, error: "Failed to verify email" });
+      }
+    },
+  );
+
   const twoFASchema = z.object({
     enabled: z.boolean(),
   });
@@ -1205,13 +1389,13 @@ export async function registerRoutes(
       const { id } = req.params;
       if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
-        await storage.revokeUser(id);
+        await storage.deleteUser(id);
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in DELETE /api/admin/users/:id", err);
         return res
           .status(500)
-          .json({ success: false, error: "Failed to revoke access" });
+          .json({ success: false, error: "Failed to delete user" });
       }
     },
   );

@@ -27,8 +27,8 @@ app.use(securityHeaders);
 // Apply CORS headers
 app.use(corsHeaders);
 
-// 5 MB in bytes – payment screenshot uploads (base64 ~33% larger than binary)
-const JSON_BODY_LIMIT = 5 * 1024 * 1024;
+// 20 MB in bytes – profile picture uploads (base64 ~33% larger than binary)
+const JSON_BODY_LIMIT = 20 * 1024 * 1024;
 
 app.use(
   express.json({
@@ -122,6 +122,10 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Serve uploaded files - MUST be before registerRoutes and vite
+  const path = await import("path");
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -132,7 +136,7 @@ app.use((req, res, next) => {
     // PayloadTooLargeError from body-parser when request body exceeds limit
     if (err.type === "entity.too.large" || err.status === 413 || err.statusCode === 413) {
       return res.status(413).json({
-        message: "File too large. Maximum size for payment screenshot is 5 MB. Please use a smaller image.",
+        message: "File too large. Maximum file size is 20 MB. Please use a smaller image.",
       });
     }
 

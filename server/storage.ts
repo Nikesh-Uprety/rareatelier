@@ -174,6 +174,9 @@ export interface IStorage {
   updateLastLoginAt(id: string): Promise<void>;
   updateUserPassword(id: string, passwordHash: string): Promise<void>;
   updateUserTwoFactor(id: string, enabled: boolean): Promise<void>;
+  updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void>;
+  updateUserEmail(id: string, newEmail: string): Promise<void>;
+  deleteUser(id: string): Promise<void>;
   revokeUser(id: string): Promise<void>;
   getAdminUsers(): Promise<
     {
@@ -184,6 +187,7 @@ export interface IStorage {
       twoFactorEnabled: boolean;
       lastLoginAt: Date | null;
       status: string;
+      profileImageUrl: string | null;
     }[]
   >;
   inviteAdminUser(data: {
@@ -983,6 +987,8 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        displayName: users.displayName,
+        profileImageUrl: users.profileImageUrl,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
         status: users.status,
@@ -1001,6 +1007,8 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        displayName: users.displayName,
+        profileImageUrl: users.profileImageUrl,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
         status: users.status,
@@ -1019,6 +1027,8 @@ export class PgStorage implements IStorage {
         username: data.username,
         password: data.password,
         role: data.role,
+        displayName: data.displayName ?? null,
+        profileImageUrl: data.profileImageUrl ?? null,
         twoFactorEnabled: data.twoFactorEnabled ?? 0,
         status: data.status ?? "active",
       })
@@ -1027,6 +1037,8 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        displayName: users.displayName,
+        profileImageUrl: users.profileImageUrl,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
         status: users.status,
@@ -1063,6 +1075,25 @@ export class PgStorage implements IStorage {
       .where(eq(users.id, id));
   }
 
+  async updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void> {
+    const updateData: Record<string, any> = {};
+    if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.profileImageUrl !== undefined) updateData.profileImageUrl = data.profileImageUrl;
+    if (Object.keys(updateData).length === 0) return;
+    await db.update(users).set(updateData).where(eq(users.id, id));
+  }
+
+  async updateUserEmail(id: string, newEmail: string): Promise<void> {
+    await db.update(users).set({ username: newEmail }).where(eq(users.id, id));
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    // Delete related OTP tokens first
+    await db.delete(otpTokens).where(eq(otpTokens.userId, id));
+    // Hard delete the user
+    await db.delete(users).where(eq(users.id, id));
+  }
+
   async getAdminUsers(): Promise<
     {
       id: string;
@@ -1072,23 +1103,26 @@ export class PgStorage implements IStorage {
       twoFactorEnabled: boolean;
       lastLoginAt: Date | null;
       status: string;
+      profileImageUrl: string | null;
     }[]
   > {
     const rows = await db
       .select({
         id: users.id,
         email: users.username,
-        name: users.username,
+        displayName: users.displayName,
         role: users.role,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
         status: users.status,
+        profileImageUrl: users.profileImageUrl,
       })
       .from(users)
       .where(sql`${users.role} IN ('admin', 'staff')`);
 
     return rows.map((row) => ({
       ...row,
+      name: row.displayName || row.email,
       twoFactorEnabled: !!row.twoFactorEnabled,
     }));
   }
@@ -1105,6 +1139,7 @@ export class PgStorage implements IStorage {
         username: data.email,
         password: data.passwordHash,
         role: data.role,
+        displayName: data.name,
         status: "invited",
         twoFactorEnabled: 1,
       })
@@ -1113,6 +1148,8 @@ export class PgStorage implements IStorage {
         username: users.username,
         password: users.password,
         role: users.role,
+        displayName: users.displayName,
+        profileImageUrl: users.profileImageUrl,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
         status: users.status,
@@ -1840,6 +1877,8 @@ export class MemStorage implements IStorage {
       username: data.username,
       password: data.password,
       role: data.role,
+      displayName: data.displayName ?? null,
+      profileImageUrl: data.profileImageUrl ?? null,
       twoFactorEnabled: 0,
       lastLoginAt: null,
       status: "active",
@@ -1859,7 +1898,7 @@ export class MemStorage implements IStorage {
   }
 
   async inviteAdminUser(data: { name: string; email: string; role: string; passwordHash: string }): Promise<User> {
-    return this.createUser({ username: data.email, password: data.passwordHash, role: data.role, twoFactorEnabled: 0, lastLoginAt: null, status: "active" } as any);
+    return this.createUser({ username: data.email, password: data.passwordHash, role: data.role, displayName: data.name, profileImageUrl: null, twoFactorEnabled: 0, lastLoginAt: null, status: "active" } as any);
   }
 
   async createOtpToken(data: { id: string; userId: string; token: string; expiresAt: Date }): Promise<OtpToken> {
@@ -1891,6 +1930,9 @@ export class MemStorage implements IStorage {
   }
 
   async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {}
+  async updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void> {}
+  async updateUserEmail(id: string, newEmail: string): Promise<void> {}
+  async deleteUser(id: string): Promise<void> {}
   async revokeUser(id: string): Promise<void> {}
   async getAdminUsers(): Promise<
     {
@@ -1901,16 +1943,18 @@ export class MemStorage implements IStorage {
       twoFactorEnabled: boolean;
       lastLoginAt: Date | null;
       status: string;
+      profileImageUrl: string | null;
     }[]
   > {
     return this._users.map((u) => ({
       id: u.id,
       email: u.username,
-      name: null,
+      name: u.displayName || null,
       role: u.role,
       twoFactorEnabled: u.twoFactorEnabled === 1,
       lastLoginAt: u.lastLoginAt,
       status: u.status,
+      profileImageUrl: u.profileImageUrl || null,
     }));
   }
 

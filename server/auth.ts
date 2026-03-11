@@ -11,6 +11,7 @@ declare global {
       email: string;
       role: string;
       name?: string;
+      profileImageUrl?: string;
       twoFactorEnabled?: boolean;
       status?: string;
     }
@@ -37,7 +38,8 @@ export function configurePassport(): void {
             id: user.id,
             email: user.username,
             role: user.role,
-            name: user.username,
+            name: user.displayName || user.username,
+            profileImageUrl: user.profileImageUrl || undefined,
             twoFactorEnabled: !!user.twoFactorEnabled,
             status: user.status,
           };
@@ -64,7 +66,9 @@ export function configurePassport(): void {
         id: user.id,
         email: user.username,
         role: user.role,
-        name: user.username,
+        name: user.displayName || user.username,
+        profileImageUrl: user.profileImageUrl || undefined,
+        twoFactorEnabled: !!user.twoFactorEnabled,
       };
       return done(null, expressUser);
     } catch (err) {
@@ -74,4 +78,5 @@ export function configurePassport(): void {
 }
 
 export { passport };
+
 
