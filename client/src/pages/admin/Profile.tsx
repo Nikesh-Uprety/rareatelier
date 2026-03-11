@@ -10,6 +10,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { AdvancedEmailEditor } from "@/components/admin/AdvancedEmailEditor";
 import {
   type AdminCustomer,
   type AdminOrder,
@@ -1429,23 +1430,17 @@ export default function AdminProfilePage() {
             )}
           </div>
 
-          {/* Email Content Editor */}
+          {/* Email Content Editor with Advanced Features */}
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Email Template & Composer
+                  Advanced Email Composer
                 </h2>
-                <p className="text-xs text-muted-foreground mt-1">Design your email with live preview</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Professional editor with syntax highlighting, live preview, and element styling
+                </p>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowSplitEditor(!showSplitEditor)}
-              >
-                {showSplitEditor ? <Minimize2 className="h-3.5 w-3.5 mr-1.5" /> : <Maximize2 className="h-3.5 w-3.5 mr-1.5" />}
-                {showSplitEditor ? "Compact" : "Split View"}
-              </Button>
             </div>
 
             {/* Template Selector */}
@@ -1467,96 +1462,13 @@ export default function AdminProfilePage() {
               </select>
             </div>
 
-            {/* Split View or Single View */}
-            {showSplitEditor ? (
-              <div className="grid grid-cols-2 gap-4 h-[600px]">
-                {/* Editor Panel */}
-                <div className="flex flex-col space-y-2">
-                  <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">HTML Code</label>
-                  <Textarea 
-                    placeholder="Paste or edit HTML code..." 
-                    className="flex-1 font-mono text-xs leading-relaxed p-3 resize-none"
-                    value={marketingBody}
-                    onChange={(e) => setMarketingBody(e.target.value)}
-                  />
-                  <div className="flex gap-2">
-                    <input 
-                      type="file" 
-                      accept=".html,.htm" 
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (evt) => setMarketingBody(evt.target?.result as string);
-                          reader.readAsText(file);
-                        }
-                      }}
-                      className="hidden"
-                      id="htmlFileInput"
-                    />
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => document.getElementById("htmlFileInput")?.click()}
-                    >
-                      <FileCode className="h-3 w-3 mr-1.5" />
-                      Import HTML
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Preview Panel */}
-                <div className="flex flex-col space-y-2">
-                  <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Live Preview</label>
-                  <iframe 
-                    srcDoc={marketingBody}
-                    className="flex-1 border border-[#E5E5E0] dark:border-border rounded-md bg-white"
-                    title="Email Preview"
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Textarea 
-                  placeholder="Paste HTML code or edit directly..." 
-                  className="min-h-[400px] font-mono text-sm leading-relaxed p-4"
-                  value={marketingBody}
-                  onChange={(e) => setMarketingBody(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <input 
-                    type="file" 
-                    accept=".html,.htm" 
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (evt) => setMarketingBody(evt.target?.result as string);
-                        reader.readAsText(file);
-                      }
-                    }}
-                    className="hidden"
-                    id="htmlFileInputCompact"
-                  />
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => document.getElementById("htmlFileInputCompact")?.click()}
-                  >
-                    <FileCode className="h-3 w-3 mr-1.5" />
-                    Import HTML File
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setShowSplitEditor(true)}
-                  >
-                    <Eye className="h-3 w-3 mr-1.5" />
-                    Live Preview
-                  </Button>
-                </div>
-              </div>
-            )}
+            {/* Advanced Email Editor */}
+            <AdvancedEmailEditor
+              htmlContent={marketingBody}
+              onHtmlChange={setMarketingBody}
+              showSplitView={showSplitEditor}
+              onSplitViewChange={setShowSplitEditor}
+            />
           </div>
 
           {/* Broadcast Settings */}

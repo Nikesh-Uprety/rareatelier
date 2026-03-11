@@ -1240,10 +1240,10 @@ export async function registerRoutes(
 
         const fs = await import("fs");
         const path = await import("path");
-        const avatarDir = path.join(process.cwd(), "uploads", "avatars");
+        const avatarDir = path.resolve(import.meta.dirname, "..", "uploads", "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
 
-        const filename = `avatar-${user.id}-${Date.now()}.${ext}`;
+        const filename = `avatar-${user.id}-${Date.now()}.webp`;
         const filepath = path.join(avatarDir, filename);
         fs.writeFileSync(filepath, finalBuffer);
 

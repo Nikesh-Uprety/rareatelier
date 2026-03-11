@@ -124,7 +124,8 @@ app.use((req, res, next) => {
 (async () => {
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
-  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+  const uploadsPath = path.resolve(import.meta.dirname, "..", "uploads");
+  app.use("/uploads", express.static(uploadsPath));
 
   await registerRoutes(httpServer, app);
 
@@ -165,7 +166,6 @@ app.use((req, res, next) => {
     {
       port,
       host: "0.0.0.0",
-      reusePort: true,
     },
     () => {
       log(`serving on port ${port}`);
