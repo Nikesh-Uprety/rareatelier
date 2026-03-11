@@ -1689,6 +1689,106 @@ export async function registerRoutes(
     },
   );
 
+  // ── Add Single Email ────────────────────────────────────
+  app.post(
+    "/api/admin/newsletter/add",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { email } = req.body;
+        if (!email || typeof email !== "string") {
+          return sendError(res, "Invalid email", undefined, 400);
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
+          return sendError(res, "Invalid email format", undefined, 400);
+        }
+
+        await storage.subscribeToNewsletter(email.trim());
+        return res.json({ success: true, message: "Email added successfully" });
+      } catch (err: any) {
+        return handleApiError(res, err, "POST /api/admin/newsletter/add");
+      }
+    },
+  );
+
+  // ── Import CSV Emails ───────────────────────────────────
+  app.post(
+    "/api/admin/newsletter/import",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { emails } = req.body;
+        if (!Array.isArray(emails)) {
+          return sendError(res, "Invalid emails array", undefined, 400);
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const validEmails = emails
+          .filter((e): e is string => typeof e === "string")
+          .map((e) => e.trim())
+          .filter((e) => emailRegex.test(e));
+
+        if (validEmails.length === 0) {
+          return sendError(res, "No valid emails found", undefined, 400);
+        }
+
+        let addedCount = 0;
+        for (const email of validEmails) {
+          try {
+            await storage.subscribeToNewsletter(email);
+            addedCount++;
+          } catch {
+            // Skip duplicates
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: `Added ${addedCount} new emails`,
+          added: addedCount,
+          total: validEmails.length,
+        });
+      } catch (err: any) {
+        return handleApiError(res, err, "POST /api/admin/newsletter/import");
+      }
+    },
+  );
+
+  // ── Delete Single Email ─────────────────────────────────
+  app.delete(
+    "/api/admin/newsletter/:email",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const email = getQueryParam(req.params.email);
+        if (!email) {
+          return sendError(res, "Invalid email", undefined, 400);
+        }
+
+        await db.delete(newsletterSubscribers).where(eq(newsletterSubscribers.email, email.toLowerCase()));
+        return res.json({ success: true, message: "Email removed successfully" });
+      } catch (err: any) {
+        return handleApiError(res, err, "DELETE /api/admin/newsletter/:email");
+      }
+    },
+  );
+
+  // ── Delete All Emails ───────────────────────────────────
+  app.delete(
+    "/api/admin/newsletter/clear-all",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const result = await db.delete(newsletterSubscribers);
+        return res.json({ success: true, message: "All subscribers cleared" });
+      } catch (err: any) {
+        return handleApiError(res, err, "DELETE /api/admin/newsletter/clear-all");
+      }
+    },
+  );
+
   // ── SMTP Test ──────────────────────────────────────────
   app.post(
     "/api/admin/test-email",

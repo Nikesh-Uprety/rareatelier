@@ -14,6 +14,10 @@ import {
   type AdminCustomer,
   type AdminOrder,
   exportSubscribersCSV,
+  addNewsletterEmail,
+  importNewsletterEmails,
+  deleteNewsletterEmail,
+  deleteAllNewsletterEmails,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { format } from "date-fns";
@@ -34,7 +38,14 @@ import {
   Camera,
   Trash2,
   PlusCircle,
-  AlertTriangle
+  AlertTriangle,
+  Upload,
+  FileCode,
+  Copy,
+  Eye,
+  X,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import {
   Dialog,
@@ -374,6 +385,106 @@ export default function AdminProfilePage() {
   </div>
 </div>`);
   const [subscriberSearch, setSubscriberSearch] = useState("");
+  const [newSubscriberEmail, setNewSubscriberEmail] = useState("");
+  const [showSplitEditor, setShowSplitEditor] = useState(false);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("template1");
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
+  const [isBroadcastConfirmOpen, setIsBroadcastConfirmOpen] = useState(false);
+
+  // Email Templates
+  const emailTemplates = {
+    template1: {
+      name: "RARE Atelier Classic",
+      subject: "New Seasonal Collection — RARE ATELIER",
+      html: `<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
+  <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
+  <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
+  <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
+  <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px;">Dear community,<br><br>[Edit your message here...]</p>
+  <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
+    <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
+  </div>
+  <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
+    <p style="font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">RARE Nepal · Kathmandu · Heritage Meets Future</p>
+  </div>
+</div>`,
+    },
+    template2: {
+      name: "Modern Gradient",
+      subject: "Exclusive Offer Inside",
+      html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+  <div style="padding: 60px 30px; text-align: center;">
+    <h1 style="font-size: 36px; color: white; margin: 0 0 16px 0; font-weight: 700;">Special Announcement</h1>
+    <p style="font-size: 18px; color: rgba(255,255,255,0.9); margin: 0 0 32px 0;">Discover what's new at RARE</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 16px 40px; background: white; color: #667eea; text-decoration: none; font-weight: 600; border-radius: 50px; font-size: 14px;">View Collection</a>
+  </div>
+  <div style="background: white; padding: 40px; text-align: center;">
+    <p style="font-size: 14px; color: #666; margin: 0;">[Add your content here...]</p>
+  </div>
+  <div style="background: #f8f9fa; padding: 24px; text-align: center; font-size: 12px; color: #999;">
+    <p style="margin: 0;">© 2026 RARE Nepal. All rights reserved.</p>
+  </div>
+</div>`,
+    },
+    template3: {
+      name: "Elegant White",
+      subject: "Introducing our latest collection",
+      html: `<div style="font-family: Georgia, 'Times New Roman', serif; max-width: 600px; margin: 0 auto; background: white;">
+  <div style="padding: 60px 40px; border-bottom: 2px solid #e8d5c4; text-align: center;">
+    <h1 style="font-size: 28px; color: #2c2c2c; margin: 0; font-weight: 300; letter-spacing: 2px;">RARE</h1>
+    <p style="font-size: 12px; color: #999; margin: 8px 0 0 0; letter-spacing: 1px;">LUXURY COLLECTIONS</p>
+  </div>
+  <div style="padding: 40px; text-align: center;">
+    <h2 style="font-size: 24px; color: #2c2c2c; margin: 0 0 16px 0;">New Arrivals</h2>
+    <p style="font-size: 14px; color: #666; line-height: 1.8; margin: 0 0 24px 0;">Discover our curated selection of premium artisanal crafts</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 14px 32px; border: 2px solid #2c2c2c; color: #2c2c2c; text-decoration: none; font-size: 12px; letter-spacing: 1px; background: white;">SHOP NOW</a>
+  </div>
+  <div style="background: #f5f5f5; padding: 24px; text-align: center; font-size: 11px; color: #999;">
+    <p style="margin: 0;">You're receiving this because you subscribed to RARE updates.</p>
+  </div>
+</div>`,
+    },
+    template4: {
+      name: "Colorful Creative",
+      subject: "🎨 Creative Update from RARE",
+      html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: linear-gradient(180deg, #ffecd2 0%, #fcb69f 100%);">
+  <div style="padding: 50px 30px; text-align: center;">
+    <div style="font-size: 48px; margin-bottom: 16px;">✨</div>
+    <h1 style="font-size: 32px; color: #2c2c2c; margin: 0 0 12px 0; font-weight: 700;">Something Special</h1>
+    <p style="font-size: 16px; color: #555; margin: 0; line-height: 1.6;">We've curated something amazing for you</p>
+  </div>
+  <div style="background: white; margin: 20px; border-radius: 8px; padding: 30px; text-align: center;">
+    <h3 style="font-size: 18px; color: #2c2c2c; margin: 0 0 12px 0;">Explore Now</h3>
+    <p style="font-size: 14px; color: #666; margin: 0 0 20px 0;">[Add description here]</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 12px 28px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; border-radius: 25px; font-weight: 600; font-size: 13px;">Discover</a>
+  </div>
+  <div style="padding: 20px; text-align: center; font-size: 11px; color: rgba(44,44,44,0.6);">
+    <p style="margin: 0;">© RARE Nepal 2026</p>
+  </div>
+</div>`,
+    },
+    template5: {
+      name: "Dark Luxe",
+      subject: "Exclusive Access: Limited Edition Drop",
+      html: `<div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #1a1a1a; color: #f0f0f0;">
+  <div style="padding: 50px 30px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); text-align: center; border-bottom: 3px solid #d4af37;">
+    <div style="font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: #d4af37; margin-bottom: 16px;">Limited Edition</div>
+    <h1 style="font-size: 36px; color: #f0f0f0; margin: 0; font-weight: 300;">RARE Exclusive</h1>
+  </div>
+  <div style="padding: 40px 30px; text-align: center;">
+    <p style="font-size: 16px; color: #d4af37; margin: 0 0 12px 0; letter-spacing: 1px;">NOW AVAILABLE</p>
+    <h2 style="font-size: 24px; color: #f0f0f0; margin: 0 0 20px 0; line-height: 1.4;">Members Get Early Access</h2>
+    <p style="font-size: 14px; color: #b0b0b0; margin: 0 0 24px 0; line-height: 1.6;">Join our exclusive collection today</p>
+    <a href="https://rarenp.com" style="display: inline-block; padding: 14px 40px; border: 2px solid #d4af37; color: #d4af37; text-decoration: none; font-weight: 600; letter-spacing: 1px; font-size: 12px;">UNLOCK ACCESS</a>
+  </div>
+  <div style="background: #0a0a0a; padding: 24px; text-align: center; border-top: 1px solid #333; font-size: 11px; color: #666;">
+    <p style="margin: 0;">Unsubscribe • Contact • Website</p>
+  </div>
+</div>`,
+    },
+  } as Record<string, { name: string; subject: string; html: string }>;
 
   // Queries
   const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
@@ -419,6 +530,95 @@ export default function AdminProfilePage() {
     },
   });
 
+  const addEmailMutation = useMutation({
+    mutationFn: async () => {
+      if (!newSubscriberEmail.trim()) throw new Error("Email is required");
+      const result = await addNewsletterEmail(newSubscriberEmail);
+      if (!result.success) throw new Error(result.message || "Failed to add email");
+      return result;
+    },
+    onSuccess: () => {
+      toast({ title: "Email added successfully" });
+      setNewSubscriberEmail("");
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to add email", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const result = await deleteNewsletterEmail(email);
+      if (!result.success) throw new Error(result.message || "Failed to delete email");
+      return result;
+    },
+    onSuccess: () => {
+      toast({ title: "Email removed successfully" });
+      setDeleteConfirmEmail(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete email", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteAllMutation = useMutation({
+    mutationFn: async () => {
+      const result = await deleteAllNewsletterEmails();
+      if (!result.success) throw new Error(result.message || "Failed to clear subscribers");
+      return result;
+    },
+    onSuccess: () => {
+      toast({ title: "All subscribers cleared" });
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to clear subscribers", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const importEmailsMutation = useMutation({
+    mutationFn: async (csvText: string) => {
+      const emails = csvText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line && line.includes("@"))
+        .map((line) => {
+          const parts = line.split(",");
+          return parts[0].trim();
+        });
+
+      if (emails.length === 0) throw new Error("No valid emails found in file");
+      const result = await importNewsletterEmails(emails);
+      if (!result.success) throw new Error(result.message || "Failed to import emails");
+      return result;
+    },
+    onSuccess: (result: any) => {
+      toast({
+        title: "Import successful",
+        description: `Added ${result.added} new emails out of ${result.total} total`,
+      });
+      setIsImportDialogOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["admin", "newsletter", "subscribers"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      importEmailsMutation.mutate(text);
+    };
+    reader.readAsText(file);
+  };
+
   const broadcastMutation = useMutation({
     mutationFn: async (payload: { subject: string; html: string }) => {
       const res = await apiRequest("POST", "/api/admin/marketing/broadcast", payload);
@@ -429,6 +629,7 @@ export default function AdminProfilePage() {
         toast({ title: `Broadcast sent to ${result.count} subscribers` });
         setMarketingSubject("");
         setMarketingBody("");
+        setIsBroadcastConfirmOpen(false);
       } else {
         toast({ title: result.error || "Failed to send broadcast", variant: "destructive" });
       }
@@ -1038,6 +1239,7 @@ export default function AdminProfilePage() {
 
         {/* Marketing tab */}
         <TabsContent value="marketing" className="mt-4 space-y-6">
+          {/* Newsletter Subscribers Management */}
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
@@ -1045,19 +1247,10 @@ export default function AdminProfilePage() {
                   Newsletter Subscribers
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Manage your community and export your email list.
+                  Manage your community ({subscribers.length} total)
                 </p>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input 
-                    placeholder="Search emails..." 
-                    className="h-8 w-[200px] pl-9 text-xs"
-                    value={subscriberSearch}
-                    onChange={(e) => setSubscriberSearch(e.target.value)}
-                  />
-                </div>
+              <div className="flex items-center gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
@@ -1065,18 +1258,78 @@ export default function AdminProfilePage() {
                   onClick={() => exportSubscribersCSV()}
                 >
                   <Download className="h-3 w-3 mr-2" />
-                  Export CSV
+                  Export
                 </Button>
               </div>
             </div>
 
+            {/* Manual Add Email */}
+            <div className="space-y-2 pb-4 border-b border-[#E5E5E0] dark:border-border">
+              <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Add Email</label>
+              <div className="flex gap-2">
+                <Input 
+                  placeholder="name@example.com" 
+                  value={newSubscriberEmail}
+                  onChange={(e) => setNewSubscriberEmail(e.target.value)}
+                  className="h-9 px-3 text-sm"
+                />
+                <Button 
+                  size="sm" 
+                  className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90"
+                  onClick={() => addEmailMutation.mutate()}
+                  disabled={addEmailMutation.isPending || !newSubscriberEmail.trim()}
+                >
+                  <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Add
+                </Button>
+                <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Upload className="h-3.5 w-3.5 mr-1.5" />
+                      Import CSV
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Import Email List</DialogTitle>
+                      <DialogDescription>Upload a CSV file with email addresses (one per line or comma-separated)</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <input 
+                        type="file" 
+                        accept=".csv,.xlsx,.xls" 
+                        onChange={handleImportFile}
+                        disabled={importEmailsMutation.isPending}
+                        className="w-full text-sm"
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Close</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            </div>
+
+            {/* Search & Filter */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input 
+                placeholder="Search emails..." 
+                className="h-8 w-full pl-9 text-xs"
+                value={subscriberSearch}
+                onChange={(e) => setSubscriberSearch(e.target.value)}
+              />
+            </div>
+
+            {/* Subscribers Table */}
             <div className="border border-[#E5E5E0] dark:border-border rounded-xl overflow-hidden">
               <table className="w-full text-xs">
                 <thead className="bg-muted/30 border-b border-[#E5E5E0] dark:border-border text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-4 py-2 text-left font-semibold">Email Address</th>
-                    <th className="px-4 py-2 text-left font-semibold">Joined At</th>
-                    <th className="px-4 py-2 text-right font-semibold">Status</th>
+                    <th className="px-4 py-2 text-left font-semibold">Joined</th>
+                    <th className="px-4 py-2 text-right font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
@@ -1091,51 +1344,239 @@ export default function AdminProfilePage() {
                   ) : filteredSubscribers.length === 0 ? (
                     <tr>
                       <td colSpan={3} className="px-4 py-8 text-center text-muted-foreground italic">
-                        No subscribers matched your search.
+                        No subscribers to display.
                       </td>
                     </tr>
                   ) : (
-                    filteredSubscribers.slice(0, 10).map((s) => (
+                    filteredSubscribers.slice(0, 20).map((s) => (
                       <tr key={s.email} className="hover:bg-muted/10 transition-colors">
-                        <td className="px-4 py-3 font-medium">{s.email}</td>
+                        <td className="px-4 py-3 font-medium text-xs">{s.email}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {s.createdAt ? format(new Date(s.createdAt), "MMM d, yyyy") : "—"}
+                          {s.createdAt ? format(new Date(s.createdAt), "MMM d") : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Badge variant="outline" className="text-[10px] text-green-600 border-green-200 bg-green-50/50">Active</Badge>
+                          <Dialog open={deleteConfirmEmail === s.email} onOpenChange={(open) => !open && setDeleteConfirmEmail(null)}>
+                            <DialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 px-2 text-[10px]"
+                                onClick={() => setDeleteConfirmEmail(s.email)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>Remove Subscriber</DialogTitle>
+                                <DialogDescription>Are you sure you want to remove {s.email}?</DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <Button variant="outline" onClick={() => setDeleteConfirmEmail(null)}>Cancel</Button>
+                                <Button 
+                                  variant="destructive" 
+                                  onClick={() => deleteEmailMutation.mutate(s.email)}
+                                  disabled={deleteEmailMutation.isPending}
+                                >
+                                  {deleteEmailMutation.isPending ? "Removing..." : "Remove"}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </td>
                       </tr>
                     ))
                   )}
-                  {filteredSubscribers.length > 10 && (
+                  {filteredSubscribers.length > 20 && (
                     <tr>
                       <td colSpan={3} className="px-4 py-2 text-center text-[10px] text-muted-foreground bg-muted/5">
-                        Showing first 10 of {filteredSubscribers.length} subscribers
+                        Showing first 20 of {filteredSubscribers.length} subscribers
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Bulk Actions */}
+            {subscribers.length > 0 && (
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E5E0] dark:border-border">
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
+                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                      Clear All
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Clear All Subscribers</DialogTitle>
+                      <DialogDescription>This action cannot be undone. Are you absolutely sure you want to delete all {subscribers.length} subscribers?</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button variant="outline">Cancel</Button>
+                      <Button 
+                        variant="destructive" 
+                        onClick={() => deleteAllMutation.mutate()}
+                        disabled={deleteAllMutation.isPending}
+                      >
+                        {deleteAllMutation.isPending ? "Clearing..." : "Clear All"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            )}
           </div>
 
+          {/* Email Content Editor */}
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-                  Email Marketing Broadcast
+                  Email Template & Composer
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">Design your email with live preview</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSplitEditor(!showSplitEditor)}
+              >
+                {showSplitEditor ? <Minimize2 className="h-3.5 w-3.5 mr-1.5" /> : <Maximize2 className="h-3.5 w-3.5 mr-1.5" />}
+                {showSplitEditor ? "Compact" : "Split View"}
+              </Button>
+            </div>
+
+            {/* Template Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Template</label>
+              <select 
+                value={selectedTemplate}
+                onChange={(e) => {
+                  const tpl = emailTemplates[e.target.value as keyof typeof emailTemplates];
+                  setSelectedTemplate(e.target.value);
+                  setMarketingSubject(tpl.subject);
+                  setMarketingBody(tpl.html);
+                }}
+                className="w-full h-9 px-3 text-sm border border-[#E5E5E0] dark:border-border rounded-md bg-white dark:bg-card"
+              >
+                {Object.entries(emailTemplates).map(([key, template]) => (
+                  <option key={key} value={key}>{template.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Split View or Single View */}
+            {showSplitEditor ? (
+              <div className="grid grid-cols-2 gap-4 h-[600px]">
+                {/* Editor Panel */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">HTML Code</label>
+                  <Textarea 
+                    placeholder="Paste or edit HTML code..." 
+                    className="flex-1 font-mono text-xs leading-relaxed p-3 resize-none"
+                    value={marketingBody}
+                    onChange={(e) => setMarketingBody(e.target.value)}
+                  />
+                  <div className="flex gap-2">
+                    <input 
+                      type="file" 
+                      accept=".html,.htm" 
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => setMarketingBody(evt.target?.result as string);
+                          reader.readAsText(file);
+                        }
+                      }}
+                      className="hidden"
+                      id="htmlFileInput"
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => document.getElementById("htmlFileInput")?.click()}
+                    >
+                      <FileCode className="h-3 w-3 mr-1.5" />
+                      Import HTML
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Preview Panel */}
+                <div className="flex flex-col space-y-2">
+                  <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground">Live Preview</label>
+                  <iframe 
+                    srcDoc={marketingBody}
+                    className="flex-1 border border-[#E5E5E0] dark:border-border rounded-md bg-white"
+                    title="Email Preview"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Textarea 
+                  placeholder="Paste HTML code or edit directly..." 
+                  className="min-h-[400px] font-mono text-sm leading-relaxed p-4"
+                  value={marketingBody}
+                  onChange={(e) => setMarketingBody(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <input 
+                    type="file" 
+                    accept=".html,.htm" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (evt) => setMarketingBody(evt.target?.result as string);
+                        reader.readAsText(file);
+                      }
+                    }}
+                    className="hidden"
+                    id="htmlFileInputCompact"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => document.getElementById("htmlFileInputCompact")?.click()}
+                  >
+                    <FileCode className="h-3 w-3 mr-1.5" />
+                    Import HTML File
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setShowSplitEditor(true)}
+                  >
+                    <Eye className="h-3 w-3 mr-1.5" />
+                    Live Preview
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Broadcast Settings */}
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Email Broadcast
                 </h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Send a newsletter or announcement to {filteredSubscribers.length} subscribers.
+                  Send to {filteredSubscribers.length} subscribers
                 </p>
               </div>
               <Badge variant="outline" className="bg-[#2D4A35]/5 text-[#2D4A35] dark:text-emerald-400 border-[#2D4A35]/20">
                 <Mail className="h-3 w-3 mr-1.5" />
-                Active Campaign
+                {subscribers.length} Recipients
               </Badge>
             </div>
 
-            <div className="grid gap-6 py-2">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
                   <MessageSquare className="h-3 w-3" />
@@ -1148,63 +1589,56 @@ export default function AdminProfilePage() {
                   className="h-10 px-4"
                 />
               </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold tracking-wider uppercase text-muted-foreground flex items-center gap-2">
-                  <Send className="h-3 w-3" />
-                  Message Content (HTML Supported)
-                </label>
-                <div className="relative">
-                  <Textarea 
-                    placeholder="Compose your email..." 
-                    className="min-h-[400px] font-mono text-sm leading-relaxed p-4"
-                    value={marketingBody}
-                    onChange={(e) => setMarketingBody(e.target.value)}
-                  />
-                  <div className="absolute bottom-3 right-3 text-[10px] text-muted-foreground bg-background/80 px-2 py-1 rounded">
-                    BCC Broadcast
-                  </div>
-                </div>
-              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E5E0] dark:border-border font-mono text-xs">
-              <p className="text-muted-foreground italic mr-auto">
-                Careful: This will send an email immediately to all subscribers.
+            <div className="flex items-center justify-between pt-4 border-t border-[#E5E5E0] dark:border-border">
+              <p className="text-xs text-muted-foreground italic">
+                Will send immediately to all subscribers via BCC
               </p>
-              <Button 
-                variant="outline" 
-                onClick={() => {
-                  setMarketingSubject("New Seasonal Collection — RARE ATELIER");
-                  setMarketingBody(`<div style="font-family: 'serif', 'Times New Roman', serif; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; text-align: center;">
-  <h1 style="font-size: 32px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 24px; color: #f2efe8;">RARE ATELIER</h1>
-  <div style="width: 40px; height: 1px; background: rgba(242, 239, 232, 0.3); margin: 0 auto 32px;"></div>
-  <h2 style="font-size: 24px; font-style: italic; margin-bottom: 16px;">The Latest from the Atelier</h2>
-  <p style="font-size: 16px; line-height: 1.6; color: rgba(242, 239, 232, 0.7); margin-bottom: 32px; text-align: left;">Dear community,<br><br>[Edit your message here...]</p>
-  <div style="margin: 40px 0; padding: 32px; border: 1px solid rgba(242, 239, 232, 0.1);">
-     <p style="font-size: 14px; color: #f2efe8; letter-spacing: 0.1em; margin-bottom: 24px;">EXPLORE THE ARCHIVE</p>
-     <a href="https://rarenp.com" style="display: inline-block; padding: 14px 28px; background: #f2efe8; color: #07060a; text-decoration: none; font-size: 11px; font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase;">Shop Now</a>
-  </div>
-  <div style="margin-top: 60px; padding-top: 32px; border-top: 1px solid rgba(242, 239, 232, 0.1);">
-    <p style="font-size: 10px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242, 239, 232, 0.4);">RARE Nepal · Kathmandu · Heritage Meets Future</p>
-  </div>
-</div>`);
-                }}
-              >
-                Reset to Template
-              </Button>
-              <Button 
-                className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90 px-8"
-                disabled={broadcastMutation.isPending || !marketingSubject.trim() || !marketingBody.trim()}
-                onClick={() => {
-                  broadcastMutation.mutate({
-                    subject: marketingSubject,
-                    html: marketingBody
-                  });
-                }}
-              >
-                {broadcastMutation.isPending ? "Dispatching..." : "Send Broadcast"}
-              </Button>
+              <Dialog open={isBroadcastConfirmOpen} onOpenChange={setIsBroadcastConfirmOpen}>
+                <DialogTrigger asChild>
+                  <Button 
+                    className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90 px-8"
+                    disabled={!marketingSubject.trim() || !marketingBody.trim() || subscribers.length === 0}
+                  >
+                    <Send className="h-3.5 w-3.5 mr-2" />
+                    Send Broadcast
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Confirm Broadcast</DialogTitle>
+                    <DialogDescription>
+                      This will send an email to {subscribers.length} subscribers. This action cannot be undone.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Subject</p>
+                      <p className="text-sm">{marketingSubject}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-muted-foreground mb-1">Recipients</p>
+                      <p className="text-sm">{subscribers.length} subscribers</p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsBroadcastConfirmOpen(false)}>Cancel</Button>
+                    <Button 
+                      className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90"
+                      onClick={() => {
+                        broadcastMutation.mutate({
+                          subject: marketingSubject,
+                          html: marketingBody
+                        });
+                      }}
+                      disabled={broadcastMutation.isPending}
+                    >
+                      {broadcastMutation.isPending ? "Sending..." : "Send to All"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </TabsContent>

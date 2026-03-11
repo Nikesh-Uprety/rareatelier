@@ -404,3 +404,25 @@ export async function createAdminAttribute(data: {
 export async function deleteAdminAttribute(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/attributes/${id}`);
 }
+
+// ── Newsletter Marketing API helpers ────────────────────
+
+export async function addNewsletterEmail(email: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("POST", "/api/admin/newsletter/add", { email });
+  return res.json();
+}
+
+export async function importNewsletterEmails(emails: string[]): Promise<{ success: boolean; message: string; added: number; total: number }> {
+  const res = await apiRequest("POST", "/api/admin/newsletter/import", { emails });
+  return res.json();
+}
+
+export async function deleteNewsletterEmail(email: string): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("DELETE", `/api/admin/newsletter/${encodeURIComponent(email)}`);
+  return res.json();
+}
+
+export async function deleteAllNewsletterEmails(): Promise<{ success: boolean; message: string }> {
+  const res = await apiRequest("DELETE", "/api/admin/newsletter/clear-all");
+  return res.json();
+}
