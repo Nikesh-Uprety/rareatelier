@@ -12,6 +12,8 @@ export interface ProductApi {
   stock: number;
   colorOptions?: string | null;
   sizeOptions?: string | null;
+  ranking?: number | null;
+  originalPrice?: number | string | null;
 }
 
 export interface CategoryApi {

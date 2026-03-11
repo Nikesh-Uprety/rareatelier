@@ -295,12 +295,14 @@ export class PgStorage implements IStorage {
         stock: products.stock,
         colorOptions: products.colorOptions,
         sizeOptions: products.sizeOptions,
+        ranking: products.ranking,
+        originalPrice: products.originalPrice,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
       .from(products)
       .where(whereClause)
-      .orderBy(desc(products.createdAt))
+      .orderBy(asc(products.ranking), desc(products.createdAt))
       .limit(limit)
       .offset(offset);
 
@@ -321,6 +323,8 @@ export class PgStorage implements IStorage {
         stock: products.stock,
         colorOptions: products.colorOptions,
         sizeOptions: products.sizeOptions,
+        ranking: products.ranking,
+        originalPrice: products.originalPrice,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -347,6 +351,8 @@ export class PgStorage implements IStorage {
         stock: data.stock,
         colorOptions: data.colorOptions ?? null,
         sizeOptions: data.sizeOptions ?? null,
+        ranking: data.ranking ?? 999,
+        originalPrice: data.originalPrice ?? null,
       })
       .returning({
         id: products.id,
@@ -360,6 +366,8 @@ export class PgStorage implements IStorage {
         stock: products.stock,
         colorOptions: products.colorOptions,
         sizeOptions: products.sizeOptions,
+        ranking: products.ranking,
+        originalPrice: products.originalPrice,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -406,6 +414,8 @@ export class PgStorage implements IStorage {
         stock: products.stock,
         colorOptions: products.colorOptions,
         sizeOptions: products.sizeOptions,
+        ranking: products.ranking,
+        originalPrice: products.originalPrice,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -1616,6 +1626,8 @@ export class MemStorage implements IStorage {
       stock: data.stock,
       colorOptions: data.colorOptions ?? null,
       sizeOptions: data.sizeOptions ?? null,
+      ranking: data.ranking ?? 999,
+      originalPrice: data.originalPrice ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

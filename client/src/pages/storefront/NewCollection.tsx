@@ -54,6 +54,26 @@ function RevealImage({
 }) {
   const { ref, isVisible } = useScrollReveal();
   const aspect = getAspect(index);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Parse gallery URLs
+  const gallery = useMemo(() => {
+    try {
+      return product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
+    } catch (e) {
+      return [];
+    }
+  }, [product.galleryUrls]);
+
+  const secondaryImage = gallery.length > 1 ? gallery[1] : null;
+
+  // Calculate sale percentage
+  const salePercentage = useMemo(() => {
+    if (!product.originalPrice || Number(product.originalPrice) <= product.price) return null;
+    const orig = Number(product.originalPrice);
+    const curr = product.price;
+    return Math.round(((orig - curr) / orig) * 100);
+  }, [product.originalPrice, product.price]);
 
   return (
     <div
@@ -65,17 +85,52 @@ function RevealImage({
       }`}
       style={{ transitionDelay: `${(index % 4) * 80}ms` }}
     >
-      <Link href={`/product/${product.id}`} className="group block relative overflow-hidden rounded-sm">
-        <div className={`${aspect} overflow-hidden bg-neutral-100 dark:bg-neutral-800`}>
+      <Link 
+        href={`/product/${product.id}`} 
+        className="group block relative overflow-hidden rounded-sm"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className={`${aspect} overflow-hidden bg-neutral-100 dark:bg-neutral-800 relative`}>
+          {/* Primary Image */}
           <img
             src={product.imageUrl ?? ""}
             alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110"
-            loading="lazy"
+            className={`w-full h-full object-cover transition-all duration-1000 ease-out ${
+              isHovered && secondaryImage ? "opacity-0 scale-110" : "opacity-100 scale-100"
+            }`}
           />
-          {/* Hover overlay */}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-500 flex items-center justify-center">
-            <div className="w-10 h-10 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-500">
+          
+          {/* Secondary Image (Cross-fade on hover) */}
+          {secondaryImage && (
+            <img
+              src={secondaryImage}
+              alt={`${product.name} alternate view`}
+              className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out ${
+                isHovered ? "opacity-100 scale-110" : "opacity-0 scale-100"
+              }`}
+            />
+          )}
+
+          {/* Sale Badge */}
+          {salePercentage && (
+            <div className="absolute top-3 left-3 px-3 py-1.5 bg-red-600 border border-red-500 rounded-sm z-10 shadow-lg shadow-red-900/40">
+              <span className="text-xs font-black tracking-widest text-white uppercase italic">
+                -{salePercentage}% OFF
+              </span>
+            </div>
+          )}
+
+          {/* Hover overlay with Text */}
+          <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent w-full h-full transition-all duration-700 ${isHovered ? "opacity-100" : "opacity-0"}`}>
+            <div className="absolute bottom-0 left-0 right-0 p-8 translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
+                <div className="flex flex-col gap-2">
+                    <span className="text-xs uppercase tracking-[0.4em] text-white/90 font-bold drop-shadow-md">View Collection</span>
+                    <h3 className="text-xl font-bold text-white tracking-tight leading-tight drop-shadow-lg">{product.name}</h3>
+                </div>
+            </div>
+            
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-500 shadow-xl">
               <ArrowUpRight className="w-4 h-4 text-black" />
             </div>
           </div>
@@ -123,19 +178,14 @@ export default function NewCollection() {
 
   const sortedProducts = useMemo(() => {
     if (!products) return [];
-    return [...products].sort((a, b) => {
-      const getPriority = (p: ProductApi) => {
-        const cat = p.category?.toUpperCase();
-        if (cat === "HOODIE") return 1;
-        if (cat === "TROUSER") return 2;
-        return 3;
-      };
-      const prioA = getPriority(a);
-      const prioB = getPriority(b);
-      
-      if (prioA !== prioB) return prioA - prioB;
-      return a.name.localeCompare(b.name);
-    });
+    return [...products]
+      .filter((p) => !!p.imageUrl) // Only show products with a real image
+      .sort((a, b) => {
+        const rankA = a.ranking ?? 999;
+        const rankB = b.ranking ?? 999;
+        if (rankA !== rankB) return rankA - rankB;
+        return a.name.localeCompare(b.name);
+      });
   }, [products]);
 
   return (

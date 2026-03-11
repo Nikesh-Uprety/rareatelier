@@ -60,7 +60,7 @@ export const insertCustomerSchema = createInsertSchema(customers).pick({
 
 export const products = pgTable("products", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   shortDetails: text("short_details"),
   description: text("description"),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
@@ -70,6 +70,8 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   colorOptions: text("color_options"), // JSON array of color names
   sizeOptions: text("size_options"), // JSON array of size codes
+  ranking: integer("ranking").default(999), // 1 = best seller
+  originalPrice: numeric("original_price", { precision: 10, scale: 2 }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
