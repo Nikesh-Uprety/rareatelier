@@ -369,7 +369,7 @@ export function AdvancedEmailEditor({
                 </span>
               )}
             </div>
-            <div className="flex-1 overflow-auto bg-white dark:bg-slate-900 rounded">
+            <div className="flex-1 overflow-auto bg-white rounded">
               <iframe
                 ref={iframeRef}
                 srcDoc={htmlContent}
