@@ -230,25 +230,79 @@ export default function Home() {
         </AnimatePresence>
         <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
 
-        <div className="absolute inset-0 flex items-center justify-start container mx-auto px-6">
-          <div className="hero-fade-in-float max-w-[600px] w-full text-white text-left flex flex-col items-start gap-y-6 md:gap-y-8">
-            <h1 className="font-serif text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold leading-[1.1] tracking-tighter drop-shadow-xl">
-              Beyond Trends.
-              <br />
-              Beyond Time.
-            </h1>
-            <p className="text-xs md:text-sm tracking-[0.6em] uppercase opacity-80 font-light">
-              Authenticity In Motion
-            </p>
-            <div className="mt-4 md:mt-8 hero-fade-in-float hero-delay-200">
+        {/* Editorial Left Text Section */}
+        <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
+          <div className="flex items-center gap-6 md:gap-12 pl-2">
+            {/* Elegant Vertical Line */}
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "clamp(120px, 20vh, 180px)", opacity: 0.4 }}
+              transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+              className="w-px bg-white hidden md:block"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+              className="text-white flex flex-col items-start w-full"
+            >
+              {/* Premium Archival Detail */}
+              <span className="text-[9px] md:text-xs tracking-[0.4em] md:tracking-[0.5em] opacity-40 font-bold mb-4 md:mb-6 block uppercase">
+                [W'25/ARCHIVE]
+              </span>
+              
+              <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter shadow-black/20 text-shadow-sm">
+                Beyond
+                <br />
+                Trends.
+              </h1>
+              
+              <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide text-shadow-sm">
+                Beyond Time.
+              </p>
+            </motion.div>
+          </div>
+        </div>
+
+        {/* Center CTA group with stagger animation */}
+        <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-0 md:items-center pt-0 md:pt-0 pointer-events-none z-20">
+          <div className="flex flex-col items-center gap-4 md:gap-5 pointer-events-auto">
+            {/* Animated reveal line */}
+            <motion.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: 1 }}
+              transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+              className="w-12 md:w-16 h-px bg-white/50 origin-center hidden md:block"
+            />
+
+            {/* CTA Button */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            >
               <Button
                 size="lg"
                 asChild
-                className="rounded-none bg-white text-black hover:bg-white/90 px-12 h-14 md:h-16 text-sm uppercase tracking-widest font-bold transition-all hover:scale-105 active:scale-95 shadow-xl"
+                className="rounded-none bg-white text-black hover:bg-white/90 px-8 sm:px-12 md:px-16 h-12 sm:h-14 md:h-15 text-[9px] md:text-xs uppercase tracking-[0.3em] md:tracking-[0.4em] font-black transition-all duration-300 hover:scale-105 active:scale-95 shadow-2xl hero-btn-glow group"
               >
-                <Link href="/products">Explore Shop</Link>
+                <Link href="/products" className="flex items-center gap-3">
+                  Explore Shop
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
+                </Link>
               </Button>
-            </div>
+            </motion.div>
+
+            {/* Tagline below button */}
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
+              className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold text-shadow-sm mt-1 md:mt-0"
+            >
+              Authenticity In Motion
+            </motion.p>
           </div>
         </div>
       </section>
@@ -449,9 +503,23 @@ export default function Home() {
                     <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
                       {product.name}
                     </h3>
-                    <p className="text-white/70 font-medium text-lg">
-                      {formatPrice(product.price)}
-                    </p>
+                    {product.saleActive && Number(product.salePercentage) > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <p className="text-white font-black text-lg">
+                          {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                        </p>
+                        <p className="text-white/50 font-medium text-sm line-through">
+                          {formatPrice(product.price)}
+                        </p>
+                        <span className="bg-white text-black text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm">
+                          {product.salePercentage}% OFF
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-white/70 font-medium text-lg">
+                        {formatPrice(product.price)}
+                      </p>
+                    )}
                   </div>
                   <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
                     <ArrowRight className="w-5 h-5" />
@@ -579,9 +647,25 @@ export default function Home() {
                 </button>
 
                 {/* Dynamic Price floating on hover */}
-                <div className="absolute bottom-2 left-2 truncate opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none">
-                   <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase">
-                    {formatPrice(product.price)}
+                <div className="absolute bottom-2 left-2 truncate opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start">
+                   {product.saleActive && Number(product.salePercentage) > 0 && (
+                     <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded shadow-xl animate-pulse">
+                        {product.salePercentage}% OFF
+                     </span>
+                   )}
+                   <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2">
+                    {product.saleActive && Number(product.salePercentage) > 0 ? (
+                      <>
+                        <span className="text-primary">
+                          {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                        </span>
+                        <span className="text-white/50 line-through text-[8px]">
+                          {formatPrice(product.price)}
+                        </span>
+                      </>
+                    ) : (
+                      formatPrice(product.price)
+                    )}
                    </span>
                 </div>
               </div>

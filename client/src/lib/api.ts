@@ -14,6 +14,8 @@ export interface ProductApi {
   sizeOptions?: string | null;
   ranking?: number | null;
   originalPrice?: number | string | null;
+  salePercentage?: number | null;
+  saleActive?: boolean | null;
 }
 
 export interface CategoryApi {
@@ -44,6 +46,7 @@ export interface OrderInput {
     locationCoordinates?: string;
   };
   paymentMethod: string;
+  promoCodeId?: string;
 }
 
 export async function fetchProducts(filters?: {
@@ -106,6 +109,8 @@ export interface OrderDetail {
   paymentProofUrl: string | null;
   paymentVerified: string | null;
   locationCoordinates: string | null;
+  promoCode?: string | null;
+  promoDiscountAmount?: number | null;
   createdAt: string | Date;
   items: {
     id: string;
@@ -142,4 +147,17 @@ export async function uploadPaymentProof(
   });
   const json = (await res.json()) as { success: boolean; error?: string };
   return json;
+}
+
+export async function validatePromoCode(code: string) {
+  const res = await apiRequest("GET", `/api/promo-codes/validate/${code}`);
+  return (await res.json()) as {
+    success: boolean;
+    data?: {
+      id: string;
+      code: string;
+      discountPct: number;
+    };
+    error?: string;
+  };
 }

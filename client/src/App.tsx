@@ -10,8 +10,9 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import Home from "@/pages/storefront/Home";
+import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 // Lazy load non-critical components
 const Products = lazy(() => import("@/pages/storefront/Products"));
@@ -30,6 +31,7 @@ const AdminBills = lazy(() => import("@/pages/admin/Bills"));
 const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
 const AdminPOS = lazy(() => import("@/pages/admin/POS"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/Analytics"));
+const AdminPromoCodes = lazy(() => import("@/pages/admin/PromoCodes"));
 const AdminProfilePage = lazy(() => import("@/pages/admin/Profile"));
 const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
 
@@ -55,8 +57,17 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
 function LoginRoute() {
   const { user, isLoading } = useCurrentUser();
 
+  // Finish the pre-loader when authentication check is complete
+  useEffect(() => {
+    if (!isLoading) {
+      if (typeof window !== 'undefined' && (window as any).finishLoading) {
+        (window as any).finishLoading();
+      }
+    }
+  }, [isLoading]);
+
   if (isLoading) {
-    return null;
+    return <BrandedLoader fullScreen />;
   }
 
   if (user && (user.role === "admin" || user.role === "staff")) {
@@ -92,6 +103,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminAnalytics />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/promo-codes">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminPromoCodes />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
@@ -199,7 +217,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Suspense fallback={null}>
+          <Suspense fallback={<BrandedLoader fullScreen />}>
             <Router />
           </Suspense>
         </TooltipProvider>

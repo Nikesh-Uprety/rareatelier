@@ -20,6 +20,8 @@ import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Suspense } from "react";
+import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard" },
@@ -28,6 +30,7 @@ const ADMIN_NAV = [
   { href: "/admin/bills", icon: Receipt, label: "Bills" },
   { href: "/admin/customers", icon: User, label: "Customers" },
   { href: "/admin/analytics", icon: BarChart, label: "Analytics" },
+  { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale" },
 ];
 
@@ -193,7 +196,11 @@ export default function AdminLayout({
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-6 md:p-10">{children}</div>
+        <div className="flex-1 overflow-auto p-6 md:p-10">
+          <Suspense fallback={<AdminSkeleton />}>
+            {children}
+          </Suspense>
+        </div>
       </main>
     </div>
   );

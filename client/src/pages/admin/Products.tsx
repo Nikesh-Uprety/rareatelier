@@ -11,8 +11,9 @@ import {
   Loader2, Plus, Trash2, Palette, Ruler, Tags, Pipette, 
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
-  MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar
+  MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,10 +28,12 @@ import {
   deleteAdminProduct, 
   uploadProductImage, 
   fetchAdminAttributes, 
-  ProductAttribute 
+  ProductAttribute,
+  createCategory,
+  updateCategory,
+  deleteCategory,
 } from "@/lib/adminApi";
 import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
-import { createCategory } from "@/lib/adminApi"; // if it's there
 import { compressImage } from "@/lib/imageUtils";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
@@ -109,6 +112,8 @@ const productSchema = z.object({
   galleryUrlsText: z.string().optional(),
   colorOptions: z.array(z.string()),
   sizeOptions: z.array(z.string()),
+  salePercentage: z.coerce.number().min(0).max(100).default(0),
+  saleActive: z.boolean().default(false),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -139,6 +144,7 @@ export default function AdminProducts() {
   );
   const [newCategorySlug, setNewCategorySlug] = useState("");
   const [pendingCategoryForm, setPendingCategoryForm] = useState<"add" | "edit" | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -167,6 +173,22 @@ export default function AdminProducts() {
     queryFn: () => fetchAdminProducts(filters),
   });
 
+  const { data: allAdminProducts = [] } = useQuery<ProductApi[]>({
+    queryKey: ["admin", "products", "all-counts"],
+    queryFn: () => fetchAdminProducts({ limit: 2000 }),
+  });
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allAdminProducts.length };
+    allAdminProducts.forEach(p => {
+      if (p.category) {
+        const slug = p.category.toLowerCase();
+        counts[slug] = (counts[slug] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [allAdminProducts]);
+
   const addForm = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -181,6 +203,8 @@ export default function AdminProducts() {
       galleryUrlsText: "",
       colorOptions: [],
       sizeOptions: [],
+      salePercentage: 0,
+      saleActive: false,
     },
   });
 
@@ -198,6 +222,8 @@ export default function AdminProducts() {
       galleryUrlsText: "",
       colorOptions: [],
       sizeOptions: [],
+      salePercentage: 0,
+      saleActive: false,
     },
   });
 
@@ -225,6 +251,8 @@ export default function AdminProducts() {
         galleryUrlsText: galleryUrls.join("\n"),
         colorOptions,
         sizeOptions,
+        salePercentage: editProduct.salePercentage ?? 0,
+        saleActive: editProduct.saleActive ?? false,
       });
     }
   }, [editProduct, editForm]);
@@ -256,6 +284,8 @@ export default function AdminProducts() {
         stock,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
+        salePercentage: values.salePercentage,
+        saleActive: values.saleActive,
       });
     },
     onSuccess: () => {
@@ -275,6 +305,8 @@ export default function AdminProducts() {
         galleryUrlsText: "",
         colorOptions: [],
         sizeOptions: [],
+        salePercentage: 0,
+        saleActive: false,
       });
     },
     onError: () => {
@@ -300,6 +332,8 @@ export default function AdminProducts() {
         stock,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
+        salePercentage: values.salePercentage,
+        saleActive: values.saleActive,
       });
     },
     onSuccess: () => {
@@ -326,6 +360,31 @@ export default function AdminProducts() {
       setPendingCategoryForm(null);
     },
     onError: () => toast({ title: "Failed to create category", variant: "destructive" }),
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: (data: { id: string; name: string; slug: string }) => 
+      updateCategory(data.id, { name: data.name, slug: data.slug }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category updated" });
+      setNewCategoryOpen(false);
+      setNewCategoryName("");
+      setNewCategorySlug("");
+      setEditingCategoryId(null);
+      setPendingCategoryForm(null);
+    },
+    onError: () => toast({ title: "Failed to update category", variant: "destructive" }),
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: (id: string) => deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      toast({ title: "Category deleted" });
+      if (categoryFilter !== "all") setCategoryFilter("all");
+    },
+    onError: () => toast({ title: "Failed to delete category", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -386,9 +445,18 @@ export default function AdminProducts() {
         </div>
         <div className="flex items-center gap-3">
           {selectedProductIds.size > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => setSelectedProductIds(new Set())}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Deselect All
+            </Button>
+          )}
+          {selectedProductIds.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10">
+                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 dark:border-destructive dark:text-destructive dark:hover:bg-destructive/20">
                   Bulk Actions ({selectedProductIds.size})
                 </Button>
               </DropdownMenuTrigger>
@@ -411,7 +479,7 @@ export default function AdminProducts() {
             <SheetTrigger asChild>
               <Button
                 variant="outline"
-                className="border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5"
+                className="border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent"
               >
                 <Tags className="w-4 h-4 mr-2" /> Attributes
               </Button>
@@ -422,7 +490,14 @@ export default function AdminProducts() {
           </Sheet>
           <Button
             className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              if (categoryFilter !== "all") {
+                addForm.setValue("category", categoryFilter);
+              } else {
+                addForm.setValue("category", "");
+              }
+              setAddOpen(true);
+            }}
           >
             <Plus className="w-4 h-4 mr-2" /> Add Product
           </Button>
@@ -540,6 +615,77 @@ export default function AdminProducts() {
                           </FormItem>
                         )}
                       />
+                      
+                      {/* Sale Section */}
+                      <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-bold flex items-center gap-2">
+                              <Percent className="w-4 h-4 text-primary" /> Active Sale
+                            </Label>
+                            <p className="text-[10px] text-muted-foreground">Apply a discount to this product</p>
+                          </div>
+                          <FormField
+                            control={addForm.control}
+                            name="saleActive"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <AnimatePresence>
+                          {addForm.watch("saleActive") && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="pt-2 border-t border-primary/10"
+                            >
+                              <FormField
+                                control={addForm.control}
+                                name="salePercentage"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <FormLabel className="text-[11px] font-bold uppercase tracking-wider">Discount Percentage</FormLabel>
+                                      <span className="text-lg font-serif font-black text-primary">{field.value}% OFF</span>
+                                    </div>
+                                    <FormControl>
+                                      <div className="space-y-2">
+                                        <Input 
+                                          type="range" 
+                                          min="0" 
+                                          max="90" 
+                                          step="5" 
+                                          className="h-2 bg-primary/20 accent-primary"
+                                          {...field} 
+                                        />
+                                        <div className="flex justify-between text-[9px] font-bold text-muted-foreground px-1">
+                                          <span>0%</span>
+                                          <span>25%</span>
+                                          <span>50%</span>
+                                          <span>75%</span>
+                                          <span>90%</span>
+                                        </div>
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
                       <FormField
                         control={addForm.control}
                         name="stockStatus"
@@ -757,6 +903,7 @@ export default function AdminProducts() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {dynamicColors.map((c) => {
+                            const [name, hex] = c.split("|");
                             const selectedColors = addForm.watch("colorOptions") || [];
                             const isSelected = selectedColors.includes(c);
                             return (
@@ -769,13 +916,17 @@ export default function AdminProducts() {
                                     : [...selectedColors, c];
                                   addForm.setValue("colorOptions", next, { shouldValidate: true, shouldDirty: true });
                                 }}
-                                className={`min-w-[2rem] h-8 px-3 border text-xs font-medium transition-all rounded-sm ${
+                                className={`flex items-center gap-2 px-3 py-1.5 border text-[11px] font-bold transition-all rounded-full ${
                                   isSelected
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                                    ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20"
+                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                {c}
+                                <div 
+                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm" 
+                                  style={{ backgroundColor: hex || '#ccc' }}
+                                />
+                                {name}
                               </button>
                             );
                           })}
@@ -802,10 +953,10 @@ export default function AdminProducts() {
                                     : [...selectedSizes, s];
                                   addForm.setValue("sizeOptions", next, { shouldValidate: true, shouldDirty: true });
                                 }}
-                                className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
+                                className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
                                   isSelected
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                                    ? "border-primary bg-primary text-primary-foreground shadow-lg scale-105"
+                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
                                 {s}
@@ -910,20 +1061,78 @@ export default function AdminProducts() {
           </AnimatePresence>
         </div>
         
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto">
-          {[
-            { label: "All", value: "all" },
-            ...categories.map((c) => ({ label: c.name, value: c.slug })),
-          ].map((cat) => (
-            <Button
-              key={cat.value}
-              variant={categoryFilter === cat.value ? "default" : "outline"}
-              className={`rounded-full ${categoryFilter === cat.value ? "bg-[#2C3E2D] text-white dark:bg-primary" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border"}`}
-              onClick={() => setCategoryFilter(cat.value)}
-            >
-              {cat.label}
-            </Button>
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 w-full sm:w-auto scrollbar-hide">
+          <Button
+            variant={categoryFilter === "all" ? "default" : "outline"}
+            className={`rounded-full ${categoryFilter === "all" ? "bg-[#2C3E2D] text-white dark:bg-primary dark:text-primary-foreground" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border dark:text-muted-foreground"}`}
+            onClick={() => setCategoryFilter("all")}
+          >
+            All Products
+            <Badge variant="secondary" className="ml-2 px-1.5 py-0 text-[10px] bg-muted/50">
+              {categoryCounts["all"] || 0}
+            </Badge>
+          </Button>
+
+          {categories.map((cat) => (
+            <div key={cat.id} className="relative flex items-center group">
+              <Button
+                variant={categoryFilter === cat.slug ? "default" : "outline"}
+                className={`rounded-full pr-2 ${categoryFilter === cat.slug ? "bg-[#2C3E2D] text-white dark:bg-primary dark:text-primary-foreground" : "bg-white dark:bg-card border-[#E5E5E0] dark:border-border dark:text-muted-foreground"}`}
+                onClick={() => setCategoryFilter(cat.slug)}
+              >
+                {cat.name}
+                <Badge 
+                  variant="secondary" 
+                  className={`ml-2 px-1.5 py-0 text-[10px] ${categoryFilter === cat.slug ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"}`}
+                >
+                  {categoryCounts[cat.slug.toLowerCase()] || 0}
+                </Badge>
+              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => {
+                    setEditingCategoryId(cat.id);
+                    setNewCategoryName(cat.name);
+                    setNewCategorySlug(cat.slug);
+                    setPendingCategoryForm("edit");
+                    setNewCategoryOpen(true);
+                  }}>
+                    <Pencil className="mr-2 h-4 w-4" /> Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    className="text-destructive"
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to delete the category "${cat.name}"?`)) {
+                        deleteCategoryMutation.mutate(cat.id);
+                      }
+                    }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           ))}
+
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="rounded-full shrink-0 h-10 w-10 border border-dashed border-muted-foreground/30 hover:border-primary hover:text-primary transition-all"
+            onClick={() => { 
+              setNewCategoryName("");
+              setNewCategorySlug("");
+              setPendingCategoryForm("add"); 
+              setNewCategoryOpen(true); 
+            }}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
@@ -963,7 +1172,7 @@ export default function AdminProducts() {
               <div
                 key={product.id}
                 className={`bg-white dark:bg-card rounded-xl border overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group relative ${
-                  selectedProductIds.has(product.id) ? "border-primary ring-1 ring-primary" : "border-[#E5E5E0] dark:border-border"
+                  selectedProductIds.has(product.id) ? "border-primary ring-1 ring-primary dark:bg-[rgba(99,102,241,0.15)] dark:border-[#6366f1] dark:ring-[#6366f1]" : "border-[#E5E5E0] dark:border-border"
                 }`}
               >
                 {/* Selection Checkbox */}
@@ -1220,6 +1429,77 @@ export default function AdminProducts() {
                           </FormItem>
                         )}
                       />
+
+                      {/* Sale Section for Edit */}
+                      <div className="p-4 rounded-2xl bg-primary/5 border border-primary/10 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-bold flex items-center gap-2">
+                              <Percent className="w-4 h-4 text-primary" /> Active Sale
+                            </Label>
+                            <p className="text-[10px] text-muted-foreground">Apply a discount to this product</p>
+                          </div>
+                          <FormField
+                            control={editForm.control}
+                            name="saleActive"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                  />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <AnimatePresence>
+                          {editForm.watch("saleActive") && (
+                            <motion.div
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: "auto" }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="pt-2 border-t border-primary/10"
+                            >
+                              <FormField
+                                control={editForm.control}
+                                name="salePercentage"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <div className="flex items-center justify-between mb-2">
+                                      <FormLabel className="text-[11px] font-bold uppercase tracking-wider">Discount Percentage</FormLabel>
+                                      <span className="text-lg font-serif font-black text-primary">{field.value}% OFF</span>
+                                    </div>
+                                    <FormControl>
+                                      <div className="space-y-2">
+                                        <Input 
+                                          type="range" 
+                                          min="0" 
+                                          max="90" 
+                                          step="5" 
+                                          className="h-2 bg-primary/20 accent-primary"
+                                          {...field} 
+                                        />
+                                        <div className="flex justify-between text-[9px] font-bold text-muted-foreground px-1">
+                                          <span>0%</span>
+                                          <span>25%</span>
+                                          <span>50%</span>
+                                          <span>75%</span>
+                                          <span>90%</span>
+                                        </div>
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
                       <FormField
                         control={editForm.control}
                         name="stockStatus"
@@ -1470,6 +1750,7 @@ export default function AdminProducts() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {dynamicColors.map((c) => {
+                            const [name, hex] = c.split("|");
                             const selectedColors = editForm.watch("colorOptions") || [];
                             const isSelected = selectedColors.includes(c);
                             return (
@@ -1482,13 +1763,17 @@ export default function AdminProducts() {
                                     : [...selectedColors, c];
                                   editForm.setValue("colorOptions", next, { shouldValidate: true, shouldDirty: true });
                                 }}
-                                className={`min-w-[2rem] h-8 px-3 border text-xs font-medium transition-all rounded-sm ${
+                                className={`flex items-center gap-2 px-3 py-1.5 border text-[11px] font-bold transition-all rounded-full ${
                                   isSelected
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                                    ? "border-primary bg-primary text-primary-foreground shadow-md ring-2 ring-primary/20"
+                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                {c}
+                                <div 
+                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm" 
+                                  style={{ backgroundColor: hex || '#ccc' }}
+                                />
+                                {name}
                               </button>
                             );
                           })}
@@ -1515,10 +1800,10 @@ export default function AdminProducts() {
                                     : [...selectedSizes, s];
                                   editForm.setValue("sizeOptions", next, { shouldValidate: true, shouldDirty: true });
                                 }}
-                                className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
+                                className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
                                   isSelected
-                                    ? "border-primary bg-primary text-primary-foreground"
-                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                                    ? "border-primary bg-primary text-primary-foreground shadow-lg scale-105"
+                                    : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
                                 {s}
@@ -1548,7 +1833,9 @@ export default function AdminProducts() {
       <Dialog open={newCategoryOpen} onOpenChange={setNewCategoryOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add new category</DialogTitle>
+            <DialogTitle>
+              {editingCategoryId ? "Edit category" : "Add new category"}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
@@ -1588,11 +1875,22 @@ export default function AdminProducts() {
                   toast({ title: "Name and slug required", variant: "destructive" });
                   return;
                 }
-                createCategoryMutation.mutate({ name: newCategoryName.trim(), slug: newCategorySlug.trim() });
+                if (editingCategoryId) {
+                  updateCategoryMutation.mutate({ 
+                    id: editingCategoryId, 
+                    name: newCategoryName.trim(), 
+                    slug: newCategorySlug.trim() 
+                  });
+                } else {
+                  createCategoryMutation.mutate({ 
+                    name: newCategoryName.trim(), 
+                    slug: newCategorySlug.trim() 
+                  });
+                }
               }}
-              disabled={createCategoryMutation.isPending}
+              disabled={createCategoryMutation.isPending || updateCategoryMutation.isPending}
             >
-              Create
+              {editingCategoryId ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

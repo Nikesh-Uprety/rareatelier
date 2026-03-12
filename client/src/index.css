@@ -226,6 +226,12 @@
   animation-delay: 200ms;
 }
 
+/* Subtle glow pulse on CTA hover */
+.hero-btn-glow:hover {
+  box-shadow: 0 0 30px rgba(255,255,255,0.25), 0 0 60px rgba(255,255,255,0.1);
+  transition: box-shadow 0.3s ease;
+}
+
 .bg-luminous-glow {
   background: radial-gradient(circle at center, rgba(255, 255, 255, 0.1) 0%, rgba(0, 0, 0, 0.3) 100%);
   mix-blend-mode: plus-lighter;

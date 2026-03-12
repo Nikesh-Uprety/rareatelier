@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Trash2, AlertCircle, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone } from "lucide-react";
 import { LocationPicker } from "@/components/LocationPicker";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
-import { createOrder } from "@/lib/api";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
 const PAYMENT_OPTIONS = [
@@ -29,6 +29,11 @@ export default function Checkout() {
   const [locationCoordinates, setLocationCoordinates] = useState<string | null>(null);
 
   const shipping = 100;
+  // Promo code state
+  const [promoCodeInput, setPromoCodeInput] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<{ id: string; code: string; discountPct: number } | null>(null);
+  const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+
   const subtotal = useMemo(
     () =>
       items.reduce(
@@ -37,7 +42,31 @@ export default function Checkout() {
       ),
     [items],
   );
-  const total = subtotal + shipping;
+
+  const discountAmount = useMemo(() => {
+    if (!appliedPromo) return 0;
+    return (subtotal * appliedPromo.discountPct) / 100;
+  }, [subtotal, appliedPromo]);
+
+  const total = subtotal + shipping - discountAmount;
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput) return;
+    setIsValidatingPromo(true);
+    try {
+      const result = await validatePromoCode(promoCodeInput.toUpperCase());
+      if (result.success && result.data) {
+        setAppliedPromo(result.data);
+        toast({ title: "Promo code applied!", description: `${result.data.discountPct}% discount added.` });
+      } else {
+        toast({ title: "Invalid promo code", description: result.error || "Please check the code and try again.", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to validate promo code.", variant: "destructive" });
+    } finally {
+      setIsValidatingPromo(false);
+    }
+  };
 
   if (items.length === 0 && step !== 3) {
     setLocation("/cart");
@@ -125,6 +154,7 @@ export default function Checkout() {
           locationCoordinates: finalLocation,
         },
         paymentMethod,
+        promoCodeId: appliedPromo?.id,
       });
 
       if (!result.success || !result.data) {
@@ -396,8 +426,36 @@ export default function Checkout() {
           </div>
 
           <div className="flex gap-2 mb-10">
-            <Input placeholder="Gift card or discount code" className="h-12 rounded-none bg-white border-gray-200" />
-            <Button variant="secondary" className="h-12 rounded-none px-6 text-xs uppercase tracking-widest font-bold">Apply</Button>
+            <div className="flex-1 relative">
+              <Input 
+                placeholder="Gift card or discount code" 
+                className={`h-12 rounded-none bg-white border-gray-200 uppercase ${appliedPromo ? "pr-10 border-emerald-500" : ""}`} 
+                value={promoCodeInput}
+                onChange={(e) => setPromoCodeInput(e.target.value)}
+                disabled={!!appliedPromo}
+              />
+              {appliedPromo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppliedPromo(null);
+                    setPromoCodeInput("");
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <Button 
+              type="button"
+              variant="secondary" 
+              className="h-12 rounded-none px-6 text-xs uppercase tracking-widest font-bold"
+              onClick={handleApplyPromo}
+              disabled={isValidatingPromo || !!appliedPromo || !promoCodeInput}
+            >
+              {isValidatingPromo ? "..." : "Apply"}
+            </Button>
           </div>
 
           <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold text-zinc-600 pt-8 border-t border-zinc-200">
@@ -405,13 +463,19 @@ export default function Checkout() {
               <span>Subtotal</span>
               <span className="text-zinc-900 font-black">{formatPrice(subtotal)}</span>
             </div>
+            {appliedPromo && (
+              <div className="flex justify-between items-center text-emerald-600">
+                <span>Discount ({appliedPromo.code})</span>
+                <span className="font-black">-{formatPrice(discountAmount)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center text-zinc-600">
               <span>Shipping</span>
               <span className="text-zinc-900 font-black">{formatPrice(shipping)}</span>
             </div>
             <div className="flex justify-between text-zinc-900 text-sm font-extrabold pt-4">
               <span>Total</span>
-              <span>{formatPrice(subtotal + shipping)}</span>
+              <span>{formatPrice(total)}</span>
             </div>
           </div>
         </div>

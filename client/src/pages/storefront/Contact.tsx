@@ -1,13 +1,14 @@
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, MapPin, Phone, MessageSquare, Facebook, Instagram, Music2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation } from "@tanstack/react-query";
+import { Facebook, Instagram, Mail, MapPin, Music2, Phone } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 
 const contactSchema = z.object({
   name: z.string().min(2, "Name is too short"),
@@ -56,32 +57,140 @@ export default function Contact() {
     mutation.mutate(data);
   };
 
+  const [expanded, setExpanded] = useState<number | null>(null);
+
+  const milestones = [
+    {
+      year: "2021",
+      title: "Founded in Kathmandu",
+      desc: "Rare Atelier began in Kathmandu, crafting garments that merge Nepali heritage with contemporary streetwear.",
+      image: "https://picsum.photos/seed/kathmandu1/800/600",
+    },
+    {
+      year: "2022",
+      title: "Debut Collection",
+      desc: "Launched our first collection focusing on durable fabrics and industrial aesthetics rooted in local craftsmanship.",
+      image: "https://picsum.photos/seed/kathmandu2/800/600",
+    },
+    {
+      year: "2023",
+      title: "Online Store",
+      desc: "Opened our online store to bring Rare Atelier beyond Kathmandu, while keeping production local and ethical.",
+      image: "https://picsum.photos/seed/kathmandu3/800/600",
+    },
+    {
+      year: "2024",
+      title: "Community & Future",
+      desc: "Expanding collaborations with local artisans and exploring sustainable materials for future drops.",
+      image: "https://picsum.photos/seed/kathmandu4/800/600",
+    },
+  ];
+
+  const statsTargets = {
+    customers: 12450,
+    instagram: 8230,
+    orders: 21450,
+  };
+
+  function AnimatedStat({ target, label }: { target: number; label: string }) {
+    const [value, setValue] = useState(0);
+    useEffect(() => {
+      let start: number | null = null;
+      const duration = 1200;
+      let raf = 0;
+      function tick(ts: number) {
+        if (!start) start = ts;
+        const progress = Math.min((ts - start) / duration, 1);
+        const current = Math.floor(progress * target);
+        setValue(current);
+        if (progress < 1) raf = requestAnimationFrame(tick);
+      }
+      raf = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(raf);
+    }, [target]);
+
+    return (
+      <div className="min-w-[110px]">
+        <div className="text-2xl md:text-3xl font-extrabold">{value.toLocaleString()}</div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground mt-1">{label}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1">
-      {/* About Us Section */}
+      {/* About Us Section (Interactive Hero: timeline + story) */}
       <section className="py-24 bg-[var(--bg-secondary)] border-b border-[var(--border)]">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <div className="space-y-8 text-center">
-            <div className="space-y-2">
-              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-semibold">
-                About Rare Atelier
-              </p>
-              <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter">
-                Crafting the Future of Nepali Streetwear
-              </h1>
+        <div className="container mx-auto px-4 max-w-6xl">
+          <div className="grid md:grid-cols-2 gap-8 items-center">
+            {/* Timeline (left) */}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-semibold mb-4">Our Journey</p>
+              <ul className="space-y-4">
+                {milestones.map((m, idx) => (
+                  <li key={idx} className="relative">
+                    <div className="flex items-start gap-4">
+                      <div className="flex flex-col items-center">
+                        <div className="w-3 h-3 rounded-full bg-[var(--accent)] mt-2" />
+                        <div className="w-px bg-[var(--border)] flex-1 mt-2" />
+                      </div>
+                      <div className="flex-1">
+                        <button
+                          type="button"
+                          onClick={() => setExpanded(expanded === idx ? null : idx)}
+                          className="w-full text-left p-4 bg-[var(--bg-card)] border border-[var(--border)] rounded-xl hover:shadow-md transition"
+                          aria-expanded={expanded === idx}
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">{m.year}</p>
+                              <h3 className="text-lg font-bold mt-1">{m.title}</h3>
+                            </div>
+                            <div className="text-xl text-muted-foreground font-bold">{expanded === idx ? "—" : "+"}</div>
+                          </div>
+                          <div className={`mt-3 text-sm text-muted-foreground transition-all overflow-hidden ${expanded === idx ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'}`}>
+                            {m.desc}
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-            
-            <div className="space-y-6 text-sm md:text-base leading-relaxed text-muted-foreground max-w-2xl mx-auto font-mono">
-              <p>
-                Rare Atelier (RARE.NP) is a premium streetwear label born in the heart of Kathmandu. 
-                We blend traditional Nepali resilience with modern industrial aesthetics to create 
-                garments that stand at the intersection of heritage and high-fashion.
-              </p>
-              <p>
-                Every piece is a testament to our commitment to quality, durability, and the 
-                unique spirit of the urban Himalayan lifestyle. We don't just make clothes; 
-                we curate an identity for those who dare to be rare.
-              </p>
+
+            {/* Story / CTA (right) */}
+            <div className="space-y-6">
+              {expanded !== null ? (
+                <div className="rounded-2xl overflow-hidden border border-[var(--border)] shadow-sm">
+                  <img src={milestones[expanded].image} alt={milestones[expanded].title} className="w-full h-64 object-cover transition-opacity duration-300" />
+                  <div className="p-4 bg-[var(--bg-card)]">
+                    <h3 className="text-lg font-bold">{milestones[expanded].title} <span className="text-sm text-muted-foreground">({milestones[expanded].year})</span></h3>
+                    <p className="text-sm text-muted-foreground mt-2">{milestones[expanded].desc}</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-semibold">About Rare Atelier</p>
+                  <h2 className="text-3xl md:text-4xl font-black tracking-tight">Crafting the Future of Nepali Streetwear</h2>
+
+                  <div className="flex gap-6 items-center">
+                    <AnimatedStat target={statsTargets.customers} label="Customers" />
+                    <AnimatedStat target={statsTargets.instagram} label="Instagram" />
+                    <AnimatedStat target={statsTargets.orders} label="Orders" />
+                  </div>
+
+                  <p className="text-sm md:text-base text-muted-foreground leading-relaxed font-mono">
+                    We blend Nepali resilience and industrial aesthetics to produce garments that are
+                    durable, thoughtfully made, and unapologetically expressive. Each piece reflects
+                    local craft and modern design — curated for those who value authenticity.
+                  </p>
+                  <div className="flex gap-4">
+                    <a href="https://www.google.com/maps/search/?api=1&query=Khusibu+Kathmandu+Nepal" target="_blank" rel="noopener noreferrer" className="inline-block px-5 py-3 bg-black text-white rounded-xl font-bold hover:opacity-90 transition">Visit Atelier</a>
+                    <a href="https://www.instagram.com/rare.np/" target="_blank" rel="noreferrer" className="inline-block px-5 py-3 border border-[var(--border)] rounded-xl font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800 transition">Follow on Instagram</a>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

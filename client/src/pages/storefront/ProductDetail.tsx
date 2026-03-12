@@ -259,9 +259,25 @@ export default function ProductDetail() {
               lineHeight: '36px',
               color: 'var(--brand-product-detail)'
             }}
-            className="mb-8"
+            className="mb-8 flex flex-col items-start gap-1"
           >
-            {formatPrice(product.price)}
+            {product.saleActive && Number(product.salePercentage) > 0 ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="text-primary font-black">
+                    {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                  </span>
+                  <span className="text-base text-muted-foreground line-through font-medium opacity-60">
+                    {formatPrice(product.price)}
+                  </span>
+                </div>
+                <div className="bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-[0.2em] px-3 py-1 mt-2">
+                  {product.salePercentage}% OFF SALE
+                </div>
+              </>
+            ) : (
+              formatPrice(product.price)
+            )}
           </p>
 
           <div className="space-y-6">
@@ -396,9 +412,24 @@ export default function ProductDetail() {
               </div>
               <div className="space-y-1">
                 <h3 className="text-sm font-bold truncate uppercase tracking-tight">{p.name}</h3>
-                <p className="text-xs text-muted-foreground uppercase tracking-widest">
-                  {formatPrice(p.price)}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className={`text-xs uppercase tracking-widest ${p.saleActive ? 'text-primary font-bold' : 'text-muted-foreground'}`}>
+                    {p.saleActive && Number(p.salePercentage) > 0 
+                      ? formatPrice(Number(p.price) * (1 - Number(p.salePercentage) / 100))
+                      : formatPrice(p.price)
+                    }
+                  </p>
+                  {p.saleActive && Number(p.salePercentage) > 0 && (
+                    <p className="text-[10px] text-muted-foreground line-through opacity-60">
+                      {formatPrice(p.price)}
+                    </p>
+                  )}
+                  {p.saleActive && Number(p.salePercentage) > 0 && (
+                    <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-1.5 py-0.5 rounded-sm shadow-xl inline-block ml-1">
+                      {p.salePercentage}% OFF
+                    </span>
+                  )}
+                </div>
               </div>
             </Link>
           ))}

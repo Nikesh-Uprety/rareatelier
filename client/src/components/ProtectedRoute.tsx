@@ -11,6 +11,16 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
   const { user, isLoading, isAuthenticated } = useCurrentUser();
   const [location, setLocation] = useLocation();
 
+  // Finish the pre-loader when authentication check is complete
+  useEffect(() => {
+    if (!isLoading) {
+      // Call finishLoading to hide the pre-loader after auth is verified
+      if (typeof window !== 'undefined' && (window as any).finishLoading) {
+        (window as any).finishLoading();
+      }
+    }
+  }, [isLoading]);
+
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {

@@ -24,6 +24,8 @@ export interface AdminOrder {
     country: string;
     phone: string;
     locationCoordinates?: string;
+    promoCode?: string;
+    promoDiscountAmount?: number;
   };
 }
 
@@ -425,4 +427,47 @@ export async function deleteNewsletterEmail(email: string): Promise<{ success: b
 export async function deleteAllNewsletterEmails(): Promise<{ success: boolean; message: string }> {
   const res = await apiRequest("DELETE", "/api/admin/newsletter/clear-all");
   return res.json();
+}
+
+// ── Promo Code API helpers ────────────────────────────
+
+export interface PromoCode {
+  id: string;
+  code: string;
+  discountPct: number;
+  maxUses: number;
+  usedCount: number;
+  active: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export async function fetchAdminPromoCodes(): Promise<PromoCode[]> {
+  const res = await apiRequest("GET", "/api/admin/promo-codes");
+  const json = (await res.json()) as { success: boolean; data: PromoCode[] };
+  return json.data;
+}
+
+export async function createAdminPromoCode(data: {
+  code: string;
+  discountPct: number;
+  maxUses: number;
+  expiresAt?: string | null;
+}): Promise<PromoCode> {
+  const res = await apiRequest("POST", "/api/admin/promo-codes", data);
+  const json = (await res.json()) as { success: boolean; data: PromoCode };
+  return json.data;
+}
+
+export async function updateAdminPromoCode(
+  id: string,
+  data: Partial<PromoCode>,
+): Promise<PromoCode> {
+  const res = await apiRequest("PUT", `/api/admin/promo-codes/${id}`, data);
+  const json = (await res.json()) as { success: boolean; data: PromoCode };
+  return json.data;
+}
+
+export async function deleteAdminPromoCode(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/promo-codes/${id}`);
 }

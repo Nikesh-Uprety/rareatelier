@@ -26,6 +26,9 @@ import {
   type InsertAdminNotification,
   type SecurityLog,
   type InsertSecurityLog,
+  promoCodes,
+  type PromoCode,
+  type InsertPromoCode,
 } from "@shared/schema";
 import { and, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 
@@ -47,6 +50,8 @@ export interface CreateOrderInput {
   total: number;
   paymentMethod: string;
   locationCoordinates?: string;
+  promoCode?: string;
+  promoDiscountAmount?: number;
   items: CreateOrderItemInput[];
 }
 
@@ -247,6 +252,13 @@ export interface IStorage {
   // Security Logs
   getSecurityLogs(limit?: number): Promise<SecurityLog[]>;
   insertSecurityLog(data: InsertSecurityLog): Promise<SecurityLog>;
+
+  // Promo Codes
+  getPromoCodes(): Promise<PromoCode[]>;
+  createPromoCode(data: InsertPromoCode): Promise<PromoCode>;
+  updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode>;
+  deletePromoCode(id: string): Promise<void>;
+  getPromoCodeByCode(code: string): Promise<PromoCode | null>;
 }
 
 export class PgStorage implements IStorage {
@@ -297,6 +309,8 @@ export class PgStorage implements IStorage {
         sizeOptions: products.sizeOptions,
         ranking: products.ranking,
         originalPrice: products.originalPrice,
+        salePercentage: products.salePercentage,
+        saleActive: products.saleActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -325,6 +339,8 @@ export class PgStorage implements IStorage {
         sizeOptions: products.sizeOptions,
         ranking: products.ranking,
         originalPrice: products.originalPrice,
+        salePercentage: products.salePercentage,
+        saleActive: products.saleActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -353,6 +369,8 @@ export class PgStorage implements IStorage {
         sizeOptions: data.sizeOptions ?? null,
         ranking: data.ranking ?? 999,
         originalPrice: data.originalPrice ?? null,
+        salePercentage: data.salePercentage ?? 0,
+        saleActive: data.saleActive ?? false,
       })
       .returning({
         id: products.id,
@@ -368,6 +386,8 @@ export class PgStorage implements IStorage {
         sizeOptions: products.sizeOptions,
         ranking: products.ranking,
         originalPrice: products.originalPrice,
+        salePercentage: products.salePercentage,
+        saleActive: products.saleActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -400,6 +420,9 @@ export class PgStorage implements IStorage {
         stock: data.stock,
         colorOptions: data.colorOptions,
         sizeOptions: data.sizeOptions,
+        salePercentage: data.salePercentage,
+        saleActive: data.saleActive,
+        originalPrice: data.originalPrice,
       })
       .where(eq(products.id, id))
       .returning({
@@ -416,6 +439,8 @@ export class PgStorage implements IStorage {
         sizeOptions: products.sizeOptions,
         ranking: products.ranking,
         originalPrice: products.originalPrice,
+        salePercentage: products.salePercentage,
+        saleActive: products.saleActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -540,6 +565,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -571,6 +598,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -615,6 +644,8 @@ export class PgStorage implements IStorage {
         status: "pending",
         paymentMethod: data.paymentMethod ?? "cash_on_delivery",
         locationCoordinates: data.locationCoordinates ?? null,
+        promoCode: data.promoCode ?? null,
+        promoDiscountAmount: data.promoDiscountAmount ?? 0,
       })
       .returning({
         id: orders.id,
@@ -633,6 +664,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -681,6 +714,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -722,6 +757,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -754,6 +791,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -830,6 +869,8 @@ export class PgStorage implements IStorage {
         paymentProofUrl: orders.paymentProofUrl,
         paymentVerified: orders.paymentVerified,
         locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -1580,6 +1621,31 @@ export class PgStorage implements IStorage {
 
     return days;
   }
+
+  // Promo Codes Implementation
+  async getPromoCodes(): Promise<PromoCode[]> {
+    return db.select().from(promoCodes).orderBy(desc(promoCodes.createdAt));
+  }
+
+  async createPromoCode(data: InsertPromoCode): Promise<PromoCode> {
+    const [row] = await db.insert(promoCodes).values(data).returning();
+    return row;
+  }
+
+  async updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode> {
+    const [row] = await db.update(promoCodes).set(data).where(eq(promoCodes.id, id)).returning();
+    if (!row) throw new Error("Promo code not found");
+    return row;
+  }
+
+  async deletePromoCode(id: string): Promise<void> {
+    await db.delete(promoCodes).where(eq(promoCodes.id, id));
+  }
+
+  async getPromoCodeByCode(code: string): Promise<PromoCode | null> {
+    const [row] = await db.select().from(promoCodes).where(eq(promoCodes.code, code.toUpperCase())).limit(1);
+    return row ?? null;
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -1628,6 +1694,8 @@ export class MemStorage implements IStorage {
       sizeOptions: data.sizeOptions ?? null,
       ranking: data.ranking ?? 999,
       originalPrice: data.originalPrice ?? null,
+      salePercentage: data.salePercentage ?? 0,
+      saleActive: data.saleActive ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1763,6 +1831,8 @@ export class MemStorage implements IStorage {
       paymentProofUrl: null,
       paymentVerified: null,
       locationCoordinates: data.locationCoordinates ?? null,
+      promoCode: data.promoCode ?? null,
+      promoDiscountAmount: data.promoDiscountAmount ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
       items: data.items.map((item) => ({
@@ -2007,6 +2077,35 @@ export class MemStorage implements IStorage {
   }
   async updateContactMessageStatus(id: string, status: "unread" | "read" | "replied"): Promise<ContactMessage> {
     return { id, name: "mock", email: "mock", phone: null, subject: "mock", message: "mock", status, createdAt: new Date() };
+  }
+
+  async getPromoCodes(): Promise<PromoCode[]> {
+    return [];
+  }
+
+  async createPromoCode(data: InsertPromoCode): Promise<PromoCode> {
+    const id = crypto.randomUUID();
+    const promo: PromoCode = {
+      id,
+      code: data.code,
+      discountPct: data.discountPct,
+      maxUses: data.maxUses ?? 100,
+      usedCount: 0,
+      active: data.active ?? true,
+      expiresAt: data.expiresAt ?? null,
+      createdAt: new Date(),
+    };
+    return promo;
+  }
+
+  async updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode> {
+    return { id, code: "TEST", discountPct: 10, maxUses: 100, usedCount: 0, active: true, expiresAt: null, createdAt: new Date() };
+  }
+
+  async deletePromoCode(id: string): Promise<void> {}
+
+  async getPromoCodeByCode(code: string): Promise<PromoCode | null> {
+    return null;
   }
 }
 

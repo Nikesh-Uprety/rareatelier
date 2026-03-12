@@ -280,8 +280,13 @@ export default function Products() {
                         >
                           <ExternalLink className="h-3.5 w-3.5" />
                         </button>
+                        {product.saleActive && Number(product.salePercentage) > 0 && (
+                          <div className="absolute top-3 left-3 z-10 bg-primary text-primary-foreground text-[9px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-sm shadow-xl animate-pulse">
+                            {product.salePercentage}% OFF
+                          </div>
+                        )}
                         {product.stock === 0 && (
-                          <div className="absolute top-3 left-3 z-10 bg-black/80 dark:bg-neutral-800/90 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded">
+                          <div className={`absolute ${product.saleActive ? 'top-12' : 'top-3'} left-3 z-10 bg-black/80 dark:bg-neutral-800/90 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded`}>
                             Out of Stock
                           </div>
                         )}
@@ -305,9 +310,19 @@ export default function Products() {
                         >
                           {product.name}
                         </h3>
-                        <p className="text-neutral-400 text-sm font-bold uppercase tracking-wider">
-                          {formatPrice(product.price)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-sm font-bold uppercase tracking-wider ${product.saleActive ? 'text-primary' : 'text-neutral-400'}`}>
+                            {product.saleActive && Number(product.salePercentage) > 0 
+                              ? formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))
+                              : formatPrice(product.price)
+                            }
+                          </p>
+                          {product.saleActive && Number(product.salePercentage) > 0 && (
+                            <p className="text-[10px] text-neutral-500 line-through opacity-60">
+                              {formatPrice(product.price)}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   ))}

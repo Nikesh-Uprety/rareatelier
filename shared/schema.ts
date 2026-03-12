@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   integer,
   jsonb,
   numeric,
@@ -72,6 +73,8 @@ export const products = pgTable("products", {
   sizeOptions: text("size_options"), // JSON array of size codes
   ranking: integer("ranking").default(999), // 1 = best seller
   originalPrice: numeric("original_price", { precision: 10, scale: 2 }),
+  salePercentage: integer("sale_percentage").default(0),
+  saleActive: boolean("sale_active").default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -117,6 +120,8 @@ export const orders = pgTable("orders", {
   paymentProofUrl: text("payment_proof_url"),
   paymentVerified: text("payment_verified"), // null = pending, "verified" | "rejected"
   locationCoordinates: text("location_coordinates"), // stringified JSON format {lat, lng}
+  promoCode: text("promo_code"),
+  promoDiscountAmount: integer("promo_discount_amount").default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -335,3 +340,26 @@ export const insertSecurityLogSchema = createInsertSchema(securityLogs).omit({
 
 export type SecurityLog = typeof securityLogs.$inferSelect;
 export type InsertSecurityLog = z.infer<typeof insertSecurityLogSchema>;
+
+// ── Promo Codes ─────────────────────────────────────
+export const promoCodes = pgTable("promo_codes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  code: varchar("code", { length: 50 }).notNull().unique(),
+  discountPct: integer("discount_pct").notNull(),
+  maxUses: integer("max_uses").notNull().default(100),
+  usedCount: integer("used_count").notNull().default(0),
+  active: boolean("active").notNull().default(true),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertPromoCodeSchema = createInsertSchema(promoCodes).omit({
+  id: true,
+  usedCount: true,
+  createdAt: true,
+});
+
+export type PromoCode = typeof promoCodes.$inferSelect;
+export type InsertPromoCode = z.infer<typeof insertPromoCodeSchema>;

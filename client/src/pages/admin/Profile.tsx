@@ -22,6 +22,11 @@ import {
   importNewsletterEmails,
   deleteNewsletterEmail,
   deleteAllNewsletterEmails,
+  fetchAdminPromoCodes,
+  createAdminPromoCode,
+  updateAdminPromoCode,
+  deleteAdminPromoCode,
+  type PromoCode,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { format } from "date-fns";
@@ -50,6 +55,7 @@ import {
   X,
   Maximize2,
   Minimize2,
+  Ticket,
 } from "lucide-react";
 import {
   Dialog,
@@ -120,7 +126,7 @@ export default function AdminProfilePage() {
       };
       return json.data ?? [];
     },
-    enabled: !!user,
+    enabled: activeTab === "users" || activeTab === "security" || activeTab === "invite",
   });
 
   const passwordMutation = useMutation({
@@ -572,14 +578,14 @@ export default function AdminProfilePage() {
     },
   } as Record<string, { name: string; subject: string; html: string }>;
 
-  // Queries
+  // Queries - Only fetch when on specific tabs
   const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
     queryKey: ["admin", "messages"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/admin/messages");
       return res.json();
     },
-    enabled: !!user,
+    enabled: activeTab === "messages",
   });
 
   const subscribersQuery = useQuery<{ success: boolean; data: { email: string; createdAt: string }[] }>({
@@ -588,7 +594,7 @@ export default function AdminProfilePage() {
       const res = await apiRequest("GET", "/api/admin/newsletter/subscribers");
       return res.json();
     },
-    enabled: !!user,
+    enabled: activeTab === "marketing",
   });
 
   const subscribersLoading = subscribersQuery.isLoading;
@@ -721,7 +727,58 @@ export default function AdminProfilePage() {
       }
     },
   });
+  
+  // Promo Codes State
+  const [isPromoCodesLoading, setIsPromoCodesLoading] = useState(false);
+  const { data: promoCodes = [], isLoading: promoCodesQueryLoading } = useQuery<PromoCode[]>({
+    queryKey: ["admin", "promo-codes"],
+    queryFn: fetchAdminPromoCodes,
+    enabled: activeTab === "promo-codes",
+  });
 
+  const createPromoCodeMutation = useMutation({
+    mutationFn: (data: { code: string; discountPct: number; maxUses: number; expiresAt?: string | null }) => 
+      createAdminPromoCode(data),
+    onSuccess: () => {
+      toast({ title: "Promo code created" });
+      setIsAddPromoOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["admin", "promo-codes"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create promo code", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const updatePromoCodeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<PromoCode> }) => 
+      updateAdminPromoCode(id, data),
+    onSuccess: () => {
+      toast({ title: "Promo code updated" });
+      queryClient.invalidateQueries({ queryKey: ["admin", "promo-codes"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to update promo code", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const deletePromoCodeMutation = useMutation({
+    mutationFn: (id: string) => deleteAdminPromoCode(id),
+    onSuccess: () => {
+      toast({ title: "Promo code deleted" });
+      queryClient.invalidateQueries({ queryKey: ["admin", "promo-codes"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to delete promo code", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const [isAddPromoOpen, setIsAddPromoOpen] = useState(false);
+  const [newPromo, setNewPromo] = useState({
+    code: "",
+    discountPct: 10,
+    maxUses: 100,
+    expiresAt: "",
+  });
 
   const isAdmin = user?.role === "admin";
 
@@ -751,6 +808,7 @@ export default function AdminProfilePage() {
             )}
           </TabsTrigger>
           <TabsTrigger value="marketing">Marketing</TabsTrigger>
+          <TabsTrigger value="promo-codes">Promo Codes</TabsTrigger>
         </TabsList>
 
         {/* Account tab */}
@@ -1658,6 +1716,156 @@ export default function AdminProfilePage() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="promo-codes" className="mt-4">
+          <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                  Promo Code Management
+                </h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Create and manage discount codes for your customers.
+                </p>
+              </div>
+              <Dialog open={isAddPromoOpen} onOpenChange={setIsAddPromoOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90">
+                    <PlusCircle className="h-4 w-4 mr-2" />
+                    New Promo Code
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Create Promo Code</DialogTitle>
+                    <DialogDescription>Add a new discount code to your store.</DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Code</label>
+                      <Input 
+                        placeholder="SUMMER2026" 
+                        value={newPromo.code}
+                        onChange={(e) => setNewPromo({ ...newPromo, code: e.target.value.toUpperCase() })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Discount (%)</label>
+                        <Input 
+                          type="number"
+                          value={newPromo.discountPct}
+                          onChange={(e) => setNewPromo({ ...newPromo, discountPct: parseInt(e.target.value) })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Max Uses</label>
+                        <Input 
+                          type="number"
+                          value={newPromo.maxUses}
+                          onChange={(e) => setNewPromo({ ...newPromo, maxUses: parseInt(e.target.value) })}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Expires At (Optional)</label>
+                      <Input 
+                        type="date"
+                        value={newPromo.expiresAt}
+                        onChange={(e) => setNewPromo({ ...newPromo, expiresAt: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddPromoOpen(false)}>Cancel</Button>
+                    <Button 
+                      className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90"
+                      onClick={() => createPromoCodeMutation.mutate({
+                        ...newPromo,
+                        expiresAt: newPromo.expiresAt || null
+                      })}
+                      disabled={createPromoCodeMutation.isPending || !newPromo.code}
+                    >
+                      {createPromoCodeMutation.isPending ? "Creating..." : "Create Promo"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="border border-[#E5E5E0] dark:border-border rounded-xl overflow-hidden">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/30 border-b border-[#E5E5E0] dark:border-border text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-6 py-4 text-left font-semibold">Code</th>
+                    <th className="px-6 py-4 text-left font-semibold">Discount</th>
+                    <th className="px-6 py-4 text-left font-semibold">Uses</th>
+                    <th className="px-6 py-4 text-left font-semibold">Expiry</th>
+                    <th className="px-6 py-4 text-center font-semibold">Status</th>
+                    <th className="px-6 py-4 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E5E0] dark:divide-border text-[11px]">
+                  {promoCodesQueryLoading ? (
+                    Array.from({ length: 3 }).map((_, i) => (
+                      <tr key={i}>
+                        <td colSpan={6} className="px-6 py-4 animate-pulse">
+                          <div className="h-4 bg-muted rounded w-full" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : promoCodes.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-10 text-center text-muted-foreground italic">
+                        No promo codes found.
+                      </td>
+                    </tr>
+                  ) : (
+                    promoCodes.map((promo) => (
+                      <tr key={promo.id} className="hover:bg-muted/10 transition-colors">
+                        <td className="px-6 py-4 font-bold tracking-wider text-[#2C3E2D] dark:text-foreground">
+                          {promo.code}
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className="text-[10px] font-black border-[#2C3E2D] text-[#2C3E2D] dark:border-emerald-400 dark:text-emerald-400">
+                             {promo.discountPct}% OFF
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="font-semibold">{promo.usedCount}</span>
+                          <span className="text-muted-foreground"> / {promo.maxUses}</span>
+                        </td>
+                        <td className="px-6 py-4 text-muted-foreground uppercase">
+                          {promo.expiresAt ? format(new Date(promo.expiresAt), "MMM d, yyyy") : "No Expiry"}
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <Switch 
+                            checked={promo.active}
+                            onCheckedChange={(checked) => updatePromoCodeMutation.mutate({ id: promo.id, data: { active: checked } })}
+                          />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
+                            onClick={() => {
+                              if (confirm("Delete this promo code?")) {
+                                deletePromoCodeMutation.mutate(promo.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </TabsContent>

@@ -74,6 +74,8 @@ export default function AdminOrders() {
   } = useQuery<AdminOrder[]>({
     queryKey: ["admin", "orders", filters],
     queryFn: () => fetchAdminOrders(filters),
+    staleTime: 60_000,
+    keepPreviousData: true,
   });
 
   const statusMutation = useMutation({

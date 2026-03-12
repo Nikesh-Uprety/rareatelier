@@ -122,40 +122,52 @@ export default function Navbar() {
               {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
-            {user && (user.role === "admin" || user.role === "staff") && (
+
+
+            {!isAuthenticated && (
               <button
                 type="button"
-                title="Admin Panel"
-                onClick={() => setLocation("/admin")}
-                className="hidden sm:flex w-10 h-10 items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                title="Admin Login"
+                onClick={() => setLocation("/admin/login")}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
               >
                 <LayoutDashboard className="w-5 h-5" />
               </button>
             )}
 
-            <Link
-              href="/cart"
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {cartItemsCount > 0 && (
+            {cartItemsCount > 0 && (
+              <Link
+                href="/cart"
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
+              >
+                <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">
                   {cartItemsCount}
                 </span>
-              )}
-            </Link>
+              </Link>
+            )}
 
             {isAuthenticated && user ? (
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-xs font-semibold">
-                  {initials}
-                </div>
-                <button
-                  onClick={() => logout()}
-                  className="hidden sm:inline text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
-                >
-                  Logout
-                </button>
+                {user.profileImageUrl ? (
+                  <img
+                    src={user.profileImageUrl}
+                    alt={user.name || user.email}
+                    className="w-8 h-8 rounded-full object-cover border-2 border-black/10 dark:border-white/10"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-xs font-semibold">
+                    {initials}
+                  </div>
+                )}
+                {user.role !== "admin" && user.role !== "staff" && (
+                  <button
+                    onClick={() => logout()}
+                    className="hidden sm:inline text-[11px] uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground"
+                  >
+                    Logout
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
@@ -218,9 +230,17 @@ export default function Navbar() {
                     <div className="flex flex-col gap-4 p-4 bg-gray-50 dark:bg-neutral-900 rounded-3xl border border-gray-100 dark:border-neutral-800">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-sm font-bold shadow-inner">
-                            {initials}
-                          </div>
+                          {user?.profileImageUrl ? (
+                            <img
+                              src={user.profileImageUrl}
+                              alt={user?.name || user?.email}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-black/10 dark:border-white/10 shadow-inner"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-full bg-black text-white dark:bg-white dark:text-black flex items-center justify-center text-sm font-bold shadow-inner">
+                              {initials}
+                            </div>
+                          )}
                           <div className="flex flex-col">
                             <span className="text-sm font-black truncate max-w-[140px] tracking-tight">
                               {user?.name || user?.email}
@@ -259,12 +279,23 @@ export default function Navbar() {
                       Rare Atelier &copy; 2025
                     </p>
                   </div>
-                  <button 
-                    onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-                    className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"
-                  >
-                    {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {!isAuthenticated && (
+                      <button 
+                        onClick={() => setLocation("/admin/login")}
+                        className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"
+                        title="Admin Login"
+                      >
+                        <LayoutDashboard className="w-5 h-5 text-muted-foreground" />
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+                      className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"
+                    >
+                      {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>

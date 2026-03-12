@@ -130,7 +130,7 @@ export default function PaymentProcess() {
                 method === "esewa" ? "rounded-full" : "rounded-none"
               }`}>
                 <img 
-                  src={method === "khalti" ? "/images/khalti.webp" : "/images/esewa.webp"} 
+                  src={method === "khalti" ? "/images/esewa-qr.webp" : "/images/esewa-qr.webp"} 
                   alt={method} 
                   className={`w-full h-full object-contain ${
                     method === "esewa" ? "scale-150" : ""

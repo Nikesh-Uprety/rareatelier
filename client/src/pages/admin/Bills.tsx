@@ -20,6 +20,8 @@ export default function AdminBills() {
   const { data: bills, isLoading } = useQuery<AdminBill[]>({
     queryKey: ["admin", "bills"],
     queryFn: fetchBills,
+    staleTime: 60_000,
+    keepPreviousData: true,
   });
 
   const voidMutation = useMutation({

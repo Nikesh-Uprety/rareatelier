@@ -19,6 +19,21 @@ export default function OrderSuccess() {
     enabled: !!orderId,
   });
 
+  const itemsSubtotal = order
+    ? order.items.reduce(
+        (acc: number, item: any) =>
+          acc + Number(item.unitPrice) * item.quantity,
+        0,
+      )
+    : 0;
+
+  const shippingFee = 100;
+
+  const promoDiscountAmount =
+    typeof order?.promoDiscountAmount === "number"
+      ? order.promoDiscountAmount
+      : 0;
+
   const downloadReceipt = () => {
     if (!order) return;
 
@@ -58,9 +73,10 @@ export default function OrderSuccess() {
     doc.setFont("helvetica", "normal");
     order.items.forEach((item: any) => {
       const productName = item.product?.name || `Product ID: ${item.productId.slice(0, 8)}`;
+      const lineTotal = Number(item.unitPrice) * item.quantity;
       doc.text(productName, margin, y);
       doc.text(`${item.quantity}`, 140, y);
-      doc.text(`Rs. ${item.unitPrice}`, 170, y);
+      doc.text(`Rs. ${lineTotal.toFixed(2)}`, 170, y);
       y += 10;
     });
 
@@ -68,10 +84,27 @@ export default function OrderSuccess() {
     doc.line(margin, y, 190, y);
     y += 10;
 
-    // Total
+    // Totals
     doc.setFont("helvetica", "bold");
+    doc.text("Subtotal:", 130, y);
+    doc.text(`Rs. ${itemsSubtotal.toFixed(2)}`, 170, y);
+    y += 7;
+
+    if (promoDiscountAmount > 0) {
+      const label = order.promoCode
+        ? `Discount (${order.promoCode})`
+        : "Discount";
+      doc.text(label + ":", 130, y);
+      doc.text(`- Rs. ${promoDiscountAmount.toFixed(2)}`, 170, y);
+      y += 7;
+    }
+
+    doc.text("Shipping:", 130, y);
+    doc.text(`Rs. ${shippingFee.toFixed(2)}`, 170, y);
+    y += 10;
+
     doc.text("Total Amount:", 130, y);
-    doc.text(`Rs. ${order.total}`, 170, y);
+    doc.text(`Rs. ${Number(order.total).toFixed(2)}`, 170, y);
 
     y += 30;
     doc.setFontSize(10);
@@ -188,15 +221,32 @@ export default function OrderSuccess() {
             <div className="space-y-4 pt-4">
               <div className="flex justify-between text-[11px] uppercase tracking-widest font-bold text-zinc-500">
                 <span>Subtotal</span>
-                <span className="text-zinc-900 dark:text-zinc-100">{formatPrice(order.items.reduce((acc: number, item: any) => acc + (parseFloat(item.unitPrice) * item.quantity), 0))}</span>
+                <span className="text-zinc-900 dark:text-zinc-100">
+                  {formatPrice(itemsSubtotal)}
+                </span>
               </div>
+              {promoDiscountAmount > 0 && (
+                <div className="flex justify-between text-[11px] uppercase tracking-widest font-bold text-emerald-600">
+                  <span>
+                    Discount{" "}
+                    {order.promoCode ? `(${order.promoCode})` : ""}
+                  </span>
+                  <span className="text-zinc-900 dark:text-zinc-100">
+                    -{formatPrice(promoDiscountAmount)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between text-[11px] uppercase tracking-widest font-bold text-zinc-500">
                 <span>Shipping Fee</span>
-                <span className="text-zinc-900 dark:text-zinc-100">Rs. 100</span>
+                <span className="text-zinc-900 dark:text-zinc-100">
+                  {formatPrice(shippingFee)}
+                </span>
               </div>
               <div className="flex justify-between text-base font-black uppercase tracking-tighter pt-6 border-t border-zinc-200 dark:border-white/10 mt-6">
                 <span className="text-zinc-500">Total Amount</span>
-                <span className="text-3xl text-zinc-900 dark:text-zinc-100">{formatPrice(order.total)}</span>
+                <span className="text-3xl text-zinc-900 dark:text-zinc-100">
+                  {formatPrice(order.total)}
+                </span>
               </div>
             </div>
           </div>

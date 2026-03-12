@@ -16,7 +16,8 @@ import {
     newsletterSubscribers,
     posSessions,
     Product,
-    products
+    products,
+    promoCodes
 } from "../shared/schema";
 import { db } from "./db";
 import {
@@ -496,6 +497,7 @@ export async function registerRoutes(
     items: z.array(orderItemSchema).min(1),
     shipping: shippingSchema,
     paymentMethod: z.string().min(1),
+    promoCodeId: z.string().optional(),
   });
 
   app.post("/api/orders", async (req: Request, res: Response) => {
@@ -505,14 +507,48 @@ export async function registerRoutes(
         return handleApiError(res, parsed.error, "orders/create", 400);
       }
 
-      const { items, shipping } = parsed.data;
+      const { items, shipping, paymentMethod, promoCodeId } = parsed.data;
 
       const orderSubtotal = items.reduce(
         (acc, item) => acc + item.priceAtTime * item.quantity,
         0,
       );
-      const orderTax = Number((orderSubtotal * 0.15).toFixed(2));
-      const orderTotal = Number((orderSubtotal + orderTax).toFixed(2));
+
+      const shippingFee = 100;
+
+      let promoCode: string | undefined;
+      let promoDiscountAmount = 0;
+
+      if (promoCodeId) {
+        const [promo] = await db
+          .select()
+          .from(promoCodes)
+          .where(eq(promoCodes.id, promoCodeId))
+          .limit(1);
+
+        const now = new Date();
+        if (
+          promo &&
+          promo.active &&
+          (!promo.expiresAt || new Date(promo.expiresAt) >= now) &&
+          promo.usedCount < promo.maxUses
+        ) {
+          promoCode = promo.code;
+          promoDiscountAmount = Math.round(
+            orderSubtotal * (promo.discountPct / 100),
+          );
+
+          await db
+            .update(promoCodes)
+            .set({ usedCount: promo.usedCount + 1 })
+            .where(eq(promoCodes.id, promo.id));
+        }
+      }
+
+      const orderTotal = Math.max(
+        0,
+        orderSubtotal + shippingFee - promoDiscountAmount,
+      );
 
       const now = new Date();
       const year = now.getFullYear();
@@ -536,7 +572,9 @@ export async function registerRoutes(
         postalCode: shipping.zip,
         country: shipping.country,
         total: orderTotal,
-        paymentMethod: parsed.data.paymentMethod,
+        paymentMethod,
+        promoCode,
+        promoDiscountAmount,
         items: items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -551,7 +589,7 @@ export async function registerRoutes(
         data: {
           orderNumber,
           subtotal: orderSubtotal,
-          tax: orderTax,
+          tax: 0,
           total: orderTotal,
           order: fullOrder,
         },
@@ -776,6 +814,9 @@ export async function registerRoutes(
     stock: z.number().int().nonnegative(),
     colorOptions: z.string().optional().nullable(),
     sizeOptions: z.string().optional().nullable(),
+    salePercentage: z.number().int().min(0).max(100).optional().default(0),
+    saleActive: z.boolean().optional().default(false),
+    originalPrice: z.number().positive().optional().nullable(),
   });
 
   app.get(
@@ -828,6 +869,10 @@ export async function registerRoutes(
           stock: parsed.data.stock,
           colorOptions: parsed.data.colorOptions || null,
           sizeOptions: parsed.data.sizeOptions || null,
+          ranking: 999,
+          salePercentage: parsed.data.salePercentage || 0,
+          saleActive: parsed.data.saleActive || false,
+          originalPrice: parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null,
         };
         const product = await storage.createProduct(data);
         return res.status(201).json({ success: true, data: product });
@@ -863,6 +908,9 @@ export async function registerRoutes(
           stock: parsed.data.stock,
           colorOptions: parsed.data.colorOptions === undefined ? undefined : (parsed.data.colorOptions || null),
           sizeOptions: parsed.data.sizeOptions === undefined ? undefined : (parsed.data.sizeOptions || null),
+          salePercentage: parsed.data.salePercentage,
+          saleActive: parsed.data.saleActive,
+          originalPrice: parsed.data.originalPrice === undefined ? undefined : (parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null),
         };
         const updated = await storage.updateProduct(
           req.params.id as string,
@@ -2127,6 +2175,73 @@ export async function registerRoutes(
       }
     },
   );
+
+  // ── Promo Code Routes ───────────────────────────────────
+  app.get("/api/admin/promo-codes", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const items = await storage.getPromoCodes();
+      res.json({ success: true, data: items });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/promo-codes");
+    }
+  });
+
+  app.post("/api/admin/promo-codes", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { code, discountPct, maxUses, expiresAt } = req.body;
+      const item = await storage.createPromoCode({
+        code: code.toUpperCase(),
+        discountPct,
+        maxUses,
+        expiresAt: expiresAt ? new Date(expiresAt) : null,
+      });
+      res.status(201).json({ success: true, data: item });
+    } catch (err) {
+      handleApiError(res, err, "POST /api/admin/promo-codes");
+    }
+  });
+
+  app.put("/api/admin/promo-codes/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) return sendError(res, "Invalid ID", undefined, 400);
+      const updated = await storage.updatePromoCode(id, req.body);
+      res.json({ success: true, data: updated });
+    } catch (err) {
+      handleApiError(res, err, "PUT /api/admin/promo-codes/:id");
+    }
+  });
+
+  app.delete("/api/admin/promo-codes/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) return sendError(res, "Invalid ID", undefined, 400);
+      await storage.deletePromoCode(id);
+      res.json({ success: true });
+    } catch (err) {
+      handleApiError(res, err, "DELETE /api/admin/promo-codes/:id");
+    }
+  });
+
+  app.get("/api/promo-codes/validate/:code", async (req: Request, res: Response) => {
+    try {
+      const code = getQueryParam(req.params.code);
+      if (!code) return sendError(res, "Invalid code", undefined, 400);
+      const promo = await storage.getPromoCodeByCode(code);
+      if (!promo || !promo.active) {
+        return res.status(404).json({ success: false, error: "Invalid promo code" });
+      }
+      if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) {
+        return res.status(400).json({ success: false, error: "Promo code expired" });
+      }
+      if (promo.usedCount >= promo.maxUses) {
+        return res.status(400).json({ success: false, error: "Promo code usage limit reached" });
+      }
+      res.json({ success: true, data: promo });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/promo-codes/validate");
+    }
+  });
 
   return httpServer;
 }
