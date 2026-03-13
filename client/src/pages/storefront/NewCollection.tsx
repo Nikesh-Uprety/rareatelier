@@ -191,24 +191,24 @@ export default function NewCollection() {
   return (
     <div className="flex flex-col min-h-screen pt-20">
       {/* Hero Banner */}
-      <section className="relative w-full py-28 md:py-40 overflow-hidden bg-neutral-950">
+      <section className="relative w-full py-28 md:py-40 overflow-hidden bg-neutral-100 dark:bg-neutral-950">
         {/* Ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-white/[0.03] blur-3xl" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-800/20 via-transparent to-transparent" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-black/[0.03] dark:bg-white/[0.03] blur-3xl" />
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-300/20 dark:from-neutral-800/20 via-transparent to-transparent" />
 
         <div className="relative container mx-auto px-6 text-center">
-          <p className="text-[10px] md:text-xs uppercase tracking-[0.5em] text-neutral-500 font-bold mb-6 animate-in fade-in slide-in-from-bottom-2 duration-700">
+          <p className="text-[10px] md:text-xs uppercase tracking-[0.5em] text-neutral-400 dark:text-neutral-500 font-bold mb-6 animate-in fade-in slide-in-from-bottom-2 duration-700">
             Curated Pieces, Captured in Detail
           </p>
-          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-bold text-white tracking-tight leading-none animate-in fade-in slide-in-from-bottom-4 duration-1000">
+          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-bold text-foreground dark:text-white tracking-tight leading-none animate-in fade-in slide-in-from-bottom-4 duration-1000">
             The Collection
           </h1>
           <div className="mt-8 flex justify-center gap-3 animate-in fade-in duration-1000" style={{ animationDelay: "400ms" }}>
-            <div className="h-px w-16 bg-neutral-700 self-center" />
-            <span className="text-[10px] uppercase tracking-[0.4em] text-neutral-600 font-medium">
+            <div className="h-px w-16 bg-neutral-300 dark:bg-neutral-700 self-center" />
+            <span className="text-[10px] uppercase tracking-[0.4em] text-neutral-500 dark:text-neutral-600 font-medium">
               {products ? products.length : "—"} Pieces
             </span>
-            <div className="h-px w-16 bg-neutral-700 self-center" />
+            <div className="h-px w-16 bg-neutral-300 dark:bg-neutral-700 self-center" />
           </div>
         </div>
       </section>

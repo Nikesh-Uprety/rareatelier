@@ -217,7 +217,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
-          <Suspense fallback={<BrandedLoader fullScreen />}>
+          <Suspense fallback={<div className="fixed inset-0 z-50 bg-background" />}>
             <Router />
           </Suspense>
         </TooltipProvider>

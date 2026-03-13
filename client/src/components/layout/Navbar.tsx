@@ -124,14 +124,14 @@ export default function Navbar() {
 
 
 
-            {!isAuthenticated && (
+            {isAuthenticated && user && (user.role === "admin" || user.role === "staff") && (
               <button
                 type="button"
-                title="Admin Login"
-                onClick={() => setLocation("/admin/login")}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+                title="Admin Dashboard"
+                onClick={() => setLocation("/admin")}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors"
               >
-                <LayoutDashboard className="w-5 h-5" />
+                <LayoutDashboard className="w-5 h-5 text-emerald-500" />
               </button>
             )}
 
@@ -280,15 +280,7 @@ export default function Navbar() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {!isAuthenticated && (
-                      <button 
-                        onClick={() => setLocation("/admin/login")}
-                        className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"
-                        title="Admin Login"
-                      >
-                        <LayoutDashboard className="w-5 h-5 text-muted-foreground" />
-                      </button>
-                    )}
+
                     <button 
                       onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                       className="w-12 h-12 flex items-center justify-center rounded-2xl bg-gray-50 dark:bg-neutral-900 hover:scale-105 transition-transform"

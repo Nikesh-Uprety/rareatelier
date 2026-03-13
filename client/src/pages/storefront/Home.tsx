@@ -25,6 +25,186 @@ const LIFESTYLE_IMAGES = [
   "/images/feature3.webp",
 ];
 
+const FEATURED_STATIC_IMAGES = [
+  "/images/hoodie_left_landscape.webp",
+  "/images/hoodie_right_landscape.webp",
+];
+
+function FeaturedProductCard({ product, index }: { product: ProductApi; index: number }) {
+  const [mobileImageIndex, setMobileImageIndex] = useState(0);
+
+  // Parse gallery images for mobile slideshow
+  const galleryImages = (() => {
+    try {
+      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
+      const mainImg = product.imageUrl ?? "";
+      const all = mainImg ? [mainImg, ...urls] : [...urls];
+      return all.length > 0 ? all : [mainImg];
+    } catch {
+      return [product.imageUrl ?? ""];
+    }
+  })();
+
+  // Auto-cycle images on mobile
+  useEffect(() => {
+    if (galleryImages.length <= 1) return;
+    const timer = setInterval(() => {
+      setMobileImageIndex((prev) => (prev + 1) % galleryImages.length);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [galleryImages.length]);
+
+  const staticImage = FEATURED_STATIC_IMAGES[index] ?? (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "");
+
+  return (
+    <Link
+      href={`/product/${product.id}`}
+      className="group cursor-pointer relative"
+    >
+      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
+        {/* Desktop view — hover swap (hidden on mobile) */}
+        <div className="hidden md:block absolute inset-0 z-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              className="absolute inset-0 z-0"
+              whileHover={{ scale: 1.1 }}
+              transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
+            >
+              <OptimizedImage
+                src={staticImage}
+                alt={`${product.name} lifestyle`}
+                className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
+                priority={index < 2}
+              />
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <OptimizedImage
+                  src={product.imageUrl ?? ""}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* Mobile view — auto-sliding gallery (hidden on desktop) */}
+        <div className="md:hidden absolute inset-0 z-0">
+          {galleryImages.map((src: string, imgIdx: number) => (
+            <div
+              key={imgIdx}
+              className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+              style={{ opacity: imgIdx === mobileImageIndex ? 1 : 0 }}
+            >
+              <img
+                src={src}
+                alt={`${product.name} view ${imgIdx + 1}`}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ))}
+          {/* Slide indicators */}
+          {galleryImages.length > 1 && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+              {galleryImages.map((_: string, dotIdx: number) => (
+                <div
+                  key={dotIdx}
+                  className={`h-1 rounded-full transition-all duration-500 ${
+                    dotIdx === mobileImageIndex
+                      ? "w-5 bg-white shadow-lg"
+                      : "w-1.5 bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop: Dark Gradient Overlay on Hover */}
+        <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
+
+        {/* Mobile: Always-visible gradient overlay */}
+        <div className="md:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none z-10" />
+
+        {/* Desktop: Glassmorphism Detail Reveal on Hover */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          whileHover={{ opacity: 1, y: 0 }}
+          className="hidden md:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center"
+        >
+          <div>
+            <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
+              {product.name}
+            </h3>
+            {product.saleActive && Number(product.salePercentage) > 0 ? (
+              <div className="flex items-center gap-2">
+                <p className="text-white font-black text-lg">
+                  {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                </p>
+                <p className="text-white/50 font-medium text-sm line-through">
+                  {formatPrice(product.price)}
+                </p>
+                <span className="bg-white text-black text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm">
+                  {product.salePercentage}% OFF
+                </span>
+              </div>
+            ) : (
+              <p className="text-white/70 font-medium text-lg">
+                {formatPrice(product.price)}
+              </p>
+            )}
+          </div>
+          <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
+            <ArrowRight className="w-5 h-5" />
+          </div>
+        </motion.div>
+
+        {/* Mobile: Always-visible product info */}
+        <div className="md:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-white text-base font-black uppercase tracking-tighter mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                {product.name}
+              </h3>
+              {product.saleActive && Number(product.salePercentage) > 0 ? (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                  <p className="text-white font-black text-sm">
+                    {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                  </p>
+                  <p className="text-white/50 font-medium text-xs line-through">
+                    {formatPrice(product.price)}
+                  </p>
+                  <span className="bg-white text-black text-[8px] font-black uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-sm">
+                    {product.salePercentage}% OFF
+                  </span>
+                </div>
+              ) : (
+                <p className="text-white/70 font-medium text-sm animate-in fade-in slide-in-from-bottom-2 duration-700">
+                  {formatPrice(product.price)}
+                </p>
+              )}
+            </div>
+            <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Desktop: External link button on hover */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            window.open(`/product/${product.id}`, "_blank");
+          }}
+          className="absolute top-4 right-4 z-30 hidden md:flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
+        >
+          <ExternalLink className="h-4 w-4" />
+        </button>
+      </div>
+    </Link>
+  );
+}
 
 export default function Home() {
   const { toast } = useToast();
@@ -266,7 +446,7 @@ export default function Home() {
         </div>
 
         {/* Center CTA group with stagger animation */}
-        <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-0 md:items-center pt-0 md:pt-0 pointer-events-none z-20">
+        <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-20 md:items-end pt-0 md:pt-0 pointer-events-none z-20">
           <div className="flex flex-col items-center gap-4 md:gap-5 pointer-events-auto">
             {/* Animated reveal line */}
             <motion.div
@@ -460,85 +640,7 @@ export default function Home() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {featuredProducts.map((product, i) => (
-            <Link
-              key={product.id}
-              href={`/product/${product.id}`}
-              className="group cursor-pointer relative"
-            >
-              <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    className="absolute inset-0 z-0"
-                    whileHover={{ scale: 1.1 }}
-                    transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
-                  >
-                    {/* Primary Image */}
-                    <OptimizedImage
-                      src={i === 0 ? "/images/hoodie_left_landscape.webp" : i === 1 ? "/images/hoodie_right_landscape.webp" : (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "")}
-                      alt={`${product.name} lifestyle`}
-                      className="w-full h-full object-cover transition-opacity duration-300 group-hover:opacity-0"
-                      priority={i < 2}
-                    />
-                    {/* Secondary Image (Model/Action) */}
-                    <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <OptimizedImage
-                        src={product.imageUrl ?? ""}
-                        alt={product.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  </motion.div>
-                </AnimatePresence>
-
-                {/* Dark Gradient Overlay on Hover for Text Visibility */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
-
-                {/* Glassmorphism Detail Reveal */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  whileHover={{ opacity: 1, y: 0 }}
-                  className="absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl flex justify-between items-center"
-                >
-                  <div>
-                    <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
-                      {product.name}
-                    </h3>
-                    {product.saleActive && Number(product.salePercentage) > 0 ? (
-                      <div className="flex items-center gap-2">
-                        <p className="text-white font-black text-lg">
-                          {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                        </p>
-                        <p className="text-white/50 font-medium text-sm line-through">
-                          {formatPrice(product.price)}
-                        </p>
-                        <span className="bg-white text-black text-[9px] font-black uppercase tracking-[0.1em] px-2 py-0.5 rounded-sm">
-                          {product.salePercentage}% OFF
-                        </span>
-                      </div>
-                    ) : (
-                      <p className="text-white/70 font-medium text-lg">
-                        {formatPrice(product.price)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center border border-white/30 text-white">
-                    <ArrowRight className="w-5 h-5" />
-                  </div>
-                </motion.div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(`/product/${product.id}`, "_blank");
-                  }}
-                  className="absolute top-4 right-4 z-30 flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </button>
-              </div>
-            </Link>
+            <FeaturedProductCard key={product.id} product={product} index={i} />
           ))}
         </div>
       </section>
