@@ -244,6 +244,7 @@ export interface IStorage {
   createAdminNotification(data: InsertAdminNotification): Promise<AdminNotification>;
   markAdminNotificationsRead(): Promise<void>;
   markAdminNotificationRead(id: string): Promise<void>;
+  markAdminNotificationsByTypeRead(type: string): Promise<void>;
 
   // Contact Messages
   createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage>;
@@ -1003,6 +1004,13 @@ export class PgStorage implements IStorage {
       .update(adminNotifications)
       .set({ isRead: 1 })
       .where(eq(adminNotifications.id, id));
+  }
+
+  async markAdminNotificationsByTypeRead(type: string): Promise<void> {
+    await db
+      .update(adminNotifications)
+      .set({ isRead: 1 })
+      .where(eq(adminNotifications.type, type));
   }
 
   // Security Logs
@@ -1972,6 +1980,14 @@ export class MemStorage implements IStorage {
     if (notif) {
       this.adminNotifications.set(id, { ...notif, isRead: 1 });
     }
+  }
+
+  async markAdminNotificationsByTypeRead(type: string): Promise<void> {
+    this.adminNotifications.forEach((notif, id) => {
+      if (notif.type === type && notif.isRead === 0) {
+        this.adminNotifications.set(id, { ...notif, isRead: 1 });
+      }
+    });
   }
 
   async getUserByEmail(email: string): Promise<User | null> {

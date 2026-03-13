@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, EyeOff } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
+import { motion, AnimatePresence } from "framer-motion";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -206,11 +207,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4 py-12">
       <div className="w-full max-w-[400px] bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-lg shadow-black/5 dark:shadow-none p-10">
         <div className="text-center mb-10">
-          <p className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground font-semibold mb-1">
+          <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-400 font-bold mb-1">
             RARE.NP
-          </p>
-          <p className="text-xs text-muted-foreground tracking-wide">
-            Admin & staff sign in
           </p>
         </div>
 
@@ -282,13 +280,49 @@ export default function LoginPage() {
                 </p>
               )}
 
-              <Button
-                type="submit"
-                disabled={isPending}
-                className="w-full h-12 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 text-sm font-medium transition-colors"
-              >
-                {isPending ? "Signing in..." : "Sign in"}
-              </Button>
+              <div className="relative pt-2">
+                <div className="flex justify-center">
+                  <motion.button
+                    type="submit"
+                    disabled={isPending}
+                    initial={false}
+                    animate={isPending ? "loading" : "idle"}
+                    variants={{
+                      idle: { width: "100%", height: "48px", borderRadius: "8px" },
+                      loading: { width: "140px", height: "12px", borderRadius: "100px" }
+                    }}
+                    className="flex items-center justify-center relative bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 overflow-hidden cursor-pointer disabled:cursor-not-allowed group transition-colors duration-500"
+                  >
+                    <AnimatePresence mode="wait">
+                      {!isPending ? (
+                        <motion.span
+                          key="text"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="text-sm font-bold uppercase tracking-[0.2em]"
+                        >
+                          Sign in
+                        </motion.span>
+                      ) : (
+                        <motion.div
+                          key="loader"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="w-full h-full relative overflow-hidden"
+                        >
+                          <motion.div
+                            animate={{ x: ["-100%", "100%"] }}
+                            transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                            className="absolute inset-0 bg-neutral-400 dark:bg-neutral-300 w-1/2"
+                          />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                </div>
+              </div>
             </form>
           </>
         )}
@@ -335,27 +369,65 @@ export default function LoginPage() {
                 ))}
               </div>
             </div>
-            <Button
-              type="button"
-              disabled={otpValue.length !== 6 || verifyMutation.isPending}
-              onClick={() => verifyMutation.mutate()}
-              className="w-full h-12 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 text-sm font-medium transition-colors mb-3"
-            >
-              {verifyMutation.isPending ? "Verifying..." : "Verify Code"}
-            </Button>
+            
+            <div className="relative pt-2">
+              <div className="flex justify-center">
+                <motion.button
+                  type="button"
+                  disabled={otpValue.length !== 6 || verifyMutation.isPending}
+                  onClick={() => verifyMutation.mutate()}
+                  initial={false}
+                  animate={verifyMutation.isPending ? "loading" : "idle"}
+                  variants={{
+                    idle: { width: "100%", height: "48px", borderRadius: "8px" },
+                    loading: { width: "140px", height: "12px", borderRadius: "100px" }
+                  }}
+                  className="flex items-center justify-center relative bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 overflow-hidden cursor-pointer disabled:cursor-not-allowed mb-3 group transition-colors duration-500"
+                >
+                  <AnimatePresence mode="wait">
+                    {!verifyMutation.isPending ? (
+                      <motion.span
+                        key="text"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="text-sm font-bold uppercase tracking-[0.2em]"
+                      >
+                        Verify Code
+                      </motion.span>
+                    ) : (
+                      <motion.div
+                        key="loader"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="w-full h-full relative overflow-hidden"
+                      >
+                        <motion.div
+                          animate={{ x: ["-100%", "100%"] }}
+                          transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+                          className="absolute inset-0 bg-neutral-400 dark:bg-neutral-300 w-1/2"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              </div>
+            </div>
+
             <button
               type="button"
               disabled={!canResend || resendMutation.isPending}
               onClick={() => resendMutation.mutate()}
-              className="w-full text-xs text-muted-foreground hover:text-foreground text-center mt-1 disabled:opacity-50"
+              className="w-full text-xs text-muted-foreground hover:text-foreground text-center mt-3 disabled:opacity-50"
             >
               Didn&apos;t receive it? Resend code
             </button>
           </>
         )}
 
-        <p className="mt-8 pt-6 border-t border-neutral-100 dark:border-neutral-800 text-center text-xs text-muted-foreground">
-          &copy; 2025 Rare Atelier. Staff and admin only.
+        <p className="mt-8 pt-6 border-t border-neutral-100 dark:border-neutral-800 text-center text-xs text-muted-foreground uppercase tracking-widest opacity-40">
+          &copy; 2025 Rare Atelier. 
         </p>
 
         <details className="mt-4 text-xs text-muted-foreground">

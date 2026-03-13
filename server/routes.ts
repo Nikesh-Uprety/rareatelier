@@ -1643,6 +1643,23 @@ export async function registerRoutes(
   );
 
   app.patch(
+    "/api/admin/notifications/read-type/:type",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { type } = req.params;
+        await storage.markAdminNotificationsByTypeRead(type);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/notifications/read-type/:type", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to mark notifications as read" });
+      }
+    },
+  );
+
+  app.patch(
     "/api/admin/notifications/:id/read",
     requireAdmin,
     async (req: Request, res: Response) => {

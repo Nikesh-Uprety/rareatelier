@@ -37,11 +37,29 @@ export function useNotifications() {
     },
   });
 
+  const markTypeReadMutation = useMutation({
+    mutationFn: async (type: string) => {
+      await apiRequest("PATCH", `/api/admin/notifications/read-type/${type}`);
+    },
+    onSuccess: (_, type) => {
+      queryClient.setQueryData<{ data: AdminNotification[] }>(["/api/admin/notifications"], (old) => {
+        if (!old) return { data: [] };
+        return { data: old.data.map((n) => (n.type === type ? { ...n, isRead: 1 } : n)) };
+      });
+    },
+  });
+
+  const getUnreadCountByType = (type: string) => {
+    return notifications.filter((n) => n.type === type && !n.isRead).length;
+  };
+
   return {
     notifications,
     unreadCount,
+    getUnreadCountByType,
     isLoading,
     markAllRead: markAllReadMutation.mutate,
     markRead: markReadMutation.mutate,
+    markTypeRead: markTypeReadMutation.mutate,
   };
 }
