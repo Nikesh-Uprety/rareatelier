@@ -26,8 +26,8 @@ const LIFESTYLE_IMAGES = [
 ];
 
 const FEATURED_STATIC_IMAGES = [
-  "/images/hoodie_left_landscape.webp",
-  "/images/hoodie_right_landscape.webp",
+  "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc03423-6408.webp", // Lifestyle for Two-Way Zip
+  "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc02288-edit-2-8008.webp", // Lifestyle for Essential Hoodie
 ];
 
 function FeaturedProductCard({ product, index }: { product: ProductApi; index: number }) {
