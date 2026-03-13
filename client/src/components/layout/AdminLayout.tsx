@@ -13,6 +13,8 @@ import {
   Bell,
   ChevronLeft,
   LogOut,
+  Megaphone,
+  Terminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -33,6 +35,7 @@ const ADMIN_NAV = [
   { href: "/admin/customers", icon: User, label: "Customers", type: "customer" },
   { href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
+  { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
 ];
 
@@ -84,20 +87,20 @@ export default function AdminLayout({
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-white/10 dark:bg-black/5 blur-[80px] rounded-full pointer-events-none group-hover/sidebar:scale-125 transition-transform duration-1000" />
         <div className="absolute top-1/4 -right-16 w-32 h-32 bg-white/5 dark:bg-black/5 blur-[40px] rounded-full pointer-events-none" />
 
-        {/* Branding Header */}
-        <div className="h-24 flex items-center px-8 border-b border-white/10 dark:border-black/5 relative z-10">
-          <Link href="/admin" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 rounded-xl bg-white dark:bg-black flex items-center justify-center shadow-2xl shadow-white/10 dark:shadow-black/20 group-hover:scale-105 transition-transform duration-500">
-              <span className="text-black dark:text-white font-black text-xl tracking-tighter">R</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-white dark:text-black font-black text-lg tracking-[0.15em] leading-none uppercase">Atelier</span>
-              <span className="text-white/40 dark:text-black/40 text-[9px] uppercase tracking-[0.4em] mt-1 font-bold">Admin Portal</span>
-            </div>
+        <div className="flex flex-col items-center border-b border-white/10 dark:border-black/5 relative z-10 px-6 pt-8 pb-4 gap-2">
+          <Link href="/admin" className="block group w-full">
+            <img 
+              src="/images/logo.webp" 
+              alt="Rare Logo" 
+              className="w-full h-auto object-contain brightness-0 invert dark:brightness-100 dark:filter-none group-hover:scale-105 transition-all duration-500" 
+            />
           </Link>
+          <div className="w-full flex justify-end items-center gap-3 px-2">
+            <ThemeToggle />
+            <NotificationBadge />
+          </div>
         </div>
 
-        {/* Current User Quick Nav */}
         <div className="px-6 py-6 border-b border-white/5 dark:border-black/5">
           <Link
             href="/admin/profile"
@@ -124,16 +127,9 @@ export default function AdminLayout({
               <p className="text-[10px] text-white/40 dark:text-black/40 uppercase font-black tracking-widest mt-0.5">{roleLabel}</p>
             </div>
           </Link>
-          
-          <div className="flex items-center justify-between mt-4 px-2">
-            <div className="flex gap-2">
-              <ThemeToggle />
-            </div>
-            <NotificationBadge />
-          </div>
         </div>
 
-        <nav className="flex-1 p-6 space-y-1.5 overflow-y-auto relative z-10">
+        <nav className="flex-1 p-6 space-y-1.5 overflow-y-auto relative z-10 sidebar-scrollbar">
           {ADMIN_NAV.map((item) => {
             const isActive = location === item.href;
             const count = getUnreadCountByType(item.type);

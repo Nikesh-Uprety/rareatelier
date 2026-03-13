@@ -162,6 +162,21 @@
   h1, h2, h3, h4, h5, h6, .font-serif {
     @apply font-serif;
   }
+
+  /* Custom Aesthetic Scrollbar for Sidebar */
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(155, 155, 155, 0.2);
+    border-radius: 20px;
+  }
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(155, 155, 155, 0.4);
+  }
 }
 
 /* Quote section icon animations */

@@ -32,6 +32,8 @@ const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
 const AdminPOS = lazy(() => import("@/pages/admin/POS"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/Analytics"));
 const AdminPromoCodes = lazy(() => import("@/pages/admin/PromoCodes"));
+const AdminMarketing = lazy(() => import("@/pages/admin/Marketing"));
+const AdminLogs = lazy(() => import("@/pages/admin/Logs"));
 const AdminProfilePage = lazy(() => import("@/pages/admin/Profile"));
 const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
 
@@ -106,6 +108,20 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminAnalytics />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/marketing">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminMarketing />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/logs">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminLogs />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
