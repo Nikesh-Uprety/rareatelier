@@ -165,6 +165,7 @@ export default function AdminProducts() {
     () => ({
       search: search || undefined,
       category: categoryFilter === "all" ? undefined : categoryFilter,
+      limit: 2000,
     }),
     [search, categoryFilter],
   );
@@ -429,15 +430,14 @@ export default function AdminProducts() {
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     return products.filter((p) => {
-      const matchesSearch =
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        (p.category ?? "").toLowerCase().includes(search.toLowerCase());
+      // Trust backend results for search matching.
+      // Simply handle category grouping on the client.
       const matchesCategory =
         categoryFilter === "all" || (p.category ?? "").toLowerCase() ===
           categoryFilter.toLowerCase();
-      return matchesSearch && matchesCategory;
+      return matchesCategory;
     });
-  }, [products, search, categoryFilter]);
+  }, [products, categoryFilter]);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

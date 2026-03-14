@@ -91,7 +91,7 @@ export default function AdminLayout({
         <div className="absolute top-1/4 -right-16 w-32 h-32 bg-white/5 dark:bg-black/5 blur-[40px] rounded-full pointer-events-none" />
 
         <div className="flex flex-col items-center border-b border-white/10 dark:border-black/5 relative z-10 px-6 pt-8 pb-4 gap-2">
-          <Link href="/admin" className="block group w-full">
+          <Link href="/" className="block group w-full">
             <img 
               src="/images/logo.webp" 
               alt="Rare Logo" 
@@ -214,7 +214,7 @@ export default function AdminLayout({
             >
               {/* Close button */}
               <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-white/10 dark:border-black/5">
-                <Link href="/admin" onClick={() => setSidebarOpen(false)} className="block">
+                <Link href="/" onClick={() => setSidebarOpen(false)} className="block">
                   <img 
                     src="/images/logo.webp" 
                     alt="Rare Logo" 

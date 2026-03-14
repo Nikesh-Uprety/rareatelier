@@ -283,14 +283,15 @@ export class PgStorage implements IStorage {
     if (filters?.search) {
       const terms = filters.search.trim().split(/\s+/).filter(Boolean);
       if (terms.length > 0) {
-        const termConditions = terms.map(term =>
-          or(
-            ilike(products.name, `%${term}%`),
-            ilike(products.category, `%${term}%`),
-            ilike(products.description, `%${term}%`)
-          )
-        );
-        conditions.push(or(...termConditions)!);
+        const termConditions = terms.map(term => {
+          const baseTerm = term.replace(/s$/i, '');
+          return or(
+            ilike(products.name, `%${baseTerm}%`),
+            ilike(products.category, `%${baseTerm}%`),
+            ilike(products.description, `%${baseTerm}%`)
+          );
+        });
+        conditions.push(and(...termConditions)!);
       }
     }
 
