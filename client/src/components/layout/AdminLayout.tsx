@@ -90,7 +90,7 @@ export default function AdminLayout({
         <div className="absolute -top-24 -left-24 w-64 h-64 bg-white/10 dark:bg-black/5 blur-[80px] rounded-full pointer-events-none group-hover/sidebar:scale-125 transition-transform duration-1000" />
         <div className="absolute top-1/4 -right-16 w-32 h-32 bg-white/5 dark:bg-black/5 blur-[40px] rounded-full pointer-events-none" />
 
-        <div className="flex flex-col items-center border-b border-white/10 dark:border-black/5 relative z-10 px-6 pt-8 pb-4 gap-2">
+        <div className="flex flex-col items-center border-b border-white/10 dark:border-black/5 relative z-10 px-6 pt-4 pb-2 gap-0">
           <Link href="/" className="block group w-full">
             <img 
               src="/images/logo.webp" 
@@ -98,19 +98,15 @@ export default function AdminLayout({
               className="w-full h-auto object-contain brightness-0 invert dark:brightness-100 dark:filter-none group-hover:scale-105 transition-all duration-500" 
             />
           </Link>
-          <div className="w-full flex justify-end items-center gap-3 px-2">
-            <ThemeToggle />
-            <NotificationBadge />
-          </div>
         </div>
 
-        <div className="px-6 py-6 border-b border-white/5 dark:border-black/5">
+        <div className="px-6 py-4 border-b border-white/5 dark:border-black/5 flex items-center justify-between gap-3">
           <Link
             href="/admin/profile"
-            className="flex items-center gap-4 p-2 rounded-xl hover:bg-white/5 dark:hover:bg-black/5 transition-all duration-300 group/profile"
+            className="flex items-center gap-3 p-1 rounded-xl hover:bg-white/5 dark:hover:bg-black/5 transition-all duration-300 group/profile flex-1 min-w-0"
           >
-            <div className="relative">
-              <div className="w-12 h-12 rounded-full border-2 border-white/10 dark:border-black/10 overflow-hidden shadow-lg group-hover/profile:border-white dark:group-hover/profile:border-black transition-colors">
+            <div className="relative shrink-0">
+              <div className="w-10 h-10 rounded-full border-2 border-white/10 dark:border-black/10 overflow-hidden shadow-lg group-hover/profile:border-white dark:group-hover/profile:border-black transition-colors">
                 {user?.profileImageUrl ? (
                   <img 
                     src={user.profileImageUrl} 
@@ -118,18 +114,22 @@ export default function AdminLayout({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-white/5 dark:bg-black/5 flex items-center justify-center text-white dark:text-black font-bold">
+                  <div className="w-full h-full bg-white/5 dark:bg-black/5 flex items-center justify-center text-white dark:text-black font-bold text-xs">
                     {initials}
                   </div>
                 )}
               </div>
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-4 border-neutral-950 dark:border-white rounded-full" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-neutral-950 dark:border-white rounded-full" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-white dark:text-black truncate uppercase tracking-wider">{displayName}</p>
-              <p className="text-[10px] text-white/40 dark:text-black/40 uppercase font-black tracking-widest mt-0.5">{roleLabel}</p>
+              <p className="text-[11px] font-bold text-white dark:text-black truncate uppercase tracking-wider">{displayName}</p>
+              <p className="text-[9px] text-white/40 dark:text-black/40 uppercase font-black tracking-widest mt-0.5">{roleLabel}</p>
             </div>
           </Link>
+          <div className="flex items-center gap-1.5">
+            <ThemeToggle />
+            <NotificationBadge />
+          </div>
         </div>
 
         <nav className="flex-1 p-6 space-y-1.5 overflow-y-auto relative z-10 sidebar-scrollbar">

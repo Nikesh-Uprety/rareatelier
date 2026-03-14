@@ -66,6 +66,9 @@
   --ring: 0 0% 9%;
   
   --radius: 0px;
+  
+  --sidebar-scrollbar-thumb: rgba(0, 0, 0, 0.4);
+  --sidebar-scrollbar-thumb-hover: rgba(0, 0, 0, 0.6);
 
   /* Brand Typography Colors */
   --brand-product-name: oklch(0.373 0.034 259.733);
@@ -101,6 +104,9 @@
   --border: 0px 0% 15%;
   --input: 0px 0% 15%;
   --ring: 0px 0% 83%;
+  
+  --sidebar-scrollbar-thumb: rgba(255, 255, 255, 0.4);
+  --sidebar-scrollbar-thumb-hover: rgba(255, 255, 255, 0.6);
 
   /* Brand Typography Colors - Adaptive for Dark Mode */
   --brand-product-name: oklch(0.85 0.034 259.733);
@@ -165,17 +171,17 @@
 
   /* Custom Aesthetic Scrollbar for Sidebar */
   .sidebar-scrollbar::-webkit-scrollbar {
-    width: 4px;
+    width: 8px;
   }
   .sidebar-scrollbar::-webkit-scrollbar-track {
     background: transparent;
   }
   .sidebar-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(155, 155, 155, 0.2);
+    background: var(--sidebar-scrollbar-thumb);
     border-radius: 20px;
   }
   .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(155, 155, 155, 0.4);
+    background: var(--sidebar-scrollbar-thumb-hover);
   }
 }
 
