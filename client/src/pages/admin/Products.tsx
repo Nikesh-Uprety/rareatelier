@@ -13,7 +13,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput
+  FolderInput, Box, CheckCircle2
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -933,26 +933,13 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 items-center justify-between px-2">
-        {/* Left: Move/Attributes/Add Product */}
+      <div className="flex flex-wrap gap-4 items-center justify-between px-2 pt-4 pb-2 border-b border-border/50">
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setMoveMode(prev => !prev)}
-            disabled={selectedProductIds.size === 0}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition-all",
-              moveMode ? "bg-primary text-primary-foreground border-primary" : "bg-background border-border text-foreground hover:border-primary",
-              selectedProductIds.size === 0 && "opacity-40 cursor-not-allowed"
-            )}
-          >
-            <FolderInput size={15} />
-            Move
-          </button>
           <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
             <SheetTrigger asChild>
               <Button
                 variant="outline"
-                className="border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent"
+                className="rounded-full border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent font-bold text-xs px-4 h-9 shadow-sm"
               >
                 <Tags className="w-4 h-4 mr-2" /> Attributes
               </Button>
@@ -963,9 +950,36 @@ export default function AdminProducts() {
           </Sheet>
         </div>
 
+        {/* Center: Category filter pills */}
+        <div className="flex gap-2 flex-wrap justify-center flex-1 min-w-[300px]">
+          <Button
+            variant={categoryFilter === "all" ? "default" : "outline"}
+            onClick={() => setCategoryFilter("all")}
+            className={cn(
+              "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto",
+              categoryFilter !== "all" && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+            )}
+          >
+            All
+          </Button>
+          {categories.map((cat) => (
+            <Button
+              key={cat.id}
+              variant={categoryFilter === cat.slug ? "default" : "outline"}
+              onClick={() => setCategoryFilter(cat.slug)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto",
+                categoryFilter !== cat.slug && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+              )}
+            >
+              {cat.name}
+            </Button>
+          ))}
+        </div>
+
         {/* Right: Add Product */}
         <Button
-          className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
+          className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
           onClick={() => {
             if (categoryFilter !== "all") {
               addForm.setValue("category", categoryFilter);
@@ -977,84 +991,6 @@ export default function AdminProducts() {
         >
           <Plus className="w-4 h-4 mr-2" /> Add Product
         </Button>
-      </div>
-
-
-      {/* Category filter pills — centered with action buttons on right */}
-      <div className="px-2 relative flex flex-col sm:flex-row items-center justify-between gap-4">
-        {/* Placeholder for left balance if needed, but categories centered is priority */}
-        <div className="hidden sm:block w-48" /> 
-
-        <div className="flex gap-2 flex-wrap justify-center flex-1">
-          <button
-            onClick={() => setCategoryFilter("all")}
-            className={cn(
-              "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-              categoryFilter === "all"
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-            )}
-          >
-            All
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setCategoryFilter(cat.slug)}
-              className={cn(
-                "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-                categoryFilter === cat.slug
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-              )}
-            >
-              {cat.name}
-            </button>
-          ))}
-        </div>
-
-        {/* Right side: Bulk actions */}
-        <div className="flex items-center gap-2 sm:w-48 justify-end">
-          <AnimatePresence>
-            {selectedProductIds.size > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                className="flex items-center gap-2"
-              >
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedProductIds(new Set())}
-                  className="h-8 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                >
-                  Deselect All
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant="outline" className="h-8 text-[10px] font-bold uppercase tracking-wider border-destructive text-destructive hover:bg-destructive/10">
-                      Bulk ({selectedProductIds.size})
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
-                      className="text-destructive font-bold text-xs"
-                      onClick={() => {
-                        if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
-                          selectedProductIds.forEach(id => deleteMutation.mutate(id));
-                          setSelectedProductIds(new Set());
-                        }
-                      }}
-                    >
-                      Delete Selected
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </div>
 
       {/* Move Panel */}
@@ -1155,9 +1091,9 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20 shadow-sm">
         <div className="flex items-center gap-4 flex-1">
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <Checkbox 
               id="select-all"
               checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
@@ -1169,18 +1105,109 @@ export default function AdminProducts() {
                 }
               }}
             />
-            <Label htmlFor="select-all" className="text-sm cursor-pointer font-medium whitespace-nowrap">
-              Select {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'All'}
+            <Label htmlFor="select-all" className="text-sm cursor-pointer font-bold whitespace-nowrap px-1">
+              {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'Select All'}
             </Label>
+
+            {/* Selection actions moved to the left after checkboxes */}
+            <AnimatePresence>
+              {selectedProductIds.size > 0 && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  className="flex items-center gap-2 border-l border-border pl-3 ml-1"
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedProductIds(new Set())}
+                    className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground px-4 shadow-sm"
+                  >
+                    Deselect
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setMoveMode(prev => !prev)}
+                    className={cn(
+                      "h-8 rounded-full text-[10px] font-black uppercase tracking-widest px-4 shadow-sm transition-all",
+                      moveMode ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <FolderInput size={12} className="mr-1.5" />
+                    Move
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest border-destructive/50 text-destructive hover:bg-destructive/10 px-4 shadow-sm">
+                        Actions
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="rounded-xl shadow-xl w-48">
+                      <DropdownMenuItem 
+                        className="text-destructive font-black text-[10px] uppercase tracking-widest p-2.5"
+                        onClick={() => {
+                          if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
+                            selectedProductIds.forEach(id => deleteMutation.mutate(id));
+                            setSelectedProductIds(new Set());
+                          }
+                        }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete ({selectedProductIds.size})
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="font-black text-[10px] uppercase tracking-widest p-2.5 text-orange-600 dark:text-orange-400"
+                        onClick={async () => {
+                          try {
+                            await Promise.all(
+                              Array.from(selectedProductIds).map(id =>
+                                updateAdminProduct(id, { stock: 0 })
+                              )
+                            );
+                            queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                            toast({ title: `Marked ${selectedProductIds.size} products as out of stock` });
+                            setSelectedProductIds(new Set());
+                          } catch {
+                            toast({ title: "Failed to update stock", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <Box className="w-3.5 h-3.5 mr-2" /> Mark Out of Stock
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        className="font-black text-[10px] uppercase tracking-widest p-2.5 text-green-600 dark:text-green-400"
+                        onClick={async () => {
+                          try {
+                            await Promise.all(
+                              Array.from(selectedProductIds).map(id =>
+                                updateAdminProduct(id, { stock: 20 })
+                              )
+                            );
+                            queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                            toast({ title: `Marked ${selectedProductIds.size} products as in stock (20)` });
+                            setSelectedProductIds(new Set());
+                          } catch {
+                            toast({ title: "Failed to update stock", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Mark In Stock (20)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Search bar inside the section in the middle */}
-          <div className="flex-1 max-w-md mx-auto relative group">
-            <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg h-10 px-3 transition-all duration-300 focus-within:border-primary/50 shadow-sm">
+          <div className="flex-1 max-w-sm mx-auto relative group">
+            <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-4 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
               <Search className={`h-4 w-4 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
               <Input 
                 placeholder="Search products..." 
-                className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50"
+                className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -1202,7 +1229,7 @@ export default function AdminProducts() {
                   initial={{ opacity: 0, y: 10, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-xl shadow-2xl z-[50] max-h-[300px] overflow-auto"
+                  className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-[50] max-h-[300px] overflow-auto"
                 >
                   <div className="px-3 py-1.5 text-[9px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
                     Quick Results
@@ -1210,13 +1237,13 @@ export default function AdminProducts() {
                   {filteredProducts.slice(0, 5).map(p => (
                      <div 
                       key={p.id} 
-                      className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
                       onClick={() => {
                         setEditProduct(p);
                         setEditOpen(true);
                       }}
                     >
-                      <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-md object-cover" alt="" />
+                      <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold truncate">{p.name}</p>
                         <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
@@ -1233,8 +1260,8 @@ export default function AdminProducts() {
         </div>
         
         <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-            {filteredProducts.length} items
+          <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest">
+            {filteredProducts.length} Items
           </p>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
@@ -1469,7 +1496,7 @@ export default function AdminProducts() {
                         </div>
                       </td>
                       <td className="p-4 text-right">
-                        <div className="flex justify-end gap-1 opacity-20 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex justify-end gap-1">
                           <Button 
                             variant="outline" 
                             size="icon" 
@@ -1484,7 +1511,7 @@ export default function AdminProducts() {
                           <Button 
                             variant="outline" 
                             size="icon" 
-                            className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+                            className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 dark:text-red-500 dark:border-red-500/30 dark:hover:bg-red-500/10"
                             onClick={() => {
                               if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
                             }}
