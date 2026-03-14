@@ -933,122 +933,8 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-4 items-center">
-        {/* Left: Select all + bulk actions */}
-        <div className="flex items-center gap-2">
-          {selectedProductIds.size > 0 && (
-            <Button
-              variant="outline"
-              onClick={() => setSelectedProductIds(new Set())}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              Deselect All
-            </Button>
-          )}
-          {selectedProductIds.size > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="border-destructive text-destructive hover:bg-destructive/10 dark:border-destructive dark:text-destructive dark:hover:bg-destructive/20">
-                  Bulk Actions ({selectedProductIds.size})
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem 
-                  className="text-destructive"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
-                      selectedProductIds.forEach(id => deleteMutation.mutate(id));
-                      setSelectedProductIds(new Set());
-                    }
-                  }}
-                >
-                  Delete Selected
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-
-        {/* Center: Search bar */}
-        <div className="flex-1 flex justify-center order-first sm:order-none w-full sm:w-auto">
-          <div className="relative w-full max-w-xl group">
-            <motion.div
-              initial={false}
-              animate={{
-                scale: search.length > 0 ? 1.02 : 1,
-                boxShadow: search.length > 0 ? "0 10px 25px -5px rgba(0, 0, 0, 0.1)" : "0 1px 2px 0 rgba(0, 0, 0, 0.05)"
-              }}
-              className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-12 px-4 transition-all duration-300 focus-within:border-primary/50"
-            >
-              <Search className={`h-5 w-5 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-              <Input 
-                placeholder="Search product name, category, or status..." 
-                className="border-none focus-visible:ring-0 bg-transparent h-full text-base placeholder:text-muted-foreground/50"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && (
-                <Button 
-                  variant="ghost" 
-                  size="icon" 
-                  className="h-8 w-8 rounded-full hover:bg-muted"
-                  onClick={() => setSearch("")}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </motion.div>
-
-            <AnimatePresence>
-              {search.length > 1 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-2xl shadow-2xl z-[50] max-h-[400px] overflow-auto"
-                >
-                  <div className="px-3 py-2 text-[10px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
-                    Quick Results
-                  </div>
-                  {filteredProducts.slice(0, 5).map(p => (
-                     <div 
-                      key={p.id} 
-                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setEditProduct(p);
-                        setEditOpen(true);
-                      }}
-                    >
-                      <img src={p.imageUrl || "/placeholder.png"} className="w-10 h-10 rounded-lg object-cover" alt="" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{p.name}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase">{p.category}</p>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-xs font-bold">{formatPrice(p.price)}</p>
-                         <p className={`text-[9px] font-bold ${p.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>{p.stock} in stock</p>
-                      </div>
-                     </div>
-                  ))}
-                  {filteredProducts.length === 0 && (
-                    <div className="py-8 text-center text-muted-foreground text-sm italic">
-                      No matches found for "{search}"
-                    </div>
-                  )}
-                  {filteredProducts.length > 5 && (
-                     <div className="p-2 mt-2 border-t text-center">
-                        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                          + {filteredProducts.length - 5} more matches
-                        </p>
-                     </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-
-        {/* Right: Action buttons */}
+      <div className="flex flex-wrap gap-4 items-center justify-between px-2">
+        {/* Left: Move/Attributes/Add Product */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setMoveMode(prev => !prev)}
@@ -1075,49 +961,100 @@ export default function AdminProducts() {
               <AttributesManager onClose={() => setAttrSheetOpen(false)} />
             </SheetContent>
           </Sheet>
-          <Button
-            className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
-            onClick={() => {
-              if (categoryFilter !== "all") {
-                addForm.setValue("category", categoryFilter);
-              } else {
-                addForm.setValue("category", "");
-              }
-              setAddOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" /> Add Product
-          </Button>
         </div>
+
+        {/* Right: Add Product */}
+        <Button
+          className="bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground"
+          onClick={() => {
+            if (categoryFilter !== "all") {
+              addForm.setValue("category", categoryFilter);
+            } else {
+              addForm.setValue("category", "");
+            }
+            setAddOpen(true);
+          }}
+        >
+          <Plus className="w-4 h-4 mr-2" /> Add Product
+        </Button>
       </div>
 
-      {/* Category filter pills — clean, no counts */}
-      <div className="flex gap-2 flex-wrap justify-center">
-        <button
-          onClick={() => setCategoryFilter("all")}
-          className={cn(
-            "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-            categoryFilter === "all"
-              ? "bg-primary text-primary-foreground border-primary"
-              : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-          )}
-        >
-          All
-        </button>
-        {categories.map((cat) => (
+
+      {/* Category filter pills — centered with action buttons on right */}
+      <div className="px-2 relative flex flex-col sm:flex-row items-center justify-between gap-4">
+        {/* Placeholder for left balance if needed, but categories centered is priority */}
+        <div className="hidden sm:block w-48" /> 
+
+        <div className="flex gap-2 flex-wrap justify-center flex-1">
           <button
-            key={cat.id}
-            onClick={() => setCategoryFilter(cat.slug)}
+            onClick={() => setCategoryFilter("all")}
             className={cn(
               "px-3 py-1 rounded-full text-xs font-medium border transition-all",
-              categoryFilter === cat.slug
+              categoryFilter === "all"
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
             )}
           >
-            {cat.name}
+            All
           </button>
-        ))}
+          {categories.map((cat) => (
+            <button
+              key={cat.id}
+              onClick={() => setCategoryFilter(cat.slug)}
+              className={cn(
+                "px-3 py-1 rounded-full text-xs font-medium border transition-all",
+                categoryFilter === cat.slug
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+              )}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Right side: Bulk actions */}
+        <div className="flex items-center gap-2 sm:w-48 justify-end">
+          <AnimatePresence>
+            {selectedProductIds.size > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                className="flex items-center gap-2"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedProductIds(new Set())}
+                  className="h-8 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                >
+                  Deselect All
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size="sm" variant="outline" className="h-8 text-[10px] font-bold uppercase tracking-wider border-destructive text-destructive hover:bg-destructive/10">
+                      Bulk ({selectedProductIds.size})
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem 
+                      className="text-destructive font-bold text-xs"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
+                          selectedProductIds.forEach(id => deleteMutation.mutate(id));
+                          setSelectedProductIds(new Set());
+                        }
+                      }}
+                    >
+                      Delete Selected
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Move Panel */}
@@ -1219,26 +1156,85 @@ export default function AdminProducts() {
       )}
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20">
-        <div className="flex items-center gap-2">
-          <Checkbox 
-            id="select-all"
-            checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
-            onCheckedChange={(checked) => {
-              if (checked) {
-                setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
-              } else {
-                setSelectedProductIds(new Set());
-              }
-            }}
-          />
-          <Label htmlFor="select-all" className="text-sm cursor-pointer font-medium">
-            Select {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'All'}
-          </Label>
+        <div className="flex items-center gap-4 flex-1">
+          <div className="flex items-center gap-2 shrink-0">
+            <Checkbox 
+              id="select-all"
+              checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
+                } else {
+                  setSelectedProductIds(new Set());
+                }
+              }}
+            />
+            <Label htmlFor="select-all" className="text-sm cursor-pointer font-medium whitespace-nowrap">
+              Select {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'All'}
+            </Label>
+          </div>
+
+          {/* Search bar inside the section in the middle */}
+          <div className="flex-1 max-w-md mx-auto relative group">
+            <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg h-10 px-3 transition-all duration-300 focus-within:border-primary/50 shadow-sm">
+              <Search className={`h-4 w-4 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Input 
+                placeholder="Search products..." 
+                className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-7 w-7 rounded-full hover:bg-muted"
+                  onClick={() => setSearch("")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+
+            <AnimatePresence>
+              {search.length > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute top-full left-0 right-0 mt-3 p-2 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-xl shadow-2xl z-[50] max-h-[300px] overflow-auto"
+                >
+                  <div className="px-3 py-1.5 text-[9px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
+                    Quick Results
+                  </div>
+                  {filteredProducts.slice(0, 5).map(p => (
+                     <div 
+                      key={p.id} 
+                      className="flex items-center gap-3 p-1.5 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => {
+                        setEditProduct(p);
+                        setEditOpen(true);
+                      }}
+                    >
+                      <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-md object-cover" alt="" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold truncate">{p.name}</p>
+                        <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
+                      </div>
+                     </div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
         
         <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
-          <p className="text-xs font-medium text-muted-foreground">
-            {filteredProducts.length} items found
+          <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+            {filteredProducts.length} items
           </p>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
