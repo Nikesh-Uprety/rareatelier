@@ -314,9 +314,10 @@ export default function AdminMarketingPage() {
             <Button 
               className="bg-[#2C3E2D]"
               onClick={() => broadcastMutation.mutate({ subject: marketingSubject, html: marketingBody })}
-              disabled={broadcastMutation.isPending}
+              loading={broadcastMutation.isPending}
+              loadingText="Sending..."
             >
-              {broadcastMutation.isPending ? "Sending..." : "Confirm Send"}
+              Confirm Send
             </Button>
           </DialogFooter>
         </DialogContent>

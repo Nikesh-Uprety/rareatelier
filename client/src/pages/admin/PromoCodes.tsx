@@ -307,8 +307,13 @@ export default function AdminPromoCodes() {
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saveMutation.isPending} className="bg-[#2C3E2D] text-white hover:bg-[#1A251B] dark:bg-primary dark:text-primary-foreground">
-                  {saveMutation.isPending ? "Saving..." : "Save Code"}
+                <Button 
+                  type="submit" 
+                  loading={saveMutation.isPending} 
+                  loadingText="Saving..."
+                  className="bg-[#2C3E2D] text-white hover:bg-[#1A251B] dark:bg-primary dark:text-primary-foreground"
+                >
+                  Save Code
                 </Button>
               </div>
             </form>

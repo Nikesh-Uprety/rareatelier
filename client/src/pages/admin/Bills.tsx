@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -9,11 +11,13 @@ import { fetchBills, voidBill } from "@/lib/adminApi";
 import type { AdminBill } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function AdminBills() {
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedBill, setSelectedBill] = useState<AdminBill | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -79,6 +83,9 @@ export default function AdminBills() {
             {filtered.length} bills • {typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
           </p>
         </div>
+        <div className="flex items-center gap-4">
+          <ViewToggle view={viewMode} onViewChange={setViewMode} />
+        </div>
       </div>
 
       {/* Filter tabs */}
@@ -111,129 +118,217 @@ export default function AdminBills() {
         />
       </div>
 
-      {/* Table */}
-      <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left min-w-[640px]">
-            <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
-              <tr>
-                <th className="px-6 py-4 font-medium">Bill No.</th>
-                <th className="px-6 py-4 font-medium">Date</th>
-                <th className="px-6 py-4 font-medium">Customer</th>
-                <th className="px-6 py-4 font-medium">Items</th>
-                <th className="px-6 py-4 font-medium text-right">Amount</th>
-                <th className="px-6 py-4 font-medium">Payment</th>
-                <th className="px-6 py-4 font-medium">Type</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
-              {isLoading
-                ? Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i}>
-                      {Array.from({ length: 9 }).map((_, j) => (
-                        <td key={j} className="px-6 py-4">
-                          <div className="h-3 w-20 bg-muted animate-pulse rounded" />
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                : filtered.map((bill) => {
-                    const items = Array.isArray(bill.items) ? bill.items : [];
-                    return (
-                      <tr key={bill.id} className="hover:bg-muted/50 transition-colors">
-                        <td className="px-6 py-4 font-medium font-mono text-xs">
-                          {bill.billNumber}
-                        </td>
-                        <td className="px-6 py-4 text-muted-foreground">
-                          {new Date(bill.createdAt).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="font-medium">{bill.customerName}</div>
-                          {bill.customerPhone && (
-                            <div className="text-xs text-muted-foreground">{bill.customerPhone}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-muted-foreground">
-                          {items.length} item{items.length !== 1 ? "s" : ""}
-                        </td>
-                        <td className="px-6 py-4 text-right font-medium">
-                          {formatPrice(bill.totalAmount)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="capitalize text-xs">
-                            {bill.paymentMethod.replace(/_/g, " ")}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant="outline"
-                            className={
-                              bill.billType === "pos"
-                                ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-none"
-                                : "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300 border-none"
-                            }
-                          >
-                            {bill.billType.toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant="outline"
-                            className={
-                              bill.status === "void"
-                                ? "bg-[#FDECEC] text-[#9A2D2D] dark:bg-red-950 dark:text-red-300 border-none"
-                                : "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300 border-none"
-                            }
-                          >
-                            {bill.status}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title="View Bill"
-                              onClick={() => setSelectedBill(bill)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              title="Download PDF"
-                              onClick={() => handleDownloadPDF(bill)}
-                            >
-                              <Download className="h-4 w-4" />
-                            </Button>
-                            {bill.status !== "void" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-red-500 hover:text-red-700"
-                                title="Void Bill"
-                                onClick={() => {
-                                  if (confirm(`Void bill ${bill.billNumber}? This cannot be undone.`)) {
-                                    voidMutation.mutate(bill.id);
-                                  }
-                                }}
+      {/* View Rendering */}
+      <AnimatePresence mode="wait">
+        {viewMode === "list" ? (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.99 }}
+            transition={{ duration: 0.2 }}
+            className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left min-w-[640px]">
+                <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Bill No.</th>
+                    <th className="px-6 py-4 font-medium">Date</th>
+                    <th className="px-6 py-4 font-medium">Customer</th>
+                    <th className="px-6 py-4 font-medium">Items</th>
+                    <th className="px-6 py-4 font-medium text-right">Amount</th>
+                    <th className="px-6 py-4 font-medium">Payment</th>
+                    <th className="px-6 py-4 font-medium">Type</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
+                  {isLoading
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i}>
+                          {Array.from({ length: 9 }).map((_, j) => (
+                            <td key={j} className="px-6 py-4">
+                              <div className="h-3 w-20 bg-muted animate-pulse rounded" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    : filtered.map((bill) => {
+                        const items = Array.isArray(bill.items) ? bill.items : [];
+                        return (
+                          <tr key={bill.id} className="hover:bg-muted/50 transition-colors">
+                            <td className="px-6 py-4 font-medium font-mono text-xs">
+                              {bill.billNumber}
+                            </td>
+                            <td className="px-6 py-4 text-muted-foreground">
+                              {new Date(bill.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="font-medium">{bill.customerName}</div>
+                              {bill.customerPhone && (
+                                <div className="text-xs text-muted-foreground">{bill.customerPhone}</div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 text-muted-foreground">
+                              {items.length} item{items.length !== 1 ? "s" : ""}
+                            </td>
+                            <td className="px-6 py-4 text-right font-medium">
+                              {formatPrice(bill.totalAmount)}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className="capitalize text-xs">
+                                {bill.paymentMethod.replace(/_/g, " ")}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  bill.billType === "pos"
+                                    ? "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border-none"
+                                    : "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300 border-none"
+                                }
                               >
-                                <XCircle className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                                {bill.billType.toUpperCase()}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge
+                                variant="outline"
+                                className={
+                                  bill.status === "void"
+                                    ? "bg-[#FDECEC] text-[#9A2D2D] dark:bg-red-950 dark:text-red-300 border-none"
+                                    : "bg-[#E8F3EB] text-[#2C5234] dark:bg-green-950 dark:text-green-300 border-none"
+                                }
+                              >
+                                {bill.status}
+                              </Badge>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title="View Bill"
+                                  onClick={() => setSelectedBill(bill)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  title="Download PDF"
+                                  onClick={() => handleDownloadPDF(bill)}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                {bill.status !== "void" && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-red-500 hover:text-red-700"
+                                    title="Void Bill"
+                                    onClick={() => {
+                                      if (confirm(`Void bill ${bill.billNumber}? This cannot be undone.`)) {
+                                        voidMutation.mutate(bill.id);
+                                      }
+                                    }}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.99 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {isLoading
+              ? Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="bg-card rounded-xl border border-border p-5 space-y-4 animate-pulse">
+                    <div className="flex justify-between items-start">
+                      <div className="h-4 w-24 bg-muted rounded" />
+                      <div className="h-4 w-16 bg-muted rounded" />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-32 bg-muted rounded" />
+                      <div className="h-3 w-40 bg-muted rounded" />
+                    </div>
+                    <div className="h-10 w-full bg-muted rounded" />
+                  </div>
+                ))
+              : filtered.map((bill) => (
+                  <div key={bill.id} className="bg-white dark:bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-all">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{bill.billNumber}</p>
+                        <h3 className="font-serif font-medium text-base mt-1">{bill.customerName}</h3>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-[10px] font-bold uppercase tracking-wider border-none",
+                          bill.status === "void" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                        )}
+                      >
+                        {bill.status}
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-3 mb-6">
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Date</span>
+                        <span>{new Date(bill.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Items</span>
+                        <span>{Array.isArray(bill.items) ? bill.items.length : 0} items</span>
+                      </div>
+                      <div className="flex justify-between items-center py-2 border-t border-dashed border-border mt-2">
+                        <span className="text-sm font-medium">Total Amount</span>
+                        <span className="text-lg font-bold">{formatPrice(bill.totalAmount)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => setSelectedBill(bill)}
+                      >
+                        <Eye className="h-3.5 w-3.5 mr-2" /> View
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 text-xs"
+                        onClick={() => handleDownloadPDF(bill)}
+                      >
+                        <Download className="h-3.5 w-3.5 mr-2" /> PDF
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bill Viewer Modal */}
       {selectedBill && (

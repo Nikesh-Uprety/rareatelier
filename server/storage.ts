@@ -698,6 +698,9 @@ export class PgStorage implements IStorage {
       link: "/admin/orders",
     });
 
+    // Sync customer stats after creating order
+    await this.syncCustomerStats(orderRow.email);
+
     return orderRow;
   }
 
@@ -729,7 +732,12 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       });
 
+    if (status === "completed") {
+      await this.syncCustomerStats(row.email);
+    }
+
     if (status === "cancelled") {
+      await this.syncCustomerStats(row.email);
       await this.createAdminNotification({
         title: "Order Cancelled",
         message: `Order #${row.id.substring(0, 8)} has been cancelled.`,
@@ -922,6 +930,7 @@ export class PgStorage implements IStorage {
     firstName: string,
     lastName: string,
   ): Promise<Customer> {
+    const emailLower = email.toLowerCase();
     const [existing] = await db
       .select({
         id: customers.id,
@@ -934,10 +943,12 @@ export class PgStorage implements IStorage {
         createdAt: customers.createdAt,
       })
       .from(customers)
-      .where(eq(customers.email, email))
+      .where(eq(sql`lower(${customers.email})`, emailLower))
       .limit(1);
 
     if (existing) {
+      // Logic to update name if it was missing or different? 
+      // For now just return existing.
       return existing;
     }
 
@@ -946,7 +957,7 @@ export class PgStorage implements IStorage {
       .values({
         firstName,
         lastName,
-        email,
+        email: emailLower,
         totalSpent: "0",
         orderCount: 0,
         avatarColor: "#2D4A35",
@@ -963,6 +974,39 @@ export class PgStorage implements IStorage {
       });
 
     return row;
+  }
+
+  async syncCustomerStats(email: string): Promise<void> {
+    const emailLower = email.toLowerCase();
+    const customerOrders = await db
+      .select({
+        total: orders.total,
+        status: orders.status,
+      })
+      .from(orders)
+      .where(eq(sql`lower(${orders.email})`, emailLower));
+
+    // We only count completed or pos orders for totalSpent? 
+    // Usually totalSpent is for completed transactions.
+    const completedOrders = customerOrders.filter(
+      (o) => o.status === "completed" || o.status === "pos" || o.status === "shipped" || o.status === "delivered"
+    );
+
+    const totalSpent = completedOrders.reduce(
+      (sum, o) => sum + Number(o.total || 0),
+      0
+    );
+    const orderCount = customerOrders.length; // Count all orders (even pending) for orderCount? 
+    // Let's count all except cancelled for orderCount.
+    const validOrderCount = customerOrders.filter(o => o.status !== "cancelled").length;
+
+    await db
+      .update(customers)
+      .set({
+        totalSpent: totalSpent.toString(),
+        orderCount: validOrderCount,
+      })
+      .where(eq(sql`lower(${customers.email})`, emailLower));
   }
 
   async subscribeToNewsletter(email: string): Promise<void> {

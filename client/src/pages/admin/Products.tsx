@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -430,8 +431,6 @@ export default function AdminProducts() {
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     return products.filter((p) => {
-      // Trust backend results for search matching.
-      // Simply handle category grouping on the client.
       const matchesCategory =
         categoryFilter === "all" || (p.category ?? "").toLowerCase() ===
           categoryFilter.toLowerCase();
@@ -439,8 +438,20 @@ export default function AdminProducts() {
     });
   }, [products, categoryFilter]);
 
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-2">
+        <div>
+          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
+            Products
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Manage your product catalog and inventory
+          </p>
+        </div>
+      </div>
 
 
       {/* Full-page Add Product overlay */}
@@ -676,7 +687,7 @@ export default function AdminProducts() {
                       <Button type="button" variant="outline" onClick={() => { setAddOpen(false); addForm.reset(); }}>
                         Cancel
                       </Button>
-                      <Button type="submit" form="add-product-form" disabled={addMutation.isPending}>
+                      <Button type="submit" form="add-product-form" loading={addMutation.isPending} loadingText="Saving...">
                         Save Product
                       </Button>
                     </div>
@@ -959,8 +970,8 @@ export default function AdminProducts() {
         </div>
 
         {/* Center: Search bar */}
-        <div className="flex-1 flex justify-center">
-          <div className="relative w-full max-w-md group">
+        <div className="flex-1 flex justify-center order-first sm:order-none w-full sm:w-auto">
+          <div className="relative w-full max-w-xl group">
             <motion.div
               initial={false}
               animate={{
@@ -1081,7 +1092,7 @@ export default function AdminProducts() {
       </div>
 
       {/* Category filter pills — clean, no counts */}
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap justify-center">
         <button
           onClick={() => setCategoryFilter("all")}
           className={cn(
@@ -1207,25 +1218,43 @@ export default function AdminProducts() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 mb-4">
-        <Checkbox 
-          id="select-all"
-          checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
-          onCheckedChange={(checked) => {
-            if (checked) {
-              setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
-            } else {
-              setSelectedProductIds(new Set());
-            }
-          }}
-        />
-        <Label htmlFor="select-all" className="text-sm cursor-pointer">
-          Select All
-        </Label>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20">
+        <div className="flex items-center gap-2">
+          <Checkbox 
+            id="select-all"
+            checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
+            onCheckedChange={(checked) => {
+              if (checked) {
+                setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
+              } else {
+                setSelectedProductIds(new Set());
+              }
+            }}
+          />
+          <Label htmlFor="select-all" className="text-sm cursor-pointer font-medium">
+            Select {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'All'}
+          </Label>
+        </div>
+        
+        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end">
+          <p className="text-xs font-medium text-muted-foreground">
+            {filteredProducts.length} items found
+          </p>
+          <ViewToggle view={viewMode} onViewChange={setViewMode} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {isLoading || isError
+      <AnimatePresence mode="wait">
+        {viewMode === "grid" ? (
+          <motion.div
+            key="grid"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+          >
+            {isLoading || isError
           ? Array.from({ length: 8 }).map((_, i) => (
               <div
                 key={i}
@@ -1350,7 +1379,133 @@ export default function AdminProducts() {
                 </div>
               </div>
             ))}
-      </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.2 }}
+            className="bg-card rounded-xl border border-border overflow-hidden shadow-sm"
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-border bg-muted/20">
+                    <th className="p-4 w-12 text-center">
+                      <Checkbox 
+                        checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
+                        onCheckedChange={(checked) => {
+                          if (checked) setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
+                          else setSelectedProductIds(new Set());
+                        }}
+                      />
+                    </th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground w-20">Image</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Product</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Category</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Price</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Stock</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredProducts.map((product) => (
+                    <tr key={product.id} className={cn(
+                      "border-b border-border hover:bg-muted/10 transition-colors group",
+                      selectedProductIds.has(product.id) && "bg-primary/5"
+                    )}>
+                      <td className="p-4 text-center">
+                        <Checkbox 
+                          checked={selectedProductIds.has(product.id)}
+                          onCheckedChange={(checked) => {
+                            const next = new Set(selectedProductIds);
+                            if (checked) next.add(product.id);
+                            else next.delete(product.id);
+                            setSelectedProductIds(next);
+                          }}
+                        />
+                      </td>
+                      <td className="p-4">
+                        <img
+                          src={product.imageUrl ?? ""}
+                          alt={product.name}
+                          className="w-12 h-12 rounded-lg object-cover bg-muted border border-border/50 shadow-sm"
+                        />
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col">
+                          <span className="font-serif font-medium text-sm line-clamp-1">{product.name}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase tracking-widest">{product.id.substring(0, 8)}</span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider h-5 bg-background border-muted-foreground/30 text-muted-foreground border">
+                          {product.category || "General"}
+                        </Badge>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-sm">{formatPrice(product.price)}</span>
+                          {product.saleActive && (
+                            <span className="text-[10px] line-through text-muted-foreground">{formatPrice(product.originalPrice || 0)}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col gap-1 w-24">
+                          <span className={cn(
+                            "text-[10px] font-bold uppercase tracking-tight",
+                            product.stock > 10 ? "text-green-600" : product.stock > 0 ? "text-orange-600" : "text-red-600"
+                          )}>
+                             {product.stock === 0 ? "OUT OF STOCK" : `${product.stock} IN STOCK`}
+                          </span>
+                          <div className="h-1 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className={cn(
+                                "h-full transition-all duration-500",
+                                product.stock > 10 ? "bg-green-500" : product.stock > 0 ? "bg-orange-500" : "bg-red-500"
+                              )}
+                              style={{ width: `${Math.min(100, (product.stock / 20) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-1 opacity-20 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditProduct(product);
+                              setEditOpen(true);
+                            }}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="icon" 
+                            className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              if (confirm("Are you sure?")) deleteMutation.mutate(product.id);
+                            }}
+                            loading={deleteMutation.isPending}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Full-page Edit Product overlay */}
       {editOpen && editProduct && (
@@ -1590,7 +1745,7 @@ export default function AdminProducts() {
                         >
                           Cancel
                         </Button>
-                        <Button type="submit" form="edit-product-form" disabled={editMutation.isPending}>
+                        <Button type="submit" form="edit-product-form" loading={editMutation.isPending} loadingText="Saving...">
                           Save Changes
                         </Button>
                       </div>

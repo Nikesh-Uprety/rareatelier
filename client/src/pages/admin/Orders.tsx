@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +60,7 @@ function BillButton({ orderId }: { orderId: string }) {
 export default function AdminOrders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -151,10 +154,26 @@ export default function AdminOrders() {
             </button>
           ))}
         </div>
+
+        <div className="ml-auto sm:ml-0 flex items-center gap-4">
+           <p className="text-xs font-medium text-muted-foreground hidden sm:block">
+             {orders?.length ?? 0} orders found
+           </p>
+           <ViewToggle view={viewMode} onViewChange={setViewMode} />
+        </div>
       </div>
 
-      <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
-        <div className="overflow-x-auto">
+      <AnimatePresence mode="wait">
+        {viewMode === "list" ? (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, scale: 0.99 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.99 }}
+            transition={{ duration: 0.2 }}
+            className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden"
+          >
+            <div className="overflow-x-auto">
           <table className="w-full text-sm text-left min-w-[640px]">
             <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
               <tr>
@@ -270,13 +289,13 @@ export default function AdminOrders() {
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs"
+                                      loading={verifyMutation.isPending}
                                       onClick={() =>
                                         verifyMutation.mutate({
                                           id: order.id,
                                           paymentVerified: "verified",
                                         })
                                       }
-                                      disabled={verifyMutation.isPending}
                                     >
                                       Verify
                                     </Button>
@@ -284,13 +303,13 @@ export default function AdminOrders() {
                                       size="sm"
                                       variant="outline"
                                       className="h-7 text-xs text-red-600"
+                                      loading={verifyMutation.isPending}
                                       onClick={() =>
                                         verifyMutation.mutate({
                                           id: order.id,
                                           paymentVerified: "rejected",
                                         })
                                       }
-                                      disabled={verifyMutation.isPending}
                                     >
                                       Reject
                                     </Button>
@@ -376,7 +395,101 @@ export default function AdminOrders() {
             </tbody>
           </table>
         </div>
-      </div>
+      </motion.div>
+    ) : (
+      <motion.div
+        key="grid"
+        initial={{ opacity: 0, scale: 0.99 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.99 }}
+        transition={{ duration: 0.2 }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+      >
+        {isLoading || isError
+          ? Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-card rounded-xl border border-border p-5 space-y-4 animate-pulse">
+                <div className="flex justify-between items-start">
+                  <div className="h-4 w-24 bg-muted rounded" />
+                  <div className="h-4 w-16 bg-muted rounded" />
+                </div>
+                <div className="space-y-2">
+                  <div className="h-3 w-32 bg-muted rounded" />
+                  <div className="h-3 w-40 bg-muted rounded" />
+                </div>
+                <div className="h-10 w-full bg-muted rounded" />
+              </div>
+            ))
+          : orders?.map((order) => {
+              const status = order.status.charAt(0).toUpperCase() + order.status.slice(1);
+              return (
+                <div key={order.id} className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Order {order.id.substring(0, 8)}</p>
+                      <h3 className="font-serif font-medium text-base mt-1">{order.fullName}</h3>
+                    </div>
+                    <Badge
+                      className={cn(
+                        "text-[10px] font-bold uppercase tracking-wider",
+                        order.status === "completed" ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" :
+                        order.status === "pending" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400" :
+                        "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
+                      )}
+                    >
+                      {status}
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Date</span>
+                      <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Payment</span>
+                      <span className="uppercase">{order.paymentMethod || 'Manual'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-t border-dashed border-border mt-2">
+                      <span className="text-sm font-medium">Total Amount</span>
+                      <span className="text-lg font-bold">{formatPrice(order.total)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={order.status}
+                      onChange={(e) =>
+                        statusMutation.mutate({
+                          id: order.id,
+                          status: e.target.value,
+                        })
+                      }
+                      className={cn(
+                        "text-xs font-bold uppercase tracking-wider border rounded-md px-3 py-2 appearance-none cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center w-full",
+                        order.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
+                        order.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
+                        order.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
+                        order.status === "pos" ? "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900" :
+                        "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900"
+                      )}
+                    >
+                      <option value="pending">⏳ Pending</option>
+                      <option value="processing">🔵 Processing</option>
+                      <option value="completed">✅ Completed</option>
+                      <option value="cancelled">❌ Cancelled</option>
+                      <option value="pos">🟣 POS</option>
+                    </select>
+                    
+                    {order.status === "completed" && (
+                      <BillButton orderId={order.id} />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+      </motion.div>
+    )}
+  </AnimatePresence>
     </div>
   );
 }

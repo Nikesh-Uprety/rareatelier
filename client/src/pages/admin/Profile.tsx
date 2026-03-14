@@ -348,10 +348,11 @@ export default function AdminProfilePage() {
                       variant="outline"
                       size="sm"
                       className="h-10 text-xs"
-                      disabled={emailChangeMutation.isPending}
+                      loading={emailChangeMutation.isPending}
+                      loadingText="Sending..."
                       onClick={() => emailChangeMutation.mutate(editEmail)}
                     >
-                      {emailChangeMutation.isPending ? "Sending..." : "Verify & Update"}
+                      Verify & Update
                     </Button>
                   )}
                 </div>
@@ -359,11 +360,13 @@ export default function AdminProfilePage() {
               <div className="flex justify-end">
                 <Button
                   type="button"
-                  disabled={profileMutation.isPending || displayName === (user?.name ?? "")}
+                  loading={profileMutation.isPending}
+                  loadingText="Saving..."
+                  disabled={displayName === (user?.name ?? "")}
                   className="h-10"
                   onClick={() => profileMutation.mutate({ displayName })}
                 >
-                  {profileMutation.isPending ? "Saving..." : "Save Changes"}
+                  Save Changes
                 </Button>
               </div>
             </div>
@@ -413,10 +416,12 @@ export default function AdminProfilePage() {
               <Button
                 type="button"
                 className="h-10"
-                disabled={passwordMutation.isPending || !passwordNew}
+                loading={passwordMutation.isPending}
+                loadingText="Updating..."
+                disabled={!passwordNew}
                 onClick={() => passwordMutation.mutate()}
               >
-                {passwordMutation.isPending ? "Updating..." : "Update Password"}
+                Update Password
               </Button>
             </div>
           </div>
@@ -547,7 +552,9 @@ export default function AdminProfilePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEmailVerifyOpen(false)}>Cancel</Button>
             <Button
-              disabled={emailVerifyMutation.isPending || emailVerifyCode.length < 6}
+              loading={emailVerifyMutation.isPending}
+              loadingText="Verifying..."
+              disabled={emailVerifyCode.length < 6}
               onClick={() => {
                 emailVerifyMutation.mutate({
                   tempToken: emailTempToken,
@@ -556,7 +563,7 @@ export default function AdminProfilePage() {
                 });
               }}
             >
-              {emailVerifyMutation.isPending ? "Verifying..." : "Verify & Update"}
+              Verify & Update
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -577,10 +584,11 @@ export default function AdminProfilePage() {
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
             <Button
               variant="destructive"
-              disabled={deleteMutation.isPending}
+              loading={deleteMutation.isPending}
+              loadingText="Deleting..."
               onClick={() => deleteUserId && deleteMutation.mutate(deleteUserId)}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
+              Confirm Delete
             </Button>
           </DialogFooter>
         </DialogContent>
