@@ -8,6 +8,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import { PerformanceVideo } from "@/components/ui/PerformanceVideo";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -15,8 +16,7 @@ import { Helmet } from "react-helmet-async";
 
 const HERO_IMAGES = [
   "/images/landingpage3.webp",
-  "/images/landingpage4.webp",
-  "/images/hero_premium_1.webp"
+  "/images/landingpage4.webp"
 ];
 
 const LIFESTYLE_IMAGES = [
@@ -208,6 +208,10 @@ export default function Home() {
   const { toast } = useToast();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const [heroMode, setHeroMode] = useState<"video" | "image">(() => {
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) return "image";
+    return "video";
+  });
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -294,16 +298,43 @@ export default function Home() {
       setCarouselIndex((i) => (i + 1) % LIFESTYLE_IMAGES.length);
     }, 5000);
     
-    const heroTimer = setInterval(() => {
-      setHeroIndex((prev) => (prev + 1) % HERO_IMAGES.length);
-    }, 8000);
+    const heroInterval = setInterval(() => {
+      setHeroIndex((prev) => {
+        // Force image mode on desktop regardless of previous state
+        const isDesktop = window.innerWidth >= 1024;
+        
+        if (isDesktop && heroMode === "video") {
+          setHeroMode("image");
+          return 0;
+        }
+
+        // If we are in video mode on mobile/tablet, we don't advance the index via interval
+        // the onEnded callback handles the transition to image mode
+        if (heroMode === "video") return prev;
+
+        const next = (prev + 1) % HERO_IMAGES.length;
+        if (next === 0 && !isDesktop) {
+          setHeroMode("video"); // Loop back to video only on mobile/tablet
+          return 0;
+        }
+        return next;
+      });
+    }, 6000);
+
+    const handleResize = () => {
+      if (window.innerWidth >= 1024 && heroMode === "video") {
+        setHeroMode("image");
+      }
+    };
+    window.addEventListener('resize', handleResize);
 
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
-      clearInterval(heroTimer);
+      clearInterval(heroInterval);
+      window.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [heroMode]);
 
   const newsletterMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -386,25 +417,45 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
         <AnimatePresence mode="popLayout">
-          <motion.div
-            key={heroIndex}
-            initial={heroIndex === 0 ? false : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ 
-              duration: 1.5,
-              ease: "easeInOut"
-            }}
-            className="absolute inset-0 w-full h-full"
-          >
-            <OptimizedImage
-              src={HERO_IMAGES[heroIndex]}
-              alt="Luxury street style campaign"
-              className="w-full h-full object-cover"
-              priority={heroIndex === 0}
-              loading={heroIndex === 0 ? "eager" : "lazy"}
-            />
-          </motion.div>
+          {heroMode === "video" ? (
+            <motion.div
+              key="hero-video"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
+              className="absolute inset-0 w-full h-full"
+            >
+              <PerformanceVideo
+                sources={[
+                  { src: "/videos/hero-campaign.mp4", type: "video/mp4" }
+                ]}
+                poster={HERO_IMAGES[0]}
+                onEnded={() => {
+                  setHeroMode("image");
+                  setHeroIndex(0);
+                }}
+                className="w-full h-full"
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key={`hero-image-${heroIndex}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
+              className="absolute inset-0 w-full h-full"
+            >
+              <OptimizedImage
+                src={HERO_IMAGES[heroIndex]}
+                alt="Luxury street style campaign"
+                className="w-full h-full object-cover"
+                priority
+                loading="eager"
+              />
+            </motion.div>
+          )}
         </AnimatePresence>
         <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
 
