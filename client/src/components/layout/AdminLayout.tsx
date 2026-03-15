@@ -145,18 +145,18 @@ export default function AdminLayout({
                   if (count > 0) markTypeRead(item.type);
                 }}
                 className={cn(
-                  "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-bold tracking-wide uppercase transition-all duration-300 group/nav",
+                  "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300 group/nav",
                   isActive
                     ? "bg-white dark:bg-black text-black dark:text-white shadow-xl shadow-black/40 dark:shadow-white/20 scale-[1.02]"
-                    : "text-white/50 dark:text-black/50 hover:text-white dark:hover:text-black hover:bg-white/5 dark:hover:bg-black/5",
+                    : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
                 )}
                 data-testid={`link-admin-nav-${item.label.toLowerCase()}`}
               >
                 <item.icon className={cn(
-                  "h-5 w-5 transition-transform duration-300 group-hover/nav:scale-110",
-                  isActive ? "text-black dark:text-white" : "opacity-70"
+                  "h-6 w-6 transition-transform duration-300 group-hover/nav:scale-110",
+                  isActive ? "text-black dark:text-white" : "opacity-90"
                 )} />
-                <span className="text-[11px] tracking-widest">{item.label}</span>
+                <span className="text-[12px] tracking-wider">{item.label}</span>
                 
                 {count > 0 && (
                   <motion.div
@@ -243,17 +243,17 @@ export default function AdminLayout({
                         setSidebarOpen(false);
                       }}
                       className={cn(
-                        "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-bold tracking-wide uppercase transition-all duration-300",
+                        "flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-black tracking-wider uppercase transition-all duration-300",
                         isActive
                           ? "bg-white dark:bg-black text-black dark:text-white shadow-xl"
-                          : "text-white/50 dark:text-black/50 hover:text-white dark:hover:text-black hover:bg-white/5 dark:hover:bg-black/5",
+                          : "text-white/70 dark:text-black/70 hover:text-white dark:hover:text-black hover:bg-white/10 dark:hover:bg-black/10",
                       )}
                     >
                       <item.icon className={cn(
-                        "h-5 w-5",
-                        isActive ? "text-black dark:text-white" : "opacity-70"
+                        "h-6 w-6",
+                        isActive ? "text-black dark:text-white" : "opacity-90"
                       )} />
-                      <span className="text-[11px] tracking-widest">{item.label}</span>
+                      <span className="text-[12px] tracking-wider">{item.label}</span>
                       {count > 0 && (
                         <div className="ml-auto min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1">
                           {count > 99 ? "99+" : count}
