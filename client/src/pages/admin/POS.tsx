@@ -20,6 +20,7 @@ import {
   openPosSession,
   fetchAdminCustomers,
   createAdminCustomer,
+  exportPosBillsCSV,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,10 @@ import {
   UserPlus,
   History,
   ParkingCircle as ParkIcon,
+  Users,
+  User,
+  Grid,
+  List,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -104,6 +109,8 @@ export default function AdminPOS() {
   const [showQR, setShowQR] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [isCustomersOpen, setIsCustomersOpen] = useState(false);
+  const [customerViewMode, setCustomerViewMode] = useState<"grid" | "list">("list");
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -224,38 +231,7 @@ export default function AdminPOS() {
   const changeAmount =
     paymentMethod === "cash" ? Math.max(0, cashReceivedNum - total) : 0;
 
-  // Cart operations — toggle: click to add, click again to remove
-  const toggleCartItem = (product: AdminProduct) => {
-    const existingInCart = cart.find((i) => i.productId === product.id);
-
-    if (existingInCart) {
-      // Second click → remove from cart
-      setCart((prev) => prev.filter((i) => i.productId !== product.id));
-      return;
-    }
-
-    // First click → add 1 unit
-    if (product.stock <= 0) {
-      toast({
-        title: "Out of Stock",
-        description: `${product.name} is currently unavailable`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setCart((prev) => [
-      ...prev,
-      {
-        productId: product.id,
-        productName: product.name,
-        imageUrl: product.imageUrl ?? "",
-        unitPrice: Number(product.price),
-        quantity: 1,
-        lineTotal: Number(product.price),
-      },
-    ]);
-  };
+  // Cart operations
 
   // For quantity adjustment only (used in cart sidebar)
   const addToCart = (product: AdminProduct) => {
@@ -386,6 +362,18 @@ export default function AdminPOS() {
         discountAmount: discountAmount,
         notes: notes || undefined,
       }),
+
+    onSuccess: (newBill) => {
+      setCompletedBill(newBill);
+      setCart([]);
+      setCustomerName("Walk-in Customer");
+      setCustomerPhone("");
+      setCashReceived("");
+      setDiscount("0");
+      setNotes("");
+      setSelectedCustomer(null);
+      toast({ title: "Checkout successful" });
+    },
 
     onError: (error) => {
       toast({ 
@@ -557,17 +545,52 @@ export default function AdminPOS() {
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          className="border-red-300 text-red-600 hover:bg-red-50"
-          onClick={() => setShowEndOfDay(true)}
-        >
-          End Session
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            className="border-[#E5E5E0] dark:border-border text-[#2C3E2D] dark:text-foreground hidden sm:flex"
+            onClick={() => exportPosBillsCSV()}
+          >
+            Export CSV
+          </Button>
+          <div className="flex bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full p-1 shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "rounded-full h-8 text-xs font-semibold px-4",
+                isCustomersOpen ? "bg-muted" : "text-muted-foreground"
+              )}
+              onClick={() => setIsCustomersOpen(true)}
+            >
+              <Search className="h-3.5 w-3.5 mr-2" />
+              Search Customer
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full h-8 text-xs font-semibold px-4 text-muted-foreground hover:text-foreground"
+              onClick={() => setIsAddCustomerOpen(true)}
+            >
+              <UserPlus className="h-3.5 w-3.5 mr-2" />
+              Add Customer
+            </Button>
+          </div>
+          <Button
+            variant="outline"
+            className="border-red-300 text-red-600 hover:bg-red-50 ml-2"
+            onClick={() => setShowEndOfDay(true)}
+          >
+            End Session
+          </Button>
+        </div>
       </div>
 
-      {/* Main Grid: Products | Customers | Cart */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px_350px] gap-6">
+      {/* Main Grid: Products | Cart */}
+      <div className={cn(
+        "grid grid-cols-1 gap-6 transition-all duration-300",
+        isCustomersOpen ? "lg:grid-cols-[1fr_300px]" : "lg:grid-cols-[1fr_350px]"
+      )}>
         {/* LEFT: Products */}
         <div className="space-y-4">
           {/* Professional search bar */}
@@ -679,7 +702,7 @@ export default function AdminPOS() {
                           product.stock <= 0 && "opacity-40 pointer-events-none"
                         )}
                       >
-                        <div onClick={() => toggleCartItem(product)} className="cursor-pointer">
+                        <div onClick={() => addToCart(product)} className="cursor-pointer">
                           {product.imageUrl && (
                             <img
                               src={product.imageUrl}
@@ -765,7 +788,7 @@ export default function AdminPOS() {
                             product.stock <= 0 && "opacity-40 pointer-events-none"
                           )}
                         >
-                          <div className="relative w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => toggleCartItem(product)}>
+                          <div className="relative w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => addToCart(product)}>
                             {product.imageUrl ? (
                               <img
                                 src={product.imageUrl}
@@ -781,7 +804,7 @@ export default function AdminPOS() {
                               </div>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleCartItem(product)}>
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => addToCart(product)}>
                             <div className="text-sm font-medium truncate">{product.name}</div>
                             <div className="text-xs text-muted-foreground uppercase">{product.category || "General"}</div>
                           </div>
@@ -822,135 +845,50 @@ export default function AdminPOS() {
           </AnimatePresence>
         </div>
 
-        {/* CENTER: Customers */}
-        <div className="space-y-4">
-          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-4 h-[calc(100vh-140px)] flex flex-col">
-            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground mb-4">
-              Customers
-            </h2>
-            <div className="relative mb-4 shrink-0">
-              <div className="flex items-center bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full h-10 px-3 transition-all duration-300 focus-within:border-primary/50 shadow-inner">
-                <Search className={`h-4 w-4 shrink-0 transition-colors ${customerSearch.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-                <Input
-                  placeholder="Search name or phone..."
-                  className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-2 w-full"
-                  value={customerSearch}
-                  onChange={(e) => setCustomerSearch(e.target.value)}
-                />
-                {customerSearch && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 shrink-0 rounded-full hover:bg-muted"
-                    onClick={() => setCustomerSearch("")}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-2 pr-2 scrollbar-hide">
-              {customers?.slice(0, 10).map((customer) => {
-                const isSelected = selectedCustomer?.id === customer.id;
-                return (
-                  <motion.button
-                    layout
-                    key={customer.id}
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedCustomer(null);
-                        setCustomerName("Walk-in Customer");
-                      } else {
-                        setSelectedCustomer(customer);
-                        setCustomerName(`${customer.firstName} ${customer.lastName}`);
-                      }
-                      setCustomerPhone("");
-                    }}
-                    className={cn(
-                      "w-full text-left p-3 rounded-xl border transition-all hover:shadow-sm",
-                      isSelected 
-                        ? "bg-[#2C3E2D] border-[#2C3E2D] text-white ring-2 ring-[#2C3E2D]/20" 
-                        : "bg-background border-[#E5E5E0] dark:border-border hover:border-primary/40"
-                    )}
-                  >
-                    <div className="font-semibold text-sm truncate">
-                      {customer.firstName} {customer.lastName}
-                    </div>
-                    <div className={cn("text-xs truncate", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                      {customer.email}
-                    </div>
-                    {customer.phoneNumber && (
-                      <div className={cn("text-xs truncate mt-0.5", isSelected ? "text-white/80" : "text-muted-foreground")}>
-                        {customer.phoneNumber}
-                      </div>
-                    )}
-                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-current/10">
-                      <span className="text-[10px] uppercase font-bold tracking-wider opacity-80">
-                        {customer.orderCount} Orders
-                      </span>
-                      <span className="text-xs font-bold">
-                        {formatPrice(customer.totalSpent)}
-                      </span>
-                    </div>
-                  </motion.button>
-                );
-              })}
-              {customers?.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground text-sm flex flex-col items-center gap-3">
-                  <p>No customers found for "{customerSearch}"</p>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="border-primary/20 hover:border-primary/50 text-primary bg-primary/5 rounded-full"
-                    onClick={() => setIsAddCustomerOpen(true)}
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" /> Add this Customer
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Removed fixed middle column for customers */}
 
         {/* RIGHT: Cart and checkout */}
         <div className="space-y-4">
           {/* Selected Customer Header */}
           {selectedCustomer ? (
-            <div className="bg-[#E8F3EB] dark:bg-green-950/30 rounded-xl p-4 border border-[#2C5234]/20 relative">
+            <div className="bg-[#E8F3EB] dark:bg-green-950/30 rounded-xl p-4 border border-[#2C5234]/20 relative shadow-sm">
               <button
                 className="absolute top-2 right-2 text-[#2C5234]/60 hover:text-[#2C5234] dark:text-green-400/60 dark:hover:text-green-400"
                 onClick={() => {
                   setSelectedCustomer(null);
                   setCustomerName("Walk-in Customer");
                   setCustomerPhone("");
-                  setCustomerSearch(""); // Clear search so they can find someone else easily
+                  setCustomerSearch("");
                 }}
               >
                 <X className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-2 mb-1">
-                <div className="bg-[#2C5234] text-white text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-sm">
-                  Selected
-                </div>
+                <Users className="w-3.5 h-3.5 text-[#2C5234]" />
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#2C5234]/70">Selected Customer</span>
               </div>
-              <div className="font-bold text-[#2C5234] dark:text-green-400 text-lg">
+              <div className="font-bold text-[#2C3E2D] dark:text-foreground text-lg mb-1 truncate">
                 {selectedCustomer.firstName} {selectedCustomer.lastName}
               </div>
-              <div className="text-xs text-[#2C5234]/80 dark:text-green-400/80 mb-3">
-                {selectedCustomer.email}
-              </div>
-              <div className="flex gap-4 pt-3 border-t border-[#2C5234]/10">
-                <div>
-                  <div className="text-[10px] uppercase text-[#2C5234]/70 dark:text-green-400/70 font-bold">Lifetime Value</div>
-                  <div className="text-sm font-bold text-[#2C5234] dark:text-green-400">{formatPrice(selectedCustomer.totalSpent)}</div>
-                </div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-3">
+                <Badge variant="outline" className="h-4 text-[9px] bg-white border-[#2C5234]/10 text-[#2C5234]">{selectedCustomer.orderCount} Orders</Badge>
+                <span className="text-primary font-bold">{formatPrice(selectedCustomer.totalSpent)} Total</span>
               </div>
             </div>
           ) : (
-            <div className="bg-muted/30 rounded-xl p-4 border border-dashed border-border text-center">
-              <div className="text-sm font-medium text-muted-foreground mb-1">Walk-in Customer</div>
-              <div className="text-xs text-muted-foreground/60">Select from the middle column to link to a profile</div>
+            <div className="bg-muted/10 rounded-xl p-4 border border-dashed border-border text-center flex flex-col items-center justify-center gap-1 min-h-[100px]">
+              <div className="w-8 h-8 rounded-full bg-muted/20 flex items-center justify-center mb-1">
+                <User className="w-4 h-4 text-muted-foreground/60" />
+              </div>
+              <div className="text-sm font-medium text-muted-foreground">Walk-in Customer</div>
+              <Button 
+                variant="link" 
+                size="sm" 
+                className="text-[10px] h-auto p-0 text-primary uppercase tracking-widest font-bold"
+                onClick={() => setIsCustomersOpen(true)}
+              >
+                Attach Profile
+              </Button>
             </div>
           )}
 
@@ -1291,42 +1229,204 @@ export default function AdminPOS() {
         </DialogContent>
       </Dialog>
 
+      {/* Customer Selection Modal */}
+      <Dialog open={isCustomersOpen} onOpenChange={setIsCustomersOpen}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl">
+          <DialogHeader className="p-6 border-b border-border space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <DialogTitle className="text-2xl font-serif">Customer Directory</DialogTitle>
+                <DialogDescription>Search and select a customer to link to this order.</DialogDescription>
+              </div>
+              <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg border border-border/50">
+                <Button 
+                  variant={customerViewMode === 'list' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="h-8 w-8 p-0 rounded-md"
+                  onClick={() => setCustomerViewMode('list')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant={customerViewMode === 'grid' ? 'secondary' : 'ghost'} 
+                  size="sm" 
+                  className="h-8 w-8 p-0 rounded-md"
+                  onClick={() => setCustomerViewMode('grid')}
+                >
+                  <Grid className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customers by name, email or phone..."
+                className="pl-10 h-12 bg-muted/20 border-border rounded-xl"
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+            {customerViewMode === 'list' ? (
+              <div className="bg-white dark:bg-card border border-border rounded-xl overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-muted/50 text-[10px] uppercase font-bold tracking-widest text-muted-foreground border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3">Customer</th>
+                      <th className="px-4 py-3">Contact</th>
+                      <th className="px-4 py-3">Sales</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {customers?.map((customer) => {
+                      const isSelected = selectedCustomer?.id === customer.id;
+                      return (
+                        <tr key={customer.id} className={cn("hover:bg-muted/20 transition-colors", isSelected && "bg-primary/5")}>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-[#2C3E2D]/10 flex items-center justify-center text-[#2C3E2D] font-bold text-xs uppercase">
+                                {customer.firstName[0]}{customer.lastName[0]}
+                              </div>
+                              <div className="font-semibold text-[#2C3E2D] dark:text-foreground">
+                                {customer.firstName} {customer.lastName}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            <div>{customer.email}</div>
+                            <div>{customer.phoneNumber || 'No phone'}</div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="text-xs font-bold">{formatPrice(customer.totalSpent)}</div>
+                            <div className="text-[10px] text-muted-foreground uppercase">{customer.orderCount} Orders</div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button 
+                              size="sm" 
+                              variant={isSelected ? "secondary" : "default"}
+                              className={cn("rounded-full h-8 px-4", isSelected ? "bg-[#2C3E2D] text-white hover:bg-[#1A251B]" : "bg-[#2C3E2D] hover:bg-[#1A251B]")}
+                              onClick={() => {
+                                setSelectedCustomer(isSelected ? null : customer);
+                                setCustomerName(isSelected ? "Walk-in Customer" : `${customer.firstName} ${customer.lastName}`);
+                                setIsCustomersOpen(false);
+                              }}
+                            >
+                              {isSelected ? "Unlink" : "Select"}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {customers?.map((customer) => {
+                  const isSelected = selectedCustomer?.id === customer.id;
+                  return (
+                    <div 
+                      key={customer.id} 
+                      className={cn(
+                        "p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md h-full flex flex-col",
+                        isSelected ? "bg-primary/5 border-primary ring-1 ring-primary" : "bg-card border-border hover:border-primary/50"
+                      )}
+                      onClick={() => {
+                        setSelectedCustomer(customer);
+                        setCustomerName(`${customer.firstName} ${customer.lastName}`);
+                        setIsCustomersOpen(false);
+                      }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
+                          {customer.firstName[0]}{customer.lastName[0]}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm truncate">{customer.firstName} {customer.lastName}</div>
+                          <div className="text-[10px] text-muted-foreground truncate">{customer.email}</div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-auto pt-3 border-t border-border">
+                        <div>
+                          <p className="text-[9px] uppercase font-bold text-muted-foreground">Orders</p>
+                          <p className="font-bold text-xs">{customer.orderCount}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[9px] uppercase font-bold text-muted-foreground">Spent</p>
+                          <p className="font-bold text-xs text-primary">{formatPrice(customer.totalSpent)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            
+            {customers?.length === 0 && (
+              <div className="py-20 text-center flex flex-col items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-muted/20 flex items-center justify-center">
+                  <UserPlus className="w-8 h-8 text-muted-foreground/40" />
+                </div>
+                <div>
+                   <h3 className="font-bold text-lg">No Results Found</h3>
+                   <p className="text-muted-foreground">No customers match your current search criteria.</p>
+                </div>
+                <Button 
+                   className="bg-[#2C3E2D] hover:bg-[#1A251B] h-10 px-8 rounded-full"
+                   onClick={() => {
+                     setIsCustomersOpen(false);
+                     setIsAddCustomerOpen(true);
+                   }}
+                >
+                  Create New Profile
+                </Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Inline Quick Add Customer Dialog */}
       <Dialog open={isAddCustomerOpen} onOpenChange={setIsAddCustomerOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-2xl">Create Customer</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleAddSubmit} className="space-y-4 mt-4">
+        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden rounded-2xl">
+          <div className="bg-[#2C3E2D] p-6 text-white">
+            <h2 className="text-2xl font-serif">Quick Create</h2>
+            <p className="text-white/70 text-sm">Fast-track new customer profile creation.</p>
+          </div>
+          <form onSubmit={handleAddSubmit} className="p-6 space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="firstName">First Name *</Label>
-                <Input id="firstName" name="firstName" required className="rounded-lg" />
+              <div className="space-y-1.5">
+                <Label htmlFor="firstName" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">First Name *</Label>
+                <Input id="firstName" name="firstName" required border="none" className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="lastName">Last Name *</Label>
-                <Input id="lastName" name="lastName" required className="rounded-lg" />
+              <div className="space-y-1.5">
+                <Label htmlFor="lastName" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Last Name *</Label>
+                <Input id="lastName" name="lastName" required border="none" className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email Address</Label>
-              <Input id="email" name="email" type="email" placeholder="customer@example.com" className="rounded-lg" />
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Email Address</Label>
+              <Input id="email" name="email" type="email" placeholder="customer@example.com" className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Phone Number</Label>
+            <div className="space-y-1.5">
+              <Label htmlFor="phoneNumber" className="text-xs uppercase font-bold tracking-widest text-muted-foreground">Phone Number</Label>
               <Input 
                 id="phoneNumber" 
                 name="phoneNumber" 
                 placeholder="e.g. 9812345678" 
                 defaultValue={customerSearch.replace(/\D/g, '')} 
-                className="rounded-lg" 
+                className="bg-muted/30 border-none rounded-xl h-11 focus-visible:ring-1 focus-visible:ring-primary/20" 
               />
             </div>
-            <div className="pt-4 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setIsAddCustomerOpen(false)} className="rounded-full">Cancel</Button>
-              <Button type="submit" disabled={addCustomerMutation.isPending} className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
-                {addCustomerMutation.isPending ? "Creating..." : "Save & Assign"}
+            <div className="pt-4 flex flex-col gap-2">
+              <Button type="submit" disabled={addCustomerMutation.isPending} className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white h-12 rounded-xl text-base font-semibold">
+                {addCustomerMutation.isPending ? "Creating profile..." : "Save & Attach Profile"}
               </Button>
+              <Button type="button" variant="ghost" onClick={() => setIsAddCustomerOpen(false)} className="w-full h-10 text-muted-foreground hover:bg-muted">Cancel</Button>
             </div>
           </form>
         </DialogContent>

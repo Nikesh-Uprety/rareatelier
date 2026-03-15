@@ -1161,6 +1161,96 @@ export async function registerRoutes(
     },
   );
 
+  // Analytics CSV export
+  app.get(
+    "/api/admin/analytics/export",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const range = getQueryParam(req.query.range) || "30d";
+        const orders = await storage.getOrders();
+        
+        const now = new Date();
+        let startDate: Date;
+        switch (range) {
+          case "7d": startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+          case "90d": startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000); break;
+          case "1y": startDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000); break;
+          default: startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); break;
+        }
+
+        const filteredOrders = orders.filter(o => {
+          if (!o.createdAt) return false;
+          return new Date(o.createdAt) >= startDate;
+        });
+
+        const rows: string[] = [];
+        rows.push("Date,Order ID,Customer,Email,Status,Payment Method,Amount");
+
+        for (const order of filteredOrders) {
+          const date = order.createdAt ? new Date(order.createdAt).toISOString().split("T")[0] : "";
+          rows.push(
+            [
+              date,
+              order.id,
+              `"${order.fullName}"`,
+              order.email,
+              order.status,
+              order.paymentMethod || "N/A",
+              order.total.toString(),
+            ].join(",")
+          );
+        }
+
+        const csv = rows.join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", `attachment; filename="analytics-${range}.csv"`);
+        return res.send(csv);
+      } catch (err) {
+        console.error("Error in GET /api/admin/analytics/export", err);
+        return res.status(500).json({ success: false, error: "Failed to export analytics" });
+      }
+    },
+  );
+
+  // Customers CSV export
+  app.get(
+    "/api/admin/customers/export",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const customers = await storage.getCustomers();
+
+        const rows: string[] = [];
+        rows.push("Name,Email,Phone,Orders,Total Spent,Status,Created");
+
+        for (const customer of customers) {
+          const created = customer.createdAt ? new Date(customer.createdAt).toISOString().split("T")[0] : "";
+          const status = customer.orderCount > 0 ? "Active" : "Inactive";
+          rows.push(
+            [
+              `"${customer.firstName} ${customer.lastName}"`,
+              customer.email,
+              customer.phoneNumber || "N/A",
+              customer.orderCount.toString(),
+              customer.totalSpent.toString(),
+              status,
+              created,
+            ].join(",")
+          );
+        }
+
+        const csv = rows.join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="customers.csv"');
+        return res.send(csv);
+      } catch (err) {
+        console.error("Error in GET /api/admin/customers/export", err);
+        return res.status(500).json({ success: false, error: "Failed to export customers" });
+      }
+    },
+  );
+
   // Admin customers
   app.get(
     "/api/admin/customers",
@@ -1207,6 +1297,44 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: err.message || "Failed to create customer" });
+      }
+    },
+  );
+
+  app.put(
+    "/api/admin/customers/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
+      try {
+        // Assume updateCustomer is added to storage
+        const customer = await storage.updateCustomer(id, req.body);
+        return res.json({ success: true, data: customer });
+      } catch (err: any) {
+        console.error("Error in PUT /api/admin/customers/:id", err);
+        return res
+          .status(500)
+          .json({ success: false, error: err.message || "Failed to update customer" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/customers/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
+      try {
+        // Assume deleteCustomer is added to storage
+        await storage.deleteCustomer(id);
+        return res.json({ success: true });
+      } catch (err: any) {
+        console.error("Error in DELETE /api/admin/customers/:id", err);
+        return res
+          .status(500)
+          .json({ success: false, error: err.message || "Failed to delete customer" });
       }
     },
   );
@@ -1962,7 +2090,7 @@ export async function registerRoutes(
           return sendError(res, "Invalid email", undefined, 400);
         }
 
-        await db.delete(newsletterSubscribers).where(eq(newsletterSubscribers.email, email.toLowerCase()));
+        await storage.unsubscribeFromNewsletter(email);
         return res.json({ success: true, message: "Email removed successfully" });
       } catch (err: any) {
         return handleApiError(res, err, "DELETE /api/admin/newsletter/:email");
@@ -1976,7 +2104,7 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const result = await db.delete(newsletterSubscribers);
+        await storage.unsubscribeAllFromNewsletter();
         return res.json({ success: true, message: "All subscribers cleared" });
       } catch (err: any) {
         return handleApiError(res, err, "DELETE /api/admin/newsletter/clear-all");
@@ -2076,6 +2204,46 @@ export async function registerRoutes(
       res.status(500).json({ success: false, error: "Failed to load bill" });
     }
   });
+
+  // GET /api/admin/bills/export — export bills to CSV
+  app.get(
+    "/api/admin/bills/export",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const bills = await storage.getBills();
+        const rows: string[] = [];
+        
+        rows.push("Bill Number,Date,Customer Name,Phone,Subtotal,Discount,Total,Payment Method,Processed By,Status,Type");
+        
+        for (const bill of bills) {
+          const date = bill.createdAt ? new Date(bill.createdAt).toISOString().split("T")[0] : "";
+          
+          rows.push([
+            bill.billNumber,
+            date,
+            `"${bill.customerName}"`,
+            bill.customerPhone || "N/A",
+            bill.subtotal.toString(),
+            bill.discountAmount.toString(),
+            bill.totalAmount.toString(),
+            bill.paymentMethod,
+            `"${bill.processedBy}"`,
+            bill.status,
+            bill.billType
+          ].join(","));
+        }
+        
+        const csv = rows.join("\n");
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader("Content-Disposition", 'attachment; filename="pos-bills.csv"');
+        return res.send(csv);
+      } catch (err) {
+        console.error("Error in GET /api/admin/bills/export", err);
+        return res.status(500).json({ success: false, error: "Failed to export bills" });
+      }
+    }
+  );
 
   // POST /api/admin/bills/pos — create bill directly from POS (no order record)
   app.post("/api/admin/bills/pos", requireAdmin, async (req: Request, res: Response) => {

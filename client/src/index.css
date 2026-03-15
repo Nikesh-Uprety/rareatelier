@@ -73,6 +73,14 @@
   /* Brand Typography Colors */
   --brand-product-name: oklch(0.373 0.034 259.733);
   --brand-product-detail: rgb(86, 86, 86);
+
+  /* Calendar Heatmap Colors - Light */
+  --calendar-0: #ebedf0;
+  --calendar-1: #9be9a8;
+  --calendar-2: #40c463;
+  --calendar-3: #30a14e;
+  --calendar-4: #216e39;
+  --calendar-holiday: #d0d7de;
 }
 
 /* DARK MODE */
@@ -111,6 +119,14 @@
   /* Brand Typography Colors - Adaptive for Dark Mode */
   --brand-product-name: oklch(0.85 0.034 259.733);
   --brand-product-detail: rgb(210, 210, 210);
+
+  /* Calendar Heatmap Colors - Dark */
+  --calendar-0: #1a1a1a;
+  --calendar-1: #0e4429;
+  --calendar-2: #006d32;
+  --calendar-3: #26a641;
+  --calendar-4: #39d353;
+  --calendar-holiday: #2d2a26;
 }
 
 /* WARM MODE */
@@ -224,6 +240,11 @@
 
 .animate-sparkle {
   animation: sparkle 3s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }
 
 /* Hero Performance Animations */

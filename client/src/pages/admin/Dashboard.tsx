@@ -264,33 +264,39 @@ export default function AdminDashboard() {
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={analytics?.revenueByDay || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E0" />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} className="[&_line]:stroke-border" />
                 <XAxis 
                   dataKey="date" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 10, fill: '#888' }}
+                  tick={{ fontSize: 10 }}
+                  className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
                   tickFormatter={(str) => {
                     const date = new Date(str);
                     return date.toLocaleDateString('en-NP', { month: 'short', day: 'numeric' });
                   }}
                 />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#888' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground" />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  cursor={{ fill: 'rgba(128,128,128,0.1)' }}
                   contentStyle={{ 
                     borderRadius: '12px', 
-                    border: '1px solid #E5E5E0',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--card))',
+                    color: 'hsl(var(--card-foreground))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                     fontSize: '12px'
                   }}
                 />
                 <Bar 
                   dataKey="revenue" 
-                  fill="#2C3E2D" 
                   radius={[4, 4, 0, 0]} 
                   barSize={32}
-                />
+                >
+                  {(analytics?.revenueByDay || []).map((_, index) => (
+                    <Cell key={`rev-${index}`} className="fill-[#4ADE80] dark:fill-[#4ADE80]" fill="#2C3E2D" />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -313,22 +319,25 @@ export default function AdminDashboard() {
                 layout="vertical"
                 margin={{ top: 10, right: 30, left: 40, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#E5E5E0" />
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} className="[&_line]:stroke-border" />
                 <XAxis type="number" hide />
                 <YAxis 
                   dataKey="category" 
                   type="category" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 10, fill: '#888' }}
+                  tick={{ fontSize: 10 }}
                   width={80}
+                  className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
                 />
                 <Tooltip 
-                  cursor={{ fill: 'rgba(0,0,0,0.05)' }}
+                  cursor={{ fill: 'rgba(128,128,128,0.1)' }}
                   contentStyle={{ 
                     borderRadius: '12px', 
-                    border: '1px solid #E5E5E0',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                    border: '1px solid hsl(var(--border))',
+                    background: 'hsl(var(--card))',
+                    color: 'hsl(var(--card-foreground))',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                     fontSize: '12px'
                   }}
                 />
@@ -338,7 +347,7 @@ export default function AdminDashboard() {
                   barSize={20}
                 >
                   {(analytics?.salesByCategory || []).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={['#2C3E2D', '#4A6741', '#6B8E23', '#8FBC8F'][index % 4]} />
+                    <Cell key={`cell-${index}`} fill={['#4ADE80', '#34D399', '#22C55E', '#16A34A', '#15803D'][index % 5]} />
                   ))}
                 </Bar>
               </BarChart>

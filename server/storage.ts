@@ -162,6 +162,11 @@ export interface IStorage {
   createCustomer(
     data: Omit<Customer, "id" | "createdAt">,
   ): Promise<Customer>;
+  updateCustomer(
+    id: string,
+    data: Partial<Omit<Customer, "id" | "createdAt">>
+  ): Promise<Customer>;
+  deleteCustomer(id: string): Promise<void>;
   upsertCustomerFromOrder(
     email: string,
     firstName: string,
@@ -204,7 +209,7 @@ export interface IStorage {
     role: string;
     passwordHash: string;
   }): Promise<User>;
-  getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]>;
+  getNewsletterSubscribers(includeUnsubscribed?: boolean): Promise<{ email: string; status: string; unsubscribedAt: Date | null; createdAt: Date | null }[]>;
 
   // OTP tokens
   createOtpToken(data: {
@@ -238,6 +243,8 @@ export interface IStorage {
 
   // Newsletter
   subscribeToNewsletter(email: string): Promise<void>;
+  unsubscribeFromNewsletter(email: string): Promise<void>;
+  unsubscribeAllFromNewsletter(): Promise<void>;
 
   // Admin Notifications
   getAdminNotifications(): Promise<AdminNotification[]>;
@@ -826,7 +833,8 @@ export class PgStorage implements IStorage {
         or(
           ilike(customers.firstName, q),
           ilike(customers.lastName, q),
-          ilike(customers.phoneNumber, q)
+          ilike(customers.phoneNumber, q),
+          ilike(customers.email, q)
         )
       );
     }
@@ -845,8 +853,10 @@ export class PgStorage implements IStorage {
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
         createdAt: customers.createdAt,
+        profileImageUrl: users.profileImageUrl,
       })
       .from(customers)
+      .leftJoin(users, eq(sql`lower(${customers.email})`, sql`lower(${users.username})`))
       .where(whereClause)
       .orderBy(desc(customers.createdAt));
 
@@ -864,8 +874,10 @@ export class PgStorage implements IStorage {
         orderCount: customers.orderCount,
         avatarColor: customers.avatarColor,
         createdAt: customers.createdAt,
+        profileImageUrl: users.profileImageUrl,
       })
       .from(customers)
+      .leftJoin(users, eq(sql`lower(${customers.email})`, sql`lower(${users.username})`))
       .where(eq(customers.id, id))
       .limit(1);
 
@@ -917,19 +929,26 @@ export class PgStorage implements IStorage {
         orderCount: data.orderCount,
         avatarColor: data.avatarColor,
       })
-      .returning({
-        id: customers.id,
-        firstName: customers.firstName,
-        lastName: customers.lastName,
-        email: customers.email,
-        phoneNumber: customers.phoneNumber,
-        totalSpent: customers.totalSpent,
-        orderCount: customers.orderCount,
-        avatarColor: customers.avatarColor,
-        createdAt: customers.createdAt,
-      });
+      .returning();
 
     return row;
+  }
+
+  async updateCustomer(
+    id: string,
+    data: Partial<Omit<Customer, "id" | "createdAt">>
+  ): Promise<Customer> {
+    const [row] = await db
+      .update(customers)
+      .set(data)
+      .where(eq(customers.id, id))
+      .returning();
+    if (!row) throw new Error("Customer not found");
+    return row;
+  }
+
+  async deleteCustomer(id: string): Promise<void> {
+    await db.delete(customers).where(eq(customers.id, id));
   }
 
   async upsertCustomerFromOrder(
@@ -1020,14 +1039,43 @@ export class PgStorage implements IStorage {
   }
 
   async subscribeToNewsletter(email: string): Promise<void> {
+    const emailLower = email.toLowerCase();
     await db
       .insert(newsletterSubscribers)
-      .values({ email: email.toLowerCase() })
-      .onConflictDoNothing();
+      .values({ email: emailLower, status: "active" })
+      .onConflictDoUpdate({
+        target: newsletterSubscribers.email,
+        set: { status: "active", unsubscribedAt: null },
+      });
   }
 
-  async getNewsletterSubscribers(): Promise<{ email: string; createdAt: Date | null }[]> {
-    return db.select().from(newsletterSubscribers).orderBy(desc(newsletterSubscribers.createdAt));
+  async unsubscribeFromNewsletter(email: string): Promise<void> {
+    await db
+      .update(newsletterSubscribers)
+      .set({ status: "unsubscribed", unsubscribedAt: new Date() })
+      .where(eq(sql`lower(${newsletterSubscribers.email})`, email.toLowerCase()));
+  }
+
+  async unsubscribeAllFromNewsletter(): Promise<void> {
+    await db
+      .update(newsletterSubscribers)
+      .set({ status: "unsubscribed", unsubscribedAt: new Date() })
+      .where(eq(newsletterSubscribers.status, "active"));
+  }
+
+  async getNewsletterSubscribers(includeUnsubscribed = false): Promise<{ email: string; status: string; unsubscribedAt: Date | null; createdAt: Date | null }[]> {
+    const conditions = [];
+    if (!includeUnsubscribed) {
+      conditions.push(eq(newsletterSubscribers.status, "active"));
+    }
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    return db
+      .select()
+      .from(newsletterSubscribers)
+      .where(whereClause)
+      .orderBy(desc(newsletterSubscribers.createdAt));
   }
 
   // Admin Notifications Implementations

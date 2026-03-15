@@ -39,6 +39,7 @@ export interface AdminCustomer {
   avatarColor: string | null;
   createdAt: string;
   phoneNumber?: string | null;
+  profileImageUrl?: string | null;
 }
 
 export interface AdminCustomerDetail extends AdminCustomer {
@@ -215,6 +216,10 @@ export function exportSubscribersCSV(): void {
   window.location.href = "/api/admin/subscribers/export";
 }
 
+export function exportCustomersCSV(): void {
+  window.location.href = "/api/admin/customers/export";
+}
+
 export async function fetchAdminCustomers(
   search?: string,
 ): Promise<AdminCustomer[]> {
@@ -242,6 +247,19 @@ export async function createAdminCustomer(data: {
   const res = await apiRequest("POST", "/api/admin/customers", data);
   const json = (await res.json()) as { success: boolean; data: AdminCustomer };
   return json.data;
+}
+
+export async function updateAdminCustomer(
+  id: string,
+  data: { firstName?: string; lastName?: string; email?: string; phoneNumber?: string }
+): Promise<AdminCustomer> {
+  const res = await apiRequest("PUT", `/api/admin/customers/${id}`, data);
+  const json = (await res.json()) as { success: boolean; data: AdminCustomer };
+  return json.data;
+}
+
+export async function deleteAdminCustomer(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/customers/${id}`);
 }
 
 export async function fetchCustomerById(
@@ -347,6 +365,10 @@ export async function voidBill(id: string): Promise<AdminBill> {
   const res = await apiRequest("PUT", `/api/admin/bills/${id}/void`);
   const json = (await res.json()) as { success: boolean; data: AdminBill };
   return json.data;
+}
+
+export function exportPosBillsCSV(): void {
+  window.location.href = "/api/admin/bills/export";
 }
 
 // ── POS Session API helpers ──────────────────────────

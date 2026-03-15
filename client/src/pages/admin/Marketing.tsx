@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   importNewsletterEmails,
   deleteNewsletterEmail,
   deleteAllNewsletterEmails,
+  type AdminCustomer,
 } from "@/lib/adminApi";
 import { format } from "date-fns";
 import {
@@ -100,6 +101,43 @@ const emailTemplates = {
 </div>
 </div>`,
   },
+  template7: {
+    name: "Minimalist News",
+    subject: "The Weekly Edit — Perspective and Insights",
+    html: `<div style="font-family: 'Inter', system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #111;">
+<header style="border-bottom: 1px solid #eee; padding-bottom: 20px; margin-bottom: 30px;">
+  <h1 style="font-size: 18px; font-weight: 600; margin: 0;">RARE WEEKLY</h1>
+</header>
+<main>
+  <h2 style="font-size: 24px; line-height: 1.3; margin-bottom: 15px;">Minimalism in Design: A New Era</h2>
+  <p style="font-size: 16px; line-height: 1.6; color: #444; margin-bottom: 25px;">Exploring the intersection of function and form in modern architecture and fashion...</p>
+  <div style="background: #f9f9f9; padding: 20px; margin-bottom: 25px;">
+    <h3 style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: #888; margin-bottom: 10px;">Featured</h3>
+    <p style="font-size: 15px; margin: 0;">Exclusive interview with Lead Designer Sarah Chen on the future of sustainable fabrics.</p>
+  </div>
+  <a href="#" style="color: #111; font-weight: 600; text-decoration: underline;">Read the full story</a>
+</main>
+<footer style="margin-top: 50px; color: #888; font-size: 12px;">
+  <p>© 2026 RARE. All rights reserved.</p>
+</footer>
+</div>`,
+  },
+  template8: {
+    name: "Season's Greetings",
+    subject: "Warm Wishes from the RARE Atelier team",
+    html: `<div style="font-family: 'Playfair Display', serif; max-width: 600px; margin: 0 auto; background: #fffcf5; color: #4a3728; border: 15px solid #4a3728; padding: 40px;">
+<div style="text-align: center;">
+  <div style="font-size: 40px; margin-bottom: 20px;">🌿</div>
+  <h1 style="font-size: 32px; letter-spacing: 2px; margin-bottom: 30px;">HOLIDAY GREETINGS</h1>
+  <p style="font-size: 18px; font-style: italic; line-height: 1.6; margin-bottom: 40px;">"The best and most beautiful things in the world cannot be seen or even touched - they must be felt with the heart."</p>
+  <div style="border-top: 1px solid #4a3728; border-bottom: 1px solid #4a3728; padding: 20px 0; margin-bottom: 40px;">
+    <p style="font-size: 14px; letter-spacing: 1px; margin: 0;">THANK YOU FOR A WONDERFUL YEAR</p>
+  </div>
+  <p style="font-size: 16px; margin-bottom: 30px;">We're taking a short break to reflect and recharge. See you in the New Year!</p>
+  <div style="font-family: 'Sacramento', cursive; font-size: 24px;">The RARE Team</div>
+</div>
+</div>`,
+  },
 } as const;
 
 export default function AdminMarketingPage() {
@@ -117,6 +155,8 @@ export default function AdminMarketingPage() {
   const [isBroadcastConfirmOpen, setIsBroadcastConfirmOpen] = useState(false);
   const [templateSearchQuery, setTemplateSearchQuery] = useState("");
 
+  const [includeCustomers, setIncludeCustomers] = useState(false);
+
   const subscribersQuery = useQuery<{ success: boolean; data: { email: string; createdAt: string }[] }>({
     queryKey: ["admin", "newsletter", "subscribers"],
     queryFn: async () => {
@@ -125,10 +165,46 @@ export default function AdminMarketingPage() {
     },
   });
 
+  const customersQuery = useQuery<AdminCustomer[]>({
+    queryKey: ["admin", "customers"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/admin/customers");
+      const json = await res.json();
+      return json.data;
+    },
+  });
+
   const subscribers = subscribersQuery.data?.data ?? [];
-  const filteredSubscribers = subscribers.filter(s =>
-    s.email.toLowerCase().includes(subscriberSearch.toLowerCase())
+  const customers = customersQuery.data ?? [];
+  
+  // 7.1: Optimize with useMemo
+  const allSubscribers = useMemo(() => {
+    let list = subscribers.map(s => ({ email: s.email, source: "newsletter" }));
+    if (includeCustomers) {
+      const customerEmails = customers.map(c => ({ email: c.email, source: "customer" }));
+      // Merge and remove duplicates
+      const seen = new Set(list.map(s => s.email));
+      customerEmails.forEach(c => {
+        if (!seen.has(c.email)) {
+          list.push(c);
+          seen.add(c.email);
+        }
+      });
+    }
+    return list;
+  }, [subscribers, customers, includeCustomers]);
+
+  const filteredSubscribers = useMemo(() => 
+    allSubscribers.filter(s => s.email.toLowerCase().includes(subscriberSearch.toLowerCase())),
+    [allSubscribers, subscriberSearch]
   );
+
+  const stats = useMemo(() => [
+    { label: "Total Reach", value: allSubscribers.length, icon: Mail, color: "from-[#F3F4F6] to-[#E5E7EB] dark:from-muted/20 dark:to-muted/10" },
+    { label: "Active Campaigns", value: 12, icon: Send, color: "from-[#ECFDF5] to-[#D1FAE5] dark:from-emerald-950/20 dark:to-emerald-900/10" },
+    { label: "Engagement Rate", value: "24.8%", icon: MessageSquare, color: "from-[#EFF6FF] to-[#DBEAFE] dark:from-blue-950/20 dark:to-blue-900/10" },
+    { label: "Growth", value: "+12%", icon: PlusCircle, color: "from-[#FFF7ED] to-[#FFEDD5] dark:from-orange-950/20 dark:to-orange-900/10" },
+  ], [allSubscribers.length]);
 
   const addEmailMutation = useMutation({
     mutationFn: async () => {
@@ -211,17 +287,53 @@ export default function AdminMarketingPage() {
             Marketing
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage your community and send email broadcasts.
+            Build relationships and grow your community with tailored broadcasts.
           </p>
         </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setIsImportDialogOpen(true)} className="h-9">
+            <Upload className="h-4 w-4 mr-2" />
+            Import CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => exportSubscribersCSV()} className="h-9">
+            <Download className="h-4 w-4 mr-2" />
+            Export
+          </Button>
+        </div>
+      </div>
+
+      {/* 7.2: Marketing Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, i) => (
+          <div key={i} className={`p-6 rounded-2xl border border-border bg-gradient-to-br ${stat.color} hover:scale-[1.02] transition-transform cursor-default group`}>
+            <div className="flex items-center justify-between">
+              <stat.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+              <span className="text-2xl font-bold tracking-tight">{stat.value}</span>
+            </div>
+            <p className="mt-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {stat.label}
+            </p>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-6">
-            <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-              Subscribers
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                Subscribers
+              </h2>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-muted-foreground font-medium uppercase">Include Customers</span>
+                <input 
+                  type="checkbox" 
+                  checked={includeCustomers} 
+                  onChange={(e) => setIncludeCustomers(e.target.checked)}
+                  className="h-3 w-3 rounded border-border"
+                />
+              </div>
+            </div>
             <div className="flex gap-2">
               <Input 
                 placeholder="Add email..." 
@@ -249,16 +361,23 @@ export default function AdminMarketingPage() {
                 <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
                   {filteredSubscribers.map((s) => (
                     <tr key={s.email} className="hover:bg-muted/10 transition-colors">
-                      <td className="px-4 py-2 truncate max-w-[150px]">{s.email}</td>
+                      <td className="px-4 py-2 truncate max-w-[150px]">
+                        <div className="flex flex-col">
+                          <span className="font-medium">{s.email}</span>
+                          <span className="text-[10px] text-muted-foreground capitalize">{s.source}</span>
+                        </div>
+                      </td>
                       <td className="px-4 py-2 text-right">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 w-6 p-0 text-red-500"
-                          onClick={() => deleteEmailMutation.mutate(s.email)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        {s.source === "newsletter" && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-6 w-6 p-0 text-red-500"
+                            onClick={() => deleteEmailMutation.mutate(s.email)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -288,6 +407,35 @@ export default function AdminMarketingPage() {
                   <option key={key} value={key}>{t.name}</option>
                 ))}
               </select>
+              <div className="flex gap-2">
+                <input
+                  type="file"
+                  accept=".html,.htm"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const content = evt.target?.result as string;
+                        setMarketingBody(content);
+                        toast({ title: "Template uploaded" });
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                  className="hidden"
+                  id="template-upload"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => document.getElementById("template-upload")?.click()}
+                  className="h-8 text-[10px]"
+                >
+                  <Upload className="h-3 w-3 mr-1.5" />
+                  Upload HTML
+                </Button>
+              </div>
             </div>
 
             <Input 
@@ -312,7 +460,7 @@ export default function AdminMarketingPage() {
                 disabled={!marketingSubject.trim() || !marketingBody.trim() || subscribers.length === 0}
               >
                 <Send className="h-4 w-4 mr-2" />
-                Broadcast to {subscribers.length}
+                Broadcast to {allSubscribers.length}
               </Button>
             </div>
           </div>
@@ -337,6 +485,23 @@ export default function AdminMarketingPage() {
             >
               Confirm Send
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Subscribers</DialogTitle>
+            <DialogDescription>
+              Upload a .txt or .csv file with one email per line.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Input type="file" accept=".txt,.csv" onChange={handleImportFile} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink } from "lucide-react";
@@ -8,6 +8,9 @@ import {
   fetchAdminCustomers,
   fetchCustomerById,
   createAdminCustomer,
+  updateAdminCustomer,
+  deleteAdminCustomer,
+  exportCustomersCSV,
   type AdminCustomer,
   type AdminCustomerDetail,
 } from "@/lib/adminApi";
@@ -15,6 +18,23 @@ import { formatPrice } from "@/lib/format";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Trash2, Edit } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -42,10 +62,11 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function AdminCustomers() {
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<AdminCustomer | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<AdminCustomer | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -62,17 +83,16 @@ export default function AdminCustomers() {
     data: detail,
     isLoading: detailLoading,
   } = useQuery<AdminCustomerDetail | null>({
-    queryKey: ["admin", "customers", selectedId],
+    queryKey: ["admin", "customers", expandedId],
     queryFn: () =>
-      selectedId ? fetchCustomerById(selectedId) : Promise.resolve(null),
-    enabled: !!selectedId,
+      expandedId ? fetchCustomerById(expandedId) : Promise.resolve(null),
+    enabled: !!expandedId,
   });
 
   const list = customers ?? [];
 
-  const handleSelectCustomer = (id: string) => {
-    setSelectedId(id);
-    setIsSheetOpen(true);
+  const handleToggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id);
   };
 
   const getInitials = (first: string, last: string) => {
@@ -91,6 +111,30 @@ export default function AdminCustomers() {
     }
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => updateAdminCustomer(id, data),
+    onSuccess: () => {
+      toast({ title: "Customer updated successfully" });
+      setEditingCustomer(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to update customer", description: error.message, variant: "destructive" });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAdminCustomer,
+    onSuccess: () => {
+      toast({ title: "Customer deleted successfully" });
+      setDeletingCustomer(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete customer", description: error.message, variant: "destructive" });
+    }
+  });
+
   const handleAddSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -105,6 +149,21 @@ export default function AdminCustomers() {
     }
 
     addMutation.mutate({ firstName, lastName, email, phoneNumber });
+  };
+
+  const handleEditSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!editingCustomer) return;
+    const fd = new FormData(e.currentTarget);
+    const firstName = fd.get("firstName") as string;
+    const lastName = fd.get("lastName") as string;
+    const email = fd.get("email") as string;
+    const phoneNumber = fd.get("phoneNumber") as string;
+
+    updateMutation.mutate({ 
+      id: editingCustomer.id, 
+      data: { firstName, lastName, email, phoneNumber } 
+    });
   };
 
   const bgColors = [
@@ -131,6 +190,7 @@ export default function AdminCustomers() {
           <Button
             variant="outline"
             className="flex-1 sm:flex-none bg-white dark:bg-card border-[#E5E5E0] dark:border-border text-[#2C3E2D] dark:text-foreground"
+            onClick={() => exportCustomersCSV()}
           >
             Export CSV
           </Button>
@@ -200,47 +260,184 @@ export default function AdminCustomers() {
                   </TableRow>
                 ) : (
                   list.map((customer, i) => (
-                    <TableRow 
-                      key={customer.id} 
-                      className="cursor-pointer hover:bg-muted/30 transition-colors"
-                      onClick={() => handleSelectCustomer(customer.id)}
-                    >
-                      <TableCell>
-                        <Avatar className={cn("w-10 h-10", bgColors[i % bgColors.length])}>
-                          <AvatarFallback className="text-white text-xs font-bold">
-                            {getInitials(customer.firstName, customer.lastName)}
-                          </AvatarFallback>
-                        </Avatar>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium text-[#2C3E2D] dark:text-foreground">
-                          {customer.firstName} {customer.lastName}
-                        </div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                          <Mail className="w-3 h-3" /> {customer.email}
-                        </div>
-                        {customer.phoneNumber && (
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Phone className="w-3 h-3" /> {customer.phoneNumber}
-                          </div>
+                    <React.Fragment key={customer.id}>
+                      <TableRow 
+                        className={cn(
+                          "cursor-pointer hover:bg-muted/30 transition-colors",
+                          expandedId === customer.id && "bg-muted/20 border-b-0"
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-medium">
-                          {customer.orderCount} orders
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-bold text-[#2C3E2D] dark:text-foreground">
-                          {formatPrice(customer.totalSpent)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                        onClick={() => handleToggleExpand(customer.id)}
+                      >
+                        <TableCell>
+                          <Avatar className={cn("w-10 h-10", !customer.profileImageUrl && bgColors[i % bgColors.length])}>
+                            {customer.profileImageUrl ? (
+                              <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
+                            ) : (
+                              <AvatarFallback className="text-white text-xs font-bold">
+                                {getInitials(customer.firstName, customer.lastName)}
+                              </AvatarFallback>
+                            )}
+                          </Avatar>
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-medium text-[#2C3E2D] dark:text-foreground">
+                            {customer.firstName} {customer.lastName}
+                          </div>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Mail className="w-3 h-3" /> {customer.email}
+                          </div>
+                          {customer.phoneNumber && (
+                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" /> {customer.phoneNumber}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="font-medium bg-muted/50">
+                            {customer.orderCount} orders
+                          </Badge>
+                          {customer.orderCount > 0 ? (
+                            <Badge className="ml-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">Active</Badge>
+                          ) : (
+                            <Badge variant="ghost" className="ml-2 text-muted-foreground">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-bold text-[#2C3E2D] dark:text-foreground">
+                            {formatPrice(customer.totalSpent)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40 rounded-xl overflow-hidden border-border shadow-lg">
+                              <DropdownMenuItem 
+                                className="cursor-pointer flex items-center gap-2 py-2"
+                                onClick={() => setEditingCustomer(customer)}
+                              >
+                                <Edit className="w-4 h-4 text-primary" /> Edit Profile
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                className="cursor-pointer flex items-center gap-2 py-2 text-destructive focus:text-destructive"
+                                onClick={() => setDeletingCustomer(customer)}
+                              >
+                                <Trash2 className="w-4 h-4" /> Delete Customer
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Expandable row details */}
+                      <AnimatePresence>
+                        {expandedId === customer.id && (
+                          <TableRow className="bg-muted/10 border-t-0">
+                            <TableCell colSpan={5} className="p-0">
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="p-6 border-x border-border mx-4 mb-4 bg-white dark:bg-card rounded-b-xl shadow-inner-sm">
+                                  {detailLoading ? (
+                                    <div className="py-12 flex flex-col items-center justify-center gap-3">
+                                      <div className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+                                      <p className="text-xs text-muted-foreground">Fetching history...</p>
+                                    </div>
+                                  ) : detail ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                      <div className="md:col-span-1 space-y-6">
+                                        <div>
+                                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Customer Stats</h4>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <div className="p-3 rounded-lg bg-muted/20 border border-border/50">
+                                              <div className="text-xs text-muted-foreground mb-1 uppercase tracking-tighter">Lifetime Orders</div>
+                                              <div className="text-xl font-bold">{detail.orderCount}</div>
+                                            </div>
+                                            <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
+                                              <div className="text-xs text-primary/70 mb-1 uppercase tracking-tighter">Total Revenue</div>
+                                              <div className="text-xl font-bold text-primary">{formatPrice(detail.totalSpent)}</div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Personal Details</h4>
+                                          <div className="space-y-2">
+                                            <div className="flex items-center gap-2 text-sm">
+                                              <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                                              <span>{detail.email}</span>
+                                            </div>
+                                            {detail.phoneNumber && (
+                                              <div className="flex items-center gap-2 text-sm">
+                                                <Phone className="w-3.5 h-3.5 text-muted-foreground" />
+                                                <span>{detail.phoneNumber}</span>
+                                              </div>
+                                            )}
+                                            <div className="flex items-center gap-2 text-sm">
+                                              <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                                              <span>Account created {new Date(detail.createdAt).toLocaleDateString()}</span>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="md:col-span-2">
+                                        <div className="flex items-center justify-between mb-3">
+                                          <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Order History</h4>
+                                          <Badge variant="secondary" className="text-[10px] px-1.5 h-5">{detail.orders.length} items</Badge>
+                                        </div>
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                          {detail.orders.length === 0 ? (
+                                            <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-xl">
+                                              No transactions found
+                                            </div>
+                                          ) : (
+                                            detail.orders.map((order) => (
+                                              <div key={order.id} className="group flex items-center justify-between p-3 rounded-xl border border-border bg-muted/5 hover:bg-muted/10 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                  <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center border border-border shadow-sm text-primary">
+                                                    <ShoppingBag className="w-4 h-4" />
+                                                  </div>
+                                                  <div>
+                                                    <div className="text-xs font-bold">Order #{order.id.slice(0, 8)}</div>
+                                                    <div className="text-[10px] text-muted-foreground">{new Date(order.createdAt).toLocaleDateString()}</div>
+                                                  </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                  <div className="text-right">
+                                                    <div className="text-xs font-bold">{formatPrice(order.total)}</div>
+                                                    <div className={cn(
+                                                      "text-[10px] font-semibold uppercase tracking-tighter",
+                                                      order.status === 'completed' ? 'text-green-600' : 'text-yellow-600'
+                                                    )}>
+                                                      {order.status}
+                                                    </div>
+                                                  </div>
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <ExternalLink className="w-3.5 h-3.5" />
+                                                  </Button>
+                                                </div>
+                                              </div>
+                                            ))
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <p className="text-center py-10 text-muted-foreground">Failed to load data</p>
+                                  )}
+                                </div>
+                              </motion.div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </AnimatePresence>
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>
@@ -272,15 +469,39 @@ export default function AdminCustomers() {
             ) : list.map((customer, i) => (
               <Card 
                 key={customer.id} 
-                className="group border-border shadow-sm hover:shadow-md hover:border-primary-foreground transition-all cursor-pointer"
-                onClick={() => handleSelectCustomer(customer.id)}
+                className={cn(
+                  "group border-border shadow-sm hover:shadow-md transition-all cursor-pointer relative",
+                  expandedId === customer.id ? "ring-2 ring-primary border-transparent" : "hover:border-primary/50"
+                )}
+                onClick={() => handleToggleExpand(customer.id)}
               >
+                <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted/50">
+                          <MoreVertical className="w-3.5 h-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-xl overflow-hidden shadow-lg border-border">
+                        <DropdownMenuItem className="cursor-pointer flex items-center gap-2" onClick={() => setEditingCustomer(customer)}>
+                          <Edit className="w-3.5 h-3.5 text-primary" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="cursor-pointer flex items-center gap-2 text-destructive focus:text-destructive" onClick={() => setDeletingCustomer(customer)}>
+                          <Trash2 className="w-3.5 h-3.5" /> Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
                 <CardContent className="p-6">
                   <div className="flex flex-col items-center text-center">
-                    <Avatar className={cn("w-16 h-16 mb-4 shadow-sm group-hover:scale-105 transition-transform", bgColors[i % bgColors.length])}>
-                      <AvatarFallback className="text-white text-lg font-bold">
-                        {getInitials(customer.firstName, customer.lastName)}
-                      </AvatarFallback>
+                    <Avatar className={cn("w-16 h-16 mb-4 shadow-sm group-hover:scale-105 transition-transform", !customer.profileImageUrl && bgColors[i % bgColors.length])}>
+                      {customer.profileImageUrl ? (
+                        <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
+                      ) : (
+                        <AvatarFallback className="text-white text-lg font-bold">
+                          {getInitials(customer.firstName, customer.lastName)}
+                        </AvatarFallback>
+                      )}
                     </Avatar>
                     <h3 className="font-bold text-[#2C3E2D] dark:text-foreground text-lg truncate w-full">
                       {customer.firstName} {customer.lastName}
@@ -288,12 +509,11 @@ export default function AdminCustomers() {
                     <p className="text-xs text-muted-foreground truncate w-full mb-1">
                       {customer.email}
                     </p>
-                    {customer.phoneNumber && (
-                      <p className="text-[10px] text-muted-foreground truncate w-full mb-2 flex items-center justify-center gap-1">
-                        <Phone className="w-3 h-3" /> {customer.phoneNumber}
-                      </p>
-                    )}
-                    <div className="grid grid-cols-2 w-full gap-2 pt-4 border-t border-border mt-auto">
+                    <div className="flex justify-center gap-1.5 mt-1">
+                      {customer.orderCount > 0 && <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0 h-4 text-[9px] px-1.5">ACTIVE</Badge>}
+                    </div>
+                    
+                    <div className="grid grid-cols-2 w-full gap-2 pt-4 border-t border-border mt-4">
                       <div className="text-left">
                         <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Orders</div>
                         <div className="font-bold">{customer.orderCount}</div>
@@ -311,135 +531,7 @@ export default function AdminCustomers() {
         )}
       </AnimatePresence>
 
-      {/* Customer Detail Sheet */}
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="right" className="sm:max-w-md w-full p-0 flex flex-col">
-          {detailLoading ? (
-            <div className="flex-1 flex items-center justify-center flex-col gap-4">
-              <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-              <p className="text-muted-foreground">Loading details...</p>
-            </div>
-          ) : detail ? (
-            <>
-              <SheetHeader className="p-6 border-b border-border bg-muted/20">
-                <div className="flex items-center gap-4">
-                  <Avatar className={cn("w-14 h-14 shadow-sm", detail.avatarColor || "bg-[#2C3E2D]")}>
-                    <AvatarFallback className="text-white text-xl font-bold">
-                      {getInitials(detail.firstName, detail.lastName)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 text-left">
-                    <SheetTitle className="text-2xl font-serif">
-                      {detail.firstName} {detail.lastName}
-                    </SheetTitle>
-                    <p className="text-muted-foreground text-sm flex items-center gap-1">
-                      Customer since {new Date(detail.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              </SheetHeader>
-
-              <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                {/* Contact Section */}
-                <section className="space-y-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Contact Details</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/10 border border-border">
-                      <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
-                        <Mail className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs text-muted-foreground font-medium">Email Address</div>
-                        <div className="text-sm font-semibold truncate">{detail.email}</div>
-                      </div>
-                    </div>
-                    {detail.phoneNumber && (
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/10 border border-border">
-                        <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
-                          <Phone className="w-4 h-4 text-primary" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs text-muted-foreground font-medium">Phone Number</div>
-                          <div className="text-sm font-semibold truncate">{detail.phoneNumber}</div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </section>
-
-                {/* Statistics Summary */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-xl bg-[#2C3E2D]/5 border border-[#2C3E2D]/10">
-                    <ShoppingBag className="w-5 h-5 text-[#2C3E2D] mb-2" />
-                    <div className="text-2xl font-bold text-[#2C3E2D]">{detail.orderCount}</div>
-                    <div className="text-xs text-muted-foreground font-medium uppercase tracking-tighter">Total Orders</div>
-                  </div>
-                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/10">
-                    <div className="text-xl font-bold text-primary mb-2">NPR</div>
-                    <div className="text-2xl font-bold text-primary">{formatPrice(detail.totalSpent).replace("Rs.", "")}</div>
-                    <div className="text-xs text-muted-foreground font-medium uppercase tracking-tighter">Total Spent</div>
-                  </div>
-                </div>
-
-                {/* Recent Orders Section */}
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Recent Orders</h4>
-                    <Badge variant="secondary" className="text-[10px]">{detail.orders.length}</Badge>
-                  </div>
-                  <div className="space-y-3">
-                    {detail.orders.length === 0 ? (
-                      <div className="text-center py-8 bg-muted/5 rounded-xl border border-dashed border-border text-muted-foreground text-sm">
-                        No orders recorded yet
-                      </div>
-                    ) : (
-                      detail.orders.map((order) => (
-                        <div 
-                          key={order.id} 
-                          className="group p-4 rounded-xl border border-border hover:border-primary transition-all bg-white dark:bg-card shadow-sm"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <div className="font-bold text-sm">Order #{order.id.slice(0, 8)}</div>
-                              <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                <Calendar className="w-3 h-3" /> {new Date(order.createdAt).toLocaleDateString()}
-                              </div>
-                            </div>
-                            <Badge className={cn(
-                              "text-[10px] uppercase font-bold",
-                              order.status === "completed" ? "bg-green-100 text-green-700 hover:bg-green-100" :
-                              order.status === "pending" ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" :
-                              "bg-muted text-muted-foreground hover:bg-muted"
-                            )}>
-                              {order.status}
-                            </Badge>
-                          </div>
-                          <div className="flex justify-between items-center text-sm font-medium">
-                            <span className="text-primary">{formatPrice(order.total)}</span>
-                            <Button variant="ghost" size="sm" className="h-7 px-2 text-[10px] group-hover:text-primary">
-                              View Order <ExternalLink className="w-3 h-3 ml-1" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </section>
-              </div>
-
-              <div className="p-6 border-t border-border bg-muted/10 mt-auto">
-                <Button className="w-full bg-[#2C3E2D] hover:bg-[#1A251B]">
-                  Send Message
-                </Button>
-              </div>
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-              <p>Customer not found</p>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* No side sheet needed anymore as we use expandable rows */}
 
       {/* Add Customer Dialog */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -475,6 +567,65 @@ export default function AdminCustomers() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit Customer Dialog */}
+      <Dialog open={!!editingCustomer} onOpenChange={(open) => !open && setEditingCustomer(null)}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-2xl">Edit Customer Profile</DialogTitle>
+          </DialogHeader>
+          {editingCustomer && (
+            <form onSubmit={handleEditSubmit} className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-firstName">First Name</Label>
+                  <Input id="edit-firstName" name="firstName" defaultValue={editingCustomer.firstName} required className="rounded-lg" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-lastName">Last Name</Label>
+                  <Input id="edit-lastName" name="lastName" defaultValue={editingCustomer.lastName} required className="rounded-lg" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-email">Email Address</Label>
+                <Input id="edit-email" name="email" type="email" defaultValue={editingCustomer.email} className="rounded-lg" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-phoneNumber">Phone Number</Label>
+                <Input id="edit-phoneNumber" name="phoneNumber" defaultValue={editingCustomer.phoneNumber || ""} className="rounded-lg" />
+              </div>
+              <div className="pt-4 flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setEditingCustomer(null)} className="rounded-full">Cancel</Button>
+                <Button type="submit" disabled={updateMutation.isPending} className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white">
+                  {updateMutation.isPending ? "Updating..." : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={!!deletingCustomer} onOpenChange={(open) => !open && setDeletingCustomer(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xl font-bold text-destructive">Delete Customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <strong>{deletingCustomer?.firstName} {deletingCustomer?.lastName}</strong> from your records.
+              This action cannot be undone, although their order history will remain in the database for accounting.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingCustomer && deleteMutation.mutate(deletingCustomer.id)}
+              className="rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -318,7 +318,13 @@ export default function AdminLayout({
         </header>
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-12">
-          <Suspense fallback={<AdminSkeleton />}>
+          <Suspense fallback={
+            <div className="relative w-full">
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary/20 overflow-hidden rounded-full">
+                <div className="h-full w-1/3 bg-primary rounded-full animate-[shimmer_1s_ease-in-out_infinite]" style={{ animation: 'shimmer 1s ease-in-out infinite alternate', transformOrigin: 'left' }} />
+              </div>
+            </div>
+          }>
             {children}
           </Suspense>
         </div>

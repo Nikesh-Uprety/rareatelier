@@ -264,6 +264,8 @@ export type InsertProductAttribute = z.infer<typeof insertProductAttributeSchema
 export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
+  status: text("status").notNull().default("active"), // 'active' | 'unsubscribed'
+  unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

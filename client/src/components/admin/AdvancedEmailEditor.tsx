@@ -52,6 +52,14 @@ export function AdvancedEmailEditor({
   onSendTest,
 }: AdvancedEmailEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  
+  const execCommand = (command: string, value?: string) => {
+    if (iframeRef.current?.contentDocument) {
+      iframeRef.current.contentDocument.execCommand(command, false, value);
+      const newHtml = iframeRef.current.contentDocument.documentElement.innerHTML;
+      onHtmlChange(newHtml);
+    }
+  };
   const [selectedElement, setSelectedElement] = useState<HTMLElement | null>(null);
   const [selectedStyles, setSelectedStyles] = useState<ElementStyle>({});
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,7 +116,7 @@ export function AdvancedEmailEditor({
 
   // Setup contenteditable for inline editing when in edit mode
   useEffect(() => {
-    if (iframeRef.current?.contentDocument && editMode && showSplitView) {
+    if (iframeRef.current?.contentDocument && showSplitView) {
       const doc = iframeRef.current.contentDocument;
       const editableSelectors = ["h1", "h2", "h3", "p", "a", "span", "div"];
       
@@ -117,32 +125,42 @@ export function AdvancedEmailEditor({
           const htmlEl = el as HTMLElement;
           
           // Skip elements with no text content
-          if (!htmlEl.textContent?.trim()) return;
+          if (!htmlEl.textContent?.trim() && htmlEl.tagName !== "DIV") return;
           
-          htmlEl.contentEditable = "true";
-          htmlEl.style.outline = "1px dashed #667eea";
-          htmlEl.style.outlineOffset = "2px";
-          htmlEl.style.cursor = "text";
-          
-          // Add focus listener for visual feedback
-          htmlEl.addEventListener("focus", () => {
-            htmlEl.style.outline = "2px solid #667eea";
-            htmlEl.style.backgroundColor = "rgba(102, 126, 234, 0.05)";
-          });
-          
-          htmlEl.addEventListener("blur", () => {
+          if (editMode) {
+            htmlEl.contentEditable = "true";
             htmlEl.style.outline = "1px dashed #667eea";
-            htmlEl.style.backgroundColor = "transparent";
+            htmlEl.style.outlineOffset = "2px";
+            htmlEl.style.cursor = "text";
             
-            // Sync changes back to HTML code
-            if (iframeRef.current?.contentDocument) {
-              const newHtml = iframeRef.current.contentDocument.documentElement.innerHTML;
-              onHtmlChange(newHtml);
-            }
-          });
-          
-          // Prevent context menu on contenteditable
-          htmlEl.addEventListener("contextmenu", (e) => e.stopPropagation());
+            // Add focus listener for visual feedback
+            const handleFocus = () => {
+              htmlEl.style.outline = "2px solid #667eea";
+              htmlEl.style.backgroundColor = "rgba(102, 126, 234, 0.05)";
+            };
+            
+            const handleBlur = () => {
+              htmlEl.style.outline = "1px dashed #667eea";
+              htmlEl.style.backgroundColor = "transparent";
+              
+              // Sync changes back to HTML code
+              if (iframeRef.current?.contentDocument) {
+                const newHtml = iframeRef.current.contentDocument.documentElement.innerHTML;
+                onHtmlChange(newHtml);
+              }
+            };
+
+            htmlEl.addEventListener("focus", handleFocus);
+            htmlEl.addEventListener("blur", handleBlur);
+            
+            // Prevent context menu on contenteditable
+            htmlEl.addEventListener("contextmenu", (e) => e.stopPropagation());
+          } else {
+            htmlEl.contentEditable = "false";
+            htmlEl.style.outline = "none";
+            htmlEl.style.cursor = "default";
+            htmlEl.style.backgroundColor = "transparent";
+          }
         });
       });
     }
@@ -398,6 +416,17 @@ export function AdvancedEmailEditor({
                 >
                   {editMode ? "Editing ON" : "Editing OFF"}
                 </Button>
+                {editMode && (
+                  <div className="flex items-center gap-1 ml-4 border-l pl-4">
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("bold")} className="h-6 w-6 p-0 font-bold" title="Bold">B</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("italic")} className="h-6 w-6 p-0 italic" title="Italic">I</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("underline")} className="h-6 w-6 p-0 underline" title="Underline">U</Button>
+                    <div className="w-[1px] h-3 bg-border mx-1" />
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyLeft")} className="h-6 w-6 p-0" title="Align Left">L</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyCenter")} className="h-6 w-6 p-0" title="Align Center">C</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyRight")} className="h-6 w-6 p-0" title="Align Right">R</Button>
+                  </div>
+                )}
               </div>
               {selectedElement && !editMode && (
                 <span className="text-xs text-muted-foreground">

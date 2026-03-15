@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -10,6 +12,7 @@ import {
   Tooltip as RechartsTooltip,
   XAxis,
   YAxis,
+  ResponsiveContainer,
 } from "recharts";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -41,9 +44,9 @@ const RANGE_LABELS: Record<RangeKey, string> = {
 };
 
 const STATUS_COLORS: Record<"completed" | "pending" | "cancelled", string> = {
-  completed: "#2D4A35",
-  pending: "#C9963A",
-  cancelled: "#9A3A3A",
+  completed: "hsl(142, 60%, 45%)", // Bright green
+  pending: "hsl(45, 93%, 47%)",    // Amber
+  cancelled: "hsl(0, 84%, 60%)",    // Red
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -315,12 +318,18 @@ export default function AdminAnalytics() {
           config={{
             revenue: {
               label: "Revenue",
-              color: "hsl(var(--accent))",
+              color: "hsl(142, 60%, 45%)",
             },
           }}
-          className="h-72 w-full"
+          className="h-72 w-full mt-4"
         >
-          <BarChart data={revenueChartData}>
+          <AreaChart data={revenueChartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="hsl(142, 60%, 45%)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid
               vertical={false}
               strokeDasharray="3 3"
@@ -331,16 +340,17 @@ export default function AdminAnalytics() {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tick={{ fontSize: 11 }}
+              tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 11 }}
             />
             <YAxis
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tick={{ fontSize: 11 }}
+              tick={{ fill: 'currentColor', opacity: 0.6, fontSize: 11 }}
+              tickFormatter={(value) => `Rs.${value >= 1000 ? (value/1000).toFixed(0) + 'k' : value}`}
             />
             <ChartTooltip
-              cursor={{ fill: "rgba(0,0,0,0.02)" }}
+              cursor={{ stroke: 'currentColor', strokeWidth: 1, strokeOpacity: 0.2 }}
               content={
                 <ChartTooltipContent
                   formatter={(value) => (
@@ -349,9 +359,7 @@ export default function AdminAnalytics() {
                     </span>
                   )}
                   labelFormatter={(_, payload) => {
-                    const date = payload?.[0]?.payload?.date as
-                      | string
-                      | undefined;
+                    const date = payload?.[0]?.payload?.date as string | undefined;
                     if (!date) return null;
                     const d = new Date(date);
                     return d.toLocaleDateString("en-NP", {
@@ -363,12 +371,15 @@ export default function AdminAnalytics() {
                 />
               }
             />
-            <Bar
+            <Area
+              type="monotone"
               dataKey="revenue"
-              radius={[4, 4, 0, 0]}
-              fill="var(--color-revenue)"
+              stroke="hsl(142, 60%, 45%)"
+              strokeWidth={2}
+              fillOpacity={1}
+              fill="url(#colorRevenue)"
             />
-          </BarChart>
+          </AreaChart>
         </ChartContainer>
       </section>
 
@@ -579,18 +590,18 @@ export default function AdminAnalytics() {
 
                             const { revenue, isHoliday } = cell;
 
-                            let bg = "#F8F1EA"; // no sales
+                            let bg = "var(--calendar-0)"; // no sales
                             if (revenue > 0) {
                               const ratio =
                                 calendarLayout.maxRevenue > 0
                                   ? revenue / calendarLayout.maxRevenue
                                   : 0;
-                              if (ratio > 0.75) bg = "#2D4A35";
-                              else if (ratio > 0.5) bg = "#4F7A5C";
-                              else if (ratio > 0.25) bg = "#7FB392";
-                              else bg = "#ECFDF5";
+                              if (ratio > 0.75) bg = "var(--calendar-4)";
+                              else if (ratio > 0.5) bg = "var(--calendar-3)";
+                              else if (ratio > 0.25) bg = "var(--calendar-2)";
+                              else bg = "var(--calendar-1)";
                             } else if (isHoliday) {
-                              bg = "#E8E0D8";
+                              bg = "var(--calendar-holiday)";
                             }
 
                             const title =
@@ -604,7 +615,7 @@ export default function AdminAnalytics() {
                               <div
                                 key={weekday}
                                 title={title}
-                                className="w-3 h-3 rounded-[3px] border border-black/5"
+                                className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5"
                                 style={{ backgroundColor: bg }}
                               />
                             );
@@ -619,20 +630,24 @@ export default function AdminAnalytics() {
             <div className="flex items-center justify-between pt-3 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 bg-[#F8F1EA]" />
+                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-0)" }} />
                   <span>No sales</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 bg-[#ECFDF5]" />
+                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-1)" }} />
                   <span>Low</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 bg-[#7FB392]" />
+                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-2)" }} />
                   <span>Medium</span>
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-[3px] border border-black/5 bg-[#2D4A35]" />
+                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-3)" }} />
                   <span>High</span>
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-[3px] border border-black/5 dark:border-white/5" style={{ backgroundColor: "var(--calendar-4)" }} />
+                  <span>Very High</span>
                 </span>
               </div>
               <span>Less ← → More</span>
@@ -673,16 +688,17 @@ export default function AdminAnalytics() {
                   stroke="none"
                 >
                   {(data?.salesByCategory ?? []).map((entry, index) => {
-                    const greens = [
-                      "#ECFDF5",
-                      "#A7F3D0",
-                      "#4ADE80",
-                      "#166534",
+                    const catColors = [
+                      "hsl(142, 60%, 45%)", // Primary Green
+                      "hsl(150, 60%, 55%)",
+                      "hsl(160, 60%, 65%)",
+                      "hsl(170, 60%, 75%)",
+                      "hsl(180, 60%, 85%)",
                     ];
                     return (
                       <Cell
                         key={entry.category + index}
-                        fill={greens[index % greens.length]}
+                        fill={catColors[index % catColors.length]}
                       />
                     );
                   })}
