@@ -208,10 +208,7 @@ export default function Home() {
   const { toast } = useToast();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [heroMode, setHeroMode] = useState<"video" | "image">(() => {
-    if (typeof window !== "undefined" && window.innerWidth >= 1024) return "image";
-    return "video";
-  });
+  const [heroMode, setHeroMode] = useState<"video" | "image">("video");
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -300,39 +297,22 @@ export default function Home() {
     
     const heroInterval = setInterval(() => {
       setHeroIndex((prev) => {
-        // Force image mode on desktop regardless of previous state
-        const isDesktop = window.innerWidth >= 1024;
-        
-        if (isDesktop && heroMode === "video") {
-          setHeroMode("image");
-          return 0;
-        }
-
-        // If we are in video mode on mobile/tablet, we don't advance the index via interval
-        // the onEnded callback handles the transition to image mode
+        // We only auto-advance if we are in image mode
         if (heroMode === "video") return prev;
 
         const next = (prev + 1) % HERO_IMAGES.length;
-        if (next === 0 && !isDesktop) {
-          setHeroMode("video"); // Loop back to video only on mobile/tablet
+        if (next === 0) {
+          setHeroMode("video"); // Loop back to video after all images
           return 0;
         }
         return next;
       });
     }, 6000);
 
-    const handleResize = () => {
-      if (window.innerWidth >= 1024 && heroMode === "video") {
-        setHeroMode("image");
-      }
-    };
-    window.addEventListener('resize', handleResize);
-
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
       clearInterval(heroInterval);
-      window.removeEventListener('resize', handleResize);
     };
   }, [heroMode]);
 

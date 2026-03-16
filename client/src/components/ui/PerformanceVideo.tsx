@@ -38,6 +38,8 @@ export function PerformanceVideo({
       console.log(`[PerformanceVideo] 4K Video ready in ${Math.round(loadTime)}ms`);
       setIsLoaded(true);
       if (autoPlay) {
+        // Ensure muted is true programmatically to help with autoplay policies
+        video.muted = true;
         video.play().catch((e) => {
           console.warn("[PerformanceVideo] Autoplay blocked or failed:", e);
         });
@@ -51,9 +53,12 @@ export function PerformanceVideo({
       }
     };
 
-    video.addEventListener("canplaythrough", handleCanPlay);
+    video.addEventListener("canplay", handleCanPlay);
     video.addEventListener("error", handleError);
     if (onEnded) video.addEventListener("ended", onEnded);
+
+    // Force load to initiate connection
+    video.load();
 
     // Battery-Saver API check (Experimental but useful)
     const checkBattery = async () => {
@@ -84,7 +89,7 @@ export function PerformanceVideo({
     observer.observe(video);
 
     return () => {
-      video.removeEventListener("canplaythrough", handleCanPlay);
+      video.removeEventListener("canplay", handleCanPlay);
       video.removeEventListener("error", handleError);
       if (onEnded) video.removeEventListener("ended", onEnded);
       observer.unobserve(video);
@@ -110,8 +115,10 @@ export function PerformanceVideo({
       <video
         ref={videoRef}
         muted
+        autoPlay={autoPlay}
         playsInline
-        preload="metadata"
+        webkit-playsinline="true"
+        preload="auto"
         className={cn(
           "w-full h-full object-cover transition-opacity duration-1000",
           isLoaded ? "opacity-100" : "opacity-0"
