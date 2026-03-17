@@ -8,8 +8,13 @@ import {
   fetchAdminImages,
   uploadAdminImage,
   type AdminImageAsset,
+  fetchLocalMedia,
+  uploadLocalMedia,
+  deleteLocalMedia,
+  type AdminLocalMedia,
 } from "@/lib/adminApi";
-import { Trash2, Upload, Images } from "lucide-react";
+import { Trash2, Upload, Images as ImagesIcon, Copy } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 type ImageCategory =
   | "product"
@@ -27,8 +32,9 @@ const CATEGORY_LABELS: Record<ImageCategory, string> = {
 };
 
 export default function AdminImagesPage() {
+  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<"local" | "cloudinary">("cloudinary");
+  const [provider, setProvider] = useState<"local" | "cloudinary">("local");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -36,29 +42,59 @@ export default function AdminImagesPage() {
   const imagesQuery = useQuery<AdminImageAsset[]>({
     queryKey: ["admin", "images", { provider, category }],
     queryFn: () => fetchAdminImages({ provider, category, limit: 120 }),
+    enabled: provider === "cloudinary",
+  });
+
+  const localMediaQuery = useQuery<AdminLocalMedia[]>({
+    queryKey: ["admin", "media", "local"],
+    queryFn: fetchLocalMedia,
+    enabled: provider === "local",
   });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return imagesQuery.data ?? [];
-    return (imagesQuery.data ?? []).filter((img) =>
-      (img.filename || img.url).toLowerCase().includes(q),
-    );
-  }, [imagesQuery.data, search]);
+    
+    if (provider === "local") {
+      const data = localMediaQuery.data ?? [];
+      if (!q) return data;
+      return data.filter((img) => img.name.toLowerCase().includes(q));
+    } else {
+      const data = imagesQuery.data ?? [];
+      if (!q) return data;
+      return data.filter((img) =>
+        (img.filename || img.url).toLowerCase().includes(q),
+      );
+    }
+  }, [imagesQuery.data, localMediaQuery.data, search, provider]);
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadAdminImage({ file, category, provider }),
+    mutationFn: async (file: File): Promise<any> => {
+      if (provider === "local") {
+        return uploadLocalMedia(file);
+      }
+      return uploadAdminImage({ file, category, provider });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "media"] });
+      toast({ title: provider === "local" ? "WebP image uploaded successfully" : "Image uploaded to Cloudinary" });
     },
+    onError: (err: any) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    }
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteAdminImage(id),
+    mutationFn: (identifier: string) => {
+      if (provider === "local") {
+        return deleteLocalMedia(identifier);
+      }
+      return deleteAdminImage(identifier);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "media"] });
+      toast({ title: "Image deleted successfully" });
     },
   });
 
@@ -67,7 +103,7 @@ export default function AdminImagesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground flex items-center gap-3">
-            <Images className="h-7 w-7" />
+            <ImagesIcon className="h-7 w-7" />
             Images
           </h1>
           <p className="text-muted-foreground mt-1">
@@ -100,7 +136,11 @@ export default function AdminImagesPage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as ImageCategory)}
-              className="h-9 rounded-lg border border-muted bg-background px-3 text-sm"
+              disabled={provider === "local"}
+              className={cn(
+                "h-9 rounded-lg border border-muted bg-background px-3 text-sm",
+                provider === "local" && "opacity-50 cursor-not-allowed"
+              )}
             >
               {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -141,7 +181,7 @@ export default function AdminImagesPage() {
           </div>
         </div>
 
-        {imagesQuery.isLoading ? (
+        {(provider === "cloudinary" ? imagesQuery.isLoading : localMediaQuery.isLoading) ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Loading images…
           </div>
@@ -151,33 +191,53 @@ export default function AdminImagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-            {filtered.map((img) => (
+            {filtered.map((item: any) => {
+              const isLocal = provider === "local";
+              const id = isLocal ? item.name : item.id;
+              const url = item.url;
+              const displayName = isLocal ? item.name : (item.filename ?? url.split("/").pop());
+
+              return (
               <div
-                key={img.id}
+                key={id}
                 className="group relative aspect-square rounded-xl border border-muted/40 bg-muted overflow-hidden"
               >
                 <img
-                  src={img.url}
-                  alt={img.filename ?? "image"}
+                  src={url}
+                  alt={displayName}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
                 />
                 <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                  <p className="text-[10px] text-white truncate">
-                    {img.filename ?? img.url.split("/").pop()}
+                  <p className="text-[10px] text-white truncate" title={displayName}>
+                    {displayName}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => deleteMutation.mutate(img.id)}
-                  disabled={deleteMutation.isPending}
-                  className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/70"
-                  aria-label="Delete image"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                
+                <div className="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => {
+                        navigator.clipboard.writeText(url);
+                        toast({ title: "URL copied to clipboard" });
+                    }}
+                    className="h-8 w-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80"
+                    aria-label="Copy URL"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteMutation.mutate(id)}
+                    disabled={deleteMutation.isPending}
+                    className="h-8 w-8 rounded-full bg-red-500/80 text-white flex items-center justify-center hover:bg-red-600"
+                    aria-label="Delete image"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </section>

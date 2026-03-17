@@ -160,6 +160,40 @@ export async function deleteAdminImage(id: string): Promise<void> {
   if (!json.success) throw new Error(json.error || "Delete failed");
 }
 
+// ── Local Media API helpers ──────────────────────────
+
+export interface AdminLocalMedia {
+  name: string;
+  url: string;
+  size: number;
+  createdAt: string;
+}
+
+export async function fetchLocalMedia(): Promise<AdminLocalMedia[]> {
+  const res = await apiRequest("GET", "/api/admin/media");
+  const json = (await res.json()) as { success: boolean; data: AdminLocalMedia[] };
+  return json.data ?? [];
+}
+
+export async function uploadLocalMedia(file: File): Promise<AdminLocalMedia> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch("/api/admin/media/upload", {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  const json = (await res.json()) as { success: boolean; data: AdminLocalMedia; error?: string };
+  if (!json.success || !json.data) throw new Error(json.error || "Upload failed");
+  return json.data;
+}
+
+export async function deleteLocalMedia(filename: string): Promise<void> {
+  const res = await apiRequest("DELETE", `/api/admin/media/${encodeURIComponent(filename)}`);
+  const json = (await res.json()) as { success: boolean; error?: string };
+  if (!json.success) throw new Error(json.error || "Delete failed");
+}
+
 export async function fetchAdminProducts(filters?: {
   search?: string;
   category?: string;

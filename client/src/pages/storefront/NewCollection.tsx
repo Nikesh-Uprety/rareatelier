@@ -192,7 +192,7 @@ export default function NewCollection() {
 
   const bannerUrl = useMemo(() => {
     const first = bannerAssets?.find((a) => !!a?.imageUrl)?.imageUrl ?? undefined;
-    return first || "/images/collection-banner.png";
+    return first || "/images/colllection.webp";
   }, [bannerAssets]);
 
   return (

@@ -42,6 +42,7 @@ import { uploadMediaToCloudinary } from "./lib/cloudinary";
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(process.cwd(), "uploads", "products");
+const MEDIA_UPLOADS_DIR = path.join(process.cwd(), "uploads", "media");
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
@@ -64,6 +65,11 @@ function ensureUploadsDir() {
 function ensureProductUploadsDir() {
   if (!fs.existsSync(PRODUCTS_UPLOADS_DIR)) {
     fs.mkdirSync(PRODUCTS_UPLOADS_DIR, { recursive: true });
+  }
+}
+function ensureMediaUploadsDir() {
+  if (!fs.existsSync(MEDIA_UPLOADS_DIR)) {
+    fs.mkdirSync(MEDIA_UPLOADS_DIR, { recursive: true });
   }
 }
 
@@ -809,22 +815,106 @@ export async function registerRoutes(
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
         ensureProductUploadsDir();
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.webp`;
+        const filename = `${Date.now()}.webp`;
         const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
         
         await sharp(buffer)
-          .webp({ quality: 80 })
+          .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: 85 })
           .toFile(filePath);
 
         const url = `/api/uploads/products/${filename}`;
-
         return res.json({ success: true, url });
       } catch (err) {
-        console.error("Error in POST /api/admin/upload-product-image", err);
-        return res.status(500).json({ success: false, error: "Failed to upload image" });
+        console.error("Error in product image upload", err);
+        return res.status(500).json({ success: false, error: "Upload failed" });
       }
     },
   );
+
+  // General Media Management (Local WebP Storage)
+  app.get("/api/admin/media", requireAdmin, async (_req, res) => {
+    try {
+      ensureMediaUploadsDir();
+      const files = await fs.promises.readdir(MEDIA_UPLOADS_DIR);
+      const media = await Promise.all(
+        files
+          .filter(f => /\.(webp|jpg|jpeg|png)$/i.test(f))
+          .map(async (filename) => {
+            const stats = await fs.promises.stat(path.join(MEDIA_UPLOADS_DIR, filename));
+            return {
+              name: filename,
+              url: `/api/uploads/media/${filename}`,
+              size: stats.size,
+              createdAt: stats.birthtime,
+            };
+          })
+      );
+      res.json({ success: true, data: media });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/media");
+    }
+  });
+
+  app.post("/api/admin/media/upload", requireAdmin, memoryUpload.single("file"), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+
+      ensureMediaUploadsDir();
+      const filename = `${path.parse(req.file.originalname).name}-${Date.now()}.webp`;
+      const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
+
+      await sharp(req.file.buffer)
+        .webp({ quality: 85 })
+        .toFile(filePath);
+
+      res.status(201).json({ 
+        success: true, 
+        data: {
+          name: filename,
+          url: `/api/uploads/media/${filename}`
+        } 
+      });
+    } catch (err) {
+      handleApiError(res, err, "POST /api/admin/media/upload");
+    }
+  });
+
+  app.delete("/api/admin/media/:filename", requireAdmin, async (req, res) => {
+    try {
+      const filename = req.params.filename as string;
+      const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
+      if (fs.existsSync(filePath)) {
+        await fs.promises.unlink(filePath);
+      }
+      res.json({ success: true });
+    } catch (err) {
+      handleApiError(res, err, "DELETE /api/admin/media/:filename");
+    }
+  });
+
+  // Serve uploads
+  app.use("/api/uploads/products", (req, res, next) => {
+    const filename = path.basename(req.url);
+    const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
+
+  app.use("/api/uploads/media", (req, res, next) => {
+    const filename = path.basename(req.url);
+    const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      res.sendFile(filePath);
+    } else {
+      next();
+    }
+  });
 
   // ── Site Assets (Landing Page Images) ──────────────────────────────
   const validSiteAssetSections = [
