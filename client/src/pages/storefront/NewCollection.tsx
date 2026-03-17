@@ -190,10 +190,7 @@ export default function NewCollection() {
       });
   }, [products]);
 
-  const bannerUrl = useMemo(() => {
-    const first = bannerAssets?.find((a) => !!a?.imageUrl)?.imageUrl ?? undefined;
-    return first || "/images/colllection.webp";
-  }, [bannerAssets]);
+  const bannerUrl = "/images/colllection.webp";
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
