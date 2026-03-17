@@ -27,6 +27,10 @@ export interface AdminOrder {
   };
   promoCode?: string;
   promoDiscountAmount?: number;
+  source?: string;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
 }
 
 export interface AdminCustomer {

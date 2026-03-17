@@ -17,6 +17,8 @@ export const OptimizedImage = ({
   ...props 
 }: OptimizedImageProps) => {
   // Only attempt WebP substitution for local images
+  if (!src) return null;
+  
   const isLocal = src.startsWith("/");
   const basePath = src.includes(".") ? src.split(".").slice(0, -1).join(".") : src;
   const webpPath = isLocal ? `${basePath}.webp` : src;

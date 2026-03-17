@@ -8,7 +8,6 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
-import { PerformanceVideo } from "@/components/ui/PerformanceVideo";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -220,10 +219,11 @@ export default function Home() {
   const { toast } = useToast();
   const [newsletterEmail, setNewsletterEmail] = useState("");
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [heroMode, setHeroMode] = useState<"video" | "image">("image");
   const [isMobile, setIsMobile] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
+  const heroVideoRef = useRef<HTMLVideoElement>(null);
   const autoPlayRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
@@ -274,43 +274,23 @@ export default function Home() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Device detection and initial hero mode
+  // Device detection
   useEffect(() => {
     const checkMobile = () => {
-      const mobile = window.innerWidth < 1024;
-      setIsMobile(mobile);
-      if (mobile) {
-        setHeroMode("video");
-      } else {
-        setHeroMode("image");
-      }
+      setIsMobile(window.innerWidth < 1024);
     };
     checkMobile();
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  const filteredHeroAssets = useMemo(() => {
-    if (isMobile) {
-      // On mobile: Show video first (if any), then up to 2 images targeted for mobile or all
-      const videos = heroAssets.filter(a => a.active && a.assetType === "video" && (a.deviceTarget === "all" || a.deviceTarget === "mobile"));
-      const images = heroAssets.filter(a => a.active && a.assetType === "image" && (a.deviceTarget === "all" || a.deviceTarget === "mobile")).slice(0, 2);
-      return [...videos, ...images];
-    } else {
-      // On desktop: Show only images targeted for desktop or all
-      return heroAssets.filter(a => a.active && a.assetType === "image" && (a.deviceTarget === "all" || a.deviceTarget === "desktop"));
-    }
-  }, [heroAssets, isMobile]);
-
-  const heroItems = filteredHeroAssets.length > 0
-    ? filteredHeroAssets
-    : HERO_IMAGES_FALLBACK.map(url => ({ imageUrl: url, assetType: "image" } as any));
-
-  // For backward compatibility with existing code using heroImages array
-  const heroImages = heroItems.filter(a => a.assetType === "image").map(a => a.imageUrl);
-  
-  // Find the first video asset for mobile hero
-  const heroVideo = filteredHeroAssets.find(a => a.assetType === "video");
+  // Hero images from CMS assets (fallback to placeholder)
+  const heroImages = useMemo(() => {
+    const images = heroAssets
+      .filter(a => a.active && a.assetType === "image")
+      .map(a => a.imageUrl);
+    return images.length > 0 ? images : HERO_IMAGES_FALLBACK;
+  }, [heroAssets]);
 
   const lifestyleImages = featuredAssets.length > 0
     ? featuredAssets.map((a) => a.imageUrl)
@@ -378,45 +358,26 @@ export default function Home() {
     }, 5000);
   }, [lifestyleImages.length]);
 
-  // Auto-scroll effect
+  // Auto-scroll effect for lifestyle carousel + hero image fallback cycling
   useEffect(() => {
     autoPlayRef.current = setInterval(() => {
       setCarouselIndex((i) => (i + 1) % lifestyleImages.length);
     }, 5000);
-    
-    const heroInterval = setInterval(() => {
-      setHeroIndex((prev) => {
-        if (!isMobile) {
-          // On desktop, just cycle images
-          return heroImages.length > 0 ? (prev + 1) % heroImages.length : 0;
-        }
 
-        // On mobile
-        if (heroMode === "video") return prev;
-
-        const next = (prev + 1) % heroImages.length;
-        if (next === 0 && heroVideo) {
-          setHeroMode("video");
-          return 0;
-        }
-        return next;
-      });
-    }, 6000);
-
-    const handleResize = () => {
-      if (window.innerWidth >= 1024 && heroMode === "video") {
-        setHeroMode("image");
-      }
-    };
-    window.addEventListener('resize', handleResize);
+    // Only cycle hero images if video failed (showing image fallback)
+    let heroInterval: ReturnType<typeof setInterval> | null = null;
+    if (videoFailed && heroImages.length > 1) {
+      heroInterval = setInterval(() => {
+        setHeroIndex((prev) => (prev + 1) % heroImages.length);
+      }, 6000);
+    }
 
     return () => {
       if (autoPlayRef.current) clearInterval(autoPlayRef.current);
       if (interactionTimeoutRef.current) clearTimeout(interactionTimeoutRef.current);
-      clearInterval(heroInterval);
-      window.removeEventListener('resize', handleResize);
+      if (heroInterval) clearInterval(heroInterval);
     };
-  }, [heroMode, lifestyleImages.length, heroImages.length]);
+  }, [lifestyleImages.length, heroImages.length, videoFailed]);
 
   const newsletterMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -498,60 +459,36 @@ export default function Home() {
       </Helmet>
       {/* Hero Section */}
       <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
-        <AnimatePresence mode="popLayout">
-          {heroMode === "video" && (heroVideo || isMobile) ? (
-            <motion.div
-              key="hero-video"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 1.5, ease: "easeInOut" }}
-              className="absolute inset-0 w-full h-full"
+        {/* Native Video Background – autoplay, loop, muted */}
+        {!videoFailed ? (
+          <motion.div
+            key="hero-video"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 1.5, ease: "easeInOut" }}
+            className="absolute inset-0 w-full h-full"
+          >
+            <video
+              ref={heroVideoRef}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              poster={heroImages[0] || undefined}
+              onError={() => setVideoFailed(true)}
+              className="w-full h-full object-cover"
             >
-              {heroVideo?.videoUrl ? (
-                <div className="w-full h-full relative">
-                  <iframe
-                    src={heroVideo.videoUrl.includes("cloudinary.com") && !heroVideo.videoUrl.includes("embed") 
-                      ? heroVideo.videoUrl.replace("/video/upload/", "/video/upload/e_loop/") 
-                      : heroVideo.videoUrl}
-                    className="w-full h-full border-0"
-                    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-                    allowFullScreen
-                    style={{ height: "100%", width: "100%", objectFit: "cover" }}
-                  />
-                  {/* Overlay to handle transition and touch events if needed */}
-                  <div className="absolute inset-0 z-10 bg-transparent" onClick={() => {
-                    setHeroMode("image");
-                    setHeroIndex(0);
-                  }} />
-                  {/* Button to skip video manually */}
-                  <button 
-                    onClick={() => { setHeroMode("image"); setHeroIndex(0); }}
-                    className="absolute bottom-10 right-10 z-30 bg-white/20 hover:bg-white/40 backdrop-blur-md text-white text-[9px] uppercase tracking-widest px-4 py-2 rounded-full border border-white/20 transition-all"
-                  >
-                    Skip Video
-                  </button>
-                </div>
-              ) : (
-                <PerformanceVideo
-                  sources={[
-                    { src: "/videos/videorare.mp4", type: "video/mp4" }
-                  ]}
-                  poster={heroImages[0]}
-                  onEnded={() => {
-                    setHeroMode("image");
-                    setHeroIndex(0);
-                  }}
-                  className="w-full h-full"
-                />
-              )}
-            </motion.div>
-          ) : heroLoading ? (
-            <div
-              className="absolute inset-0 w-full h-full animate-pulse bg-muted"
-              style={{ aspectRatio: "1920/800" }}
-            />
-          ) : (
+              <source src="/videos/videorare.mp4" type="video/mp4" />
+            </video>
+          </motion.div>
+        ) : heroLoading ? (
+          <div
+            className="absolute inset-0 w-full h-full animate-pulse bg-muted"
+            style={{ aspectRatio: "1920/800" }}
+          />
+        ) : (
+          <AnimatePresence mode="popLayout">
             <motion.div
               key={`hero-image-${heroIndex}`}
               initial={{ opacity: 0 }}
@@ -560,16 +497,20 @@ export default function Home() {
               transition={{ duration: 1.5, ease: "easeInOut" }}
               className="absolute inset-0 w-full h-full"
             >
-              <OptimizedImage
-                src={heroImages[heroIndex]}
-                alt="Luxury street style campaign"
-                className="w-full h-full object-cover object-center"
-                priority
-                loading="eager"
-              />
+              {heroImages[heroIndex] ? (
+                <OptimizedImage
+                  src={heroImages[heroIndex]}
+                  alt="Luxury street style campaign"
+                  className="w-full h-full object-cover object-center"
+                  priority
+                  loading="eager"
+                />
+              ) : (
+                <div className="w-full h-full bg-neutral-900" />
+              )}
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
         <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
 
         {/* Editorial Left Text Section */}

@@ -4,8 +4,23 @@ import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Receipt } from "lucide-react";
+import { Search, Receipt, ArrowUpDown, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   exportOrdersCSV,
   fetchAdminOrders,
@@ -61,6 +76,8 @@ export default function AdminOrders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
+  const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -112,6 +129,15 @@ export default function AdminOrders() {
     },
   });
 
+  const sortedOrders = useMemo(() => {
+    if (!orders) return [];
+    return [...orders].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return sortOrder === "latest" ? dateB - dateA : dateA - dateB;
+    });
+  }, [orders, sortOrder]);
+
   const STATUS_TABS = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'POS'];
 
   return (
@@ -155,11 +181,24 @@ export default function AdminOrders() {
           ))}
         </div>
 
-        <div className="ml-auto sm:ml-0 flex items-center gap-4">
+        <div className="ml-auto sm:ml-0 flex items-center gap-3">
            <p className="text-xs font-medium text-muted-foreground hidden sm:block">
              {orders?.length ?? 0} orders found
            </p>
-           <ViewToggle view={viewMode} onViewChange={setViewMode} />
+           <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
+             <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
+               <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
+               <select
+                 className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer"
+                 value={sortOrder}
+                 onChange={(e) => setSortOrder(e.target.value as "latest" | "oldest")}
+               >
+                 <option value="latest">Latest First</option>
+                 <option value="oldest">Oldest First</option>
+               </select>
+             </div>
+             <ViewToggle view={viewMode} onViewChange={setViewMode} />
+           </div>
         </div>
       </div>
 
@@ -214,7 +253,7 @@ export default function AdminOrders() {
                       </td>
                     </tr>
                   ))
-                : orders?.map((order) => {
+                : sortedOrders.map((order) => {
                     const statusMap: Record<string, string> = {
                       pending: 'Pending',
                       processing: 'Processing',
@@ -226,7 +265,8 @@ export default function AdminOrders() {
                     return (
                       <tr
                         key={order.id}
-                        className="hover:bg-muted/50 transition-colors"
+                        className="hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={() => setSelectedOrder(order)}
                       >
                         <td className="px-4 py-3 font-medium text-xs">#{order.id.slice(0, 8)}</td>
                         <td className="px-4 py-3">
@@ -239,104 +279,24 @@ export default function AdminOrders() {
                           {order.shippingAddress && (
                             <div className="text-muted-foreground text-xs mt-1">
                               <p>{order.shippingAddress.country}</p>
-                              {order.shippingAddress.locationCoordinates && (
-                                <div className="pt-2 mt-2 border-t border-border">
-                                  <a
-                                    href={`https://www.google.com/maps?q=${order.shippingAddress.locationCoordinates}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors uppercase tracking-wider"
-                                  >
-                                    View on Map
-                                  </a>
-                                </div>
-                              )}
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {order.createdAt
-                            ? new Date(order.createdAt).toLocaleDateString()
-                            : ""}
+                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                          {order.createdAt ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
+                              <span className="text-[10px]">{format(new Date(order.createdAt), "h:mm a")}</span>
+                            </div>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 text-xs">
                             <span className="font-medium capitalize">
                               {order.paymentMethod?.replace(/_/g, " ") ?? "—"}
                             </span>
-                            {order.paymentMethod === 'cash_on_delivery' && order.shippingAddress && (
-                              <div className="text-[10px] text-muted-foreground/80 mt-0.5 leading-tight flex items-start gap-1">
-                                <span className="shrink-0 font-medium">To:</span>
-                                <span>
-                                  {order.shippingAddress.addressLine1}, {order.shippingAddress.city}
-                                  {order.shippingAddress.region && `, ${order.shippingAddress.region}`}
-                                </span>
-                              </div>
-                            )}
-                            {order.paymentProofUrl ? (
-                              <>
-                                <a
-                                  href={order.paymentProofUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline"
-                                >
-                                  View screenshot
-                                </a>
-                                {order.paymentVerified == null ? (
-                                  <div className="flex gap-1 mt-1">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs"
-                                      loading={verifyMutation.isPending}
-                                      onClick={() =>
-                                        verifyMutation.mutate({
-                                          id: order.id,
-                                          paymentVerified: "verified",
-                                        })
-                                      }
-                                    >
-                                      Verify
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-xs text-red-600"
-                                      loading={verifyMutation.isPending}
-                                      onClick={() =>
-                                        verifyMutation.mutate({
-                                          id: order.id,
-                                          paymentVerified: "rejected",
-                                        })
-                                      }
-                                    >
-                                      Reject
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Badge
-                                    variant="outline"
-                                    className={
-                                      order.paymentVerified === "verified"
-                                        ? "bg-[#E8F3EB] text-[#2C5234] text-[10px]"
-                                        : "bg-[#FDECEC] text-[#9A2D2D] text-[10px]"
-                                    }
-                                  >
-                                    {order.paymentVerified}
-                                  </Badge>
-                                )}
-                              </>
-                            ) : (
-                              order.paymentMethod &&
-                              ["esewa", "khalti", "bank"].includes(
-                                order.paymentMethod,
-                              ) && (
-                                <span className="text-muted-foreground">
-                                  Awaiting proof
-                                </span>
-                              )
-                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -356,35 +316,17 @@ export default function AdminOrders() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            value={order.status}
-                            onChange={(e) =>
-                              statusMutation.mutate({
-                                id: order.id,
-                                status: e.target.value,
-                              })
-                            }
+                          <Badge
                             className={cn(
-                              "text-xs font-bold uppercase tracking-wider border rounded-md px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center",
+                              "text-[10px] font-bold uppercase tracking-wider",
                               status === "Completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
                               status === "Pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
                               status === "Processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
                               status === "POS" ? "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900" :
                               "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900"
-                            )}
-                          >
-                            <option value="pending">⏳ Pending</option>
-                            <option value="processing">🔵 Processing</option>
-                            <option value="completed">✅ Completed</option>
-                            <option value="cancelled">❌ Cancelled</option>
-                            <option value="pos">🟣 POS</option>
-                          </select>
-                          {/* Bill button for completed orders */}
-                          {order.status === "completed" && (
-                            <div className="mt-2">
-                              <BillButton orderId={order.id} />
-                            </div>
-                          )}
+                            )}>
+                            {status}
+                          </Badge>
                         </td>
                         <td className="px-4 py-3 text-right font-medium">
                           {formatPrice(order.total)}
@@ -419,10 +361,14 @@ export default function AdminOrders() {
                 <div className="h-10 w-full bg-muted rounded" />
               </div>
             ))
-          : orders?.map((order) => {
+          : sortedOrders.map((order) => {
               const status = order.status.charAt(0).toUpperCase() + order.status.slice(1);
               return (
-                <div key={order.id} className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card">
+                <div 
+                  key={order.id} 
+                  className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card cursor-pointer"
+                  onClick={() => setSelectedOrder(order)}
+                >
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Order {order.id.substring(0, 8)}</p>
@@ -443,7 +389,7 @@ export default function AdminOrders() {
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Date</span>
-                      <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                      <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
                     </div>
                     <div className="flex justify-between text-xs text-muted-foreground">
                       <span>Payment</span>
@@ -455,34 +401,10 @@ export default function AdminOrders() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <select
-                      value={order.status}
-                      onChange={(e) =>
-                        statusMutation.mutate({
-                          id: order.id,
-                          status: e.target.value,
-                        })
-                      }
-                      className={cn(
-                        "text-xs font-bold uppercase tracking-wider border rounded-md px-3 py-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary/20 transition-colors text-center w-full",
-                        order.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900" :
-                        order.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900" :
-                        order.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
-                        order.status === "pos" ? "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900" :
-                        "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900"
-                      )}
-                    >
-                      <option value="pending">⏳ Pending</option>
-                      <option value="processing">🔵 Processing</option>
-                      <option value="completed">✅ Completed</option>
-                      <option value="cancelled">❌ Cancelled</option>
-                      <option value="pos">🟣 POS</option>
-                    </select>
-                    
-                    {order.status === "completed" && (
-                      <BillButton orderId={order.id} />
-                    )}
+                  <div className="flex flex-col gap-2 mt-4">
+                    <Button variant="outline" className="w-full text-xs font-bold uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}>
+                      Manage Order <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
                   </div>
                 </div>
               );
@@ -490,6 +412,210 @@ export default function AdminOrders() {
       </motion.div>
     )}
   </AnimatePresence>
+
+      {/* Sliding Drawer for Order Details */}
+      <Sheet open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-0 flex flex-col bg-[#FDFDFB] dark:bg-card border-l border-[#E5E5E0] dark:border-border">
+          {selectedOrder && (
+            <>
+              <div className="p-6 border-b border-border/50 flex-none space-y-4">
+                <SheetHeader className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest bg-muted">
+                      Order #{selectedOrder.id.slice(0, 8)}
+                    </Badge>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {format(new Date(selectedOrder.createdAt), "MMM d, yyyy • h:mm a")}
+                    </span>
+                  </div>
+                  <SheetTitle className="text-2xl font-serif text-[#2C3E2D] dark:text-foreground pt-2">
+                    {selectedOrder.fullName}
+                  </SheetTitle>
+                  <SheetDescription className="text-sm">
+                    {selectedOrder.email}
+                  </SheetDescription>
+                </SheetHeader>
+                
+                <div className="flex items-center gap-2">
+                  <Select
+                    value={selectedOrder.status}
+                    onValueChange={(val) => {
+                      statusMutation.mutate({
+                        id: selectedOrder.id,
+                        status: val,
+                      });
+                      setSelectedOrder(prev => prev ? { ...prev, status: val } : null);
+                    }}
+                  >
+                    <SelectTrigger className={cn(
+                        "h-10 text-xs font-bold uppercase tracking-wider rounded-md",
+                        selectedOrder.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20" :
+                        selectedOrder.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20" :
+                        selectedOrder.status === "processing" ? "bg-blue-100 text-blue-700 border-blue-700/20" :
+                        selectedOrder.status === "pos" ? "bg-purple-100 text-purple-700 border-purple-700/20" :
+                        "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20"
+                      )}>
+                      <SelectValue placeholder="Update Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">⏳ Pending</SelectItem>
+                      <SelectItem value="processing">🔵 Processing</SelectItem>
+                      <SelectItem value="completed">✅ Completed</SelectItem>
+                      <SelectItem value="cancelled">❌ Cancelled</SelectItem>
+                      <SelectItem value="pos">🟣 POS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-8 flex-1">
+                {/* Payment Section */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80 flex items-center gap-2">
+                    <Receipt className="w-4 h-4" /> Payment Details
+                  </h4>
+                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 space-y-3 shadow-sm">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Method</span>
+                      <span className="font-medium capitalize">{selectedOrder.paymentMethod?.replace(/_/g, " ") ?? "—"}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Total</span>
+                      <span className="font-bold text-lg">{formatPrice(selectedOrder.total)}</span>
+                    </div>
+                    
+                    {selectedOrder.promoCode && (
+                       <div className="flex justify-between items-center text-sm pt-2 border-t border-dashed border-border/50">
+                         <span className="text-muted-foreground">Promo Code</span>
+                         <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200 uppercase">
+                           {selectedOrder.promoCode} (-Rs. {selectedOrder.promoDiscountAmount})
+                         </Badge>
+                       </div>
+                    )}
+
+                    {selectedOrder.paymentProofUrl && (
+                      <div className="pt-3 border-t border-border/50">
+                        <div className="flex items-center justify-between mb-2">
+                          <a
+                            href={selectedOrder.paymentProofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                          >
+                            View screenshot
+                          </a>
+                          {selectedOrder.paymentVerified == null ? (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-[10px] font-bold tracking-wider"
+                                onClick={() => {
+                                  verifyMutation.mutate({ id: selectedOrder.id, paymentVerified: "verified" });
+                                  setSelectedOrder(prev => prev ? { ...prev, paymentVerified: "verified" } : null);
+                                }}
+                              >
+                                <CheckCircle2 className="w-3 h-3 mr-1 text-green-600" /> Verify
+                              </Button>
+                            </div>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className={
+                                selectedOrder.paymentVerified === "verified"
+                                  ? "bg-[#E8F3EB] text-[#2C5234] text-[10px]"
+                                  : "bg-[#FDECEC] text-[#9A2D2D] text-[10px]"
+                              }
+                            >
+                              {selectedOrder.paymentVerified}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Delivery & Shipping Section */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80 flex items-center gap-2">
+                    <Truck className="w-4 h-4" /> Delivery Information
+                  </h4>
+                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 shadow-sm">
+                    
+                    <div className="mb-4 pb-4 border-b border-border/50 grid grid-cols-2 gap-4">
+                      <div>
+                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Source</p>
+                         <p className="text-sm font-medium capitalize flex items-center gap-1.5">
+                           {selectedOrder.source === 'instagram' ? <Globe className="w-3 h-3 text-pink-600"/> :
+                            selectedOrder.source === 'tiktok' ? <Globe className="w-3 h-3"/> :
+                            selectedOrder.source === 'pos' ? <Package className="w-3 h-3 text-purple-600"/> :
+                            <Globe className="w-3 h-3 text-blue-600"/> }
+                           {selectedOrder.source || 'Website'}
+                         </p>
+                      </div>
+                      <div>
+                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Provider</p>
+                         {selectedOrder.deliveryRequired === false ? (
+                           <Badge variant="outline" className="text-[10px]">No Delivery</Badge>
+                         ) : (
+                           <p className="text-sm font-medium capitalize text-[#2C3E2D] dark:text-foreground">
+                             {selectedOrder.deliveryProvider ? selectedOrder.deliveryProvider.replace(/_/g, " ") : 'Not Assigned'}
+                           </p>
+                         )}
+                      </div>
+                    </div>
+
+                    {selectedOrder.deliveryRequired !== false && (
+                      <div className="space-y-4">
+                        {selectedOrder.deliveryAddress ? (
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>
+                            <p className="text-sm font-medium text-foreground">{selectedOrder.deliveryAddress}</p>
+                          </div>
+                        ) : selectedOrder.shippingAddress ? (
+                          <div>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Shipping Details</p>
+                            <div className="text-sm font-medium text-foreground leading-relaxed">
+                              {selectedOrder.shippingAddress.addressLine1}, {selectedOrder.shippingAddress.city}
+                              {selectedOrder.shippingAddress.region && `, ${selectedOrder.shippingAddress.region}`}
+                              <div className="text-muted-foreground mt-1 text-xs">
+                                {selectedOrder.shippingAddress.phone}
+                              </div>
+                            </div>
+                            
+                            {selectedOrder.shippingAddress.locationCoordinates && (
+                              <div className="mt-3">
+                                <a
+                                  href={`https://www.google.com/maps?q=${selectedOrder.shippingAddress.locationCoordinates}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 text-xs font-bold py-1.5 px-3 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+                                >
+                                  <MapPin className="w-3 h-3" /> View Map Location
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">No address provided.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional Actions */}
+                {selectedOrder.status === "completed" && (
+                  <div className="pt-4 border-t border-border">
+                    <BillButton orderId={selectedOrder.id} />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

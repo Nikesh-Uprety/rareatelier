@@ -166,13 +166,15 @@ export default function AdminCustomers() {
     });
   };
 
-  const bgColors = [
-    "bg-[#2C5234]",
-    "bg-[#1E40AF]",
-    "bg-[#8B2020]",
-    "bg-[#926019]",
-    "bg-[#1B6A68]",
-    "bg-[#4B3B6D]",
+  const bgGradients = [
+    "bg-gradient-to-br from-[#2C5234] to-[#1A3320]",
+    "bg-gradient-to-br from-[#1E40AF] to-[#112361]",
+    "bg-gradient-to-br from-[#8B2020] to-[#591414]",
+    "bg-gradient-to-br from-[#926019] to-[#5C3C0F]",
+    "bg-gradient-to-br from-[#1B6A68] to-[#103D3C]",
+    "bg-gradient-to-br from-[#4B3B6D] to-[#2B2240]",
+    "bg-gradient-to-br from-indigo-500 to-indigo-900",
+    "bg-gradient-to-br from-emerald-500 to-emerald-900",
   ];
 
   return (
@@ -229,16 +231,16 @@ export default function AdminCustomers() {
             className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm"
           >
             <Table>
-              <TableHeader className="bg-muted/50">
-                <TableRow>
-                  <TableHead className="w-[80px]">Customer</TableHead>
-                  <TableHead>Contact Info</TableHead>
-                  <TableHead>Orders</TableHead>
-                  <TableHead>Total Spent</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+              <TableHeader className="bg-transparent">
+                <TableRow className="border-b border-[#E5E5E0] dark:border-border hover:bg-transparent">
+                  <TableHead className="w-[80px] py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer</TableHead>
+                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact Info</TableHead>
+                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Orders</TableHead>
+                  <TableHead className="py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Spent</TableHead>
+                  <TableHead className="text-right py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="divide-y divide-[#E5E5E0] dark:divide-border">
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
@@ -263,28 +265,28 @@ export default function AdminCustomers() {
                     <React.Fragment key={customer.id}>
                       <TableRow 
                         className={cn(
-                          "cursor-pointer hover:bg-muted/30 transition-colors",
-                          expandedId === customer.id && "bg-muted/20 border-b-0"
+                          "cursor-pointer hover:bg-muted/30 transition-colors border-b border-[#E5E5E0] dark:border-border",
+                          expandedId === customer.id && "bg-muted/10 border-b-0"
                         )}
                         onClick={() => handleToggleExpand(customer.id)}
                       >
-                        <TableCell>
-                          <Avatar className={cn("w-10 h-10", !customer.profileImageUrl && bgColors[i % bgColors.length])}>
+                        <TableCell className="py-4">
+                          <Avatar className={cn("w-12 h-12 shadow-sm border border-black/5 dark:border-white/5", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
                             {customer.profileImageUrl ? (
                               <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
                             ) : (
-                              <AvatarFallback className="text-white text-xs font-bold">
+                              <AvatarFallback className="text-white text-sm font-bold bg-transparent">
                                 {getInitials(customer.firstName, customer.lastName)}
                               </AvatarFallback>
                             )}
                           </Avatar>
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium text-[#2C3E2D] dark:text-foreground">
+                        <TableCell className="py-4">
+                          <div className="font-semibold text-base text-[#2C3E2D] dark:text-foreground">
                             {customer.firstName} {customer.lastName}
                           </div>
-                          <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                            <Mail className="w-3 h-3" /> {customer.email}
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1">
+                            <Mail className="w-3.5 h-3.5" /> {customer.email}
                           </div>
                           {customer.phoneNumber && (
                             <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -299,7 +301,7 @@ export default function AdminCustomers() {
                           {customer.orderCount > 0 ? (
                             <Badge className="ml-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-0">Active</Badge>
                           ) : (
-                            <Badge variant="ghost" className="ml-2 text-muted-foreground">Inactive</Badge>
+                            <Badge variant="secondary" className="ml-2 bg-muted text-muted-foreground border-0">Inactive</Badge>
                           )}
                         </TableCell>
                         <TableCell>
@@ -494,11 +496,11 @@ export default function AdminCustomers() {
                 </div>
                 <CardContent className="p-6">
                   <div className="flex flex-col items-center text-center">
-                    <Avatar className={cn("w-16 h-16 mb-4 shadow-sm group-hover:scale-105 transition-transform", !customer.profileImageUrl && bgColors[i % bgColors.length])}>
+                    <Avatar className={cn("w-20 h-20 mb-4 shadow-md border-2 border-white dark:border-card group-hover:scale-105 transition-transform", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
                       {customer.profileImageUrl ? (
                         <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
                       ) : (
-                        <AvatarFallback className="text-white text-lg font-bold">
+                        <AvatarFallback className="text-white text-xl font-bold bg-transparent">
                           {getInitials(customer.firstName, customer.lastName)}
                         </AvatarFallback>
                       )}

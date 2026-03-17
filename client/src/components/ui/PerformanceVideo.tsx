@@ -100,7 +100,7 @@ export function PerformanceVideo({
     <div className={cn("relative w-full h-full overflow-hidden", className)}>
       {/* Poster Image - Shows while loading or on error */}
       <AnimatePresence>
-        {(!isLoaded || error) && (
+        {(!isLoaded || error) && poster && (
           <motion.img
             src={poster}
             alt="Video poster"

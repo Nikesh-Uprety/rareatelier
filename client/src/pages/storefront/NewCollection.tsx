@@ -4,22 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { ArrowUpRight } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-
-// Masonry layout assignment: vary aspect ratios for visual interest
-const ASPECT_PATTERNS = [
-  "aspect-[3/4]",
-  "aspect-[4/5]",
-  "aspect-square",
-  "aspect-[3/4]",
-  "aspect-[4/5]",
-  "aspect-[3/4]",
-  "aspect-square",
-  "aspect-[4/5]",
-];
-
-function getAspect(index: number) {
-  return ASPECT_PATTERNS[index % ASPECT_PATTERNS.length];
-}
+import { motion } from "framer-motion";
 
 // Scroll-reveal hook using IntersectionObserver
 function useScrollReveal() {
@@ -45,6 +30,22 @@ function useScrollReveal() {
   return { ref, isVisible };
 }
 
+// Masonry aspect ratio patterns
+const ASPECT_PATTERNS = [
+  "aspect-[3/4]",
+  "aspect-[4/5]",
+  "aspect-square",
+  "aspect-[3/4]",
+  "aspect-[4/5]",
+  "aspect-[3/4]",
+  "aspect-square",
+  "aspect-[4/5]",
+];
+
+function getAspect(index: number) {
+  return ASPECT_PATTERNS[index % ASPECT_PATTERNS.length];
+}
+
 function RevealImage({
   product,
   index,
@@ -56,7 +57,6 @@ function RevealImage({
   const aspect = getAspect(index);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Parse gallery URLs
   const gallery = useMemo(() => {
     try {
       return product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
@@ -67,7 +67,6 @@ function RevealImage({
 
   const secondaryImage = gallery.length > 1 ? gallery[1] : null;
 
-  // Calculate sale percentage
   const salePercentage = useMemo(() => {
     if (!product.originalPrice || Number(product.originalPrice) <= product.price) return null;
     const orig = Number(product.originalPrice);
@@ -92,7 +91,6 @@ function RevealImage({
         onMouseLeave={() => setIsHovered(false)}
       >
         <div className={`${aspect} overflow-hidden bg-neutral-100 dark:bg-neutral-800 relative`}>
-          {/* Primary Image */}
           <img
             src={product.imageUrl ?? ""}
             alt={product.name}
@@ -101,7 +99,6 @@ function RevealImage({
             }`}
           />
           
-          {/* Secondary Image (Cross-fade on hover) */}
           {secondaryImage && (
             <img
               src={secondaryImage}
@@ -112,7 +109,6 @@ function RevealImage({
             />
           )}
 
-          {/* Sale Badge */}
           {salePercentage && (
             <div className="absolute top-3 left-3 px-3 py-1.5 bg-red-600 border border-red-500 rounded-sm z-10 shadow-lg shadow-red-900/40">
               <span className="text-xs font-black tracking-widest text-white uppercase italic">
@@ -121,7 +117,6 @@ function RevealImage({
             </div>
           )}
 
-          {/* Hover overlay with Text */}
           <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent w-full h-full transition-all duration-700 ${isHovered ? "opacity-100" : "opacity-0"}`}>
             <div className="absolute bottom-0 left-0 right-0 p-8 translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
                 <div className="flex flex-col gap-2">
@@ -164,22 +159,10 @@ export default function NewCollection() {
     queryFn: fetchCategories,
   });
 
-  const getCategoryDisplayName = (slug: string) => {
-    if (slug === "uncategorized") return "Other";
-    const c = categories.find((x) => x.slug === slug);
-    return (
-      c?.name ??
-      slug
-        .replace(/_/g, " ")
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (w) => w.toUpperCase())
-    );
-  };
-
   const sortedProducts = useMemo(() => {
     if (!products) return [];
     return [...products]
-      .filter((p) => !!p.imageUrl) // Only show products with a real image
+      .filter((p) => !!p.imageUrl)
       .sort((a, b) => {
         const rankA = a.ranking ?? 999;
         const rankB = b.ranking ?? 999;
@@ -188,27 +171,92 @@ export default function NewCollection() {
       });
   }, [products]);
 
+  // Pick first 9 product images for the hero grid
+  const heroGridImages = useMemo(() => {
+    const withImages = sortedProducts.filter(p => p.imageUrl);
+    return withImages.slice(0, 9).map(p => ({
+      url: p.imageUrl!,
+      name: p.name,
+    }));
+  }, [sortedProducts]);
+
   return (
     <div className="flex flex-col min-h-screen pt-20">
-      {/* Hero Banner */}
-      <section className="relative w-full py-28 md:py-40 overflow-hidden bg-neutral-100 dark:bg-neutral-950">
-        {/* Ambient glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-black/[0.03] dark:bg-white/[0.03] blur-3xl" />
-        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-neutral-300/20 dark:from-neutral-800/20 via-transparent to-transparent" />
+      {/* Hero Banner — 3×3 Image Grid with Text Overlay */}
+      <section className="relative w-full overflow-hidden bg-neutral-950">
+        {/* 3×3 Image Grid Background */}
+        <div className="relative w-full">
+          <div className="grid grid-cols-3 gap-[2px] md:gap-1">
+            {heroGridImages.length > 0 ? (
+              heroGridImages.map((img, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 1.05 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.8, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  className="aspect-[3/4] overflow-hidden relative"
+                >
+                  <img
+                    src={img.url}
+                    alt={img.name}
+                    className="w-full h-full object-cover object-center"
+                    loading={i < 3 ? "eager" : "lazy"}
+                  />
+                </motion.div>
+              ))
+            ) : (
+              /* Skeleton placeholders while loading */
+              Array.from({ length: 9 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="aspect-[3/4] bg-neutral-800 animate-pulse"
+                />
+              ))
+            )}
+          </div>
 
-        <div className="relative container mx-auto px-6 text-center">
-          <p className="text-[10px] md:text-xs uppercase tracking-[0.5em] text-neutral-400 dark:text-neutral-500 font-bold mb-6 animate-in fade-in slide-in-from-bottom-2 duration-700">
-            Curated Pieces, Captured in Detail
-          </p>
-          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl font-bold text-foreground dark:text-white tracking-tight leading-none animate-in fade-in slide-in-from-bottom-4 duration-1000">
-            The Collection
-          </h1>
-          <div className="mt-8 flex justify-center gap-3 animate-in fade-in duration-1000" style={{ animationDelay: "400ms" }}>
-            <div className="h-px w-16 bg-neutral-300 dark:bg-neutral-700 self-center" />
-            <span className="text-[10px] uppercase tracking-[0.4em] text-neutral-500 dark:text-neutral-600 font-medium">
-              {products ? products.length : "—"} Pieces
-            </span>
-            <div className="h-px w-16 bg-neutral-300 dark:bg-neutral-700 self-center" />
+          {/* Dark Overlay for Text Legibility */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70 pointer-events-none" />
+
+          {/* Vignette edges */}
+          <div className="absolute inset-0 pointer-events-none" style={{
+            background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 100%)'
+          }} />
+
+          {/* Text Overlay */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
+            <motion.p
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 0.6, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.3 }}
+              className="text-[9px] md:text-xs uppercase tracking-[0.6em] text-white font-bold mb-4 md:mb-6"
+            >
+              Curated Pieces, Captured in Detail
+            </motion.p>
+
+            <motion.h1
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="font-serif text-5xl sm:text-7xl md:text-8xl lg:text-9xl font-bold text-white tracking-tight leading-none text-center"
+            >
+              The
+              <br />
+              Collection
+            </motion.h1>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1.0 }}
+              className="mt-6 md:mt-8 flex items-center gap-3"
+            >
+              <div className="h-px w-12 md:w-16 bg-white/30" />
+              <span className="text-[10px] md:text-xs uppercase tracking-[0.4em] text-white/50 font-medium">
+                {products ? products.length : "—"} Pieces
+              </span>
+              <div className="h-px w-12 md:w-16 bg-white/30" />
+            </motion.div>
           </div>
         </div>
       </section>

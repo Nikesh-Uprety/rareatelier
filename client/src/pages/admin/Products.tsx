@@ -132,9 +132,6 @@ export default function AdminProducts() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
   const [attrSheetOpen, setAttrSheetOpen] = useState(false);
-  const [moveMode, setMoveMode] = useState(false);
-  const [moveTargetCategory, setMoveTargetCategory] = useState<string>('');
-  const [moveNewCategoryName, setMoveNewCategoryName] = useState('');
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [mediaLibraryTarget, setMediaLibraryTarget] = useState<'add-main' | 'add-gallery' | 'edit-main' | 'edit-gallery' | null>(null);
 
@@ -517,17 +514,17 @@ export default function AdminProducts() {
           </AnimatePresence>
         </div>
         
-        <div className="hidden sm:flex items-center gap-2 mt-4 sm:mt-0">
+        <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto justify-end">
           <Button 
-            className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white shadow-sm"
+            className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white shadow-sm flex-1 sm:flex-none"
             onClick={() => setAddOpen(true)}
           >
             <Plus className="w-4 h-4 mr-2" /> Add Product
           </Button>
           <Button 
             variant="outline"
-            className="rounded-full border-[#E5E5E0] dark:border-border shadow-sm"
-            onClick={() => window.location.href = '/admin?tab=settings'}
+            className="rounded-full border-[#E5E5E0] dark:border-border shadow-sm flex-1 sm:flex-none"
+            onClick={() => setAttrSheetOpen(true)}
           >
             Attributes
           </Button>
@@ -1042,39 +1039,7 @@ export default function AdminProducts() {
       />
 
       <div className="flex flex-col gap-6 px-2 pt-4 pb-2 border-b border-border/50">
-        {/* Mobile-first: Attributes and Add Product at the top */}
-        <div className="flex flex-row justify-between items-center w-full order-1 sm:order-none">
-          <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
-            <SheetTrigger asChild>
-              <Button
-                variant="outline"
-                className="rounded-full border-[#2C3E2D] text-[#2C3E2D] hover:bg-[#2C3E2D]/5 dark:border-border dark:text-foreground dark:hover:bg-accent font-bold text-xs px-4 h-9 shadow-sm"
-              >
-                <Tags className="w-4 h-4 mr-2" /> Attributes
-              </Button>
-            </SheetTrigger>
-            <SheetContent className="sm:max-w-xl md:max-w-2xl overflow-y-auto w-full p-0 border-none bg-[#FDFDFB] dark:bg-card">
-              <AttributesManager onClose={() => setAttrSheetOpen(false)} />
-            </SheetContent>
-          </Sheet>
-
-          <Button
-            className="sm:hidden rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white dark:bg-primary dark:text-primary-foreground font-bold text-xs px-6 h-10 shadow-md"
-            onClick={() => {
-              if (categoryFilter !== "all") {
-                addForm.setValue("category", categoryFilter);
-              } else {
-                addForm.setValue("category", "");
-              }
-              setAddOpen(true);
-            }}
-          >
-            <Plus className="w-4 h-4 mr-2" /> Add Product
-          </Button>
-        </div>
-
-        {/* Categories: Second on mobile, centered/padded */}
-        <div className="flex gap-2 min-w-0 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-none order-2 sm:order-none justify-start sm:justify-center no-scrollbar">
+        <div className="flex gap-2 min-w-0 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-none justify-start sm:justify-center no-scrollbar">
           <Button
             variant={categoryFilter === "all" ? "default" : "outline"}
             onClick={() => setCategoryFilter("all")}
@@ -1101,103 +1066,6 @@ export default function AdminProducts() {
         </div>
       </div>
 
-      {/* Move Panel */}
-      {moveMode && selectedProductIds.size > 0 && (
-        <div className="border border-border rounded-xl p-4 bg-card mt-3">
-          <p className="text-xs text-muted-foreground mb-3 font-medium uppercase tracking-wide">
-            Moving {selectedProductIds.size} product{selectedProductIds.size > 1 ? 's' : ''}
-          </p>
-          {/* Product chips */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            {filteredProducts.filter(p => selectedProductIds.has(p.id)).map(product => (
-              <div
-                key={product.id}
-                className="flex items-center gap-1.5 bg-muted rounded-lg px-2 py-1 text-xs font-medium group cursor-pointer hover:bg-destructive/10 hover:text-destructive transition-colors"
-                onClick={() => {
-                  const next = new Set(selectedProductIds);
-                  next.delete(product.id);
-                  setSelectedProductIds(next);
-                }}
-              >
-                {product.name}
-                <span className="text-muted-foreground group-hover:text-destructive">×</span>
-              </div>
-            ))}
-          </div>
-          {/* Move options */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <select
-                value={moveTargetCategory}
-                onChange={e => setMoveTargetCategory(e.target.value)}
-                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm cursor-pointer"
-              >
-                <option value="">Move to existing category...</option>
-                {categories.map(cat => (
-                  <option key={cat.id} value={cat.slug}>{cat.name}</option>
-                ))}
-              </select>
-              <button
-                onClick={async () => {
-                  if (!moveTargetCategory) return;
-                  try {
-                    await Promise.all(
-                      Array.from(selectedProductIds).map(id =>
-                        updateAdminProduct(id, { category: moveTargetCategory })
-                      )
-                    );
-                    queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-                    toast({ title: `Moved ${selectedProductIds.size} products` });
-                    setSelectedProductIds(new Set());
-                    setMoveMode(false);
-                    setMoveTargetCategory('');
-                  } catch {
-                    toast({ title: "Failed to move products", variant: "destructive" });
-                  }
-                }}
-                disabled={!moveTargetCategory}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm disabled:opacity-40"
-              >
-                Move
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                value={moveNewCategoryName}
-                onChange={e => setMoveNewCategoryName(e.target.value)}
-                placeholder="Or create new category..."
-                className="flex-1 bg-background text-foreground border border-border rounded-lg px-3 py-2 text-sm placeholder:text-muted-foreground"
-              />
-              <button
-                onClick={async () => {
-                  if (!moveNewCategoryName.trim()) return;
-                  try {
-                    const slug = slugify(moveNewCategoryName);
-                    const newCat = await createCategory({ name: moveNewCategoryName.trim(), slug });
-                    await Promise.all(
-                      Array.from(selectedProductIds).map(id =>
-                        updateAdminProduct(id, { category: newCat.slug })
-                      )
-                    );
-                    queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-                    queryClient.invalidateQueries({ queryKey: ["categories"] });
-                    toast({ title: `Created "${newCat.name}" and moved ${selectedProductIds.size} products` });
-                    setSelectedProductIds(new Set());
-                    setMoveMode(false);
-                    setMoveNewCategoryName('');
-                  } catch {
-                    toast({ title: "Failed to create category & move", variant: "destructive" });
-                  }
-                }}
-                disabled={!moveNewCategoryName.trim()}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm disabled:opacity-40"
-              >
-                Create & Move
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20 shadow-sm overflow-hidden">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
           <div className="flex items-center gap-3 shrink-0">
@@ -1232,18 +1100,6 @@ export default function AdminProducts() {
                     className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground px-4 shadow-sm"
                   >
                     Deselect
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setMoveMode(prev => !prev)}
-                    className={cn(
-                      "h-8 rounded-full text-[10px] font-black uppercase tracking-widest px-4 shadow-sm transition-all",
-                      moveMode ? "bg-primary text-primary-foreground border-primary" : "text-muted-foreground hover:text-foreground"
-                    )}
-                  >
-                    <FolderInput size={12} className="mr-1.5" />
-                    Move
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -2186,6 +2042,13 @@ export default function AdminProducts() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      {/* Attributes Manager Sheet */}
+      <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-[600px] p-0 overflow-hidden border-l border-border">
+          <AttributesManager onClose={() => setAttrSheetOpen(false)} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

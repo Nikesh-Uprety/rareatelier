@@ -124,6 +124,12 @@ export const orders = pgTable("orders", {
   locationCoordinates: text("location_coordinates"), // stringified JSON format {lat, lng}
   promoCode: text("promo_code"),
   promoDiscountAmount: integer("promo_discount_amount").default(0),
+  source: text("source").notNull().default("website"),
+    // "website" | "pos" | "instagram" | "tiktok"
+  deliveryRequired: boolean("delivery_required").notNull().default(true),
+  deliveryProvider: text("delivery_provider"),
+    // "pathao" | "nepal_can_move" | "yango" | "other" | null
+  deliveryAddress: text("delivery_address"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
