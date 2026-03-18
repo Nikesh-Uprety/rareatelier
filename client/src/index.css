@@ -81,6 +81,9 @@
   --calendar-3: #30a14e;
   --calendar-4: #216e39;
   --calendar-holiday: #d0d7de;
+
+  --shimmer-1: rgba(0, 0, 0, 0.3);
+  --shimmer-2: rgba(0, 0, 0, 0.9);
 }
 
 /* DARK MODE */
@@ -127,6 +130,9 @@
   --calendar-3: #26a641;
   --calendar-4: #39d353;
   --calendar-holiday: #2d2a26;
+
+  --shimmer-1: rgba(255, 255, 255, 0.3);
+  --shimmer-2: rgba(255, 255, 255, 0.9);
 }
 
 /* WARM MODE */

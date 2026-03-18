@@ -212,11 +212,11 @@ export default function Products() {
         </aside>
 
         {/* Glassmorphism Products Container */}
-        <div className="flex-1 rounded-3xl p-6 md:p-10 backdrop-blur-xl bg-neutral-950/95 dark:bg-neutral-950/95 border border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.2)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] text-white min-h-[400px]">
-          <div className="flex justify-between items-center mb-8 pb-4 border-b border-white/[0.06]">
+        <div className="flex-1 rounded-3xl p-6 md:p-10 backdrop-blur-xl bg-white/90 dark:bg-neutral-950/95 border border-black/[0.06] dark:border-white/[0.06] shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] text-zinc-900 dark:text-white min-h-[400px]">
+          <div className="flex justify-between items-center mb-8 pb-4 border-b border-black/[0.06] dark:border-white/[0.06]">
             <p 
               style={{ fontFamily: 'Roboto, sans-serif' }}
-              className="text-[10px] font-bold uppercase tracking-widest text-neutral-400"
+              className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-neutral-400"
             >
               Showing {filteredProducts.length} results
             </p>
@@ -224,13 +224,13 @@ export default function Products() {
             <div className="flex items-center gap-3">
               <span 
                 style={{ fontFamily: 'Roboto, sans-serif' }}
-                className="text-[10px] font-bold uppercase tracking-widest text-neutral-400"
+                className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-neutral-400"
               >
                 Sort By
               </span>
               <select 
                 style={{ fontFamily: 'Roboto, sans-serif' }}
-                className="h-10 pl-4 pr-10 bg-neutral-900 border border-neutral-800 rounded text-[10px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-white appearance-none cursor-pointer text-white"
+                className="h-10 pl-4 pr-10 bg-white/50 dark:bg-neutral-900 border border-black/[0.06] dark:border-neutral-800 rounded text-[10px] font-bold uppercase tracking-widest focus:ring-1 focus:ring-black dark:focus:ring-white appearance-none cursor-pointer text-zinc-900 dark:text-white"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
@@ -304,21 +304,19 @@ export default function Products() {
                             fontWeight: 700,
                             fontSize: '18px',
                             lineHeight: '27px',
-                            color: 'white',
-                            textShadow: '0 0 15px rgba(255, 255, 255, 0.3)'
                           }}
                         >
                           {product.name}
                         </h3>
                         <div className="flex items-center gap-2">
-                          <p className={`text-sm font-bold uppercase tracking-wider ${product.saleActive ? 'text-primary' : 'text-neutral-400'}`}>
+                          <p className={`text-sm font-bold uppercase tracking-wider ${product.saleActive ? 'text-primary' : 'text-zinc-500 dark:text-neutral-400'}`}>
                             {product.saleActive && Number(product.salePercentage) > 0 
                               ? formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))
                               : formatPrice(product.price)
                             }
                           </p>
                           {product.saleActive && Number(product.salePercentage) > 0 && (
-                            <p className="text-[10px] text-neutral-500 line-through opacity-60">
+                            <p className="text-[10px] text-zinc-400 dark:text-neutral-500 line-through opacity-60">
                               {formatPrice(product.price)}
                             </p>
                           )}

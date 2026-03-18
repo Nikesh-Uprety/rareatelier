@@ -866,13 +866,13 @@ export default function Home() {
                         {product.salePercentage}% OFF
                      </span>
                    )}
-                   <span className="bg-black/80 text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2">
+                   <span className="bg-white/90 dark:bg-black/80 text-zinc-900 dark:text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2 border border-black/5 dark:border-white/5">
                     {product.saleActive && Number(product.salePercentage) > 0 ? (
                       <>
                         <span className="text-primary">
                           {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
                         </span>
-                        <span className="text-white/50 line-through text-[8px]">
+                        <span className="text-zinc-500/50 dark:text-white/50 line-through text-[8px]">
                           {formatPrice(product.price)}
                         </span>
                       </>
@@ -998,31 +998,6 @@ export default function Home() {
             </div>
           </div>
           <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] uppercase tracking-[0.3em] text-gray-600 font-bold">
-          </div>
-          <div className="mt-8 text-center">
-            <a 
-              href="https://www.nikeshuprety.com.np/" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-block text-[10px] uppercase tracking-[0.3em] font-black animate-pulse"
-              style={{
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.8), rgba(255,255,255,0.2))',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundSize: '200% auto',
-                animation: 'shimmer 3s ease-in-out infinite',
-                textShadow: 'none',
-                filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.15))',
-              }}
-            >
-              0xn1ku-hacks
-            </a>
-            <style>{`
-              @keyframes shimmer {
-                0%, 100% { background-position: -200% center; opacity: 0.4; }
-                50% { background-position: 200% center; opacity: 1; }
-              }
-            `}</style>
           </div>
         </div>
       </footer>
