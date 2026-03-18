@@ -32,11 +32,11 @@ import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
 const ADMIN_NAV = [
   { href: "/admin", icon: LayoutGrid, label: "Dashboard", type: "system" },
+  { href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { href: "/admin/products", icon: Package, label: "Products", type: "product" },
   { href: "/admin/orders", icon: ShoppingBag, label: "Orders", type: "order" },
   { href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },
   { href: "/admin/customers", icon: User, label: "Customers", type: "customer" },
-  { href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },

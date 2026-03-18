@@ -84,6 +84,28 @@
 
   --shimmer-1: rgba(0, 0, 0, 0.3);
   --shimmer-2: rgba(0, 0, 0, 0.9);
+
+  /* Antigravity Colors */
+  --ag-bg:       #f5f4f0;
+  --ag-bg2:      #ffffff;
+  --ag-bg3:      #f0efe9;
+  --ag-bg4:      #e8e7e0;
+  --ag-border:   #d4d2c8;
+  --ag-border2:  #c0beb4;
+  --ag-text:     #1a1a1f;
+  --ag-text2:    #5a5a6a;
+  --ag-text3:    #9a9aad;
+  --ag-green:    #1a7a4a;
+  --ag-green-m:  #39e88e;
+  --ag-green-l:  #e8f7ef;
+  --ag-amber:    #b57d0e;
+  --ag-amber-l:  #fef6e4;
+  --ag-red:      #c0392b;
+  --ag-red-l:    #fdecea;
+  --ag-blue:     #2d5fa8;
+  --ag-blue-l:   #eaf0fb;
+  --ag-purple:   #5b3ea8;
+  --ag-purple-l: #f0ebfb;
 }
 
 /* DARK MODE */
@@ -133,6 +155,28 @@
 
   --shimmer-1: rgba(255, 255, 255, 0.3);
   --shimmer-2: rgba(255, 255, 255, 0.9);
+
+  /* Antigravity Colors - Dark */
+  --ag-bg:       #0a0a0c;
+  --ag-bg2:      #111114;
+  --ag-bg3:      #18181d;
+  --ag-bg4:      #222228;
+  --ag-border:   #ffffff12;
+  --ag-border2:  #ffffff1f;
+  --ag-text:     #f0eff5;
+  --ag-text2:    #9a9aad;
+  --ag-text3:    #5c5c70;
+  --ag-green:    #39e88e;
+  --ag-green-m:  #39e88e;
+  --ag-green-l:  rgba(57,232,142,0.12);
+  --ag-amber:    #f5a623;
+  --ag-amber-l:  rgba(245,166,35,0.12);
+  --ag-red:      #ff4d4d;
+  --ag-red-l:    rgba(255,77,77,0.10);
+  --ag-blue:     #5b8def;
+  --ag-blue-l:   rgba(91,141,239,0.12);
+  --ag-purple:   #9b7cf8;
+  --ag-purple-l: rgba(155,124,248,0.12);
 }
 
 /* WARM MODE */

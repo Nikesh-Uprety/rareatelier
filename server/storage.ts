@@ -299,6 +299,16 @@ export interface IStorage {
   updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode>;
   deletePromoCode(id: string): Promise<void>;
   getPromoCodeByCode(code: string): Promise<PromoCode | null>;
+
+  // Media Assets
+  getMediaAssets(params: {
+    category?: string;
+    provider?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MediaAsset[]>;
+  createMediaAsset(data: NewMediaAsset): Promise<MediaAsset>;
+  deleteMediaAsset(id: string): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -1940,6 +1950,39 @@ export class PgStorage implements IStorage {
     const [row] = await db.select().from(promoCodes).where(eq(promoCodes.code, code.toUpperCase())).limit(1);
     return row ?? null;
   }
+
+  // Media Assets Implementation
+  async getMediaAssets(params: {
+    category?: string;
+    provider?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MediaAsset[]> {
+    const conditions = [];
+    if (params.category) conditions.push(eq(mediaAssets.category, params.category));
+    if (params.provider) conditions.push(eq(mediaAssets.provider, params.provider));
+    
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const limit = params.limit || 50;
+    const offset = params.offset || 0;
+
+    return db
+      .select()
+      .from(mediaAssets)
+      .where(whereClause)
+      .orderBy(desc(mediaAssets.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async createMediaAsset(data: NewMediaAsset): Promise<MediaAsset> {
+    const [row] = await db.insert(mediaAssets).values(data).returning();
+    return row;
+  }
+
+  async deleteMediaAsset(id: string): Promise<void> {
+    await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
+  }
 }
 
 export class MemStorage implements IStorage {
@@ -2448,6 +2491,35 @@ export class MemStorage implements IStorage {
   async getPromoCodeByCode(code: string): Promise<PromoCode | null> {
     return null;
   }
+
+  // Media Assets Stubs
+  async getMediaAssets(_params: {
+    category?: string;
+    provider?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<MediaAsset[]> {
+    return [];
+  }
+
+  async createMediaAsset(data: NewMediaAsset): Promise<MediaAsset> {
+    const asset: MediaAsset = {
+      ...data,
+      id: crypto.randomUUID(),
+      url: data.url,
+      provider: data.provider,
+      category: data.category,
+      publicId: data.publicId ?? null,
+      filename: data.filename ?? null,
+      bytes: data.bytes ?? null,
+      width: data.width ?? null,
+      height: data.height ?? null,
+      createdAt: new Date(),
+    };
+    return asset;
+  }
+
+  async deleteMediaAsset(_id: string): Promise<void> {}
 }
 
 export const storage: IStorage = new PgStorage();

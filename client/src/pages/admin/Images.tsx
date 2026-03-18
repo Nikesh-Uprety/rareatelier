@@ -8,10 +8,6 @@ import {
   fetchAdminImages,
   uploadAdminImage,
   type AdminImageAsset,
-  fetchLocalMedia,
-  uploadLocalMedia,
-  deleteLocalMedia,
-  type AdminLocalMedia,
 } from "@/lib/adminApi";
 import { Trash2, Upload, Images as ImagesIcon, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -42,41 +38,23 @@ export default function AdminImagesPage() {
   const imagesQuery = useQuery<AdminImageAsset[]>({
     queryKey: ["admin", "images", { provider, category }],
     queryFn: () => fetchAdminImages({ provider, category, limit: 120 }),
-    enabled: provider === "cloudinary",
-  });
-
-  const localMediaQuery = useQuery<AdminLocalMedia[]>({
-    queryKey: ["admin", "media", "local"],
-    queryFn: fetchLocalMedia,
-    enabled: provider === "local",
   });
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    
-    if (provider === "local") {
-      const data = localMediaQuery.data ?? [];
-      if (!q) return data;
-      return data.filter((img) => img.name.toLowerCase().includes(q));
-    } else {
-      const data = imagesQuery.data ?? [];
-      if (!q) return data;
-      return data.filter((img) =>
-        (img.filename || img.url).toLowerCase().includes(q),
-      );
-    }
-  }, [imagesQuery.data, localMediaQuery.data, search, provider]);
+    const data = imagesQuery.data ?? [];
+    if (!q) return data;
+    return data.filter((img) =>
+      (img.filename || img.url).toLowerCase().includes(q),
+    );
+  }, [imagesQuery.data, search]);
 
   const uploadMutation = useMutation({
-    mutationFn: async (file: File): Promise<any> => {
-      if (provider === "local") {
-        return uploadLocalMedia(file);
-      }
+    mutationFn: async (file: File): Promise<AdminImageAsset> => {
       return uploadAdminImage({ file, category, provider });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "media"] });
       toast({ title: provider === "local" ? "WebP image uploaded successfully" : "Image uploaded to Cloudinary" });
     },
     onError: (err: any) => {
@@ -85,15 +63,11 @@ export default function AdminImagesPage() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (identifier: string) => {
-      if (provider === "local") {
-        return deleteLocalMedia(identifier);
-      }
-      return deleteAdminImage(identifier);
+    mutationFn: (id: string) => {
+      return deleteAdminImage(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "media"] });
       toast({ title: "Image deleted successfully" });
     },
   });
@@ -136,11 +110,7 @@ export default function AdminImagesPage() {
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as ImageCategory)}
-              disabled={provider === "local"}
-              className={cn(
-                "h-9 rounded-lg border border-muted bg-background px-3 text-sm",
-                provider === "local" && "opacity-50 cursor-not-allowed"
-              )}
+              className="h-9 rounded-lg border border-muted bg-background px-3 text-sm"
             >
               {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>
@@ -181,7 +151,7 @@ export default function AdminImagesPage() {
           </div>
         </div>
 
-        {(provider === "cloudinary" ? imagesQuery.isLoading : localMediaQuery.isLoading) ? (
+        {imagesQuery.isLoading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Loading images…
           </div>
@@ -191,11 +161,10 @@ export default function AdminImagesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
-            {filtered.map((item: any) => {
-              const isLocal = provider === "local";
-              const id = isLocal ? item.name : item.id;
+            {filtered.map((item: AdminImageAsset) => {
+              const id = item.id;
               const url = item.url;
-              const displayName = isLocal ? item.name : (item.filename ?? url.split("/").pop());
+              const displayName = item.filename ?? url.split("/").pop();
 
               return (
               <div
@@ -204,7 +173,7 @@ export default function AdminImagesPage() {
               >
                 <img
                   src={url}
-                  alt={displayName}
+                  alt={displayName ?? ""}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   loading="lazy"
                 />

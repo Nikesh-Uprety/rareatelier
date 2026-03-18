@@ -77,8 +77,8 @@ function SectionHelperText({ section }: { section: SectionKey }) {
   if (section === "hero") {
     return (
       <p className="text-xs text-muted-foreground mt-1">
-        Recommended 1920×800px. Max 5 images. Images are stored on Cloudinary
-        and automatically optimized for web delivery.
+        Recommended 1920×800px. Max 5 images. Images are stored locally
+        and automatically optimized for web delivery (WebP).
       </p>
     );
   }
@@ -193,7 +193,7 @@ function SectionManager({ section }: { section: SectionKey }) {
       setDeleteId(null);
       toast({
         title: "Image deleted",
-        description: "Removed from both Cloudinary and the storefront.",
+        description: "Removed from the storefront and local storage.",
       });
     },
     onError: (err: Error) => {
@@ -282,7 +282,7 @@ function SectionManager({ section }: { section: SectionKey }) {
       setUploadState({ file: null, previewUrl: null, altText: "", deviceTarget: "all" });
       toast({
         title: "Uploaded",
-        description: "Uploaded and saved to Cloudinary.",
+        description: "Image optimized and saved locally as WebP.",
       });
     },
     onError: (err: Error) => {
@@ -705,8 +705,8 @@ function SectionManager({ section }: { section: SectionKey }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete image?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the image from both Cloudinary and the storefront
-              landing page. This action cannot be undone.
+              This will remove the image from the storefront
+              landing page and local storage. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

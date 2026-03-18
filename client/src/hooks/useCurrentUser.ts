@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
 
 export interface CurrentUser {
@@ -16,15 +16,37 @@ interface MeResponse {
   error?: string;
 }
 
+// Auth query key for consistent cache management
+export const AUTH_QUERY_KEY = ["/api/auth/me"] as const;
+
 export function useCurrentUser() {
   const { data, isLoading } = useQuery<MeResponse | null>({
-    queryKey: ["/api/auth/me"],
+    queryKey: AUTH_QUERY_KEY,
     queryFn: getQueryFn<MeResponse>({ on401: "returnNull" }),
+    staleTime: 1000 * 60 * 5, // 5 minutes - data considered fresh
+    gcTime: 1000 * 60 * 60, // 1 hour - keep in cache even if unused
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnReconnect: true, // Refetch on network reconnect
   });
 
   const user = data?.success ? data.data ?? null : null;
   const isAuthenticated = !!user;
 
   return { user, isLoading, isAuthenticated };
+}
+
+// Hook to invalidate auth cache (use after login/logout)
+export function useAuthInvalidation() {
+  const queryClient = useQueryClient();
+
+  const invalidateAuth = () => {
+    queryClient.invalidateQueries({ queryKey: AUTH_QUERY_KEY });
+  };
+
+  const resetAuth = () => {
+    queryClient.resetQueries({ queryKey: AUTH_QUERY_KEY });
+  };
+
+  return { invalidateAuth, resetAuth };
 }
 

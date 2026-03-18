@@ -11,7 +11,9 @@ import { logger } from "./logger";
 import { corsHeaders, securityHeaders } from "./middleware/security";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import { initWebSocketServer } from "./websocket";
 import os from "node:os";
+
 
 const app = express();
 
@@ -152,6 +154,10 @@ app.use((req, res, next) => {
   app.use("/uploads", express.static(uploadsPath));
 
   await registerRoutes(httpServer, app);
+
+  // Initialize WebSocket server for real-time admin notifications
+  initWebSocketServer(httpServer);
+
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     if (res.headersSent) {

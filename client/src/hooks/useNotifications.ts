@@ -5,9 +5,11 @@ import { AdminNotification } from "@shared/schema";
 export function useNotifications() {
   const queryClient = useQueryClient();
 
+  // Remove refetchInterval polling - notifications now come via WebSocket
   const { data: response, isLoading } = useQuery<{ data: AdminNotification[] }>({
     queryKey: ["/api/admin/notifications"],
-    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: Infinity, // Don't auto-refetch, rely on WebSocket
+    gcTime: 1000 * 60 * 30, // Keep in cache for 30 minutes
   });
 
   const notifications = response?.data || [];

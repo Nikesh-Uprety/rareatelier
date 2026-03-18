@@ -421,7 +421,7 @@ export const siteAssets = pgTable("site_assets", {
   // hero | featured_collection | new_collection
   imageUrl: text("image_url").notNull(),
   // Cloudinary delivery URL (permanent, survives deploys)
-  cloudinaryPublicId: text("cloudinary_public_id").notNull(),
+  cloudinaryPublicId: text("cloudinary_public_id"),
   // needed for deletion via Cloudinary API
   altText: text("alt_text").default(""),
   deviceTarget: text("device_target").notNull().default("all"),

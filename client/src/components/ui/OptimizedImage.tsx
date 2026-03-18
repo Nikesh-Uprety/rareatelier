@@ -6,6 +6,8 @@ interface OptimizedImageProps extends React.ImgHTMLAttributes<HTMLImageElement> 
   fallbackExt?: 'png' | 'jpg' | 'jpeg';
   className?: string;
   priority?: boolean;
+  width?: number;
+  height?: number;
 }
 
 export const OptimizedImage = ({ 
@@ -14,6 +16,8 @@ export const OptimizedImage = ({
   fallbackExt = 'png', 
   className, 
   priority = false,
+  width,
+  height,
   ...props 
 }: OptimizedImageProps) => {
   // Only attempt WebP substitution for local images
@@ -34,8 +38,11 @@ export const OptimizedImage = ({
         loading={priority ? "eager" : "lazy"}
         decoding="async"
         fetchPriority={priority ? "high" : "auto"}
+        width={width}
+        height={height}
         {...props}
       />
     </picture>
   );
 };
+

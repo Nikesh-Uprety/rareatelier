@@ -1,3 +1,5 @@
+import express from "express";
+
 import type { Express, NextFunction, Request, Response } from "express";
 import fs from "fs";
 import { type Server } from "http";
@@ -5,10 +7,16 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
-import { passport } from "./auth";
 import { storage } from "./storage";
+import passport from "passport";
+import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
+import { broadcastNotification } from "./websocket";
+import bcrypt from "bcryptjs";
+console.log("------------------ SERVER ROUTES RELOADED ------------------");
+
 
 import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
+
 import {
     bills,
     emailTemplates,
@@ -201,7 +209,8 @@ export async function registerRoutes(
       }
       passport.authenticate("local", (err: any, user: Express.User | false) => {
         if (err) {
-          return next(err);
+          console.error("DEBUG AUTH ERROR:", err);
+          return res.status(500).json({ message: "DEBUG AUTH ERROR: " + (err.message || "Unknown") });
         }
         if (!user) {
           return res.status(401).json({
@@ -426,13 +435,16 @@ export async function registerRoutes(
         message,
       });
 
-      // Create admin notification
-      await storage.createAdminNotification({
+      // Create admin notification and broadcast via WebSocket
+      const notification = await storage.createAdminNotification({
         title: "New Contact Message",
         message: `From: ${name} (${subject})`,
         type: "contact",
         link: "/admin/profile?tab=messages",
       });
+
+      // Broadcast to connected admin clients
+      broadcastNotification(notification);
 
       return res.status(201).json({ success: true, data: created });
     } catch (err) {
@@ -440,6 +452,7 @@ export async function registerRoutes(
       return res.status(500).json({ success: false, error: "Failed to send message" });
     }
   });
+
 
   app.get("/api/products", async (req: Request, res: Response) => {
     try {
@@ -814,17 +827,15 @@ export async function registerRoutes(
         const base64 = parsed.data.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
-        ensureProductUploadsDir();
-        const filename = `${Date.now()}.webp`;
-        const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
         
-        await sharp(buffer)
-          .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-          .webp({ quality: 85 })
-          .toFile(filePath);
+        // Use unified local WebP service for products
+        const asset = await processAndStoreImage(
+          buffer,
+          "product",
+          `product_${Date.now()}.png` // fallback name
+        );
 
-        const url = `/api/uploads/products/${filename}`;
-        return res.json({ success: true, url });
+        return res.json({ success: true, url: asset.url });
       } catch (err) {
         console.error("Error in product image upload", err);
         return res.status(500).json({ success: false, error: "Upload failed" });
@@ -832,25 +843,19 @@ export async function registerRoutes(
     },
   );
 
-  // General Media Management (Local WebP Storage)
-  app.get("/api/admin/media", requireAdmin, async (_req, res) => {
+  // General Media Management (Centralized Library)
+  app.get("/api/admin/media", requireAdmin, async (req: Request, res: Response) => {
     try {
-      ensureMediaUploadsDir();
-      const files = await fs.promises.readdir(MEDIA_UPLOADS_DIR);
-      const media = await Promise.all(
-        files
-          .filter(f => /\.(webp|jpg|jpeg|png)$/i.test(f))
-          .map(async (filename) => {
-            const stats = await fs.promises.stat(path.join(MEDIA_UPLOADS_DIR, filename));
-            return {
-              name: filename,
-              url: `/api/uploads/media/${filename}`,
-              size: stats.size,
-              createdAt: stats.birthtime,
-            };
-          })
-      );
-      res.json({ success: true, data: media });
+      const provider = req.query.provider as string | undefined;
+      const category = req.query.category as string | undefined;
+      
+      const rows = await storage.getMediaAssets({
+        provider,
+        category,
+        limit: 100
+      });
+      
+      return res.json({ success: true, data: rows });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/media");
     }
@@ -895,26 +900,11 @@ export async function registerRoutes(
     }
   });
 
-  // Serve uploads
-  app.use("/api/uploads/products", (req, res, next) => {
-    const filename = path.basename(req.url);
-    const filePath = path.join(PRODUCTS_UPLOADS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      next();
-    }
-  });
-
-  app.use("/api/uploads/media", (req, res, next) => {
-    const filename = path.basename(req.url);
-    const filePath = path.join(MEDIA_UPLOADS_DIR, filename);
-    if (fs.existsSync(filePath)) {
-      res.sendFile(filePath);
-    } else {
-      next();
-    }
-  });
+  // Serve all uploads (including nested categories)
+  app.use("/uploads", express.static(UPLOADS_DIR));
+  
+  // Backwards compatibility for /api/uploads/
+  app.use("/api/uploads", express.static(UPLOADS_DIR));
 
   // ── Site Assets (Landing Page Images) ──────────────────────────────
   const validSiteAssetSections = [
@@ -953,7 +943,12 @@ export async function registerRoutes(
           });
         }
 
-        const { url, publicId } = await uploadToCloudinary(req.file.buffer, section);
+        // Use unified local WebP service
+        const asset = await processAndStoreImage(
+          req.file.buffer,
+          section,
+          req.file.originalname || "image.jpg"
+        );
 
         const [{ max }] = await db
           .select({ max: sql<number>`COALESCE(MAX(${siteAssets.sortOrder}), -1)` })
@@ -964,8 +959,8 @@ export async function registerRoutes(
           .insert(siteAssets)
           .values({
             section,
-            imageUrl: url,
-            cloudinaryPublicId: publicId,
+            imageUrl: asset.url,
+            cloudinaryPublicId: null, // No longer using Cloudinary for new uploads
             altText,
             deviceTarget,
             assetType: "image",
@@ -3135,47 +3130,29 @@ export async function registerRoutes(
         const file = (req as any).file as Express.Multer.File | undefined;
         if (!file) return sendError(res, "Missing file", undefined, 400);
 
-        const allowedCategories = new Set([
-          "product",
-          "model",
-          "website",
-          "landing_page",
-          "collection_page",
-        ]);
-        if (!allowedCategories.has(category)) {
-          return sendError(res, "Invalid category", undefined, 400);
-        }
-
-        let url = "";
-        let publicId: string | null = null;
-
-        if (provider === "cloudinary") {
-          const uploaded = await uploadMediaToCloudinary(file.buffer, category);
-          url = uploaded.url;
-          publicId = uploaded.publicId;
-        } else {
-          const dir = path.join(UPLOADS_DIR, "images", category);
-          await fs.promises.mkdir(dir, { recursive: true });
-          const safeBase = (file.originalname || "image").replace(/[^a-zA-Z0-9._-]/g, "_");
-          const filename = `${Date.now()}_${safeBase}`;
-          const abs = path.join(dir, filename);
-          await fs.promises.writeFile(abs, file.buffer);
-          url = `/uploads/images/${category}/${filename}`;
-        }
-
-        const [row] = await db
-          .insert(mediaAssets)
-          .values({
-            url,
-            provider,
+        if (provider === "local") {
+          const asset = await processAndStoreImage(
+            file.buffer,
             category,
-            publicId,
-            filename: file.originalname ?? null,
-            bytes: file.size ?? null,
-          })
-          .returning();
-
-        return res.json({ success: true, data: row });
+            file.originalname || "image.jpg"
+          );
+          return res.json({ success: true, data: asset });
+        } else {
+          // Cloudinary path
+          const uploaded = await uploadMediaToCloudinary(file.buffer, category);
+          const [row] = await db
+            .insert(mediaAssets)
+            .values({
+              url: uploaded.url,
+              provider: "cloudinary",
+              category,
+              publicId: uploaded.publicId,
+              filename: file.originalname ?? null,
+              bytes: file.size ?? null,
+            })
+            .returning();
+          return res.json({ success: true, data: row });
+        }
       } catch (err) {
         handleApiError(res, err, "POST /api/admin/images/upload");
       }
@@ -3192,10 +3169,8 @@ export async function registerRoutes(
 
       if (asset.provider === "cloudinary" && asset.publicId) {
         await deleteFromCloudinary(asset.publicId);
-      } else if (asset.provider === "local" && asset.url?.startsWith("/uploads/")) {
-        const rel = asset.url.replace(/^\/uploads\//, "");
-        const abs = path.join(UPLOADS_DIR, rel);
-        await fs.promises.unlink(abs).catch(() => {});
+      } else if (asset.provider === "local") {
+        await deleteLocalImage(asset.url);
       }
 
       await db.delete(mediaAssets).where(eq(mediaAssets.id, id));
