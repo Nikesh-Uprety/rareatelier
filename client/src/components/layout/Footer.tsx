@@ -63,29 +63,6 @@ export default function Footer() {
                 <li><Link href="/refund" className="hover:text-gray-400 transition-colors">Refund Policy</Link></li>
                 <li><Link href="/privacy" className="hover:text-gray-400 transition-colors">Privacy Policy</Link></li>
                 <li><Link href="/terms" className="hover:text-gray-400 transition-colors">Terms of service</Link></li>
-                <li className="pt-4">
-                  <a 
-                    href="https://www.nikeshuprety.com.np/" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="inline-block text-[10px] uppercase tracking-[0.3em] font-black"
-                    style={{
-                      background: 'linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.9), rgba(255,255,255,0.3))',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      backgroundSize: '200% auto',
-                      animation: 'shimmer-footer 3s ease-in-out infinite',
-                    }}
-                  >
-                    designed & dev by : 0xn1ku-hacks
-                  </a>
-                  <style>{`
-                    @keyframes shimmer-footer {
-                      0%, 100% { background-position: -200% center; opacity: 0.4; }
-                      50% { background-position: 200% center; opacity: 1; }
-                    }
-                  `}</style>
-                </li>
               </ul>
             </div>
             <div>
@@ -132,7 +109,29 @@ export default function Footer() {
               </form>
             </div>
           </div>
-          <div className="pt-8 border-t border-gray-900" />
+          <div className="pt-8 border-t border-gray-900 flex flex-col md:flex-row justify-between items-center gap-6">
+            <a 
+              href="https://www.nikeshuprety.com.np/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block text-[10px] uppercase tracking-[0.3em] font-black"
+              style={{
+                background: 'linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.9), rgba(255,255,255,0.3))',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundSize: '200% auto',
+                animation: 'shimmer-footer 3s ease-in-out infinite',
+              }}
+            >
+              designed & dev by : 0xn1ku-hacks
+            </a>
+            <style>{`
+              @keyframes shimmer-footer {
+                0%, 100% { background-position: -200% center; opacity: 0.4; }
+                50% { background-position: 200% center; opacity: 1; }
+              }
+            `}</style>
+          </div>
         </div>
       </footer>
       <footer className="py-12 border-t bg-white">
