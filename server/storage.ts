@@ -14,6 +14,8 @@ import {
   newsletterSubscribers,
   adminNotifications,
   securityLogs,
+  mediaAssets,
+  siteAssets,
   type Category,
   type Customer,
   type Order,
@@ -33,6 +35,10 @@ import {
   type InsertPromoCode,
   type Bill,
   type Platform,
+  type MediaAsset,
+  type NewMediaAsset,
+  type SiteAsset,
+  type InsertSiteAsset,
 } from "@shared/schema";
 import { and, or, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
 

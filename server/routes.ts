@@ -12,7 +12,7 @@ import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
 import { broadcastNotification } from "./websocket";
 import bcrypt from "bcryptjs";
-console.log("------------------ SERVER ROUTES RELOADED ------------------");
+
 
 
 import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
