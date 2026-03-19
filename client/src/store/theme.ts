@@ -14,7 +14,7 @@ export const useThemeStore = create<ThemeState>((set) => {
     if (savedTheme && ['light', 'dark', 'warm'].includes(savedTheme)) {
       return savedTheme;
     }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'light';
   };
 
   const initialTheme = getInitialTheme();

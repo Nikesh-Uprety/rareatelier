@@ -244,33 +244,37 @@ function NewArrivalCard({ product }: { product: ProductApi }) {
   );
   const [idx, setIdx] = useState(0);
 
+  // Adaptive timing: primary image (idx 0) holds 3.5s, gallery images cycle at 2.0s
   useEffect(() => {
     if (images.length <= 1) return;
-    const t = setInterval(() => setIdx((p) => (p + 1) % images.length), 2400);
-    return () => clearInterval(t);
-  }, [images.length]);
+    const duration = idx === 0 ? 3500 : 2000;
+    const t = setTimeout(() => setIdx((p) => (p + 1) % images.length), duration);
+    return () => clearTimeout(t);
+  }, [images.length, idx]);
 
   return (
     <Link href={`/product/${product.id}`} className="group cursor-pointer">
       <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500">
         <div className="absolute inset-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={`${product.id}-${idx}`}
+          {/* Cross-fade blend: all images stacked, active one has opacity 1 */}
+          {images.slice(0, 6).map((src: string, imgIdx: number) => (
+            <div
+              key={`${product.id}-img-${imgIdx}`}
               className="absolute inset-0"
-              initial={{ opacity: 0, scale: 1.02 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.995 }}
-              transition={{ duration: 0.7, ease: "easeInOut" }}
+              style={{
+                opacity: imgIdx === idx ? 1 : 0,
+                transition: 'opacity 1.2s ease-in-out',
+                zIndex: imgIdx === idx ? 1 : 0,
+              }}
             >
               <OptimizedImage
-                src={images[idx] ?? product.imageUrl ?? ""}
-                alt={`${product.name} view ${idx + 1}`}
+                src={src}
+                alt={`${product.name} view ${imgIdx + 1}`}
                 className="w-full h-full object-cover"
               />
-            </motion.div>
-          </AnimatePresence>
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white" />
+            </div>
+          ))}
+          <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white z-[2]" />
         </div>
 
         <button
@@ -286,7 +290,7 @@ function NewArrivalCard({ product }: { product: ProductApi }) {
         </button>
 
         {/* Price: always visible on mobile/tablet, hover-reveal on desktop */}
-        <div className="absolute bottom-2 left-2 max-w-[85%] truncate opacity-100 md:opacity-0 md:group-hover:opacity-100 transform translate-y-0 md:translate-y-2 md:group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start">
+        <div className="absolute bottom-2 left-2 max-w-[85%] truncate opacity-100 md:opacity-0 md:group-hover:opacity-100 transform translate-y-0 md:translate-y-2 md:group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start z-[5]">
           {product.saleActive && Number(product.salePercentage) > 0 && (
             <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded shadow-xl">
               {product.salePercentage}% OFF
@@ -355,8 +359,8 @@ export default function Home() {
   });
 
   const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
-    queryKey: ["products", "new-arrivals", { limit: 4 }],
-    queryFn: () => fetchProducts({ limit: 4 }),
+    queryKey: ["products", "arrivals"],
+    queryFn: () => fetchProducts({ category: "arrivals", limit: 4 }),
   });
 
   const {
@@ -602,7 +606,7 @@ export default function Home() {
             </motion.div>
           </AnimatePresence>
         )}
-        <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700 pointer-events-none" />
+        <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700 pointer-events-none" />
 
         {/* Editorial Left Text Section */}
         <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
@@ -872,7 +876,7 @@ export default function Home() {
           } as any}
         />
 
-        <div className="absolute inset-0 bg-black/40 dark:bg-luminous-glow transition-colors duration-700" />
+        <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700" />
         
         <div className="absolute inset-0 flex items-center justify-center p-6 sm:p-12 z-20">
           <motion.div 

@@ -454,6 +454,21 @@ export async function registerRoutes(
   });
 
 
+  // Dedicated arrivals endpoint for homepage "New Arrivals" section
+  app.get("/api/products/arrivals", async (req: Request, res: Response) => {
+    try {
+      const products = await storage.getProducts({
+        category: "arrivals",
+        limit: 4,
+        includeInactive: false,
+      });
+      return res.json({ success: true, data: products });
+    } catch (err) {
+      console.error("Error in GET /api/products/arrivals", err);
+      return res.status(500).json({ success: false, error: "Failed to load arrivals" });
+    }
+  });
+
   app.get("/api/products", async (req: Request, res: Response) => {
     try {
       const { category, search, page, limit } = req.query;
@@ -735,6 +750,7 @@ export async function registerRoutes(
     { name: "Trousers", slug: "TROUSER" },
     { name: "T-Shirts", slug: "TSHIRTS" },
     { name: "Winter '25", slug: "WINTER_25" },
+    { name: "Arrivals", slug: "arrivals" },
   ];
   app.get("/api/categories", async (req: Request, res: Response) => {
     try {
