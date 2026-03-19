@@ -35,11 +35,11 @@ const ADMIN_NAV = [
   { href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { href: "/admin/products", icon: Package, label: "Products", type: "product" },
   { href: "/admin/orders", icon: ShoppingBag, label: "Orders", type: "order" },
+  { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
   { href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },
   { href: "/admin/customers", icon: User, label: "Customers", type: "customer" },
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
-  { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
   { href: "/admin/images", icon: Images, label: "Images", type: "media" },
 ];
 
@@ -325,18 +325,6 @@ export default function AdminLayout({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden bg-[#F5F5F3] dark:bg-neutral-900 transition-colors duration-500">
-        {/* Fixed POS button (admin-only) */}
-        {(user?.role === "admin" || user?.role === "staff") && (
-          <Link
-            href="/admin/pos"
-            className="hidden md:inline-flex fixed top-6 right-6 z-[55] items-center gap-2 rounded-full bg-[#2C3E2D] text-white px-5 py-2.5 shadow-lg shadow-black/20 hover:bg-[#1A251B] transition-colors"
-          >
-            <CreditCard className="h-4 w-4" />
-            <span className="text-xs font-black uppercase tracking-widest">
-              Point Of Sale
-            </span>
-          </Link>
-        )}
         {/* Header - only on mobile */}
         <header className="h-20 bg-neutral-950 dark:bg-white border-b border-white/10 dark:border-black/5 flex items-center justify-between px-6 md:hidden relative z-50">
           <div className="flex items-center gap-3">
