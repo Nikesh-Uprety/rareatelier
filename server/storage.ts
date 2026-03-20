@@ -41,6 +41,7 @@ import {
   type InsertSiteAsset,
 } from "@shared/schema";
 import { and, or, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
+import { broadcastNotification } from "./websocket";
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -1177,6 +1178,11 @@ export class PgStorage implements IStorage {
       .insert(adminNotifications)
       .values(data)
       .returning();
+    try {
+      broadcastNotification(row);
+    } catch (err) {
+      console.error("[WebSocket] Failed to broadcast admin notification", err);
+    }
     return row;
   }
 
@@ -2328,6 +2334,11 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.adminNotifications.set(id, notification);
+    try {
+      broadcastNotification(notification);
+    } catch (err) {
+      console.error("[WebSocket] Failed to broadcast admin notification", err);
+    }
     return notification;
   }
 

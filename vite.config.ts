@@ -60,6 +60,9 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+    // When Vite runs in Express middleware mode (see `server/vite.ts`),
+    // it still needs to know which port the HMR websocket client should use.
+    port: Number(process.env.PORT || 5000),
     fs: {
       strict: true,
       deny: ["**/.*"],

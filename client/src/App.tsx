@@ -39,6 +39,7 @@ const AdminProfilePage = lazy(() => import("@/pages/admin/Profile"));
 const AdminNotifications = lazy(() => import("@/pages/admin/Notifications"));
 const AdminLandingPageManager = lazy(() => import("@/pages/admin/LandingPageManager"));
 const AdminImages = lazy(() => import("@/pages/admin/Images"));
+const AdminStorefrontImages = lazy(() => import("@/pages/admin/StorefrontImagePicker"));
 
 const LoginPage = lazy(() => import("@/pages/auth/Login"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -171,6 +172,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminImages />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/storefront-images">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminStorefrontImages />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

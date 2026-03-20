@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useNotifications } from "@/hooks/useNotifications";
+import { useAdminWebSocket } from "@/hooks/useAdminWebSocket";
 import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
@@ -41,6 +42,7 @@ const ADMIN_NAV = [
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { href: "/admin/images", icon: Images, label: "Images", type: "media" },
+  { href: "/admin/storefront-images", icon: Settings, label: "Storefront Images", type: "system" },
 ];
 
 export default function AdminLayout({
@@ -53,6 +55,7 @@ export default function AdminLayout({
   const { user } = useCurrentUser();
   const { toast } = useToast();
   const { getUnreadCountByType, markTypeRead } = useNotifications();
+  useAdminWebSocket();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const handleLogout = async () => {

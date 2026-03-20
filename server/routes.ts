@@ -10,8 +10,8 @@ import { z } from "zod";
 import { storage } from "./storage";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
-import { broadcastNotification } from "./websocket";
 import bcrypt from "bcryptjs";
+import { resolveUploadsDir } from "./uploads";
 
 
 
@@ -49,8 +49,7 @@ import { generateBillFromOrder, generateBillNumber } from "./services/billServic
 import { uploadToCloudinary, deleteFromCloudinary } from "./lib/cloudinary";
 import { uploadMediaToCloudinary } from "./lib/cloudinary";
 
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR ? path.resolve(process.env.UPLOADS_DIR) : path.join(process.cwd(), "uploads");
+const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(UPLOADS_DIR, "products");
 const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
@@ -67,6 +66,49 @@ const memoryUpload = multer({
     cb(null, allowed.includes(file.mimetype));
   },
 });
+
+function listImagesInUploadsDir(options: { maxDepth?: number; maxFiles?: number } = {}) {
+  const maxDepth = options.maxDepth ?? 3;
+  const maxFiles = options.maxFiles ?? 200;
+  const allowedExt = new Set([".webp", ".png", ".jpg", ".jpeg"]);
+
+  const results: Array<{ filename: string; url: string; relPath: string }> = [];
+
+  function walk(currentAbs: string, currentRel: string, depth: number) {
+    if (results.length >= maxFiles) return;
+    if (depth > maxDepth) return;
+
+    if (!fs.existsSync(currentAbs)) return;
+
+    const entries = fs.readdirSync(currentAbs, { withFileTypes: true });
+    for (const entry of entries) {
+      if (results.length >= maxFiles) return;
+      if (entry.name.startsWith(".")) continue;
+
+      const abs = path.join(currentAbs, entry.name);
+      const rel = currentRel ? path.posix.join(currentRel, entry.name) : entry.name;
+
+      if (entry.isDirectory()) {
+        walk(abs, rel, depth + 1);
+        continue;
+      }
+
+      if (!entry.isFile()) continue;
+
+      const ext = path.extname(entry.name).toLowerCase();
+      if (!allowedExt.has(ext)) continue;
+
+      results.push({
+        filename: entry.name,
+        relPath: rel,
+        url: `/uploads/${rel}`,
+      });
+    }
+  }
+
+  walk(UPLOADS_DIR, "", 0);
+  return results;
+}
 
 function ensureUploadsDir() {
   if (!fs.existsSync(UPLOADS_DIR)) {
@@ -446,15 +488,56 @@ export async function registerRoutes(
         link: "/admin/profile?tab=messages",
       });
 
-      // Broadcast to connected admin clients
-      broadcastNotification(notification);
-
       return res.status(201).json({ success: true, data: created });
     } catch (err) {
       console.error("Error in POST /api/contact", err);
       return res.status(500).json({ success: false, error: "Failed to send message" });
     }
   });
+
+  // ── User activity (cart) -> Admin live notifications ─────────────────────────
+  app.post(
+    "/api/user-activity/cart",
+    rateLimit({ windowMs: 60 * 1000, maxRequests: 20 }),
+    async (req: Request, res: Response) => {
+      try {
+        const schema = z.object({
+          action: z.enum(["add", "update", "remove"]),
+          productName: z.string().min(1),
+          size: z.string().optional(),
+          color: z.string().optional(),
+          quantity: z.number().int().min(1).optional(),
+        });
+
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid payload" });
+        }
+
+        const { action, productName, size, color, quantity } = parsed.data;
+
+        const variantParts = [size ? `Size: ${size}` : null, color ? `Color: ${color}` : null].filter(
+          Boolean,
+        ) as string[];
+        const variant = variantParts.length ? variantParts.join(", ") : "";
+
+        const messageParts = [`${action.toUpperCase()}: ${productName}`];
+        if (variant) messageParts.push(`(${variant})`);
+        if (quantity) messageParts.push(`x${quantity}`);
+
+        await storage.createAdminNotification({
+          title: "Cart Activity",
+          message: messageParts.join(" "),
+          type: "system",
+          link: "/admin",
+        });
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in POST /api/user-activity/cart", err);
+        return res.status(500).json({ success: false, error: "Failed to broadcast cart activity" });
+      }
+    },
+  );
 
 
   // Dedicated arrivals endpoint for homepage "New Arrivals" section
@@ -3173,6 +3256,26 @@ export async function registerRoutes(
       return res.json({ success: true, data: rows });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/images");
+    }
+  });
+
+  // ── Dev / local image library (no upload) ─────────────────────────────
+  // Lists images currently present in the server's local uploads directory.
+  // Useful when uploads are not persistent on Railway free plans.
+  app.get("/api/admin/storefront-image-library", requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const images = listImagesInUploadsDir({ maxDepth: 2, maxFiles: 500 });
+      // Return only a clean subset for thumbnails
+      return res.json({
+        success: true,
+        data: images.map((img) => ({
+          filename: img.filename,
+          url: img.url,
+          relPath: img.relPath,
+        })),
+      });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/storefront-image-library");
     }
   });
 

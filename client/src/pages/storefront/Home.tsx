@@ -26,6 +26,15 @@ const HERO_IMAGES_FALLBACK = [
   "https://placehold.co/1920x800/0a0e1a/6366f1?text=RARE.NP",
 ];
 
+// For now we hardwire the Featured Collection + Explore visuals.
+// Users can override these via the admin "Storefront Images" picker (localStorage).
+const FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT = [
+  "/images/feature1.webp",
+  "/images/feature2.webp",
+  "/images/feature3.webp",
+];
+const EXPLORE_COLLECTION_IMAGE_DEFAULT = "/images/explore.webp";
+
 const LIFESTYLE_IMAGES_FALLBACK = [
   "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/631740212_17994330563913773_2587884432133361953_n.jpg?stp=dst-jpegr_e35_tt6&_nc_cat=100&ig_cache_key=MzgzMDk2Nzc4NDI1NjQ2MTc0OA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTkyMC5oZHIuQzMifQ%3D%3D&_nc_ohc=WHAtzLrmUw0Q7kNvwGZrMhY&_nc_oc=AdkqVNju-2AEOO-fn-AAnUa0TPWgAGyG6Rki48MU9gwLm4w0V1IiaidBIpz8Zd0A4P0&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=291tdQM7tKQUnIlBz26x5g&_nc_ss=8&oh=00_AfxPGSDL-niDxVGt9ePHCQRPO21x9E_0NDNSrJUZGMF2LQ&oe=69BDA11A",
   "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/601064673_17988135542913773_395755096348511217_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc4OTUwOTgwMzg0NTQ5NDg5MA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=MtEtHv7NcAgQ7kNvwHwy6sz&_nc_oc=Adk6Llzm6Ews4P_r2brHfIZkHXcWlljxFVulZ6urWQfATyMefNIIcH--KNV4K3wKeic&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_Afx0cuyYIHwRuTfg-fnqVA4Vb34Sq-t3VFdoTDT2eFosJQ&oe=69BD72BA",
@@ -398,6 +407,15 @@ export default function Home() {
   const isDragging = useRef(false);
   const interactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Featured Collection visuals (feature1/2/3) and Explore banner (explore.webp).
+  // Defaults come from client public files; overrides come from admin picker via localStorage.
+  const [featureCollectionImages, setFeatureCollectionImages] = useState<string[]>(
+    FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT,
+  );
+  const [exploreCollectionImage, setExploreCollectionImage] = useState<string>(
+    EXPLORE_COLLECTION_IMAGE_DEFAULT,
+  );
+
   const { scrollYProgress } = useScroll();
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, -200]);
 
@@ -423,15 +441,6 @@ export default function Home() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: featuredAssets = [] } = useQuery<SiteAsset[]>({
-    queryKey: ["siteAssets", "featured_collection"],
-    queryFn: () =>
-      fetch("/api/site-assets/featured_collection")
-        .then((r) => r.json())
-        .then((r) => r.data ?? []),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const { data: campaignAssets = [] } = useQuery<SiteAsset[]>({
     queryKey: ["siteAssets", "new_collection"],
     queryFn: () =>
@@ -451,6 +460,29 @@ export default function Home() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
+  // Load admin overrides (if any) for Featured + Explore visuals.
+  useEffect(() => {
+    try {
+      const rawFeatures = localStorage.getItem("storefront_feature_images");
+      if (rawFeatures) {
+        const parsed = JSON.parse(rawFeatures);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const normalized = parsed
+            .map((x) => (typeof x === "string" ? x : ""))
+            .filter(Boolean);
+          if (normalized.length > 0) setFeatureCollectionImages(normalized.slice(0, 3));
+        }
+      }
+
+      const rawExplore = localStorage.getItem("storefront_explore_image");
+      if (rawExplore && typeof rawExplore === "string") {
+        setExploreCollectionImage(rawExplore);
+      }
+    } catch {
+      // ignore localStorage errors and keep defaults
+    }
+  }, []);
+
   const showHeroVideo = isMobile && !videoFailed;
 
   // Hero images from CMS assets (fallback to placeholder)
@@ -461,13 +493,11 @@ export default function Home() {
     return images.length > 0 ? images : HERO_IMAGES_FALLBACK;
   }, [heroAssets]);
 
-  const lifestyleImages = featuredAssets.length > 0
-    ? featuredAssets.map((a) => a.imageUrl)
-    : LIFESTYLE_IMAGES_FALLBACK;
+  const lifestyleImages =
+    featureCollectionImages.length > 0 ? featureCollectionImages : LIFESTYLE_IMAGES_FALLBACK;
 
-  const campaignBannerImage = campaignAssets.length > 0
-    ? campaignAssets[0].imageUrl
-    : "/images/landingpage3.webp";
+  const campaignBannerImage =
+    exploreCollectionImage || (campaignAssets[0]?.imageUrl ?? "/images/explore.webp");
 
   // Finish pre-loader only when data is ready (Hydration-First)
   useEffect(() => {

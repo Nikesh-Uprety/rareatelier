@@ -23,9 +23,9 @@ const app = express();
 // Without a persistent mount, files may disappear on container redeploy/restart.
 import fs from "fs";
 import path from "path";
+import { resolveUploadsDir } from "./uploads";
 
-const UPLOADS_DIR =
-  process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
+const UPLOADS_DIR = resolveUploadsDir();
 
 const UPLOAD_SUBDIRS = [
   "products",

@@ -12,6 +12,9 @@ export async function setupVite(server: Server, app: Express) {
   const expressPort = Number(process.env.PORT || "5000");
   const serverOptions = {
     middlewareMode: true,
+    // When running Vite as Express middleware, ensure Vite doesn't default
+    // its internal HMR port to 5173 (which breaks the websocket client).
+    port: expressPort,
     hmr: {
       server,
       path: "/vite-hmr",
@@ -42,6 +45,24 @@ export async function setupVite(server: Server, app: Express) {
 
   app.use("/{*path}", async (req, res, next) => {
     const url = req.originalUrl;
+
+    // IMPORTANT: This catch-all exists to serve `index.html` for SPA navigations.
+    // It must NOT intercept non-HTML requests (API routes, uploads, websocket upgrade
+    // endpoints, etc.), otherwise it can break HMR and image/API requests.
+    const accept = req.headers.accept || "";
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (!accept.includes("text/html")) return next();
+
+    if (
+      url.startsWith("/api/") ||
+      url.startsWith("/uploads") ||
+      url.startsWith("/ws/") ||
+      url.startsWith("/vite-hmr") ||
+      url.startsWith("/@vite/") ||
+      url.startsWith("/src/")
+    ) {
+      return next();
+    }
 
     try {
       const clientTemplate = path.resolve(
