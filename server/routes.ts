@@ -37,6 +37,8 @@ import {
     sendInviteEmail,
     sendMarketingBroadcastEmail,
     sendNewsletterWelcomeEmail,
+    sendOrderConfirmationEmail,
+    sendOrderStatusUpdateEmail,
     sendOTPEmail,
 } from "./email";
 import { getQueryParam, handleApiError, sendError } from "./errorHandler";
@@ -655,6 +657,28 @@ export async function registerRoutes(
       });
 
       const fullOrder = await storage.getOrderById(order.id);
+
+      // Fire-and-forget order confirmation email
+      try {
+        sendOrderConfirmationEmail({
+          orderId: order.id,
+          fullName: fullOrder.fullName ?? fullOrder.customerName ?? "Customer",
+          email: fullOrder.email ?? fullOrder.customerEmail ?? "",
+          items: (fullOrder.items ?? []).map((it: any) => ({
+            productName: it.product?.name ?? "Product",
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+          })),
+          subtotal: orderSubtotal,
+          shippingFee: SHIPPING_FEE,
+          promoCode: promoCode ?? undefined,
+          promoDiscountAmount: promoDiscountAmount ?? undefined,
+          total: orderTotal,
+          paymentMethod: paymentMethod ?? "cash_on_delivery",
+        });
+      } catch (emailErr) {
+        console.error("Order confirmation email failed (non-critical):", emailErr);
+      }
 
       return res.status(201).json({
         success: true,
@@ -1547,6 +1571,23 @@ export async function registerRoutes(
           } catch (billErr) {
             console.error("Bill generation failed (non-critical):", billErr);
           }
+        }
+
+        // Fire-and-forget order status update email
+        try {
+          const orderDetails = await storage.getOrderById(id);
+          const customerEmail = orderDetails.email ?? (orderDetails as any).customerEmail ?? "";
+          const customerName = orderDetails.fullName ?? (orderDetails as any).customerName ?? "Customer";
+          if (customerEmail) {
+            sendOrderStatusUpdateEmail(
+              customerEmail,
+              customerName,
+              id,
+              parsed.data.status,
+            );
+          }
+        } catch (emailErr) {
+          console.error("Order status email failed (non-critical):", emailErr);
         }
 
         return res.json({ success: true, data: updated });
