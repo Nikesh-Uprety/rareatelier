@@ -86,10 +86,17 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   res.set("Referrer-Policy", "strict-origin-when-cross-origin");
 
   // Content Security Policy
-  res.set(
-    "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
-  );
+  if (process.env.NODE_ENV === "production") {
+    res.set(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+    );
+  } else {
+    res.set(
+      "Content-Security-Policy",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https: ws://localhost:5001 ws://localhost:5173 ws://127.0.0.1:5173; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';"
+    );
+  }
 
   // Permissions Policy (formerly Feature Policy)
   res.set(

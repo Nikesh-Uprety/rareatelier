@@ -662,15 +662,15 @@ export async function registerRoutes(
       try {
         sendOrderConfirmationEmail({
           orderId: order.id,
-          fullName: fullOrder.fullName ?? fullOrder.customerName ?? "Customer",
-          email: fullOrder.email ?? fullOrder.customerEmail ?? "",
+          fullName: fullOrder.fullName ?? "Customer",
+          email: fullOrder.email ?? "",
           items: (fullOrder.items ?? []).map((it: any) => ({
             productName: it.product?.name ?? "Product",
             quantity: it.quantity,
             unitPrice: it.unitPrice,
           })),
           subtotal: orderSubtotal,
-          shippingFee: SHIPPING_FEE,
+          shippingFee: shippingFee,
           promoCode: promoCode ?? undefined,
           promoDiscountAmount: promoDiscountAmount ?? undefined,
           total: orderTotal,
@@ -1576,8 +1576,8 @@ export async function registerRoutes(
         // Fire-and-forget order status update email
         try {
           const orderDetails = await storage.getOrderById(id);
-          const customerEmail = orderDetails.email ?? (orderDetails as any).customerEmail ?? "";
-          const customerName = orderDetails.fullName ?? (orderDetails as any).customerName ?? "Customer";
+          const customerEmail = orderDetails.email ?? "";
+          const customerName = orderDetails.fullName ?? "Customer";
           if (customerEmail) {
             sendOrderStatusUpdateEmail(
               customerEmail,
