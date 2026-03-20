@@ -292,23 +292,6 @@ export default function NewCollection() {
         </div>
       </section>
 
-      <section className="px-4 md:px-6 py-14 md:py-16">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-center text-[10px] md:text-xs uppercase tracking-[0.42em] font-semibold text-muted-foreground mb-8">
-            As Seen On Instagram
-          </p>
-          <div className="w-full flex justify-center">
-            <div className="w-full max-w-[540px]">
-              <blockquote
-                className="instagram-media !bg-transparent w-full !min-w-0 !max-w-[540px] border border-[var(--border)] rounded-sm overflow-hidden"
-                data-instgrm-permalink="https://www.instagram.com/p/DTAWRgSDal3/"
-                data-instgrm-version="14"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Gallery */}
       <section className="py-16 md:py-24 container mx-auto px-4 md:px-6 max-w-7xl">
         {isLoading ? (
@@ -332,6 +315,24 @@ export default function NewCollection() {
             </p>
           </div>
         )}
+      </section>
+
+      {/* As Seen On Instagram (moved to bottom) */}
+      <section className="px-4 md:px-6 py-14 md:py-16">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-center text-[10px] md:text-xs uppercase tracking-[0.42em] font-semibold text-muted-foreground mb-8">
+            As Seen On Instagram
+          </p>
+          <div className="w-full flex justify-center">
+            <div className="w-full max-w-[540px]">
+              <blockquote
+                className="instagram-media !bg-transparent w-full !min-w-0 !max-w-[540px] border border-[var(--border)] rounded-sm overflow-hidden"
+                data-instgrm-permalink="https://www.instagram.com/p/DTAWRgSDal3/"
+                data-instgrm-version="14"
+              />
+            </div>
+          </div>
+        </div>
       </section>
     </div>
   );
