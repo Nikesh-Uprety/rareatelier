@@ -223,3 +223,215 @@ export async function sendNewsletterWelcomeEmail(to: string) {
     });
   }
 }
+
+interface OrderEmailItem {
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+interface OrderConfirmationData {
+  orderId: string;
+  fullName: string;
+  email: string;
+  items: OrderEmailItem[];
+  subtotal: number;
+  shippingFee: number;
+  promoCode?: string;
+  promoDiscountAmount?: number;
+  total: number;
+  paymentMethod: string;
+}
+
+function formatPrice(amount: number): string {
+  return `Rs ${amount.toLocaleString("en-NP")}`;
+}
+
+function paymentMethodLabel(method: string): string {
+  const labels: Record<string, string> = {
+    cash_on_delivery: "Cash on Delivery",
+    esewa: "eSewa",
+    khalti: "Khalti",
+    bank_transfer: "Bank Transfer",
+    fonepay: "FonePay",
+  };
+  return labels[method] || method;
+}
+
+export async function sendOrderConfirmationEmail(data: OrderConfirmationData) {
+  if (!isSMTPConfigured || !transporter) {
+    console.warn(
+      "[DEV] SMTP not configured. Order confirmation for",
+      data.email,
+      "-> Order",
+      data.orderId.substring(0, 8),
+    );
+    return;
+  }
+
+  const shortId = data.orderId.substring(0, 8).toUpperCase();
+
+  const itemRows = data.items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding: 12px 0; border-bottom: 1px solid rgba(242,239,232,0.1); color: #f2efe8; font-size: 14px;">${item.productName}</td>
+        <td style="padding: 12px 0; border-bottom: 1px solid rgba(242,239,232,0.1); color: rgba(242,239,232,0.7); font-size: 14px; text-align: center;">${item.quantity}</td>
+        <td style="padding: 12px 0; border-bottom: 1px solid rgba(242,239,232,0.1); color: rgba(242,239,232,0.7); font-size: 14px; text-align: right;">${formatPrice(item.unitPrice * item.quantity)}</td>
+      </tr>`,
+    )
+    .join("");
+
+  const promoRow =
+    data.promoDiscountAmount && data.promoDiscountAmount > 0
+      ? `<tr>
+          <td colspan="2" style="padding: 6px 0; color: rgba(242,239,232,0.7); font-size: 14px;">Discount (${data.promoCode ?? "promo"})</td>
+          <td style="padding: 6px 0; color: #4ade80; font-size: 14px; text-align: right;">-${formatPrice(data.promoDiscountAmount)}</td>
+        </tr>`
+      : "";
+
+  try {
+    await transporter.sendMail({
+      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+      to: data.email,
+      subject: `Order Confirmed — #${shortId}`,
+      html: `
+        <div style="font-family: 'serif'; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; border-radius: 24px;">
+          <h1 style="font-size: 28px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; color: #f2efe8; text-align: center;">RARE ATELIER</h1>
+          <div style="width: 40px; height: 1px; background: rgba(242,239,232,0.3); margin: 0 auto 32px;"></div>
+
+          <h2 style="font-size: 22px; font-style: italic; margin-bottom: 8px; text-align: center;">Order Confirmed</h2>
+          <p style="font-size: 15px; color: rgba(242,239,232,0.7); text-align: center; margin-bottom: 32px;">
+            Thank you, ${data.fullName}. Your order <strong style="color: #f2efe8;">#${shortId}</strong> has been placed successfully.
+          </p>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(242,239,232,0.2);">
+                <th style="padding: 8px 0; text-align: left; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.5);">Item</th>
+                <th style="padding: 8px 0; text-align: center; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.5);">Qty</th>
+                <th style="padding: 8px 0; text-align: right; font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.5);">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemRows}
+            </tbody>
+          </table>
+
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
+            <tr>
+              <td colspan="2" style="padding: 6px 0; color: rgba(242,239,232,0.7); font-size: 14px;">Subtotal</td>
+              <td style="padding: 6px 0; color: rgba(242,239,232,0.7); font-size: 14px; text-align: right;">${formatPrice(data.subtotal)}</td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding: 6px 0; color: rgba(242,239,232,0.7); font-size: 14px;">Shipping</td>
+              <td style="padding: 6px 0; color: rgba(242,239,232,0.7); font-size: 14px; text-align: right;">${formatPrice(data.shippingFee)}</td>
+            </tr>
+            ${promoRow}
+            <tr style="border-top: 1px solid rgba(242,239,232,0.2);">
+              <td colspan="2" style="padding: 12px 0; color: #f2efe8; font-size: 18px; font-weight: 700;">Total</td>
+              <td style="padding: 12px 0; color: #f2efe8; font-size: 18px; font-weight: 700; text-align: right;">${formatPrice(data.total)}</td>
+            </tr>
+          </table>
+
+          <p style="font-size: 14px; color: rgba(242,239,232,0.7); margin-bottom: 8px;">
+            <strong style="color: #f2efe8;">Payment:</strong> ${paymentMethodLabel(data.paymentMethod)}
+          </p>
+
+          <div style="margin-top: 48px; padding-top: 24px; border-top: 1px solid rgba(242,239,232,0.1); text-align: center;">
+            <p style="font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.4);">RARE Nepal · Khusibu, Nayabazar, Kathmandu</p>
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[SMTP] Order confirmation email sent to: ${data.email}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Order confirmation failed for", data.email, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack,
+    });
+  }
+}
+
+function statusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    pending: "Pending",
+    processing: "Processing",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    pos: "POS Sale",
+  };
+  return labels[status] || status;
+}
+
+function statusColor(status: string): string {
+  const colors: Record<string, string> = {
+    pending: "#facc15",
+    processing: "#38bdf8",
+    completed: "#4ade80",
+    cancelled: "#f87171",
+    pos: "#a78bfa",
+  };
+  return colors[status] || "#f2efe8";
+}
+
+export async function sendOrderStatusUpdateEmail(
+  email: string,
+  fullName: string,
+  orderId: string,
+  newStatus: string,
+) {
+  if (!isSMTPConfigured || !transporter) {
+    console.warn(
+      "[DEV] SMTP not configured. Status update for",
+      email,
+      "->",
+      newStatus,
+    );
+    return;
+  }
+
+  const shortId = orderId.substring(0, 8).toUpperCase();
+  const label = statusLabel(newStatus);
+  const color = statusColor(newStatus);
+
+  try {
+    await transporter.sendMail({
+      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+      to: email,
+      subject: `Order #${shortId} — ${label}`,
+      html: `
+        <div style="font-family: 'serif'; max-width: 600px; margin: 0 auto; padding: 40px; background: #07060a; color: #f2efe8; border-radius: 24px;">
+          <h1 style="font-size: 28px; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 8px; color: #f2efe8; text-align: center;">RARE ATELIER</h1>
+          <div style="width: 40px; height: 1px; background: rgba(242,239,232,0.3); margin: 0 auto 32px;"></div>
+
+          <h2 style="font-size: 22px; font-style: italic; margin-bottom: 16px; text-align: center;">Order Update</h2>
+          <p style="font-size: 15px; color: rgba(242,239,232,0.7); text-align: center; margin-bottom: 32px;">
+            Hi ${fullName}, your order <strong style="color: #f2efe8;">#${shortId}</strong> status has been updated.
+          </p>
+
+          <div style="background: rgba(242,239,232,0.05); border: 1px solid rgba(242,239,232,0.1); border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 32px;">
+            <p style="font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.5); margin-bottom: 12px;">Current Status</p>
+            <p style="font-size: 28px; font-weight: 700; color: ${color}; margin: 0;">${label}</p>
+          </div>
+
+          <div style="margin-top: 48px; padding-top: 24px; border-top: 1px solid rgba(242,239,232,0.1); text-align: center;">
+            <p style="font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(242,239,232,0.4);">RARE Nepal · Khusibu, Nayabazar, Kathmandu</p>
+          </div>
+        </div>
+      `,
+    });
+    console.log(`[SMTP] Order status update email sent to: ${email}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Order status update failed for", email, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack,
+    });
+  }
+}

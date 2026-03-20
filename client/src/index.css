@@ -292,6 +292,95 @@
   animation: sparkle 3s ease-in-out infinite;
 }
 
+/* Quote section: bioluminescent glow orbs — autoplay, sinusoidal drift + opacity pulse */
+@keyframes quote-glow-drift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.6;
+  }
+  25% {
+    transform: translate(24px, -18px) scale(1.08);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translate(-16px, 22px) scale(0.94);
+    opacity: 0.5;
+  }
+  75% {
+    transform: translate(-28px, -12px) scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+@keyframes quote-glow-drift-alt {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.5;
+  }
+  33% {
+    transform: translate(-22px, 20px) scale(1.06);
+    opacity: 0.85;
+  }
+  66% {
+    transform: translate(18px, -16px) scale(0.96);
+    opacity: 0.55;
+  }
+}
+
+/* Light-mode glow: amber/gold + dusty rose — higher opacity so effects are visible */
+@keyframes quote-glow-light {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.45;
+  }
+  25% {
+    transform: translate(20px, -14px) scale(1.06);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translate(-14px, 18px) scale(0.97);
+    opacity: 0.4;
+  }
+  75% {
+    transform: translate(-24px, -10px) scale(1.04);
+    opacity: 0.55;
+  }
+}
+
+@keyframes quote-glow-light-alt {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.38;
+  }
+  33% {
+    transform: translate(-18px, 16px) scale(1.04);
+    opacity: 0.58;
+  }
+  66% {
+    transform: translate(16px, -12px) scale(0.98);
+    opacity: 0.45;
+  }
+}
+
+.quote-glow-orb {
+  animation: quote-glow-drift 16s ease-in-out infinite;
+  filter: blur(40px);
+}
+
+.quote-glow-orb-alt {
+  animation: quote-glow-drift-alt 20s ease-in-out infinite;
+  filter: blur(40px);
+}
+
+/* Light mode: use softer drift + lower opacity animations */
+:root:not(.dark) .quote-glow-orb {
+  animation-name: quote-glow-light;
+}
+
+:root:not(.dark) .quote-glow-orb-alt {
+  animation-name: quote-glow-light-alt;
+}
+
 @keyframes shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }

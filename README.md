@@ -46,9 +46,11 @@ Push the schema to your database and seed initial data:
 # Push schema
 npm run db:push
 
-# Seed initial data
+# Seed initial data (only works on empty DB; use --force to reset existing data)
 npm run db:seed
 ```
+
+> **Note:** The seed script will **refuse to run** if the database already has users or products, to prevent accidental data loss. For a fresh dev database or intentional reset, run: `npm run db:seed -- --force`
 
 ### 4. Running the Project
 Start the development server:

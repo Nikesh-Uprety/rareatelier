@@ -162,6 +162,33 @@ async function loadProductsFromCsv(): Promise<AggregatedProduct[]> {
 }
 
 async function main() {
+  const force = process.argv.includes("--force");
+
+  // Safeguard: refuse to wipe data unless --force is passed
+  const [existingUsers, existingProducts] = await Promise.all([
+    db.select().from(users).limit(1),
+    db.select().from(products).limit(1),
+  ]);
+
+  if ((existingUsers.length > 0 || existingProducts.length > 0) && !force) {
+    console.error(`
+⚠️  SEED BLOCKED: Database already contains data.
+
+This command DELETES all users, products, customers, and orders before seeding.
+To avoid accidental data loss, it is blocked when data exists.
+
+To force a full reset (WIPES ALL DATA), run:
+  npm run db:seed -- --force
+
+If you need a fresh database, consider using a separate dev database.
+`);
+    process.exit(1);
+  }
+
+  if (force && (existingUsers.length > 0 || existingProducts.length > 0)) {
+    console.warn("⚠️  --force used: wiping existing data and re-seeding...\n");
+  }
+
   // Clear tables in order to avoid FK issues
   await db.delete(orderItems);
   await db.delete(orders);

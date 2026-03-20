@@ -65,6 +65,9 @@ function getGalleryImagesForCard(product: ProductApi, { addDummyFallback }: { ad
 
 function FeaturedProductCard({ product, index }: { product: ProductApi; index: number }) {
   const [mobileImageIndex, setMobileImageIndex] = useState(0);
+  const touchStartX = useRef(0);
+  const autoCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const didSwipeRef = useRef(false);
 
   // Parse gallery images for mobile slideshow
   const galleryImages = (() => {
@@ -78,14 +81,54 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
     }
   })();
 
-  // Auto-cycle images on mobile
-  useEffect(() => {
+  // Auto-cycle images on mobile/tablet (paused during swipe)
+  const startAutoCycle = useCallback(() => {
     if (galleryImages.length <= 1) return;
-    const timer = setInterval(() => {
+    if (autoCycleRef.current) clearInterval(autoCycleRef.current);
+    autoCycleRef.current = setInterval(() => {
       setMobileImageIndex((prev) => (prev + 1) % galleryImages.length);
     }, 2000);
-    return () => clearInterval(timer);
   }, [galleryImages.length]);
+
+  useEffect(() => {
+    startAutoCycle();
+    return () => {
+      if (autoCycleRef.current) clearInterval(autoCycleRef.current);
+    };
+  }, [startAutoCycle]);
+
+  // Touch swipe handlers for mobile/tablet (< 1024px)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    if (autoCycleRef.current) {
+      clearInterval(autoCycleRef.current);
+      autoCycleRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    if (galleryImages.length <= 1) {
+      startAutoCycle();
+      return;
+    }
+    if (Math.abs(deltaX) > 50) {
+      didSwipeRef.current = true;
+      setMobileImageIndex((prev) => {
+        if (deltaX < 0) return (prev + 1) % galleryImages.length; // swipe left = next
+        return (prev - 1 + galleryImages.length) % galleryImages.length; // swipe right = prev
+      });
+      setTimeout(() => { didSwipeRef.current = false; }, 400);
+    }
+    startAutoCycle();
+  };
+
+  const handleGalleryClick = (e: React.MouseEvent) => {
+    if (didSwipeRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
 
   const staticImage = FEATURED_STATIC_IMAGES[index] ?? (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "");
 
@@ -95,8 +138,8 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
       className="group cursor-pointer relative"
     >
       <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[4/5] rounded-xl shadow-2xl transition-all duration-300 hover:shadow-white/5">
-        {/* Desktop view — hover swap (hidden on mobile) */}
-        <div className="hidden md:block absolute inset-0 z-0">
+        {/* Desktop view — hover swap (hidden on mobile/tablet, lg = 1024px) */}
+        <div className="hidden lg:block absolute inset-0 z-0">
           <AnimatePresence mode="wait">
             <motion.div
               className="absolute inset-0 z-0"
@@ -120,8 +163,13 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
           </AnimatePresence>
         </div>
 
-        {/* Mobile view — auto-sliding gallery (hidden on desktop) */}
-        <div className="md:hidden absolute inset-0 z-0">
+        {/* Mobile/tablet view — auto-sliding gallery + touch swipe (hidden on desktop, < 1024px) */}
+        <div
+          className="lg:hidden absolute inset-0 z-0 touch-pan-y"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onClick={handleGalleryClick}
+        >
           {galleryImages.map((src: string, imgIdx: number) => (
             <div
               key={imgIdx}
@@ -153,14 +201,14 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
         </div>
 
         {/* Desktop: Dark Gradient Overlay on Hover */}
-        <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
+        <div className="hidden lg:block absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none z-10" />
 
-        {/* Mobile: Always-visible gradient overlay */}
-        <div className="md:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none z-10" />
+        {/* Mobile/tablet: Always-visible gradient overlay */}
+        <div className="lg:hidden absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent pointer-events-none z-10" />
 
         {/* Desktop: Glassmorphism Detail Reveal on Hover */}
         <div 
-          className="hidden md:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-700 ease-out"
+          className="hidden lg:flex absolute inset-x-4 bottom-4 z-20 p-6 backdrop-blur-xl bg-black/40 border border-white/10 rounded-2xl shadow-xl justify-between items-center opacity-0 translate-y-4 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-700 ease-out"
         >
           <div>
             <h3 className="text-white text-xl font-black uppercase tracking-tighter mb-1">
@@ -189,8 +237,8 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
           </div>
         </div>
 
-        {/* Mobile: Always-visible product info */}
-        <div className="md:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
+        {/* Mobile/tablet: Always-visible product info */}
+        <div className="lg:hidden absolute inset-x-3 bottom-3 z-20 p-4 backdrop-blur-xl bg-black/40 border border-white/10 rounded-xl shadow-xl">
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-white text-base font-black uppercase tracking-tighter mb-0.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -228,7 +276,7 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
             e.stopPropagation();
             window.open(`/product/${product.id}`, "_blank");
           }}
-          className="absolute top-4 right-4 z-30 hidden md:flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
+          className="absolute top-4 right-4 z-30 hidden lg:flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md border border-white/10 opacity-0 group-hover:opacity-100 transition-all duration-300 hover:bg-white hover:text-black"
         >
           <ExternalLink className="h-4 w-4" />
         </button>
@@ -686,45 +734,55 @@ export default function Home() {
       </section>
 
       {/* Quote Section */}
-      {/* Quote Section - Glassmorphism & Aurora Effect */}
-      <section className="py-16 md:py-24 bg-white dark:bg-neutral-950 relative overflow-hidden transition-colors duration-500">
-        {/* Subtle Aurora Background */}
-        <div className="absolute inset-0 pointer-events-none opacity-40 dark:opacity-30">
-          <motion.div 
-            animate={{ 
-              x: [0, 50, -50, 0],
-              y: [0, -30, 30, 0],
-              scale: [1, 1.2, 0.9, 1]
-            }}
-            transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-            className="absolute top-[-10%] left-[10%] w-[500px] h-[500px] bg-primary/20 blur-[120px] rounded-full"
+      {/* Quote Section - Glassmorphism & Bioluminescent Glow (autoplay) */}
+      <section className="py-16 md:py-24 relative overflow-hidden transition-colors duration-500
+        bg-gradient-to-br from-[#faf8f5] via-[#f5f2eb] to-[#f0ebe3]
+        dark:bg-neutral-950">
+        {/* Bioluminescent glow orbs — CSS keyframes autoplay on load, blur(40px) on orb */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {/* Light mode: amber/gold + dusty rose — stronger opacity so effects are visible */}
+          <div
+            className="quote-glow-orb absolute top-[-10%] left-[10%] w-[480px] h-[480px] rounded-full dark:hidden"
+            style={{ background: "rgba(220, 170, 80, 0.55)" }}
+            aria-hidden
           />
-          <motion.div 
-            animate={{ 
-              x: [0, -60, 40, 0],
-              y: [0, 40, -40, 0],
-              scale: [1, 0.8, 1.1, 1]
-            }}
-            transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
-            className="absolute bottom-[-10%] right-[10%] w-[450px] h-[450px] bg-primary/10 blur-[120px] rounded-full"
+          <div
+            className="quote-glow-orb-alt absolute bottom-[-10%] right-[10%] w-[420px] h-[420px] rounded-full dark:hidden"
+            style={{ background: "rgba(185, 125, 150, 0.5)" }}
+            aria-hidden
+          />
+          {/* Dark mode: soft cyan/violet glow orbs — visible on dark bg */}
+          <div
+            className="quote-glow-orb absolute top-[-10%] left-[10%] w-[480px] h-[480px] rounded-full hidden dark:block"
+            style={{ background: "rgba(120, 180, 255, 0.45)" }}
+            aria-hidden
+          />
+          <div
+            className="quote-glow-orb-alt absolute bottom-[-10%] right-[10%] w-[420px] h-[420px] rounded-full hidden dark:block"
+            style={{ background: "rgba(160, 120, 220, 0.4)" }}
+            aria-hidden
           />
         </div>
         
-        <div className="relative max-w-5xl mx-auto px-6">
+        <div className="relative max-w-5xl mx-auto px-6 z-10">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-            className="relative p-8 md:p-16 rounded-[2rem] border border-white/20 dark:border-white/10 bg-white/40 dark:bg-white/5 backdrop-blur-2xl shadow-[0_8px_32px_0_rgba(0,0,0,0.05)] dark:shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] overflow-hidden group"
+            className="relative p-8 md:p-16 rounded-[2rem] overflow-hidden
+              border border-amber-300/50 dark:border-white/20
+              bg-white/70 dark:bg-neutral-900/80
+              backdrop-blur-2xl
+              shadow-[0_8px_40px_0_rgba(120,90,60,0.12)] dark:shadow-[0_8px_40px_0_rgba(0,0,0,0.5)]"
           >
-            {/* Iridescent border glow */}
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+            {/* Ambient iridescent glow — always visible */}
+            <div className="absolute inset-0 bg-gradient-to-br from-amber-200/15 via-transparent to-amber-100/10 dark:from-white/10 dark:via-transparent dark:to-white/5 pointer-events-none" />
             
             <div className="relative flex flex-col items-center text-center">
-              <div className="h-px w-10 bg-primary/40 mb-8" />
+              <div className="h-px w-10 bg-amber-600/60 dark:bg-white/50 mb-8" />
               
-              <h2 className="text-2xl md:text-5xl lg:text-5xl font-serif italic leading-tight tracking-tight max-w-3xl text-neutral-900 dark:text-neutral-50 mb-10">
+              <h2 className="text-2xl md:text-5xl lg:text-5xl font-serif italic leading-tight tracking-tight max-w-3xl text-neutral-900 dark:text-white mb-10">
                 {"The best way to predict the future is to create it.".split(" ").map((word, i) => (
                   <motion.span
                     key={i}
@@ -745,16 +803,16 @@ export default function Home() {
 
               <motion.div
                 initial={{ opacity: 0 }}
-                whileInView={{ opacity: 0.7 }}
+                whileInView={{ opacity: 1 }}
                 viewport={{ once: true }}
                 transition={{ duration: 1, delay: 1 }}
                 className="flex items-center gap-4"
               >
-                <div className="h-px w-6 bg-primary/30" />
-                <span className="text-[10px] md:text-xs tracking-[0.4em] uppercase font-black text-primary/80 dark:text-primary/90">
+                <div className="h-px w-6 bg-amber-600/50 dark:bg-white/40" />
+                <span className="text-[10px] md:text-xs tracking-[0.4em] uppercase font-black text-neutral-700 dark:text-white/90">
                   Alan Kay
                 </span>
-                <div className="h-px w-6 bg-primary/30" />
+                <div className="h-px w-6 bg-amber-600/50 dark:bg-white/40" />
               </motion.div>
             </div>
           </motion.div>

@@ -1,14 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef, type MouseEvent } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import useEmblaCarousel from "embla-carousel-react";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Helmet } from "react-helmet-async";
 
@@ -50,9 +49,19 @@ export default function ProductDetail() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
+  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isGalleryVisible, setIsGalleryVisible] = useState(false);
+  const [slideTrigger, setSlideTrigger] = useState(0);
+  const [lensActive, setLensActive] = useState(false);
+  const [lensPosition, setLensPosition] = useState({ x: 0, y: 0 });
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
+  const [heightFt, setHeightFt] = useState("");
+  const [heightIn, setHeightIn] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [sizeRecommendation, setSizeRecommendation] = useState<string | null>(null);
+  const galleryCloseTimeoutRef = useRef<number | null>(null);
+  const didSwipeRef = useRef(false);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const sizes = useMemo(() => parseJsonArray(product?.sizeOptions ?? undefined), [product?.sizeOptions]);
@@ -63,6 +72,60 @@ export default function ProductDetail() {
     return list.length ? list : [""];
   }, [mainImageUrl, galleryUrls]);
   const displayImage = allImages[selectedImageIndex] ?? allImages[0];
+  const lensSize = 180;
+  const lensZoom = 5;
+
+  useEffect(() => {
+    if (selectedImageIndex > allImages.length - 1) {
+      setSelectedImageIndex(0);
+    }
+  }, [allImages.length, selectedImageIndex]);
+
+  useEffect(() => {
+    if (allImages.length <= 1 || !allImages[0]) return;
+    if (isGalleryOpen) return;
+    const interval = window.setInterval(() => {
+      setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
+    }, 4000);
+    return () => window.clearInterval(interval);
+  }, [allImages, slideTrigger, isGalleryOpen]);
+
+  useEffect(() => {
+    if (!isGalleryOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsGalleryVisible(false);
+      }
+      if (event.key === "ArrowRight") {
+        setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
+        setSlideTrigger((prev) => prev + 1);
+      }
+      if (event.key === "ArrowLeft") {
+        setSelectedImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
+        setSlideTrigger((prev) => prev + 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [allImages.length, isGalleryOpen]);
+
+  useEffect(() => {
+    if (!isGalleryOpen) return;
+    const raf = window.requestAnimationFrame(() => setIsGalleryVisible(true));
+    return () => window.cancelAnimationFrame(raf);
+  }, [isGalleryOpen]);
+
+  useEffect(() => {
+    if (isGalleryVisible || !isGalleryOpen) return;
+    galleryCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsGalleryOpen(false);
+    }, 220);
+    return () => {
+      if (galleryCloseTimeoutRef.current) {
+        window.clearTimeout(galleryCloseTimeoutRef.current);
+      }
+    };
+  }, [isGalleryOpen, isGalleryVisible]);
 
   if (isLoading || !product) {
     if (isLoading) {
@@ -102,12 +165,81 @@ export default function ProductDetail() {
       { size: effectiveSize ?? "One Size", color: effectiveColor ?? "Default" },
       quantity,
     );
-    toast({ title: "Added to bag" });
+    const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
+    toast({ title: "Added to bag", duration: isMobileOrTablet ? 1500 : undefined });
   };
 
   const handleBuyNow = () => {
     handleAddToCart();
     setLocation("/checkout");
+  };
+
+  const resetSlideshow = () => {
+    setSlideTrigger((prev) => prev + 1);
+  };
+
+  const goToImage = (index: number, manual = false) => {
+    if (!allImages.length) return;
+    const next = (index + allImages.length) % allImages.length;
+    setSelectedImageIndex(next);
+    if (manual) resetSlideshow();
+  };
+
+  const goToNextImage = (manual = false) => {
+    goToImage(selectedImageIndex + 1, manual);
+  };
+
+  const goToPreviousImage = (manual = false) => {
+    goToImage(selectedImageIndex - 1, manual);
+  };
+
+  const openGallery = () => {
+    setIsGalleryOpen(true);
+  };
+
+  const closeGallery = () => {
+    setIsGalleryVisible(false);
+  };
+
+  const getSizeRecommendation = () => {
+    const parsedWeight = Number(weightKg);
+    const parsedFt = Number(heightFt);
+    const parsedIn = Number(heightIn);
+
+    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
+      setSizeRecommendation("Please enter a valid weight in kg.");
+      return;
+    }
+
+    const hasHeight = Number.isFinite(parsedFt) && parsedFt >= 0 && Number.isFinite(parsedIn) && parsedIn >= 0;
+    const heightNote = hasHeight ? ` for ${parsedFt}'${parsedIn}"` : "";
+
+    if (parsedWeight < 60) {
+      setSizeRecommendation(`Recommended size${heightNote}: S/M`);
+      return;
+    }
+    if (parsedWeight <= 75) {
+      setSizeRecommendation(`Recommended size${heightNote}: M/L`);
+      return;
+    }
+    if (parsedWeight <= 90) {
+      setSizeRecommendation(`Recommended size${heightNote}: L/XL`);
+      return;
+    }
+    setSizeRecommendation(`Recommended size${heightNote}: XL`);
+  };
+
+  const handleDesktopImageMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = ((event.clientX - rect.left) / rect.width) * 100;
+    const y = ((event.clientY - rect.top) / rect.height) * 100;
+    const lensHalf = lensSize / 2;
+    const clampedX = Math.min(Math.max(event.clientX - rect.left, lensHalf), rect.width - lensHalf);
+    const clampedY = Math.min(Math.max(event.clientY - rect.top, lensHalf), rect.height - lensHalf);
+    setLensPosition({
+      x: rect.width ? (clampedX / rect.width) * 100 : x,
+      y: rect.height ? (clampedY / rect.height) * 100 : y,
+    });
   };
 
   const structuredData = {
@@ -145,55 +277,15 @@ export default function ProductDetail() {
         </script>
       </Helmet>
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
-        {/* Media Gallery: Mobile Carousel + Desktop Thumbnail Sidebar */}
         <div className="lg:flex lg:w-3/5 lg:gap-6">
-          {/* Mobile Embla Carousel */}
-          <div className="lg:hidden w-full relative mb-6">
-            <div className="overflow-hidden rounded-sm" ref={emblaRef}>
-              <div className="flex">
-                {allImages.map((url, idx) => (
-                  <div className="flex-[0_0_100%] min-w-0" key={idx}>
-                    <div className="aspect-[4/5] bg-muted relative">
-                      {product.stock === 0 && (
-                        <div className="absolute top-3 left-3 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5">
-                          Out of Stock
-                        </div>
-                      )}
-                      <img
-                        src={url || ""}
-                        alt={`${product.name} - view ${idx + 1}`}
-                        className="w-full h-full object-cover select-none"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {allImages.length > 1 && (
-              <div className="flex justify-center gap-2 mt-4">
-                {allImages.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => emblaApi?.scrollTo(idx)}
-                    className={`w-2 h-2 rounded-full transition-all ${
-                      idx === selectedImageIndex ? "bg-black w-6" : "bg-gray-300"
-                    }`}
-                    aria-label={`Go to slide ${idx + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Desktop Thumbnail Sidebar */}
           {allImages.length > 1 && (
             <div className="hidden lg:flex flex-col gap-3 w-20 flex-shrink-0">
               {allImages.map((url, i) => (
                 <button
                   key={i}
                   type="button"
-                  onMouseEnter={() => setSelectedImageIndex(i)}
-                  onClick={() => setSelectedImageIndex(i)}
+                  onMouseEnter={() => goToImage(i, true)}
+                  onClick={() => goToImage(i, true)}
                   className={`aspect-[4/5] w-full bg-muted overflow-hidden rounded-sm border-2 transition-all ${
                     selectedImageIndex === i ? "border-black border-opacity-100" : "border-transparent opacity-60 hover:opacity-100"
                   }`}
@@ -204,31 +296,89 @@ export default function ProductDetail() {
             </div>
           )}
 
-          {/* Desktop Main Zoom Image */}
-          <div className="hidden lg:block flex-1">
-             <div className="aspect-[4/5] bg-muted overflow-hidden rounded-sm relative cursor-zoom-in group">
-                {product.stock === 0 && (
-                  <div className="absolute top-4 left-4 z-10 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-4 py-2">
-                    Out of Stock
-                  </div>
-                )}
-                <TransformWrapper 
-                  initialScale={1} 
-                  initialPositionX={0} 
-                  initialPositionY={0}
-                  doubleClick={{ disabled: false }}
-                  panning={{ disabled: false }}
-                >
-                  <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full cursor-zoom-in">
-                    <img
-                      src={displayImage || ""}
-                      alt={product.name}
-                      onClick={() => setIsLightboxOpen(true)}
-                      className="w-full h-full object-cover transition-transform duration-500"
-                    />
-                  </TransformComponent>
-                </TransformWrapper>
-             </div>
+          <div className="flex-1">
+            <div
+              className="aspect-[4/5] bg-muted overflow-hidden rounded-sm relative cursor-pointer group"
+              onClick={() => {
+                if (didSwipeRef.current) {
+                  didSwipeRef.current = false;
+                  return;
+                }
+                openGallery();
+              }}
+              onTouchStart={(event) => {
+                didSwipeRef.current = false;
+                if (event.touches[0]) {
+                  setTouchStartX(event.touches[0].clientX);
+                }
+              }}
+              onTouchEnd={(event) => {
+                if (touchStartX === null) return;
+                const deltaX = event.changedTouches[0].clientX - touchStartX;
+                if (Math.abs(deltaX) > 40) {
+                  didSwipeRef.current = true;
+                  if (deltaX < 0) goToNextImage(true);
+                  if (deltaX > 0) goToPreviousImage(true);
+                }
+                setTouchStartX(null);
+              }}
+              onMouseEnter={() => setLensActive(true)}
+              onMouseLeave={() => setLensActive(false)}
+              onMouseMove={handleDesktopImageMouseMove}
+            >
+              {product.stock === 0 && (
+                <div className="absolute top-3 left-3 lg:top-4 lg:left-4 z-20 bg-black/80 text-white text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 lg:px-4 lg:py-2">
+                  Out of Stock
+                </div>
+              )}
+
+              {allImages.map((url, idx) => (
+                <img
+                  key={`${url}-${idx}`}
+                  src={url || ""}
+                  alt={`${product.name} - view ${idx + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover select-none transition-opacity duration-700 ${
+                    selectedImageIndex === idx ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              ))}
+
+              {lensActive && displayImage && (
+                <div
+                  className="hidden lg:block absolute z-30 pointer-events-none border border-white/80 shadow-2xl rounded-full"
+                  style={{
+                    width: `${lensSize}px`,
+                    height: `${lensSize}px`,
+                    left: `calc(${lensPosition.x}% - ${lensSize / 2}px)`,
+                    top: `calc(${lensPosition.y}% - ${lensSize / 2}px)`,
+                    backgroundImage: `url("${displayImage}")`,
+                    backgroundRepeat: "no-repeat",
+                    backgroundSize: `${lensZoom * 100}% ${lensZoom * 100}%`,
+                    backgroundPosition: `${lensPosition.x}% ${lensPosition.y}%`,
+                  }}
+                />
+              )}
+            </div>
+
+            {allImages.length > 1 && (
+              <div className="mt-4 lg:hidden overflow-x-auto">
+                <div className="flex gap-2 min-w-max pr-2">
+                  {allImages.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => goToImage(i, true)}
+                      className={`h-[64px] w-[52px] overflow-hidden rounded-sm border transition-all ${
+                        selectedImageIndex === i ? "border-black" : "border-transparent opacity-70"
+                      }`}
+                      aria-label={`Select image ${i + 1}`}
+                    >
+                      <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -306,27 +456,141 @@ export default function ProductDetail() {
             )}
 
             {sizes.length > 0 && (
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
-                  Size
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {sizes.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSelectedSize(s)}
-                      className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
-                        effectiveSize === s
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {s}
-                    </button>
-                  ))}
+              <Sheet open={isSizeGuideOpen} onOpenChange={setIsSizeGuideOpen}>
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
+                    Size
+                  </p>
+                  <div className="flex justify-end mb-3">
+                    <SheetTrigger asChild>
+                      <button
+                        type="button"
+                        className="text-[10px] uppercase tracking-[0.2em] font-light text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors"
+                      >
+                        Size &amp; Fit Guide &#8594;
+                      </button>
+                    </SheetTrigger>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSelectedSize(s)}
+                        className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
+                          effectiveSize === s
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+
+                <SheetContent
+                  side="right"
+                  className="w-full sm:max-w-md md:max-w-lg p-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+                >
+                  <div className="h-full overflow-y-auto px-5 py-6 sm:px-7 sm:py-8">
+                    <SheetTitle className="text-3xl font-semibold tracking-tight mb-6">
+                      Size &amp; Fit Guide
+                    </SheetTitle>
+
+                    <div className="border border-border/70 rounded-sm p-4 sm:p-5 mb-6">
+                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-3">
+                        Our Models
+                      </h3>
+                      <div className="space-y-2 text-sm leading-relaxed text-foreground/90">
+                        <p>Male Model: 5&apos;11&quot; height · 72kg · wears size XL</p>
+                        <p>Female Model: 5&apos;3&quot; height · 54kg · wears size M</p>
+                      </div>
+                    </div>
+
+                    <div className="border border-border/70 rounded-sm p-4 sm:p-5 mb-6">
+                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
+                        Size Recommendation Tool
+                      </h3>
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={heightFt}
+                          onChange={(event) => setHeightFt(event.target.value)}
+                          placeholder="Height (ft)"
+                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={heightIn}
+                          onChange={(event) => setHeightIn(event.target.value)}
+                          placeholder="Height (in)"
+                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={weightKg}
+                          onChange={(event) => setWeightKg(event.target.value)}
+                          placeholder="Weight (kg)"
+                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={getSizeRecommendation}
+                        className="w-full h-10 rounded-none uppercase tracking-[0.2em] text-[10px] font-bold"
+                      >
+                        Get Size Recommendation
+                      </Button>
+                      {sizeRecommendation && (
+                        <p className="mt-3 text-sm text-foreground/90">{sizeRecommendation}</p>
+                      )}
+                    </div>
+
+                    <div className="border border-border/70 rounded-sm overflow-hidden">
+                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground px-4 py-3 border-b border-border/70">
+                        Size Chart
+                      </h3>
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/40">
+                          <tr className="text-left">
+                            <th className="px-4 py-3 font-medium border-b border-border/70">Size</th>
+                            <th className="px-4 py-3 font-medium border-b border-border/70">Chest</th>
+                            <th className="px-4 py-3 font-medium border-b border-border/70">Length</th>
+                            <th className="px-4 py-3 font-medium border-b border-border/70">Shoulder</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="bg-background">
+                            <td className="px-4 py-3 border-b border-border/60">M</td>
+                            <td className="px-4 py-3 border-b border-border/60">42 inch</td>
+                            <td className="px-4 py-3 border-b border-border/60">26.5 inch</td>
+                            <td className="px-4 py-3 border-b border-border/60">18.5 inch</td>
+                          </tr>
+                          <tr className="bg-muted/20">
+                            <td className="px-4 py-3 border-b border-border/60">L</td>
+                            <td className="px-4 py-3 border-b border-border/60">44 inch</td>
+                            <td className="px-4 py-3 border-b border-border/60">27.5 inch</td>
+                            <td className="px-4 py-3 border-b border-border/60">20.5 inch</td>
+                          </tr>
+                          <tr className="bg-background">
+                            <td className="px-4 py-3">XL</td>
+                            <td className="px-4 py-3">46 inch</td>
+                            <td className="px-4 py-3">28.5 inch</td>
+                            <td className="px-4 py-3">22.5 inch</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </SheetContent>
+              </Sheet>
             )}
 
             <div>
@@ -436,55 +700,82 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {/* Fullscreen Lightbox */}
-      {isLightboxOpen && (
-        <div 
-          className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4 lg:p-12 animate-in fade-in duration-200"
-          onClick={() => setIsLightboxOpen(false)}
+      {isGalleryOpen && (
+        <div
+          className={`fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 lg:p-10 transition-opacity duration-200 ${
+            isGalleryVisible ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={closeGallery}
         >
-          <button 
-            type="button" 
-            className="absolute top-6 right-6 lg:top-10 lg:right-10 w-12 h-12 flex items-center justify-center bg-black hover:bg-gray-800 text-white rounded-full transition-transform hover:scale-105 z-50"
+          <button
+            type="button"
+            className="absolute top-5 right-5 w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors z-50"
             onClick={(e) => {
               e.stopPropagation();
-              setIsLightboxOpen(false);
+              closeGallery();
             }}
+            aria-label="Close gallery"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
-          
-          <div 
-            className="relative w-full h-full max-w-6xl max-h-[90vh] flex items-center justify-center"
+
+          <div
+            className={`relative w-full max-w-6xl h-full max-h-[92vh] flex flex-col items-center justify-center transition-transform duration-200 ${
+              isGalleryVisible ? "scale-100" : "scale-95"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <TransformWrapper 
-              initialScale={1} 
-              initialPositionX={0} 
-              initialPositionY={0}
-            >
-              <TransformComponent wrapperClass="w-full h-full flex items-center justify-center" contentClass="max-w-full max-h-full">
-                <img
-                  src={displayImage || ""}
-                  alt={`${product.name} fullscreen view`}
-                  className="max-w-full max-h-[90vh] object-contain rounded-md shadow-2xl"
-                />
-              </TransformComponent>
-            </TransformWrapper>
-            
-            {/* Lightbox Thumbnails */}
             {allImages.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 hidden lg:flex gap-3 bg-white/90 backdrop-blur-md p-3 rounded-full shadow-lg border border-gray-200/50">
-                {allImages.map((url, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setSelectedImageIndex(i)}
-                    className={`w-12 h-12 rounded-full overflow-hidden border-2 transition-all ${
-                      selectedImageIndex === i ? "border-black scale-110" : "border-transparent opacity-50 hover:opacity-100 hover:scale-105"
-                    }`}
-                  >
-                    <img src={url || ""} alt="" className="w-full h-full object-cover" />
-                  </button>
-                ))}
+              <>
+                <button
+                  type="button"
+                  onClick={() => goToPreviousImage(true)}
+                  className="absolute left-0 lg:-left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goToNextImage(true)}
+                  className="absolute right-0 lg:-right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+
+            <div className="relative w-full h-full max-h-[78vh]">
+              {allImages.map((url, idx) => (
+                <img
+                  key={`modal-${url}-${idx}`}
+                  src={url || ""}
+                  alt={`${product.name} fullscreen view ${idx + 1}`}
+                  className={`absolute inset-0 m-auto max-w-full max-h-full object-contain rounded-sm shadow-2xl transition-opacity duration-300 ${
+                    selectedImageIndex === idx ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+              ))}
+            </div>
+
+            {allImages.length > 1 && (
+              <div className="w-full max-w-4xl mt-5 overflow-x-auto">
+                <div className="flex gap-2 min-w-max px-1">
+                  {allImages.map((url, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => goToImage(i, true)}
+                      className={`h-16 w-12 lg:h-20 lg:w-16 rounded-sm overflow-hidden border transition-all ${
+                        selectedImageIndex === i ? "border-white" : "border-white/20 opacity-70 hover:opacity-100"
+                      }`}
+                      aria-label={`Open image ${i + 1}`}
+                    >
+                      <img src={url || ""} alt="" className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

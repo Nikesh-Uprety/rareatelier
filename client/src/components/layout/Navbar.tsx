@@ -96,7 +96,7 @@ export default function Navbar() {
               { name: "Home", href: "/" },
               { name: "Shop", href: "/products" },
               { name: "New Collection", href: "/new-collection" },
-              { name: "Contact", href: "/contact" },
+              { name: "Atelier", href: "/atelier" },
             ].map((item) => (
               <Link
                 key={item.href}
@@ -197,7 +197,7 @@ export default function Navbar() {
                   { name: "Home", href: "/" },
                   { name: "Shop", href: "/products" },
                   { name: "New Collection", href: "/new-collection" },
-                  { name: "Contact", href: "/contact" },
+                  { name: "Atelier", href: "/atelier" },
                 ].map((item, i) => (
                   <motion.div
                     key={item.href}

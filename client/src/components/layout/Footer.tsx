@@ -127,7 +127,7 @@ export default function Footer() {
                   animation: 'shimmer-footer 3s ease-in-out infinite',
                 }}
               >
-                designed & dev by : 0xn1ku-hacks
+                Developer : 0xn1ku-hacks
               </a>
               <style>{`
                 @keyframes shimmer-footer {

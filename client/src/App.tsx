@@ -210,10 +210,13 @@ function Router() {
           <NewCollection />
         </StorefrontLayout>
       </Route>
-      <Route path="/contact">
+      <Route path="/atelier">
         <StorefrontLayout>
           <Contact />
         </StorefrontLayout>
+      </Route>
+      <Route path="/contact">
+        <Redirect to="/atelier" />
       </Route>
       <Route path="/cart">
         <StorefrontLayout>

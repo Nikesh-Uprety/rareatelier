@@ -192,6 +192,45 @@ export default function NewCollection() {
 
   const bannerUrl = "/images/colllection.webp";
 
+  useEffect(() => {
+    const scriptId = "instagram-embed-script";
+    const existingScript = document.getElementById(scriptId) as HTMLScriptElement | null;
+
+    const processEmbeds = () => {
+      const instagram = (window as Window & { instgrm?: { Embeds?: { process?: () => void } } }).instgrm;
+      instagram?.Embeds?.process?.();
+    };
+
+    if (existingScript) {
+      if (existingScript.dataset.loaded === "true") {
+        processEmbeds();
+      } else {
+        existingScript.addEventListener("load", processEmbeds, { once: true });
+      }
+      return () => {
+        existingScript.removeEventListener("load", processEmbeds);
+      };
+    }
+
+    const script = document.createElement("script");
+    script.id = scriptId;
+    script.src = "https://www.instagram.com/embed.js";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      processEmbeds();
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen pt-20">
       {/* Hero Banner — Full-bleed background image + Text */}
@@ -248,6 +287,23 @@ export default function NewCollection() {
                 </span>
                 <div className="h-px w-12 md:w-16 bg-white/35" />
               </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="px-4 md:px-6 py-14 md:py-16">
+        <div className="max-w-7xl mx-auto">
+          <p className="text-center text-[10px] md:text-xs uppercase tracking-[0.42em] font-semibold text-muted-foreground mb-8">
+            As Seen On Instagram
+          </p>
+          <div className="w-full flex justify-center">
+            <div className="w-full max-w-[540px]">
+              <blockquote
+                className="instagram-media !bg-transparent w-full !min-w-0 !max-w-[540px] border border-[var(--border)] rounded-sm overflow-hidden"
+                data-instgrm-permalink="https://www.instagram.com/p/DTAWRgSDal3/"
+                data-instgrm-version="14"
+              />
             </div>
           </div>
         </div>
