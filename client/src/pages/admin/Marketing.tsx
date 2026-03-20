@@ -141,7 +141,7 @@ const emailTemplates = {
 } as const;
 
 export default function AdminMarketingPage() {
-  const { toast } = useToast();
+  const { toast, success, error, warning } = useToast();
   const queryClient = useQueryClient();
 
   const [marketingSubject, setMarketingSubject] = useState("New Seasonal Collection — RARE ATELIER");
@@ -264,20 +264,20 @@ export default function AdminMarketingPage() {
   });
 
   const broadcastMutation = useMutation({
-    mutationFn: async (payload: { subject: string; html: string }) => {
+    mutationFn: async (payload: { subject: string; html: string; selectedEmails?: string[]; sendToAll?: boolean }) => {
       const res = await apiRequest("POST", "/api/admin/marketing/broadcast", payload);
       return res.json();
     },
     onSuccess: (result) => {
       if (result.success) {
-        toast({ title: `Broadcast sent to ${result.count} subscribers` });
+        success(`Broadcast sent`, `Sent to ${result.sent ?? result.count ?? 0} subscribers`);
         setIsBroadcastConfirmOpen(false);
       } else {
-        toast({ title: "Broadcast failed", description: result.error || "SMTP failed", variant: "destructive" });
+        error("Broadcast failed", result.error || "SMTP failed");
       }
     },
     onError: (err: Error) => {
-      toast({ title: "Broadcast failed", description: err.message, variant: "destructive" });
+      error("Broadcast failed", err.message);
     }
   });
   
@@ -539,14 +539,30 @@ export default function AdminMarketingPage() {
               onSendTest={() => sendTestMutation.mutate()}
             />
 
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center">
+              <p className="text-[11px] text-muted-foreground">
+                {Array.from(selectedEmails).length > 0
+                  ? `Selected ${Array.from(selectedEmails).length} subscriber${Array.from(selectedEmails).length > 1 ? "s" : ""}`
+                  : "Select at least one subscriber to send this broadcast."}
+              </p>
               <Button 
                 className="bg-[#2C3E2D] hover:bg-[#2C3E2D]/90"
-                onClick={() => setIsBroadcastConfirmOpen(true)}
-                disabled={!marketingSubject.trim() || !marketingBody.trim() || subscribers.length === 0}
+                onClick={() => {
+                  if (Array.from(selectedEmails).length === 0) {
+                    warning("No recipients selected", "Please select at least one subscriber.");
+                    return;
+                  }
+                  setIsBroadcastConfirmOpen(true);
+                }}
+                disabled={
+                  !marketingSubject.trim() ||
+                  !marketingBody.trim() ||
+                  subscribers.length === 0 ||
+                  Array.from(selectedEmails).length === 0
+                }
               >
                 <Send className="h-4 w-4 mr-2" />
-                Broadcast to {allSubscribers.length}
+                Broadcast to {Array.from(selectedEmails).length || allSubscribers.length}
               </Button>
             </div>
           </div>
@@ -558,14 +574,23 @@ export default function AdminMarketingPage() {
           <DialogHeader>
             <DialogTitle>Send Broadcast?</DialogTitle>
             <DialogDescription>
-              This will send the email to {subscribers.length} subscribers immediately.
+              This will send the email to {Array.from(selectedEmails).length} selected subscriber
+              {Array.from(selectedEmails).length === 1 ? "" : "s"} immediately.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsBroadcastConfirmOpen(false)}>Cancel</Button>
             <Button 
               className="bg-[#2C3E2D]"
-              onClick={() => broadcastMutation.mutate({ subject: marketingSubject, html: marketingBody })}
+              onClick={() =>
+                broadcastMutation.mutate({
+                  subject: marketingSubject,
+                  html: marketingBody,
+                  selectedEmails: Array.from(selectedEmails),
+                  sendToAll:
+                    Array.from(selectedEmails).length === allSubscribers.length,
+                })
+              }
               loading={broadcastMutation.isPending}
               loadingText="Sending..."
             >

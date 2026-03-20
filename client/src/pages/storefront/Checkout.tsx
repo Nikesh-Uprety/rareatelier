@@ -59,12 +59,22 @@ export default function Checkout() {
     if (!promoCodeInput) return;
     setIsValidatingPromo(true);
     try {
-      const result = await validatePromoCode(promoCodeInput.toUpperCase());
-      if (result.success && result.data) {
+      const productIds = items.map((it) => it.product.id);
+      const result = await validatePromoCode(promoCodeInput.toUpperCase(), productIds);
+
+      if (result.valid && result.data) {
         setAppliedPromo(result.data);
-        toast({ title: "Promo code applied!", description: `${result.data.discountPct}% discount added.` });
+        toast({
+          title: "Promo code applied!",
+          description: `${result.data.discountPct}% discount added.`,
+        });
       } else {
-        toast({ title: "Invalid promo code", description: result.error || "Please check the code and try again.", variant: "destructive" });
+        setAppliedPromo(null);
+        toast({
+          title: "Invalid promo code",
+          description: result.reason || "Please check the code and try again.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       toast({ title: "Error", description: "Failed to validate promo code.", variant: "destructive" });

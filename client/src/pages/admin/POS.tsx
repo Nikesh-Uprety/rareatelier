@@ -321,7 +321,15 @@ export default function AdminPOS() {
       // Auto-select the newly created customer
       setSelectedCustomer(newCustomer);
       setCustomerName(`${newCustomer.firstName} ${newCustomer.lastName}`);
-      setCustomerPhone("");
+        setCustomerPhone(newCustomer.phoneNumber ?? "");
+        // Reset cart/checkout totals when switching customers
+        setCart([]);
+        setDiscount("0");
+        setCashReceived("");
+        setNotes("");
+        setDeliveryRequired(false);
+        setDeliveryProvider("");
+        setDeliveryAddress("");
       setCustomerSearch("");
 
       queryClient.invalidateQueries({ queryKey: ["admin", "customers"] });
@@ -897,6 +905,14 @@ export default function AdminPOS() {
                   setCustomerName("Walk-in Customer");
                   setCustomerPhone("");
                   setCustomerSearch("");
+                  // Reset cart/checkout state when detaching customer
+                  setCart([]);
+                  setDiscount("0");
+                  setCashReceived("");
+                  setNotes("");
+                  setDeliveryRequired(false);
+                  setDeliveryProvider("");
+                  setDeliveryAddress("");
                 }}
               >
                 <X className="h-4 w-4" />
@@ -1429,8 +1445,22 @@ export default function AdminPOS() {
                               variant={isSelected ? "secondary" : "default"}
                               className={cn("rounded-full h-8 px-4", isSelected ? "bg-[#2C3E2D] text-white hover:bg-[#1A251B]" : "bg-[#2C3E2D] hover:bg-[#1A251B]")}
                               onClick={() => {
-                                setSelectedCustomer(isSelected ? null : customer);
-                                setCustomerName(isSelected ? "Walk-in Customer" : `${customer.firstName} ${customer.lastName}`);
+                                const nextCustomer = isSelected ? null : customer;
+                                setSelectedCustomer(nextCustomer);
+                                setCustomerName(
+                                  nextCustomer
+                                    ? `${nextCustomer.firstName} ${nextCustomer.lastName}`
+                                    : "Walk-in Customer",
+                                );
+                                setCustomerPhone(nextCustomer?.phoneNumber ?? "");
+                                // Reset cart/checkout totals when switching customers
+                                setCart([]);
+                                setDiscount("0");
+                                setCashReceived("");
+                                setNotes("");
+                                setDeliveryRequired(false);
+                                setDeliveryProvider("");
+                                setDeliveryAddress("");
                                 setIsCustomersOpen(false);
                               }}
                             >
@@ -1457,6 +1487,15 @@ export default function AdminPOS() {
                       onClick={() => {
                         setSelectedCustomer(customer);
                         setCustomerName(`${customer.firstName} ${customer.lastName}`);
+                        setCustomerPhone(customer.phoneNumber ?? "");
+                        // Reset cart/checkout totals when switching customers
+                        setCart([]);
+                        setDiscount("0");
+                        setCashReceived("");
+                        setNotes("");
+                        setDeliveryRequired(false);
+                        setDeliveryProvider("");
+                        setDeliveryAddress("");
                         setIsCustomersOpen(false);
                       }}
                     >

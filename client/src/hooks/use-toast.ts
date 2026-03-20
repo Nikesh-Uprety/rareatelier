@@ -5,7 +5,7 @@ import type {
   ToastProps,
 } from "@/components/ui/toast"
 
-const TOAST_LIMIT = 1
+const TOAST_LIMIT = 3
 const TOAST_REMOVE_DELAY = 1000000
 
 type ToasterToast = ToastProps & {
@@ -138,8 +138,11 @@ function dispatch(action: Action) {
 }
 
 type Toast = Omit<ToasterToast, "id">
+type ToastInput = Omit<Toast, "variant"> & {
+  variant?: ToastProps["variant"] | "success" | "warning"
+}
 
-function toast({ ...props }: Toast) {
+function toast({ ...props }: ToastInput) {
   const id = genId()
 
   const update = (props: ToasterToast) =>
@@ -181,9 +184,45 @@ function useToast() {
     }
   }, [state])
 
+  const success = React.useCallback(
+    (message: string, description?: string) =>
+      toast({
+        title: message,
+        description,
+        variant: "success",
+        duration: 3000,
+      }),
+    []
+  )
+
+  const error = React.useCallback(
+    (message: string, description?: string) =>
+      toast({
+        title: message,
+        description,
+        variant: "destructive",
+        duration: 5000,
+      }),
+    []
+  )
+
+  const warning = React.useCallback(
+    (message: string, description?: string) =>
+      toast({
+        title: message,
+        description,
+        variant: "warning",
+        duration: 4000,
+      }),
+    []
+  )
+
   return {
     ...state,
     toast,
+    success,
+    error,
+    warning,
     dismiss: (toastId?: string) => dispatch({ type: "DISMISS_TOAST", toastId }),
   }
 }

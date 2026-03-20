@@ -1,6 +1,6 @@
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useIsFetching } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HelmetProvider } from "react-helmet-async";
@@ -10,10 +10,11 @@ import AdminLayout from "@/components/layout/AdminLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
-import { lazy, Suspense, useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import Home from "@/pages/storefront/Home";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
+import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
 
 // Lazy load non-critical components
 const Products = lazy(() => import("@/pages/storefront/Products"));
@@ -30,6 +31,7 @@ const AdminProducts = lazy(() => import("@/pages/admin/Products"));
 const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminBills = lazy(() => import("@/pages/admin/Bills"));
 const AdminCustomers = lazy(() => import("@/pages/admin/Customers"));
+const AdminStoreUsers = lazy(() => import("@/pages/admin/StoreUsers"));
 const AdminPOS = lazy(() => import("@/pages/admin/POS"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/Analytics"));
 const AdminPromoCodes = lazy(() => import("@/pages/admin/PromoCodes"));
@@ -46,6 +48,18 @@ const NotFound = lazy(() => import("@/pages/not-found"));
 const LegalPlaceholder = lazy(() => import("@/pages/storefront/LegalPlaceholder"));
 
 function StorefrontLayout({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const pathname = location.split("?")[0];
+  const isFetching = useIsFetching();
+  const [isRouteChanging, setIsRouteChanging] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsRouteChanging(true);
+    const timeout = setTimeout(() => setIsRouteChanging(false), 400);
+    return () => clearTimeout(timeout);
+  }, [pathname]);
+
+  const isLoading = isRouteChanging || isFetching > 0;
   // Finish the pre-loader when the main app layout has mounted
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).finishLoading) {
@@ -58,6 +72,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background flex flex-col transition-colors duration-300">
+      <TopLoadingBar isLoading={isLoading} />
       <Navbar />
       <main className="flex-1 flex flex-col">
         {children}
@@ -151,6 +166,13 @@ function Router() {
         <ProtectedRoute requireAdmin>
           <AdminLayout>
             <AdminCustomers />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/store-users">
+        <ProtectedRoute requireAdmin>
+          <AdminLayout>
+            <AdminStoreUsers />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

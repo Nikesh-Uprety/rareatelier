@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Receipt, ArrowUpDown, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe } from "lucide-react";
+import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import {
@@ -76,9 +76,21 @@ export default function AdminOrders() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [sortOrder, setSortOrder] = useState<"latest" | "oldest">("latest");
   const [timeRange, setTimeRange] = useState<"all" | "1d" | "3d" | "7d">("all");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  const [selectedOrderSn, setSelectedOrderSn] = useState<number | null>(null);
+  const [selectedOrderItems, setSelectedOrderItems] = useState<
+    Array<{
+      id: string;
+      productId: string;
+      quantity: number;
+      unitPrice: string | number;
+      product?: { name?: string } | null;
+      size?: string;
+      color?: string;
+    }>
+  >([]);
+  const [selectedOrderItemsLoading, setSelectedOrderItemsLoading] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -153,9 +165,144 @@ export default function AdminOrders() {
     return [...filtered].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
-      return sortOrder === "latest" ? dateB - dateA : dateA - dateB;
+      // Always latest first (ORDER BY created_at DESC)
+      return dateB - dateA;
     });
-  }, [orders, sortOrder, timeRange]);
+  }, [orders, timeRange]);
+
+  // Display serial numbers based on creation order (oldest = 1),
+  // while still showing the list latest-first.
+  const orderSnById = useMemo(() => {
+    if (!orders) return new Map<string, number>();
+    const now = Date.now();
+    const cutoffMs =
+      timeRange === "1d"
+        ? now - 1 * 24 * 60 * 60 * 1000
+        : timeRange === "3d"
+          ? now - 3 * 24 * 60 * 60 * 1000
+          : timeRange === "7d"
+            ? now - 7 * 24 * 60 * 60 * 1000
+            : null;
+
+    const filtered =
+      cutoffMs === null
+        ? orders
+        : orders.filter((o) => {
+            const t = new Date(o.createdAt).getTime();
+            return Number.isFinite(t) && t >= cutoffMs;
+          });
+
+    const asc = [...filtered].sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateA - dateB;
+    });
+
+    const map = new Map<string, number>();
+    asc.forEach((o, i) => map.set(o.id, i + 1));
+    return map;
+  }, [orders, timeRange]);
+
+  const orderTypeBadge = (order: AdminOrder) => {
+    const isPos = order.source === "pos";
+    return (
+      <Badge
+        variant="outline"
+        className={
+          isPos
+            ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900"
+            : "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900"
+        }
+      >
+        {isPos ? "POS ORDER" : "ONLINE ORDER"}
+      </Badge>
+    );
+  };
+
+  const formatOrderStatusBadge = (status: string) => {
+    const normalized = status?.toLowerCase?.() ?? status;
+    const statusMap: Record<string, { label: string; className: string }> = {
+      pending: {
+        label: "Pending",
+        className:
+          "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-400 dark:border-yellow-900",
+      },
+      processing: {
+        label: "Processing",
+        className:
+          "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900",
+      },
+      completed: {
+        label: "Completed",
+        className:
+          "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900",
+      },
+      cancelled: {
+        label: "Cancelled",
+        className:
+          "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900",
+      },
+      pos: {
+        label: "POS",
+        className:
+          "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900",
+      },
+    };
+
+    const entry = statusMap[normalized] ?? { label: normalized, className: "bg-muted text-foreground" };
+    return <Badge variant="outline" className={entry.className}>{entry.label}</Badge>;
+  };
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setSelectedOrderItems([]);
+      setSelectedOrderItemsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedOrderItemsLoading(true);
+    setSelectedOrderItems([]);
+
+    fetch(`/api/orders/${selectedOrder.id}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((json) => {
+        if (cancelled) return;
+        setSelectedOrderItems(json?.data?.items ?? []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSelectedOrderItems([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setSelectedOrderItemsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedOrder?.id]);
+
+  const orderItemsSubtotal = useMemo(() => {
+    return selectedOrderItems.reduce((sum, it) => {
+      const unit = Number(it.unitPrice) || 0;
+      return sum + unit * (it.quantity || 0);
+    }, 0);
+  }, [selectedOrderItems]);
+
+  const discountAmount = selectedOrder?.promoDiscountAmount ?? 0;
+
+  const { data: posBill } = useQuery<AdminBill | null>({
+    queryKey: ["bill", "order", selectedOrder?.id],
+    enabled: !!selectedOrder && selectedOrder.source === "pos",
+    queryFn: () => {
+      if (!selectedOrder) return Promise.resolve(null);
+      return fetchBillByOrder(selectedOrder.id);
+    },
+    staleTime: 0,
+    retry: false,
+  });
 
   const STATUS_TABS = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'POS'];
 
@@ -206,21 +353,6 @@ export default function AdminOrders() {
            </p>
            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
              <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
-               <ArrowUpDown className="h-3 w-3 text-muted-foreground" />
-               <Select
-                 value={sortOrder}
-                 onValueChange={(v) => setSortOrder(v as "latest" | "oldest")}
-               >
-                 <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
-                   <SelectValue />
-                 </SelectTrigger>
-                 <SelectContent>
-                   <SelectItem value="latest">Latest First</SelectItem>
-                   <SelectItem value="oldest">Oldest First</SelectItem>
-                 </SelectContent>
-               </Select>
-             </div>
-             <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
                <Clock className="h-3 w-3 text-muted-foreground" />
                <Select
                  value={timeRange}
@@ -256,11 +388,10 @@ export default function AdminOrders() {
           <table className="w-full text-sm text-left min-w-[640px]">
             <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
               <tr>
-                <th className="px-4 py-3 font-medium">Order</th>
+                <th className="px-4 py-3 font-medium">S.N</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Date</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Promo</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium text-right">Amount</th>
               </tr>
@@ -285,15 +416,12 @@ export default function AdminOrders() {
                       <td className="px-4 py-3">
                         <div className="h-4 w-12 bg-muted rounded-full animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="h-3 w-16 bg-muted animate-pulse" />
-                      </td>
                       <td className="px-4 py-3 text-right">
                         <div className="h-3 w-16 bg-muted animate-pulse ml-auto" />
                       </td>
                     </tr>
                   ))
-                : sortedOrders.map((order) => {
+                : sortedOrders.map((order, idx) => {
                     const statusMap: Record<string, string> = {
                       pending: 'Pending',
                       processing: 'Processing',
@@ -306,9 +434,12 @@ export default function AdminOrders() {
                       <tr
                         key={order.id}
                         className="hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => setSelectedOrder(order)}
+                        onClick={() => {
+                          setSelectedOrder(order);
+                          setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                        }}
                       >
-                        <td className="px-4 py-3 font-medium text-xs">#{order.id.slice(0, 8)}</td>
+                        <td className="px-4 py-3 font-medium text-xs">{orderSnById.get(order.id) ?? idx + 1}</td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-[#2C3E2D] dark:text-foreground">
                             {order.fullName}
@@ -316,9 +447,9 @@ export default function AdminOrders() {
                           <div className="text-muted-foreground text-xs">
                             {order.email}
                           </div>
-                          {order.shippingAddress && (
+                          {order.country && (
                             <div className="text-muted-foreground text-xs mt-1">
-                              <p>{order.shippingAddress.country}</p>
+                              <p>{order.country}</p>
                             </div>
                           )}
                         </td>
@@ -338,22 +469,6 @@ export default function AdminOrders() {
                               {order.paymentMethod?.replace(/_/g, " ") ?? "—"}
                             </span>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          {order.promoCode ? (
-                            <div className="flex flex-col gap-1 items-start">
-                              <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-950 dark:text-orange-400 dark:border-orange-900">
-                                {order.promoCode}
-                              </Badge>
-                              {(order.promoDiscountAmount ?? 0) > 0 && (
-                                <span className="text-[10px] text-muted-foreground font-medium">
-                                  -Rs. {order.promoDiscountAmount}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
@@ -401,17 +516,22 @@ export default function AdminOrders() {
                 <div className="h-10 w-full bg-muted rounded" />
               </div>
             ))
-          : sortedOrders.map((order) => {
+          : sortedOrders.map((order, idx) => {
               const status = order.status.charAt(0).toUpperCase() + order.status.slice(1);
               return (
                 <div 
                   key={order.id} 
                   className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card cursor-pointer"
-                  onClick={() => setSelectedOrder(order)}
+                  onClick={() => {
+                    setSelectedOrder(order);
+                    setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                  }}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Order {order.id.substring(0, 8)}</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                        S.N {orderSnById.get(order.id) ?? idx + 1}
+                      </p>
                       <h3 className="font-serif font-medium text-base mt-1">{order.fullName}</h3>
                     </div>
                     <Badge
@@ -442,7 +562,15 @@ export default function AdminOrders() {
                   </div>
 
                   <div className="flex flex-col gap-2 mt-4">
-                    <Button variant="outline" className="w-full text-xs font-bold uppercase tracking-wider" onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}>
+                    <Button
+                      variant="outline"
+                      className="w-full text-xs font-bold uppercase tracking-wider"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedOrder(order);
+                        setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                      }}
+                    >
                       Manage Order <ChevronRight className="w-4 h-4 ml-1" />
                     </Button>
                   </div>
@@ -454,26 +582,45 @@ export default function AdminOrders() {
   </AnimatePresence>
 
       {/* Sliding Drawer for Order Details */}
-      <Sheet open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
+      <Sheet
+        open={!!selectedOrder}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedOrder(null);
+            setSelectedOrderSn(null);
+            setSelectedOrderItems([]);
+          }
+        }}
+      >
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-0 flex flex-col bg-[#FDFDFB] dark:bg-card border-l border-[#E5E5E0] dark:border-border">
           {selectedOrder && (
             <>
               <div className="p-6 border-b border-border/50 flex-none space-y-4">
                 <SheetHeader className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest bg-muted">
-                      Order #{selectedOrder.id.slice(0, 8)}
-                    </Badge>
-                    <span className="text-xs font-medium text-muted-foreground">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-widest bg-muted">
+                        S.N {selectedOrderSn ?? "—"}
+                      </Badge>
+                      {orderTypeBadge(selectedOrder)}
+                      {formatOrderStatusBadge(selectedOrder.status)}
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
                       {format(new Date(selectedOrder.createdAt), "MMM d, yyyy • h:mm a")}
                     </span>
                   </div>
                   <SheetTitle className="text-2xl font-serif text-[#2C3E2D] dark:text-foreground pt-2">
                     {selectedOrder.fullName}
                   </SheetTitle>
-                  <SheetDescription className="text-sm">
-                    {selectedOrder.email}
-                  </SheetDescription>
+                  <div className="space-y-1">
+                    <SheetDescription className="text-sm">
+                      {selectedOrder.email}
+                    </SheetDescription>
+                    <div className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      <span>Customer Phone: {selectedOrder.phoneNumber ?? "—"}</span>
+                    </div>
+                  </div>
                 </SheetHeader>
                 
                 <div className="flex items-center gap-2">
@@ -509,6 +656,56 @@ export default function AdminOrders() {
               </div>
 
               <div className="p-6 space-y-8 flex-1">
+                {/* Items Ordered */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80">
+                    Items Ordered
+                  </h4>
+                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 shadow-sm">
+                    {selectedOrderItemsLoading ? (
+                      <div className="space-y-3">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="h-12 bg-muted rounded-lg animate-pulse" />
+                        ))}
+                      </div>
+                    ) : selectedOrderItems.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No items found.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {selectedOrderItems.map((it) => {
+                          const qty = Number(it.quantity) || 0;
+                          const unit = Number(it.unitPrice) || 0;
+                          const lineSubtotal = qty * unit;
+                          return (
+                            <div
+                              key={it.id}
+                              className="flex items-start justify-between gap-3 border border-border/50 rounded-xl p-3 bg-card/60"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm truncate">
+                                  {it.product?.name ?? "Unknown Product"}
+                                </p>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] mt-1">
+                                  Size: {it.size ?? "—"} • Color: {it.color ?? "—"}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground mt-2">
+                                  Qty: {qty} • Unit: {formatPrice(unit)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-bold">{formatPrice(lineSubtotal)}</p>
+                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">
+                                  Subtotal
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 {/* Payment Section */}
                 <div className="space-y-3">
                   <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80 flex items-center gap-2">
@@ -519,19 +716,33 @@ export default function AdminOrders() {
                       <span className="text-muted-foreground">Method</span>
                       <span className="font-medium capitalize">{selectedOrder.paymentMethod?.replace(/_/g, " ") ?? "—"}</span>
                     </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Total</span>
-                      <span className="font-bold text-lg">{formatPrice(selectedOrder.total)}</span>
+                    <div className="pt-2 border-t border-dashed border-border/50 space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Subtotal</span>
+                        <span className="font-medium">{formatPrice(orderItemsSubtotal)}</span>
+                      </div>
+                      {discountAmount > 0 && (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Discount</span>
+                          <span className="font-medium text-green-700 dark:text-green-300">- {formatPrice(discountAmount)}</span>
+                        </div>
+                      )}
+                      {selectedOrder.promoCode ? (
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-muted-foreground">Promo Code Used</span>
+                          <Badge
+                            variant="outline"
+                            className="bg-orange-50 text-orange-600 border-orange-200 uppercase"
+                          >
+                            {selectedOrder.promoCode}
+                          </Badge>
+                        </div>
+                      ) : null}
+                      <div className="flex justify-between items-center text-sm pt-1">
+                        <span className="text-muted-foreground">Total in NPR</span>
+                        <span className="font-bold text-lg">{formatPrice(selectedOrder.total)}</span>
+                      </div>
                     </div>
-                    
-                    {selectedOrder.promoCode && (
-                       <div className="flex justify-between items-center text-sm pt-2 border-t border-dashed border-border/50">
-                         <span className="text-muted-foreground">Promo Code</span>
-                         <Badge variant="outline" className="bg-orange-50 text-orange-600 border-orange-200 uppercase">
-                           {selectedOrder.promoCode} (-Rs. {selectedOrder.promoDiscountAmount})
-                         </Badge>
-                       </div>
-                    )}
 
                     {selectedOrder.paymentProofUrl && (
                       <div className="pt-3 border-t border-border/50">
@@ -606,28 +817,44 @@ export default function AdminOrders() {
                       </div>
                     </div>
 
-                    {selectedOrder.deliveryRequired !== false && (
+                    {selectedOrder.source === "pos" ? (
+                      <div className="space-y-3 mt-3">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">
+                            Staff Created
+                          </p>
+                          <p className="text-sm font-medium text-foreground">
+                            {posBill?.processedBy ?? "—"}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px]">
+                          POS order (no delivery address)
+                        </Badge>
+                      </div>
+                    ) : selectedOrder.deliveryRequired !== false && (
                       <div className="space-y-4">
                         {selectedOrder.deliveryAddress ? (
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>
                             <p className="text-sm font-medium text-foreground">{selectedOrder.deliveryAddress}</p>
                           </div>
-                        ) : selectedOrder.shippingAddress ? (
+                        ) : selectedOrder.addressLine1 ? (
                           <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Shipping Details</p>
+                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Delivery Address</p>
                             <div className="text-sm font-medium text-foreground leading-relaxed">
-                              {selectedOrder.shippingAddress.addressLine1}, {selectedOrder.shippingAddress.city}
-                              {selectedOrder.shippingAddress.region && `, ${selectedOrder.shippingAddress.region}`}
+                              {selectedOrder.addressLine1}, {selectedOrder.city}
+                              {selectedOrder.region && `, ${selectedOrder.region}`}
+                              {selectedOrder.postalCode && ` ${selectedOrder.postalCode}`}
+                              {selectedOrder.country ? `, ${selectedOrder.country}` : ""}
                               <div className="text-muted-foreground mt-1 text-xs">
-                                {selectedOrder.shippingAddress.phone}
+                                Customer Phone: {selectedOrder.phoneNumber ?? "—"}
                               </div>
                             </div>
                             
-                            {selectedOrder.shippingAddress.locationCoordinates && (
+                            {selectedOrder.locationCoordinates && (
                               <div className="mt-3">
                                 <a
-                                  href={`https://www.google.com/maps?q=${selectedOrder.shippingAddress.locationCoordinates}`}
+                                  href={`https://www.google.com/maps?q=${selectedOrder.locationCoordinates}`}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center gap-1.5 text-xs font-bold py-1.5 px-3 rounded-full bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"

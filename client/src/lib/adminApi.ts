@@ -14,17 +14,15 @@ export interface AdminOrder {
   paymentProofUrl?: string | null;
   paymentVerified?: string | null;
   createdAt: string;
-  shippingAddress: {
-    firstName: string;
-    lastName: string;
-    addressLine1: string;
-    city: string;
-    region: string;
-    postalCode: string;
-    country: string;
-    phone: string;
-    locationCoordinates?: string;
-  };
+  userId?: string | null;
+  phoneNumber?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  region?: string | null;
+  postalCode?: string | null;
+  country?: string | null;
+  locationCoordinates?: string | null;
   promoCode?: string;
   promoDiscountAmount?: number;
   source?: string;
@@ -47,7 +45,22 @@ export interface AdminCustomer {
 }
 
 export interface AdminCustomerDetail extends AdminCustomer {
+  deliveryAddress: {
+    street: string | null;
+    city: string | null;
+    region: string | null;
+  } | null;
   orders: AdminOrder[];
+}
+
+export interface AdminCustomerOrderHistoryItem {
+  id: string;
+  createdAt: string;
+  items: { name: string; quantity: number }[];
+  total: string | number;
+  paymentMethod: string;
+  status: string;
+  source: "online" | "pos";
 }
 
 export interface AdminAnalyticsKpisTrends {
@@ -141,7 +154,7 @@ export async function uploadAdminImage(input: {
   provider: "local" | "cloudinary";
 }): Promise<AdminImageAsset> {
   const form = new FormData();
-  form.append("file", input.file);
+  form.append("images", input.file);
   form.append("category", input.category);
   form.append("provider", input.provider);
   const res = await fetch("/api/admin/images/upload", {
@@ -149,9 +162,9 @@ export async function uploadAdminImage(input: {
     credentials: "include",
     body: form,
   });
-  const json = (await res.json()) as { success: boolean; data: AdminImageAsset; error?: string };
-  if (!json.success) throw new Error(json.error || "Upload failed");
-  return json.data;
+  const json = (await res.json()) as { success: boolean; data: AdminImageAsset | AdminImageAsset[]; error?: string };
+  if (!json.success || !json.data) throw new Error(json.error || "Upload failed");
+  return Array.isArray(json.data) ? json.data[0] : json.data;
 }
 
 export async function deleteAdminImage(id: string): Promise<void> {
@@ -265,6 +278,17 @@ export async function updateCategory(
 
 export async function deleteCategory(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/categories/${id}`);
+}
+
+export async function bulkCategorizeProducts(input: {
+  productIds: string[];
+  categorySlug: string;
+}): Promise<void> {
+  const res = await apiRequest("PATCH", "/api/admin/products/bulk-categorize", input);
+  const json = (await res.json()) as { success: boolean; error?: string };
+  if (!json.success) {
+    throw new Error(json.error || "Failed to move products");
+  }
 }
 
 export async function uploadProductImage(
@@ -393,6 +417,12 @@ export async function fetchCustomerById(
     success: boolean;
     data: AdminCustomerDetail;
   };
+  return json.data;
+}
+
+export async function fetchCustomerOrders(id: string): Promise<AdminCustomerOrderHistoryItem[]> {
+  const res = await apiRequest("GET", `/api/admin/customers/${encodeURIComponent(id)}/orders`);
+  const json = (await res.json()) as { success: boolean; data: AdminCustomerOrderHistoryItem[] };
   return json.data;
 }
 
@@ -606,6 +636,8 @@ export interface PromoCode {
   usedCount: number;
   active: boolean;
   expiresAt: string | null;
+  applicableProductIds: number[] | null;
+  durationPreset: string | null;
   createdAt: string;
 }
 
@@ -620,6 +652,8 @@ export async function createAdminPromoCode(data: {
   discountPct: number;
   maxUses: number;
   expiresAt?: string | null;
+  applicableProductIds?: number[] | null;
+  durationPreset?: string | null;
 }): Promise<PromoCode> {
   const res = await apiRequest("POST", "/api/admin/promo-codes", data);
   const json = (await res.json()) as { success: boolean; data: PromoCode };

@@ -7,12 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import {
   fetchAdminCustomers,
   fetchCustomerById,
+  fetchCustomerOrders,
   createAdminCustomer,
   updateAdminCustomer,
   deleteAdminCustomer,
   exportCustomersCSV,
   type AdminCustomer,
   type AdminCustomerDetail,
+  type AdminCustomerOrderHistoryItem,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { ViewToggle } from "@/components/admin/ViewToggle";
@@ -86,6 +88,16 @@ export default function AdminCustomers() {
     queryKey: ["admin", "customers", expandedId],
     queryFn: () =>
       expandedId ? fetchCustomerById(expandedId) : Promise.resolve(null),
+    enabled: !!expandedId,
+  });
+
+  const {
+    data: orders = [],
+    isLoading: ordersLoading,
+  } = useQuery<AdminCustomerOrderHistoryItem[]>({
+    queryKey: ["admin", "customers", expandedId, "orders"],
+    queryFn: () =>
+      expandedId ? fetchCustomerOrders(expandedId) : Promise.resolve([]),
     enabled: !!expandedId,
   });
 
@@ -372,6 +384,12 @@ export default function AdminCustomers() {
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Personal Details</h4>
                                           <div className="space-y-2">
                                             <div className="flex items-center gap-2 text-sm">
+                                              <UserIcon className="w-3.5 h-3.5 text-muted-foreground" />
+                                              <span>
+                                                {detail.firstName} {detail.lastName}
+                                              </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-sm">
                                               <Mail className="w-3.5 h-3.5 text-muted-foreground" />
                                               <span>{detail.email}</span>
                                             </div>
@@ -381,6 +399,24 @@ export default function AdminCustomers() {
                                                 <span>{detail.phoneNumber}</span>
                                               </div>
                                             )}
+                                            <div className="flex items-start gap-2 text-sm">
+                                              <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
+                                              <span>
+                                                {detail.deliveryAddress ? (
+                                                  [
+                                                    detail.deliveryAddress.street,
+                                                    detail.deliveryAddress.city,
+                                                    detail.deliveryAddress.region,
+                                                  ]
+                                                    .filter(Boolean)
+                                                    .join(", ") || "No address on file"
+                                                ) : (
+                                                  <span className="text-muted-foreground">
+                                                    No address on file
+                                                  </span>
+                                                )}
+                                              </span>
+                                            </div>
                                             <div className="flex items-center gap-2 text-sm">
                                               <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
                                               <span>Account created {new Date(detail.createdAt).toLocaleDateString()}</span>
@@ -391,38 +427,80 @@ export default function AdminCustomers() {
                                       <div className="md:col-span-2">
                                         <div className="flex items-center justify-between mb-3">
                                           <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Order History</h4>
-                                          <Badge variant="secondary" className="text-[10px] px-1.5 h-5">{detail.orders.length} items</Badge>
+                                          <Badge variant="secondary" className="text-[10px] px-1.5 h-5">
+                                            {ordersLoading ? "Loading..." : `${orders.length} items`}
+                                          </Badge>
                                         </div>
                                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                                          {detail.orders.length === 0 ? (
+                                          {ordersLoading ? (
+                                            <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-xl">
+                                              Loading order history...
+                                            </div>
+                                          ) : orders.length === 0 ? (
                                             <div className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-xl">
                                               No transactions found
                                             </div>
                                           ) : (
-                                            detail.orders.map((order) => (
-                                              <div key={order.id} className="group flex items-center justify-between p-3 rounded-xl border border-border bg-muted/5 hover:bg-muted/10 transition-colors">
-                                                <div className="flex items-center gap-3">
+                                            orders.map((order) => (
+                                              <div
+                                                key={order.id}
+                                                className="group flex items-start justify-between p-3 rounded-xl border border-border bg-muted/5 hover:bg-muted/10 transition-colors gap-3"
+                                              >
+                                                <div className="flex items-start gap-3 min-w-0">
                                                   <div className="w-8 h-8 rounded-lg bg-background flex items-center justify-center border border-border shadow-sm text-primary">
                                                     <ShoppingBag className="w-4 h-4" />
                                                   </div>
-                                                  <div>
-                                                    <div className="text-xs font-bold">Order #{order.id.slice(0, 8)}</div>
-                                                    <div className="text-[10px] text-muted-foreground">{new Date(order.createdAt).toLocaleDateString()}</div>
+                                                  <div className="min-w-0">
+                                                    <div className="text-xs font-bold">
+                                                      Order #{order.id.slice(0, 8)}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground">
+                                                      {new Date(order.createdAt).toLocaleDateString()} • {order.source === "pos" ? "POS" : "Online"}
+                                                    </div>
+
+                                                    <div className="mt-2 space-y-1">
+                                                      {order.items.slice(0, 3).map((it, idx) => (
+                                                        <div
+                                                          key={`${order.id}-${idx}`}
+                                                          className="flex items-center justify-between gap-3"
+                                                        >
+                                                          <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                                                            {it.name}
+                                                          </span>
+                                                          <span className="text-[10px] font-semibold text-foreground">
+                                                            {it.quantity}x
+                                                          </span>
+                                                        </div>
+                                                      ))}
+                                                      {order.items.length > 3 && (
+                                                        <div className="text-[10px] text-muted-foreground">
+                                                          +{order.items.length - 3} more items
+                                                        </div>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
+
+                                                <div className="flex flex-col items-end gap-2">
                                                   <div className="text-right">
-                                                    <div className="text-xs font-bold">{formatPrice(order.total)}</div>
-                                                    <div className={cn(
-                                                      "text-[10px] font-semibold uppercase tracking-tighter",
-                                                      order.status === 'completed' ? 'text-green-600' : 'text-yellow-600'
-                                                    )}>
+                                                    <div className="text-xs font-bold">
+                                                      {formatPrice(order.total)}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground capitalize">
+                                                      {order.paymentMethod}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-[10px] font-semibold uppercase tracking-tighter",
+                                                        order.status === "completed" ||
+                                                          order.status === "issued"
+                                                          ? "text-green-600"
+                                                          : "text-yellow-600",
+                                                      )}
+                                                    >
                                                       {order.status}
                                                     </div>
                                                   </div>
-                                                  <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <ExternalLink className="w-3.5 h-3.5" />
-                                                  </Button>
                                                 </div>
                                               </div>
                                             ))

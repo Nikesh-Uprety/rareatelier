@@ -153,15 +153,22 @@ export async function uploadPaymentProof(
   return json;
 }
 
-export async function validatePromoCode(code: string) {
-  const res = await apiRequest("GET", `/api/promo-codes/validate/${code}`);
+export async function validatePromoCode(
+  code: string,
+  itemProductIds: Array<string | number>,
+) {
+  const res = await apiRequest("POST", "/api/promo/validate", {
+    code,
+    items: itemProductIds.map((productId) => ({ productId })),
+  });
+
   return (await res.json()) as {
-    success: boolean;
+    valid: boolean;
+    reason?: string;
     data?: {
       id: string;
       code: string;
       discountPct: number;
     };
-    error?: string;
   };
 }

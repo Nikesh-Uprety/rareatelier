@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutGrid,
   User,
+  Users,
   BarChart,
   Package,
   CreditCard,
@@ -28,7 +29,9 @@ import { ThemeToggle } from "@/components/admin/ThemeToggle";
 import { NotificationBadge } from "@/components/admin/NotificationBadge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Suspense, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useIsFetching } from "@tanstack/react-query";
+import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 
 const ADMIN_NAV = [
@@ -39,6 +42,7 @@ const ADMIN_NAV = [
   { href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
   { href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },
   { href: "/admin/customers", icon: User, label: "Customers", type: "customer" },
+  { href: "/admin/store-users", icon: Users, label: "Store Users", type: "team" },
   { href: "/admin/promo-codes", icon: Tags, label: "Promo Codes", type: "promo" },
   { href: "/admin/marketing", icon: Megaphone, label: "Marketing", type: "marketing" },
   { href: "/admin/images", icon: Images, label: "Images", type: "media" },
@@ -57,6 +61,16 @@ export default function AdminLayout({
   const { getUnreadCountByType, markTypeRead } = useNotifications();
   useAdminWebSocket();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isFetching = useIsFetching();
+  const [isRouteChanging, setIsRouteChanging] = useState(false);
+
+  useEffect(() => {
+    setIsRouteChanging(true);
+    const timeout = setTimeout(() => setIsRouteChanging(false), 400);
+    return () => clearTimeout(timeout);
+  }, [pathname]);
+
+  const isLoading = isRouteChanging || isFetching > 0;
 
   const handleLogout = async () => {
     try {
@@ -90,6 +104,7 @@ export default function AdminLayout({
 
   return (
     <div className="min-h-screen bg-[#F5F5F3] dark:bg-neutral-900 flex text-[#2C3E2D] dark:text-foreground font-sans overflow-hidden">
+      <TopLoadingBar isLoading={isLoading} />
       {/* Sidebar */}
       <aside className="w-72 bg-neutral-950 dark:bg-white border-r border-white/5 dark:border-black/5 hidden md:flex flex-col h-screen sticky top-0 transition-colors duration-500 relative overflow-hidden group/sidebar">
         {/* Sun Flare / Luminous Glow Effect */}

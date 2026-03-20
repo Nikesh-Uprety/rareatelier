@@ -40,7 +40,7 @@ import {
   type SiteAsset,
   type InsertSiteAsset,
 } from "@shared/schema";
-import { and, or, asc, desc, eq, gte, ilike, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gte, ilike, inArray, sql } from "drizzle-orm";
 import { broadcastNotification } from "./websocket";
 
 export interface CreateOrderItemInput {
@@ -131,6 +131,16 @@ export interface PaymentMethodBreakdown {
   percent: number;
 }
 
+export interface StoreUser {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  profileImageUrl: string | null;
+  emailNotifications: boolean;
+  createdAt: Date;
+}
+
 export interface RevenueByPlatform {
   platform: string;
   label: string;
@@ -197,7 +207,28 @@ export interface IStorage {
 
   // Customers
   getCustomers(search?: string): Promise<Customer[]>;
-  getCustomerById(id: string): Promise<Customer & { orders: Order[] }>;
+  getCustomerById(
+    id: string,
+  ): Promise<
+    Customer & {
+      orders: Order[];
+      deliveryAddress: { street: string | null; city: string | null; region: string | null } | null;
+    }
+  >;
+  // Unified order history (online orders + POS bills)
+  getCustomerOrders(
+    id: string,
+  ): Promise<
+    {
+      id: string;
+      createdAt: Date;
+      items: { name: string; quantity: number }[];
+      total: string;
+      paymentMethod: string;
+      status: string;
+      source: "online" | "pos";
+    }[]
+  >;
   createCustomer(
     data: Omit<Customer, "id" | "createdAt">,
   ): Promise<Customer>;
@@ -248,6 +279,20 @@ export interface IStorage {
     role: string;
     passwordHash: string;
   }): Promise<User>;
+
+  // Internal team (non-customer) users for admin store-users page
+  getStoreUsers(): Promise<StoreUser[]>;
+  createStoreUser(data: {
+    name: string;
+    email: string;
+    passwordHash: string;
+    role: string;
+  }): Promise<StoreUser>;
+  updateStoreUser(
+    id: string,
+    data: { role?: string; emailNotifications?: boolean },
+  ): Promise<StoreUser>;
+
   getNewsletterSubscribers(includeUnsubscribed?: boolean): Promise<{ email: string; status: string; unsubscribedAt: Date | null; createdAt: Date | null }[]>;
 
   // OTP tokens
@@ -622,6 +667,7 @@ export class PgStorage implements IStorage {
         userId: orders.userId,
         email: orders.email,
         fullName: orders.fullName,
+        phoneNumber: customers.phoneNumber,
         addressLine1: orders.addressLine1,
         addressLine2: orders.addressLine2,
         city: orders.city,
@@ -644,6 +690,7 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       })
       .from(orders)
+      .leftJoin(customers, eq(orders.email, customers.email))
       .where(whereClause)
       .orderBy(desc(orders.createdAt))
       .limit(limit)
@@ -659,6 +706,7 @@ export class PgStorage implements IStorage {
         userId: orders.userId,
         email: orders.email,
         fullName: orders.fullName,
+        phoneNumber: customers.phoneNumber,
         addressLine1: orders.addressLine1,
         addressLine2: orders.addressLine2,
         city: orders.city,
@@ -681,6 +729,7 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       })
       .from(orders)
+      .leftJoin(customers, eq(orders.email, customers.email))
       .where(eq(orders.id, id))
       .limit(1);
 
@@ -944,7 +993,18 @@ export class PgStorage implements IStorage {
     return rows;
   }
 
-  async getCustomerById(id: string): Promise<Customer & { orders: Order[] }> {
+  async getCustomerById(
+    id: string,
+  ): Promise<
+    Customer & {
+      orders: Order[];
+      deliveryAddress: {
+        street: string | null;
+        city: string | null;
+        region: string | null;
+      } | null;
+    }
+  > {
     const [customerRow] = await db
       .select({
         id: customers.id,
@@ -998,7 +1058,167 @@ export class PgStorage implements IStorage {
       .where(eq(orders.email, customerRow.email))
       .orderBy(desc(orders.createdAt));
 
-    return { ...customerRow, orders: customerOrders };
+    const latestOnlineOrder = customerOrders[0];
+    const deliveryAddressFromOnline: {
+      street: string | null;
+      city: string | null;
+      region: string | null;
+    } | null = latestOnlineOrder?.addressLine1
+      ? {
+          street: latestOnlineOrder.addressLine1,
+          city: latestOnlineOrder.city ?? null,
+          region: latestOnlineOrder.region ?? null,
+        }
+      : null;
+
+    let deliveryAddress: {
+      street: string | null;
+      city: string | null;
+      region: string | null;
+    } | null = deliveryAddressFromOnline;
+
+    // Fallback to the most recent POS bill's deliveryAddress (POS doesn't store city/region separately)
+    if (!deliveryAddress) {
+      const billConditions = [eq(bills.customerName, `${customerRow.firstName} ${customerRow.lastName}`)];
+      if (customerRow.email) {
+        billConditions.push(eq(bills.customerEmail, customerRow.email));
+      }
+      if (customerRow.phoneNumber) {
+        billConditions.push(eq(bills.customerPhone, customerRow.phoneNumber));
+      }
+
+      const [latestBill] = await db
+        .select({
+          deliveryAddress: bills.deliveryAddress,
+        })
+        .from(bills)
+        .where(or(...billConditions))
+        .orderBy(desc(bills.createdAt))
+        .limit(1);
+
+      deliveryAddress = latestBill?.deliveryAddress
+        ? { street: latestBill.deliveryAddress, city: null, region: null }
+        : null;
+    }
+
+    return { ...customerRow, orders: customerOrders, deliveryAddress };
+  }
+
+  async getCustomerOrders(id: string) {
+    const [customerRow] = await db
+      .select({
+        id: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        email: customers.email,
+        phoneNumber: customers.phoneNumber,
+      })
+      .from(customers)
+      .where(eq(customers.id, id))
+      .limit(1);
+
+    if (!customerRow) {
+      throw new Error("Customer not found");
+    }
+
+    const customerFullName = `${customerRow.firstName} ${customerRow.lastName}`;
+
+    // Online orders (website)
+    const onlineOrders = await db
+      .select({
+        id: orders.id,
+        createdAt: orders.createdAt,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+      })
+      .from(orders)
+      .where(eq(orders.email, customerRow.email))
+      .orderBy(desc(orders.createdAt));
+
+    const orderIds = onlineOrders.map((o) => o.id);
+    const itemsByOrder = new Map<string, { name: string; quantity: number }[]>();
+
+    if (orderIds.length) {
+      const itemRows = await db
+        .select({
+          orderId: orderItems.orderId,
+          quantity: orderItems.quantity,
+          productName: products.name,
+        })
+        .from(orderItems)
+        .leftJoin(products, eq(orderItems.productId, products.id))
+        .where(inArray(orderItems.orderId, orderIds))
+        .orderBy(asc(orderItems.id));
+
+      for (const row of itemRows) {
+        const list = itemsByOrder.get(row.orderId) ?? [];
+        list.push({
+          name: row.productName ?? "Unknown",
+          quantity: Number(row.quantity ?? 0),
+        });
+        itemsByOrder.set(row.orderId, list);
+      }
+    }
+
+    const onlineMapped = onlineOrders.map((o) => ({
+      id: o.id,
+      createdAt: o.createdAt ?? new Date(),
+      items: itemsByOrder.get(o.id) ?? [],
+      total: typeof o.total === "string" ? o.total : String(o.total ?? "0"),
+      paymentMethod: o.paymentMethod,
+      status: o.status,
+      source: "online" as const,
+    }));
+
+    // POS orders (stored as bills)
+    const billConditions = [eq(bills.customerName, customerFullName)];
+    if (customerRow.email) {
+      billConditions.push(eq(bills.customerEmail, customerRow.email));
+    }
+    if (customerRow.phoneNumber) {
+      billConditions.push(eq(bills.customerPhone, customerRow.phoneNumber));
+    }
+
+    const posBills = await db
+      .select({
+        id: bills.id,
+        createdAt: bills.createdAt,
+        totalAmount: bills.totalAmount,
+        status: bills.status,
+        paymentMethod: bills.paymentMethod,
+        items: bills.items,
+      })
+      .from(bills)
+      .where(or(...billConditions))
+      .orderBy(desc(bills.createdAt));
+
+    const posMapped = posBills.map((b) => {
+      const rawItems = Array.isArray(b.items) ? (b.items as any[]) : [];
+      return {
+        id: b.id,
+        createdAt: b.createdAt ?? new Date(),
+        items: rawItems.map((it) => ({
+          name: it.productName ?? "Unknown",
+          quantity: Number(it.quantity ?? 0),
+        })),
+        total:
+          typeof b.totalAmount === "string"
+            ? b.totalAmount
+            : String(b.totalAmount ?? "0"),
+        paymentMethod: b.paymentMethod,
+        status: b.status ?? "issued",
+        source: "pos" as const,
+      };
+    });
+
+    const combined = [...onlineMapped, ...posMapped];
+    combined.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+
+    return combined;
   }
 
   async createCustomer(
@@ -1272,8 +1492,10 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
         status: users.status,
       })
       .from(users)
@@ -1292,8 +1514,10 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
         status: users.status,
       })
       .from(users)
@@ -1303,7 +1527,16 @@ export class PgStorage implements IStorage {
     return row ?? null;
   }
 
-  async createUser(data: Omit<User, "id">): Promise<User> {
+  async createUser(data: {
+    username: string;
+    password: string;
+    role: string;
+    status?: string;
+    twoFactorEnabled?: number;
+    lastLoginAt?: Date | null;
+    displayName?: string | null;
+    profileImageUrl?: string | null;
+  }): Promise<User> {
     const [row] = await db
       .insert(users)
       .values({
@@ -1313,6 +1546,7 @@ export class PgStorage implements IStorage {
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
         twoFactorEnabled: data.twoFactorEnabled ?? 0,
+        emailNotifications: true,
         status: data.status ?? "active",
       })
       .returning({
@@ -1322,8 +1556,10 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
         status: users.status,
       });
 
@@ -1410,6 +1646,98 @@ export class PgStorage implements IStorage {
     }));
   }
 
+  async getStoreUsers(): Promise<StoreUser[]> {
+    const rows = await db
+      .select({
+        id: users.id,
+        email: users.username,
+        name: users.displayName,
+        role: users.role,
+        profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(sql`${users.role} != 'customer'`)
+      .orderBy(desc(users.createdAt));
+
+    return rows.map((r) => ({
+      ...r,
+      name: r.name ?? null,
+      profileImageUrl: r.profileImageUrl ?? null,
+      emailNotifications: !!r.emailNotifications,
+    }));
+  }
+
+  async createStoreUser(data: {
+    name: string;
+    email: string;
+    passwordHash: string;
+    role: string;
+  }): Promise<StoreUser> {
+    const [row] = await db
+      .insert(users)
+      .values({
+        username: data.email,
+        password: data.passwordHash,
+        role: data.role,
+        displayName: data.name,
+        profileImageUrl: null,
+        twoFactorEnabled: 0,
+        status: "active",
+        emailNotifications: true,
+      })
+      .returning({
+        id: users.id,
+        email: users.username,
+        name: users.displayName,
+        role: users.role,
+        profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
+        createdAt: users.createdAt,
+      });
+
+    return {
+      ...row,
+      name: row.name ?? null,
+      profileImageUrl: row.profileImageUrl ?? null,
+      emailNotifications: !!row.emailNotifications,
+    };
+  }
+
+  async updateStoreUser(
+    id: string,
+    data: { role?: string; emailNotifications?: boolean },
+  ): Promise<StoreUser> {
+    const updateData: Record<string, any> = {};
+    if (data.role !== undefined) updateData.role = data.role;
+    if (data.emailNotifications !== undefined)
+      updateData.emailNotifications = data.emailNotifications;
+
+    const [row] = await db
+      .update(users)
+      .set(updateData)
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        email: users.username,
+        name: users.displayName,
+        role: users.role,
+        profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
+        createdAt: users.createdAt,
+      });
+
+    if (!row) throw new Error("User not found");
+
+    return {
+      ...row,
+      name: row.name ?? null,
+      profileImageUrl: row.profileImageUrl ?? null,
+      emailNotifications: !!row.emailNotifications,
+    };
+  }
+
   async inviteAdminUser(data: {
     name: string;
     email: string;
@@ -1433,8 +1761,10 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
+        createdAt: users.createdAt,
         status: users.status,
       });
 
@@ -2235,7 +2565,18 @@ export class MemStorage implements IStorage {
     return this._customers;
   }
 
-  async getCustomerById(id: string): Promise<Customer & { orders: Order[] }> {
+  async getCustomerById(
+    id: string,
+  ): Promise<
+    Customer & {
+      orders: Order[];
+      deliveryAddress: {
+        street: string | null;
+        city: string | null;
+        region: string | null;
+      } | null;
+    }
+  > {
     const customer = this._customers.find((c) => c.id === id);
     if (!customer) {
       throw new Error("Customer not found");
@@ -2243,7 +2584,11 @@ export class MemStorage implements IStorage {
     const customerOrders = this._orders
       .filter((o) => o.email === customer.email)
       .map(({ items: _items, ...order }) => order);
-    return { ...customer, orders: customerOrders };
+    return { ...customer, orders: customerOrders, deliveryAddress: null };
+  }
+
+  async getCustomerOrders(_id: string) {
+    return [];
   }
 
   async createCustomer(
@@ -2374,7 +2719,16 @@ export class MemStorage implements IStorage {
     return this._users.find((u) => u.id === id) ?? null;
   }
 
-  async createUser(data: Omit<User, "id">): Promise<User> {
+  async createUser(data: {
+    username: string;
+    password: string;
+    role: string;
+    status?: string;
+    twoFactorEnabled?: number;
+    lastLoginAt?: Date | null;
+    displayName?: string | null;
+    profileImageUrl?: string | null;
+  }): Promise<User> {
     const user: User = {
       id: crypto.randomUUID(),
       username: data.username,
@@ -2382,10 +2736,13 @@ export class MemStorage implements IStorage {
       role: data.role,
       displayName: data.displayName ?? null,
       profileImageUrl: data.profileImageUrl ?? null,
+      emailNotifications: true,
       twoFactorEnabled: 0,
-      lastLoginAt: null,
-      status: "active",
+      lastLoginAt: data.lastLoginAt ?? null,
+      status: data.status ?? "active",
+      createdAt: new Date(),
     };
+    user.twoFactorEnabled = data.twoFactorEnabled ?? 0;
     this._users.push(user);
     return user;
   }
@@ -2470,6 +2827,72 @@ export class MemStorage implements IStorage {
     }));
   }
 
+  async getStoreUsers(): Promise<StoreUser[]> {
+    return this._users
+      .filter((u) => u.role !== "customer")
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((u) => ({
+        id: u.id,
+        email: u.username,
+        name: u.displayName ?? null,
+        role: u.role,
+        profileImageUrl: u.profileImageUrl ?? null,
+        emailNotifications: !!u.emailNotifications,
+        createdAt: u.createdAt,
+      }));
+  }
+
+  async createStoreUser(data: {
+    name: string;
+    email: string;
+    passwordHash: string;
+    role: string;
+  }): Promise<StoreUser> {
+    const user: User = {
+      id: crypto.randomUUID(),
+      username: data.email,
+      password: data.passwordHash,
+      role: data.role,
+      displayName: data.name,
+      profileImageUrl: null,
+      twoFactorEnabled: 0,
+      lastLoginAt: null,
+      createdAt: new Date(),
+      emailNotifications: true,
+      status: "active",
+    };
+    this._users.push(user);
+    return {
+      id: user.id,
+      email: user.username,
+      name: user.displayName ?? null,
+      role: user.role,
+      profileImageUrl: user.profileImageUrl ?? null,
+      emailNotifications: !!user.emailNotifications,
+      createdAt: user.createdAt,
+    };
+  }
+
+  async updateStoreUser(
+    id: string,
+    data: { role?: string; emailNotifications?: boolean },
+  ): Promise<StoreUser> {
+    const user = this._users.find((u) => u.id === id);
+    if (!user) throw new Error("User not found");
+    if (data.role !== undefined) user.role = data.role;
+    if (data.emailNotifications !== undefined) user.emailNotifications = data.emailNotifications;
+
+    return {
+      id: user.id,
+      email: user.username,
+      name: user.displayName ?? null,
+      role: user.role,
+      profileImageUrl: user.profileImageUrl ?? null,
+      emailNotifications: !!user.emailNotifications,
+      createdAt: user.createdAt,
+    };
+  }
+
   async createContactMessage(data: Omit<ContactMessage, "id" | "createdAt" | "status">): Promise<ContactMessage> {
     return { ...data, id: "mock", status: "unread", createdAt: new Date() };
   }
@@ -2494,13 +2917,26 @@ export class MemStorage implements IStorage {
       usedCount: 0,
       active: data.active ?? true,
       expiresAt: data.expiresAt ?? null,
+      applicableProductIds: data.applicableProductIds ?? null,
+      durationPreset: data.durationPreset ?? null,
       createdAt: new Date(),
     };
     return promo;
   }
 
   async updatePromoCode(id: string, data: Partial<PromoCode>): Promise<PromoCode> {
-    return { id, code: "TEST", discountPct: 10, maxUses: 100, usedCount: 0, active: true, expiresAt: null, createdAt: new Date() };
+    return {
+      id,
+      code: data.code ?? "TEST",
+      discountPct: data.discountPct ?? 10,
+      maxUses: data.maxUses ?? 100,
+      usedCount: 0,
+      active: data.active ?? true,
+      expiresAt: data.expiresAt ?? null,
+      applicableProductIds: data.applicableProductIds ?? null,
+      durationPreset: data.durationPreset ?? null,
+      createdAt: new Date(),
+    };
   }
 
   async deletePromoCode(id: string): Promise<void> {}
@@ -2540,4 +2976,3 @@ export class MemStorage implements IStorage {
 }
 
 export const storage: IStorage = new PgStorage();
-

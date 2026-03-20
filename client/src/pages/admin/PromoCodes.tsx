@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { Plus, Tags, Trash2, Edit2, Copy, Check } from "lucide-react";
+import { addDays, addHours, format, isValid, parseISO } from "date-fns";
+import { Plus, Tags, Trash2, Edit2, Copy, Check, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -18,11 +20,25 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import {
   Form,
   FormControl,
@@ -32,26 +48,68 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { fetchAdminPromoCodes, createAdminPromoCode, updateAdminPromoCode, deleteAdminPromoCode, type PromoCode } from "@/lib/adminApi";
+import { fetchProducts, type ProductApi } from "@/lib/api";
+import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 
-const promoSchema = z.object({
+const promoSchema = z
+  .object({
   code: z.string().min(3, "Code must be at least 3 characters").max(50),
   discountPct: z.coerce.number().min(1, "Discount must be at least 1%").max(100),
   maxUses: z.coerce.number().min(1, "Must allow at least 1 use"),
   active: z.boolean().default(true),
-});
+  applyToSpecificProducts: z.boolean().default(false),
+  applicableProductIds: z.array(z.coerce.number().int()).default([]),
+  durationPreset: z.enum(["none", "1day", "1week", "custom"]).default("none"),
+  customExpiresAt: z.string().optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.applyToSpecificProducts && v.applicableProductIds.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["applicableProductIds"],
+        message: "Select at least one product",
+      });
+    }
+
+    if (v.durationPreset === "custom") {
+      const raw = v.customExpiresAt || "";
+      const parsed = raw ? parseISO(raw) : null;
+      if (!raw || !parsed || !isValid(parsed)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["customExpiresAt"],
+          message: "Pick a valid expiry date",
+        });
+      }
+    }
+  });
 
 type PromoFormValues = z.infer<typeof promoSchema>;
+
+function toDatetimeLocalValue(d: Date) {
+  // datetime-local expects `YYYY-MM-DDTHH:mm`
+  return format(d, "yyyy-MM-dd'T'HH:mm");
+}
 
 export default function AdminPromoCodes() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: promos = [], isLoading } = useQuery({
     queryKey: ["admin", "promo-codes"],
     queryFn: fetchAdminPromoCodes,
+  });
+
+  const { data: products = [] } = useQuery<ProductApi[]>({
+    queryKey: ["products", "promo-codes"],
+    queryFn: () => fetchProducts({ limit: 2000 }),
   });
 
   const form = useForm<PromoFormValues>({
@@ -61,15 +119,75 @@ export default function AdminPromoCodes() {
       discountPct: 10,
       maxUses: 100,
       active: true,
+      applyToSpecificProducts: false,
+      applicableProductIds: [],
+      durationPreset: "none",
+      customExpiresAt: null,
     },
   });
 
+  const applyToSpecificProducts = form.watch("applyToSpecificProducts");
+  const selectedProductIds = form.watch("applicableProductIds");
+  const durationPreset = form.watch("durationPreset");
+  const customExpiresAt = form.watch("customExpiresAt");
+
+  const expiryPreview = useMemo(() => {
+    if (!durationPreset || durationPreset === "none") return { label: "Never expires", date: null as Date | null };
+
+    const now = new Date();
+    if (durationPreset === "1day") {
+      const d = addHours(now, 24);
+      return { label: `Expires: ${format(d, "EEE dd MMM yyyy 'at' hh:mm a")}`, date: d };
+    }
+
+    if (durationPreset === "1week") {
+      const d = addDays(now, 7);
+      return { label: `Expires: ${format(d, "EEE dd MMM yyyy 'at' hh:mm a")}`, date: d };
+    }
+
+    // custom
+    if (customExpiresAt) {
+      const parsed = parseISO(customExpiresAt);
+      if (isValid(parsed)) {
+        return { label: `Expires: ${format(parsed, "EEE dd MMM yyyy 'at' hh:mm a")}`, date: parsed };
+      }
+    }
+
+    return { label: "Expires: (pick a date)", date: null as Date | null };
+  }, [customExpiresAt, durationPreset]);
+
+  const productByNumericId = useMemo(() => {
+    const map = new Map<number, ProductApi>();
+    for (const p of products) {
+      const idNum = Number(p.id);
+      if (Number.isFinite(idNum)) map.set(idNum, p);
+    }
+    return map;
+  }, [products]);
+
   const handleEditClick = (promo: PromoCode) => {
+    const isRestricted = promo.applicableProductIds != null;
+    const allowedPresets = ["none", "1day", "1week", "custom"] as const;
+    const durationPreset: PromoFormValues["durationPreset"] =
+      (promo.durationPreset && allowedPresets.includes(promo.durationPreset as any)
+        ? (promo.durationPreset as PromoFormValues["durationPreset"])
+        : promo.expiresAt
+          ? "custom"
+          : "none") as PromoFormValues["durationPreset"];
+    const customExpiresAt =
+      durationPreset === "custom" && promo.expiresAt
+        ? toDatetimeLocalValue(new Date(promo.expiresAt))
+        : null;
+
     form.reset({
       code: promo.code,
       discountPct: promo.discountPct,
       maxUses: promo.maxUses,
       active: promo.active,
+      applyToSpecificProducts: isRestricted,
+      applicableProductIds: promo.applicableProductIds ?? [],
+      durationPreset,
+      customExpiresAt,
     });
     setEditingPromo(promo);
     setIsAddOpen(true);
@@ -81,6 +199,10 @@ export default function AdminPromoCodes() {
       discountPct: 10,
       maxUses: 100,
       active: true,
+      applyToSpecificProducts: false,
+      applicableProductIds: [],
+      durationPreset: "none",
+      customExpiresAt: null,
     });
     setEditingPromo(null);
     setIsAddOpen(true);
@@ -88,10 +210,23 @@ export default function AdminPromoCodes() {
 
   const saveMutation = useMutation({
     mutationFn: async (values: PromoFormValues) => {
+      const payload = {
+        code: values.code,
+        discountPct: values.discountPct,
+        maxUses: values.maxUses,
+        active: values.active,
+        applicableProductIds: values.applyToSpecificProducts
+          ? values.applicableProductIds
+          : null,
+        durationPreset: values.durationPreset,
+        expiresAt:
+          values.durationPreset === "custom" ? values.customExpiresAt : null,
+      };
+
       if (editingPromo) {
-        return updateAdminPromoCode(editingPromo.id, values);
+        return updateAdminPromoCode(editingPromo.id, payload);
       } else {
-        return createAdminPromoCode(values);
+        return createAdminPromoCode(payload as any);
       }
     },
     onSuccess: () => {
@@ -142,6 +277,8 @@ export default function AdminPromoCodes() {
               <TableHead className="font-semibold">Discount</TableHead>
               <TableHead className="font-semibold">Uses</TableHead>
               <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="font-semibold">Products</TableHead>
+              <TableHead className="font-semibold">Expires</TableHead>
               <TableHead className="font-semibold">Created</TableHead>
               <TableHead className="text-right px-6 font-semibold">Actions</TableHead>
             </TableRow>
@@ -149,7 +286,7 @@ export default function AdminPromoCodes() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 opacity-60">
+                <TableCell colSpan={8} className="text-center py-10 opacity-60">
                   <div className="flex justify-center mb-2">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#2C3E2D] dark:border-primary"></div>
                   </div>
@@ -158,7 +295,7 @@ export default function AdminPromoCodes() {
               </TableRow>
             ) : promos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-10 opacity-60">
+                <TableCell colSpan={8} className="text-center py-10 opacity-60">
                   <Tags className="w-8 h-8 md:w-10 md:h-10 mx-auto text-muted-foreground mb-3 opacity-50" />
                   <p className="text-sm">No promo codes found.</p>
                 </TableCell>
@@ -197,9 +334,37 @@ export default function AdminPromoCodes() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${promo.active ? 'bg-green-500' : 'bg-red-500'}`} />
-                      <span className="text-sm capitalize">{promo.active ? 'Active' : 'Inactive'}</span>
+                      {promo.expiresAt &&
+                      new Date(promo.expiresAt) < new Date() ? (
+                        <Badge
+                          variant="destructive"
+                          className="rounded-full px-3 py-1 text-xs"
+                        >
+                          Expired
+                        </Badge>
+                      ) : (
+                        <>
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              promo.active ? "bg-green-500" : "bg-red-500"
+                            }`}
+                          />
+                          <span className="text-sm capitalize">
+                            {promo.active ? "Active" : "Inactive"}
+                          </span>
+                        </>
+                      )}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {promo.applicableProductIds == null
+                      ? "All"
+                      : promo.applicableProductIds.length}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {promo.expiresAt
+                      ? format(new Date(promo.expiresAt), "MMM d, yyyy")
+                      : "Never"}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {format(new Date(promo.createdAt || new Date()), "MMM d, yyyy")}
@@ -303,6 +468,209 @@ export default function AdminPromoCodes() {
                   </FormItem>
                 )}
               />
+
+              <div className="space-y-4 rounded-xl border p-4">
+                <h4 className="text-sm font-bold text-foreground">Product Restriction</h4>
+
+                <FormField
+                  control={form.control}
+                  name="applyToSpecificProducts"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Apply to specific products only</FormLabel>
+                        <p className="text-[10px] text-muted-foreground">
+                          Turn on to restrict this promo code to selected products.
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {applyToSpecificProducts && (
+                  <div className="space-y-3">
+                    <FormField
+                      control={form.control}
+                      name="applicableProductIds"
+                      render={() => (
+                        <FormItem>
+                          <FormLabel>Restricted Products</FormLabel>
+                          <Popover
+                            open={productPickerOpen}
+                            onOpenChange={setProductPickerOpen}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full justify-between"
+                              >
+                                <span className="text-xs font-bold">
+                                  {selectedProductIds.length
+                                    ? `${selectedProductIds.length} selected`
+                                    : "Select products"}
+                                </span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="start" className="p-0 w-[360px]">
+                              <Command>
+                                <CommandInput placeholder="Search products..." />
+                                <CommandList>
+                                  <CommandEmpty>No products found.</CommandEmpty>
+                                  <CommandGroup heading="Products">
+                                    {products
+                                      .map((p) => ({
+                                        p,
+                                        idNum: Number(p.id),
+                                      }))
+                                      .filter(({ idNum }) =>
+                                        Number.isFinite(idNum),
+                                      )
+                                      .map(({ p, idNum }) => {
+                                        const selected = selectedProductIds.includes(idNum);
+                                        return (
+                                          <CommandItem
+                                            key={p.id}
+                                            value={`${idNum} ${p.name}`}
+                                            onSelect={() => {
+                                              const next = selected
+                                                ? selectedProductIds.filter(
+                                                    (x) => x !== idNum,
+                                                  )
+                                                : [...selectedProductIds, idNum];
+                                              form.setValue(
+                                                "applicableProductIds",
+                                                next,
+                                                { shouldDirty: true, shouldValidate: true },
+                                              );
+                                            }}
+                                          >
+                                            <Checkbox
+                                              checked={selected}
+                                              className="mr-2"
+                                            />
+                                            <span className="text-sm">{p.name}</span>
+                                          </CommandItem>
+                                        );
+                                      })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+
+                          {form.formState.errors.applicableProductIds && (
+                            <FormMessage />
+                          )}
+
+                          {selectedProductIds.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-2">
+                              {selectedProductIds.map((idNum) => {
+                                const prod = productByNumericId.get(idNum);
+                                return (
+                                  <div
+                                    key={idNum}
+                                    className="inline-flex items-center gap-2 px-2 py-1 rounded-full border bg-muted/20"
+                                  >
+                                    <span className="text-xs font-medium">
+                                      {prod?.name ?? idNum}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="text-muted-foreground hover:text-red-500"
+                                      onClick={() => {
+                                        form.setValue(
+                                          "applicableProductIds",
+                                          selectedProductIds.filter(
+                                            (x) => x !== idNum,
+                                          ),
+                                          { shouldDirty: true, shouldValidate: true },
+                                        );
+                                      }}
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-xl border p-4">
+                <h4 className="text-sm font-bold text-foreground">Expiry</h4>
+
+                <RadioGroup
+                  value={durationPreset}
+                  onValueChange={(v) => {
+                    form.setValue("durationPreset", v as any, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    });
+                    if (v !== "custom") form.setValue("customExpiresAt", null, { shouldDirty: true });
+                  }}
+                  className="flex flex-col gap-2"
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="none" id="dur-none" />
+                    <Label htmlFor="dur-none">No expiry</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="1day" id="dur-1day" />
+                    <Label htmlFor="dur-1day">1 Day</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="1week" id="dur-1week" />
+                    <Label htmlFor="dur-1week">1 Week</Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value="custom" id="dur-custom" />
+                    <Label htmlFor="dur-custom">Custom date</Label>
+                  </div>
+                </RadioGroup>
+
+                {durationPreset === "custom" && (
+                  <FormField
+                    control={form.control}
+                    name="customExpiresAt"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Custom expiry date/time</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            value={customExpiresAt ?? ""}
+                            onChange={(e) =>
+                              form.setValue(
+                                "customExpiresAt",
+                                e.target.value ? e.target.value : null,
+                                { shouldDirty: true, shouldValidate: true },
+                              )
+                            }
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                <p className="text-[12px] text-muted-foreground pt-1">
+                  {expiryPreview.label}
+                </p>
+              </div>
+
               <div className="flex justify-end gap-3 rounded-none">
                 <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
                   Cancel

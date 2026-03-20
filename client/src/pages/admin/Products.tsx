@@ -35,6 +35,7 @@ import {
   createCategory,
   updateCategory,
   deleteCategory,
+  bulkCategorizeProducts,
 } from "@/lib/adminApi";
 import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
 import { compressImage } from "@/lib/imageUtils";
@@ -122,6 +123,12 @@ const productSchema = z.object({
 
 type ProductFormValues = z.infer<typeof productSchema>;
 
+type PendingGalleryImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 export default function AdminProducts() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -134,6 +141,11 @@ export default function AdminProducts() {
   const [attrSheetOpen, setAttrSheetOpen] = useState(false);
   const [mediaLibraryOpen, setMediaLibraryOpen] = useState(false);
   const [mediaLibraryTarget, setMediaLibraryTarget] = useState<'add-main' | 'add-gallery' | 'edit-main' | 'edit-gallery' | null>(null);
+  const [moveCategoryOpen, setMoveCategoryOpen] = useState(false);
+  const [moveSelectionIds, setMoveSelectionIds] = useState<Set<string>>(new Set());
+  const [moveMode, setMoveMode] = useState<"existing" | "new">("existing");
+  const [moveExistingSlug, setMoveExistingSlug] = useState<string>("");
+  const [moveNewCategoryName, setMoveNewCategoryName] = useState<string>("");
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -154,6 +166,14 @@ export default function AdminProducts() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const [galleryTarget, setGalleryTarget] = useState<"add" | "edit" | null>(null);
+  const [addPendingGalleryImages, setAddPendingGalleryImages] = useState<PendingGalleryImage[]>([]);
+  const [editPendingGalleryImages, setEditPendingGalleryImages] = useState<PendingGalleryImage[]>([]);
+  const [galleryUploadStatus, setGalleryUploadStatus] = useState<{
+    mode: "add" | "edit";
+    completed: number;
+    total: number;
+  } | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -276,10 +296,46 @@ export default function AdminProducts() {
 
   const addMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
-      const galleryUrls = values.galleryUrlsText
+      const existingGalleryUrls = values.galleryUrlsText
         ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
         : [];
       const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
+
+      let uploadedUrls: string[] = [];
+      let failedCount = 0;
+
+      if (addPendingGalleryImages.length) {
+        const files = addPendingGalleryImages.map((p) => p.file);
+        const total = files.length;
+        let completed = 0;
+
+        setGalleryUploadStatus({ mode: "add", completed, total });
+
+        for (let i = 0; i < files.length; i += 3) {
+          const batch = files.slice(i, i + 3);
+          const results = await Promise.allSettled(
+            batch.map(async (file) => {
+              const dataUrl = await compressImage(file);
+              return uploadProductImage(dataUrl);
+            }),
+          );
+
+          results.forEach((result) => {
+            completed += 1;
+            if (result.status === "fulfilled") {
+              uploadedUrls.push(result.value);
+            } else {
+              failedCount += 1;
+            }
+            setGalleryUploadStatus({ mode: "add", completed, total });
+          });
+        }
+
+        setGalleryUploadStatus(null);
+      }
+
+      const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
+
       return createAdminProduct({
         name: values.name,
         shortDetails: values.shortDetails || undefined,
@@ -315,6 +371,7 @@ export default function AdminProducts() {
         salePercentage: 0,
         saleActive: false,
       });
+      setAddPendingGalleryImages([]);
     },
     onError: () => {
       toast({ title: "Failed to add product" });
@@ -324,10 +381,46 @@ export default function AdminProducts() {
   const editMutation = useMutation({
     mutationFn: async (values: ProductFormValues) => {
       if (!editProduct) throw new Error("No product selected");
-      const galleryUrls = values.galleryUrlsText
+      const existingGalleryUrls = values.galleryUrlsText
         ? values.galleryUrlsText.split(/\n/).map((u) => u.trim()).filter(Boolean)
         : [];
       const stock = values.stockStatus === "out_of_stock" ? 0 : values.stock;
+
+      let uploadedUrls: string[] = [];
+      let failedCount = 0;
+
+      if (editPendingGalleryImages.length) {
+        const files = editPendingGalleryImages.map((p) => p.file);
+        const total = files.length;
+        let completed = 0;
+
+        setGalleryUploadStatus({ mode: "edit", completed, total });
+
+        for (let i = 0; i < files.length; i += 3) {
+          const batch = files.slice(i, i + 3);
+          const results = await Promise.allSettled(
+            batch.map(async (file) => {
+              const dataUrl = await compressImage(file);
+              return uploadProductImage(dataUrl);
+            }),
+          );
+
+          results.forEach((result) => {
+            completed += 1;
+            if (result.status === "fulfilled") {
+              uploadedUrls.push(result.value);
+            } else {
+              failedCount += 1;
+            }
+            setGalleryUploadStatus({ mode: "edit", completed, total });
+          });
+        }
+
+        setGalleryUploadStatus(null);
+      }
+
+      const galleryUrls = [...existingGalleryUrls, ...uploadedUrls];
+
       return updateAdminProduct(editProduct.id, {
         name: values.name,
         shortDetails: values.shortDetails || undefined,
@@ -348,6 +441,7 @@ export default function AdminProducts() {
       toast({ title: "Product updated" });
       setEditOpen(false);
       setEditProduct(null);
+      setEditPendingGalleryImages([]);
     },
     onError: () => {
       toast({ title: "Failed to update product" });
@@ -437,6 +531,26 @@ export default function AdminProducts() {
       return matchesCategory;
     });
   }, [products, categoryFilter]);
+
+  const selectedProductsForMove = useMemo(
+    () => filteredProducts.filter(p => moveSelectionIds.has(p.id)),
+    [filteredProducts, moveSelectionIds],
+  );
+
+  const handleOpenMoveDialog = () => {
+    if (selectedProductIds.size === 0) return;
+    const nextIds = new Set(selectedProductIds);
+    setMoveSelectionIds(nextIds);
+    setMoveMode("existing");
+    setMoveExistingSlug(categoryFilter !== "all" ? categoryFilter : (categories[0]?.slug ?? ""));
+    setMoveNewCategoryName("");
+    setMoveCategoryOpen(true);
+  };
+
+  const clearSelection = () => {
+    setSelectedProductIds(new Set());
+    setMoveSelectionIds(new Set());
+  };
 
   const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
     if (typeof window !== 'undefined') {
@@ -867,7 +981,10 @@ export default function AdminProducts() {
                           type="button" 
                           variant="outline" 
                           className="flex-1 border-dashed text-xs h-9"
-                          onClick={() => galleryInputRef.current?.click()}
+                          onClick={() => {
+                            setGalleryTarget("add");
+                            galleryInputRef.current?.click();
+                          }}
                           disabled={uploadingImage}
                         >
                           <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
@@ -892,7 +1009,27 @@ export default function AdminProducts() {
                                </button>
                             </div>
                           ))}
+                          {addPendingGalleryImages.map((img) => (
+                            <div key={img.id} className="aspect-square bg-muted rounded-sm border border-[#E5E5E0] overflow-hidden relative group">
+                              <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  setAddPendingGalleryImages((prev) => prev.filter((p) => p.id !== img.id));
+                                  URL.revokeObjectURL(img.previewUrl);
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
+                      )}
+                      {galleryUploadStatus && galleryUploadStatus.mode === "add" && (
+                        <p className="text-[11px] text-muted-foreground pt-1">
+                          Uploading {galleryUploadStatus.completed}/{galleryUploadStatus.total}...
+                        </p>
                       )}
                     </div>
                   </div>
@@ -934,9 +1071,23 @@ export default function AdminProducts() {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Colors</p>
-                          <Link href="/admin/attributes" className="text-[10px] text-primary hover:underline font-medium">Manage</Link>
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline font-medium"
+                            onClick={() => {
+                              const current = addForm.getValues("colorOptions") || [];
+                              if (!current.length && dynamicColors.length) {
+                                addForm.setValue("colorOptions", [dynamicColors[0]], {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                              }
+                            }}
+                          >
+                            Manage
+                          </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicColors.map((c) => {
                             const [name, hex] = c.split("|");
                             const selectedColors = addForm.watch("colorOptions") || [];
@@ -946,10 +1097,13 @@ export default function AdminProducts() {
                                 key={c}
                                 type="button"
                                 onClick={() => {
-                                  const next = isSelected 
-                                    ? selectedColors.filter(x => x !== c)
+                                  const next = isSelected
+                                    ? selectedColors.filter((x) => x !== c)
                                     : [...selectedColors, c];
-                                  addForm.setValue("colorOptions", next, { shouldValidate: true, shouldDirty: true });
+                                  addForm.setValue("colorOptions", next, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
                                 }}
                                 className={`flex items-center gap-2 px-3 py-1.5 border text-[11px] font-bold transition-all rounded-full ${
                                   isSelected
@@ -957,24 +1111,82 @@ export default function AdminProducts() {
                                     : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                <div 
-                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm" 
-                                  style={{ backgroundColor: hex || '#ccc' }}
+                                <div
+                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm"
+                                  style={{ backgroundColor: hex || "#ccc" }}
                                 />
                                 {name}
                               </button>
                             );
                           })}
                         </div>
+                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
+                            Product Colors
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(addForm.watch("colorOptions") || []).map((c) => {
+                              const [name, hex] = c.split("|");
+                              return (
+                                <div
+                                  key={c}
+                                  className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
+                                >
+                                  <span
+                                    className="w-3 h-3 rounded-full border border-black/10"
+                                    style={{ backgroundColor: hex || "#ccc" }}
+                                  />
+                                  <span>{name}</span>
+                                  <button
+                                    type="button"
+                                    className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
+                                    onClick={() => {
+                                      const current = addForm.getValues("colorOptions") || [];
+                                      addForm.setValue(
+                                        "colorOptions",
+                                        current.filter((x) => x !== c),
+                                        { shouldValidate: true, shouldDirty: true },
+                                      );
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {(!addForm.watch("colorOptions") ||
+                              addForm.watch("colorOptions")!.length === 0) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                No colors added for this product yet.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Interactive Sizes */}
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Sizes</p>
-                          <Link href="/admin/attributes" className="text-[10px] text-primary hover:underline font-medium">Manage</Link>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">
+                            Sizes
+                          </p>
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline font-medium"
+                            onClick={() => {
+                              const current = addForm.getValues("sizeOptions") || [];
+                              if (!current.length && dynamicSizes.length) {
+                                addForm.setValue("sizeOptions", [dynamicSizes[0]], {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                              }
+                            }}
+                          >
+                            Manage
+                          </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicSizes.map((s) => {
                             const selectedSizes = addForm.watch("sizeOptions") || [];
                             const isSelected = selectedSizes.includes(s);
@@ -983,10 +1195,13 @@ export default function AdminProducts() {
                                 key={s}
                                 type="button"
                                 onClick={() => {
-                                  const next = isSelected 
-                                    ? selectedSizes.filter(x => x !== s)
+                                  const next = isSelected
+                                    ? selectedSizes.filter((x) => x !== s)
                                     : [...selectedSizes, s];
-                                  addForm.setValue("sizeOptions", next, { shouldValidate: true, shouldDirty: true });
+                                  addForm.setValue("sizeOptions", next, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
                                 }}
                                 className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
                                   isSelected
@@ -998,6 +1213,41 @@ export default function AdminProducts() {
                               </button>
                             );
                           })}
+                        </div>
+                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
+                            Product Sizes
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(addForm.watch("sizeOptions") || []).map((s) => (
+                              <div
+                                key={s}
+                                className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
+                              >
+                                <span>{s}</span>
+                                <button
+                                  type="button"
+                                  className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
+                                  onClick={() => {
+                                    const current = addForm.getValues("sizeOptions") || [];
+                                    addForm.setValue(
+                                      "sizeOptions",
+                                      current.filter((x) => x !== s),
+                                      { shouldValidate: true, shouldDirty: true },
+                                    );
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            {(!addForm.watch("sizeOptions") ||
+                              addForm.watch("sizeOptions")!.length === 0) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                No sizes added for this product yet.
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1035,6 +1285,35 @@ export default function AdminProducts() {
             const next = current ? `${current}\n${url}` : url;
             editForm.setValue("galleryUrlsText", next, { shouldValidate: true, shouldDirty: true });
           }
+        }}
+      />
+
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (!files.length || !galleryTarget) {
+            e.target.value = "";
+            return;
+          }
+
+          const mapped: PendingGalleryImage[] = files.map((file) => ({
+            id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+            file,
+            previewUrl: URL.createObjectURL(file),
+          }));
+
+          if (galleryTarget === "add") {
+            setAddPendingGalleryImages((prev) => [...prev, ...mapped]);
+          } else if (galleryTarget === "edit") {
+            setEditPendingGalleryImages((prev) => [...prev, ...mapped]);
+          }
+
+          e.target.value = "";
         }}
       />
 
@@ -1458,6 +1737,214 @@ export default function AdminProducts() {
         )}
       </AnimatePresence>
 
+      {/* Floating selection bar */}
+      <AnimatePresence>
+        {selectedProductIds.size > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-x-0 bottom-4 z-40 px-4 sm:px-6 pointer-events-none"
+          >
+            <div className="max-w-5xl mx-auto pointer-events-auto bg-background/95 dark:bg-neutral-900/95 border border-border shadow-xl rounded-2xl px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">
+                <Checkbox
+                  checked={true}
+                  onCheckedChange={() => clearSelection()}
+                  className="mr-1"
+                />
+                <span>{selectedProductIds.size} products selected</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em]"
+                  onClick={clearSelection}
+                >
+                  Clear Selection
+                </Button>
+                <Button
+                  size="sm"
+                  className="text-[10px] sm:text-xs font-black uppercase tracking-[0.25em]"
+                  onClick={handleOpenMoveDialog}
+                >
+                  Move to Category
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Move to Category Dialog */}
+      <Dialog open={moveCategoryOpen} onOpenChange={setMoveCategoryOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg font-black tracking-[0.2em] uppercase">
+              Move to Category
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-3 space-y-4 max-h-[420px] overflow-y-auto pr-1">
+            {selectedProductsForMove.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                No products selected. Close this dialog and select products first.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-[0.25em] text-muted-foreground font-bold">
+                  {selectedProductsForMove.length} products
+                </p>
+                <div className="space-y-2">
+                  {selectedProductsForMove.map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex items-center gap-3 border border-border rounded-xl px-3 py-2 bg-card/60"
+                    >
+                      <img
+                        src={product.imageUrl ?? ""}
+                        alt={product.name}
+                        className="w-10 h-10 rounded-md object-cover bg-muted border border-border/50"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{product.name}</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em]">
+                          {product.category || "General"}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          const nextIds = new Set(moveSelectionIds);
+                          nextIds.delete(product.id);
+                          setMoveSelectionIds(nextIds);
+                          const nextSelected = new Set(selectedProductIds);
+                          nextSelected.delete(product.id);
+                          setSelectedProductIds(nextSelected);
+                        }}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="border-t border-border pt-4 space-y-4">
+              <RadioGroup
+                value={moveMode}
+                onValueChange={(v) => setMoveMode(v as "existing" | "new")}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-start gap-3">
+                  <RadioGroupItem value="existing" id="move-existing" className="mt-1" />
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="move-existing" className="text-xs font-bold uppercase tracking-[0.25em]">
+                      Move to existing category
+                    </Label>
+                    <Select
+                      value={moveExistingSlug}
+                      onValueChange={setMoveExistingSlug}
+                      disabled={moveMode !== "existing" || categories.length === 0}
+                    >
+                      <SelectTrigger className="h-9 w-full max-w-xs text-xs">
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.slug}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <RadioGroupItem value="new" id="move-new" className="mt-1" />
+                  <div className="flex-1 space-y-2">
+                    <Label htmlFor="move-new" className="text-xs font-bold uppercase tracking-[0.25em]">
+                      Create new category &amp; move
+                    </Label>
+                    <Input
+                      value={moveNewCategoryName}
+                      onChange={(e) => setMoveNewCategoryName(e.target.value)}
+                      placeholder="New category name"
+                      disabled={moveMode !== "new"}
+                      className="h-9 max-w-xs text-xs"
+                    />
+                  </div>
+                </div>
+              </RadioGroup>
+            </div>
+          </div>
+          <DialogFooter className="mt-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setMoveCategoryOpen(false)}
+              className="order-2 sm:order-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="order-1 sm:order-2"
+              disabled={
+                selectedProductsForMove.length === 0 ||
+                (moveMode === "existing" && !moveExistingSlug) ||
+                (moveMode === "new" && !moveNewCategoryName.trim())
+              }
+              onClick={async () => {
+                const ids = selectedProductsForMove.map((p) => p.id);
+                if (ids.length === 0) return;
+                try {
+                  let targetSlug = moveExistingSlug;
+                  let targetName = "";
+                  if (moveMode === "existing") {
+                    const target = categories.find((c) => c.slug === moveExistingSlug);
+                    targetName = target?.name ?? moveExistingSlug;
+                  } else {
+                    const name = moveNewCategoryName.trim();
+                    const slug = slugify(name);
+                    const created = await createCategoryMutation.mutateAsync({ name, slug });
+                    targetSlug = created.slug;
+                    targetName = created.name;
+                  }
+
+                  await bulkCategorizeProducts({
+                    productIds: ids,
+                    categorySlug: targetSlug,
+                  });
+
+                  queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                  toast({
+                    title: `Moved ${ids.length} products`,
+                    description: targetName ? `Moved to "${targetName}".` : undefined,
+                  });
+                  clearSelection();
+                  setMoveCategoryOpen(false);
+                } catch (err: any) {
+                  toast({
+                    title: "Failed to move products",
+                    description: err?.message ?? "Please try again.",
+                    variant: "destructive",
+                  });
+                }
+              }}
+            >
+              Confirm Move
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Full-page Edit Product overlay */}
       {editOpen && editProduct && (
         <div className="fixed inset-0 z-50 bg-background overflow-auto">
@@ -1826,7 +2313,10 @@ export default function AdminProducts() {
                           type="button" 
                           variant="outline" 
                           className="flex-1 border-dashed text-xs h-9"
-                          onClick={() => galleryInputRef.current?.click()}
+                          onClick={() => {
+                            setGalleryTarget("edit");
+                            galleryInputRef.current?.click();
+                          }}
                           disabled={uploadingImage}
                         >
                           <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
@@ -1851,7 +2341,27 @@ export default function AdminProducts() {
                                </button>
                             </div>
                           ))}
+                          {editPendingGalleryImages.map((img) => (
+                            <div key={img.id} className="aspect-square bg-muted rounded-sm border border-[#E5E5E0] overflow-hidden relative group">
+                              <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  setEditPendingGalleryImages((prev) => prev.filter((p) => p.id !== img.id));
+                                  URL.revokeObjectURL(img.previewUrl);
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
+                      )}
+                      {galleryUploadStatus && galleryUploadStatus.mode === "edit" && (
+                        <p className="text-[11px] text-muted-foreground pt-1">
+                          Uploading {galleryUploadStatus.completed}/{galleryUploadStatus.total}...
+                        </p>
                       )}
                     </div>
                   </div>
@@ -1893,9 +2403,23 @@ export default function AdminProducts() {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Colors</p>
-                          <Link href="/admin/attributes" className="text-[10px] text-primary hover:underline font-medium">Manage</Link>
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline font-medium"
+                            onClick={() => {
+                              const current = editForm.getValues("colorOptions") || [];
+                              if (!current.length && dynamicColors.length) {
+                                editForm.setValue("colorOptions", [dynamicColors[0]], {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                              }
+                            }}
+                          >
+                            Manage
+                          </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicColors.map((c) => {
                             const [name, hex] = c.split("|");
                             const selectedColors = editForm.watch("colorOptions") || [];
@@ -1905,10 +2429,13 @@ export default function AdminProducts() {
                                 key={c}
                                 type="button"
                                 onClick={() => {
-                                  const next = isSelected 
-                                    ? selectedColors.filter(x => x !== c)
+                                  const next = isSelected
+                                    ? selectedColors.filter((x) => x !== c)
                                     : [...selectedColors, c];
-                                  editForm.setValue("colorOptions", next, { shouldValidate: true, shouldDirty: true });
+                                  editForm.setValue("colorOptions", next, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
                                 }}
                                 className={`flex items-center gap-2 px-3 py-1.5 border text-[11px] font-bold transition-all rounded-full ${
                                   isSelected
@@ -1916,24 +2443,82 @@ export default function AdminProducts() {
                                     : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                <div 
-                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm" 
-                                  style={{ backgroundColor: hex || '#ccc' }}
+                                <div
+                                  className="w-3 h-3 rounded-full border border-black/10 shadow-sm"
+                                  style={{ backgroundColor: hex || "#ccc" }}
                                 />
                                 {name}
                               </button>
                             );
                           })}
                         </div>
+                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
+                            Product Colors
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(editForm.watch("colorOptions") || []).map((c) => {
+                              const [name, hex] = c.split("|");
+                              return (
+                                <div
+                                  key={c}
+                                  className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
+                                >
+                                  <span
+                                    className="w-3 h-3 rounded-full border border-black/10"
+                                    style={{ backgroundColor: hex || "#ccc" }}
+                                  />
+                                  <span>{name}</span>
+                                  <button
+                                    type="button"
+                                    className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
+                                    onClick={() => {
+                                      const current = editForm.getValues("colorOptions") || [];
+                                      editForm.setValue(
+                                        "colorOptions",
+                                        current.filter((x) => x !== c),
+                                        { shouldValidate: true, shouldDirty: true },
+                                      );
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              );
+                            })}
+                            {(!editForm.watch("colorOptions") ||
+                              editForm.watch("colorOptions")!.length === 0) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                No colors added for this product yet.
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {/* Interactive Sizes */}
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Sizes</p>
-                          <Link href="/admin/attributes" className="text-[10px] text-primary hover:underline font-medium">Manage</Link>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">
+                            Sizes
+                          </p>
+                          <button
+                            type="button"
+                            className="text-[10px] text-primary hover:underline font-medium"
+                            onClick={() => {
+                              const current = editForm.getValues("sizeOptions") || [];
+                              if (!current.length && dynamicSizes.length) {
+                                editForm.setValue("sizeOptions", [dynamicSizes[0]], {
+                                  shouldValidate: true,
+                                  shouldDirty: true,
+                                });
+                              }
+                            }}
+                          >
+                            Manage
+                          </button>
                         </div>
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicSizes.map((s) => {
                             const selectedSizes = editForm.watch("sizeOptions") || [];
                             const isSelected = selectedSizes.includes(s);
@@ -1942,10 +2527,13 @@ export default function AdminProducts() {
                                 key={s}
                                 type="button"
                                 onClick={() => {
-                                  const next = isSelected 
-                                    ? selectedSizes.filter(x => x !== s)
+                                  const next = isSelected
+                                    ? selectedSizes.filter((x) => x !== s)
                                     : [...selectedSizes, s];
-                                  editForm.setValue("sizeOptions", next, { shouldValidate: true, shouldDirty: true });
+                                  editForm.setValue("sizeOptions", next, {
+                                    shouldValidate: true,
+                                    shouldDirty: true,
+                                  });
                                 }}
                                 className={`h-11 w-11 flex items-center justify-center border text-[11px] font-black tracking-tighter transition-all rounded-xl ${
                                   isSelected
@@ -1957,6 +2545,41 @@ export default function AdminProducts() {
                               </button>
                             );
                           })}
+                        </div>
+                        <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
+                            Product Sizes
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {(editForm.watch("sizeOptions") || []).map((s) => (
+                              <div
+                                key={s}
+                                className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
+                              >
+                                <span>{s}</span>
+                                <button
+                                  type="button"
+                                  className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
+                                  onClick={() => {
+                                    const current = editForm.getValues("sizeOptions") || [];
+                                    editForm.setValue(
+                                      "sizeOptions",
+                                      current.filter((x) => x !== s),
+                                      { shouldValidate: true, shouldDirty: true },
+                                    );
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            {(!editForm.watch("sizeOptions") ||
+                              editForm.watch("sizeOptions")!.length === 0) && (
+                              <p className="text-[11px] text-muted-foreground">
+                                No sizes added for this product yet.
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
 

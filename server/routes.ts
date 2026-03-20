@@ -40,6 +40,7 @@ import {
     sendOrderConfirmationEmail,
     sendOrderStatusUpdateEmail,
     sendOTPEmail,
+    sendStoreUserWelcomeEmail,
 } from "./email";
 import { getQueryParam, handleApiError, sendError } from "./errorHandler";
 import { requireAdmin } from "./middleware/requireAdmin";
@@ -56,7 +57,8 @@ const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 },
+  // Max 5MB per image as required
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (
     _req: Request,
     file: Express.Multer.File,
@@ -681,11 +683,24 @@ export async function registerRoutes(
           .limit(1);
 
         const now = new Date();
+        const cartProductIds = new Set(
+          items
+            .map((it) => Number(it.productId))
+            .filter((n) => Number.isFinite(n)),
+        );
+
+        const matchesApplicableProducts =
+          promo?.applicableProductIds == null
+            ? true
+          : promo.applicableProductIds.some((pid: number) =>
+                cartProductIds.has(pid),
+              );
         if (
           promo &&
           promo.active &&
           (!promo.expiresAt || new Date(promo.expiresAt) >= now) &&
-          promo.usedCount < promo.maxUses
+          promo.usedCount < promo.maxUses &&
+          matchesApplicableProducts
         ) {
           promoCode = promo.code;
           promoDiscountAmount = Math.round(
@@ -1443,6 +1458,43 @@ export async function registerRoutes(
     },
   );
 
+  // Bulk categorize products
+  app.patch(
+    "/api/admin/products/bulk-categorize",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const schema = z.object({
+          productIds: z.array(z.string().min(1)).min(1),
+          categorySlug: z.string().min(1),
+        });
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res
+            .status(400)
+            .json({ success: false, error: "Invalid payload" });
+        }
+
+        const { productIds, categorySlug } = parsed.data;
+
+        const result = await db
+          .update(products)
+          .set({ category: categorySlug })
+          .where(inArray(products.id, productIds));
+
+        return res.json({
+          success: true,
+          updated: result.rowCount ?? productIds.length,
+        });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/products/bulk-categorize", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to move products" });
+      }
+    },
+  );
+
   app.post(
     "/api/admin/products",
     requireAdmin,
@@ -1970,6 +2022,140 @@ export async function registerRoutes(
     },
   );
 
+  // ── Store Users (team members) ─────────────────────────────
+  const storeUserRoleEnum = z.enum(["owner", "manager", "csr", "admin", "staff"]);
+
+  const createStoreUserSchema = z.object({
+    name: z.string().min(1).max(100),
+    email: z.string().email(),
+    password: z.string().min(6),
+    role: storeUserRoleEnum,
+  });
+
+  app.get(
+    "/api/admin/store-users",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const users = await storage.getStoreUsers();
+        return res.json({ success: true, data: users });
+      } catch (err) {
+        console.error("Error in GET /api/admin/store-users", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load store users" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/store-users",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const parsed = createStoreUserSchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid request body" });
+        }
+
+        const { name, email, password, role } = parsed.data;
+
+        const existing = await storage.getUserByEmail(email);
+        if (existing) {
+          return res.status(400).json({ success: false, error: "Email already in use" });
+        }
+
+        const bcrypt = await import("bcryptjs");
+        const hashed = await bcrypt.default.hash(password, 10);
+
+        const created = await storage.createStoreUser({
+          name,
+          email,
+          role,
+          passwordHash: hashed,
+        });
+
+        // Fire-and-forget welcome email via SMTP/Brevo
+        const inviter = req.user as Express.User | undefined;
+        sendStoreUserWelcomeEmail(
+          email,
+          name,
+          password,
+          inviter?.name || inviter?.email || "Admin",
+        ).catch((e) => {
+          console.error("Failed to send store user welcome email:", e);
+        });
+
+        return res.status(201).json({ success: true, data: created });
+      } catch (err) {
+        console.error("Error in POST /api/admin/store-users", err);
+        return res.status(500).json({ success: false, error: "Failed to create store user" });
+      }
+    },
+  );
+
+  const updateStoreUserSchema = z
+    .object({
+      role: storeUserRoleEnum.optional(),
+      email_notifications: z.boolean().optional(),
+    })
+    .refine((v) => v.role !== undefined || v.email_notifications !== undefined, {
+      message: "No update fields provided",
+    });
+
+  app.patch(
+    "/api/admin/store-users/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).json({ success: false, error: "Invalid ID" });
+      }
+
+      const parsed = updateStoreUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid request body" });
+      }
+
+      try {
+        const { role, email_notifications } = parsed.data;
+        const updated = await storage.updateStoreUser(id, {
+          role,
+          emailNotifications: email_notifications,
+        });
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/store-users/:id", err);
+        return res.status(500).json({ success: false, error: "Failed to update store user" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/store-users/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).json({ success: false, error: "Invalid ID" });
+      }
+
+      const actor = req.user as Express.User | undefined;
+      if (actor && actor.id === id) {
+        return res.status(400).json({ success: false, error: "Cannot delete yourself" });
+      }
+
+      try {
+        await storage.deleteUser(id);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/store-users/:id", err);
+        return res.status(500).json({ success: false, error: "Failed to delete store user" });
+      }
+    },
+  );
+
   const updatePasswordSchema = z.object({
     current: z.string().min(1),
     newPassword: z.string().min(8),
@@ -2261,7 +2447,7 @@ export async function registerRoutes(
   const inviteUserSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    role: z.enum(["admin", "staff"]),
+    role: z.enum(["owner", "manager", "csr", "admin", "staff"]),
   });
 
   app.post(
@@ -2331,6 +2517,26 @@ export async function registerRoutes(
         return res
           .status(404)
           .json({ success: false, error: "Customer not found" });
+      }
+    },
+  );
+
+  // Unified order history for a customer (online orders + POS bills)
+  app.get(
+    "/api/admin/customers/:id/orders",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      const { id } = req.params;
+      if (typeof id !== "string") {
+        return res.status(400).json({ success: false, error: "Invalid ID" });
+      }
+
+      try {
+        const orders = await storage.getCustomerOrders(id);
+        return res.json({ success: true, data: orders });
+      } catch (err) {
+        console.error("Error in GET /api/admin/customers/:id/orders", err);
+        return res.status(404).json({ success: false, error: "Customer not found" });
       }
     },
   );
@@ -2569,18 +2775,53 @@ export async function registerRoutes(
     requireAdmin,
     async (req: Request, res: Response) => {
       try {
-        const { subject, html } = req.body;
+        const { subject, html, selectedEmails, sendToAll } = req.body as {
+          subject?: string;
+          html?: string;
+          selectedEmails?: string[];
+          sendToAll?: boolean;
+        };
+
         if (!subject || !html) {
-          return res.status(400).json({ success: false, error: "Missing subject or html" });
+          return res
+            .status(400)
+            .json({ success: false, error: "Missing subject or html" });
         }
 
-        const subscribers = await db.select().from(newsletterSubscribers);
-        if (!subscribers.length) {
-          return res.status(400).json({ success: false, error: "No subscribers found" });
+        let targetEmails: string[] = [];
+
+        if (sendToAll) {
+          const subscribers = await db.select().from(newsletterSubscribers);
+          if (!subscribers.length) {
+            return res
+              .status(400)
+              .json({ success: false, error: "No subscribers found" });
+          }
+          targetEmails = subscribers.map((s) => s.email);
+        } else if (Array.isArray(selectedEmails)) {
+          if (selectedEmails.length === 0) {
+            return res.status(400).json({
+              success: false,
+              error: "No recipients selected",
+            });
+          }
+          // Only send to the explicit selection
+          targetEmails = selectedEmails;
+        } else {
+          // No explicit selection and no sendToAll flag: treat as invalid
+          return res.status(400).json({
+            success: false,
+            error:
+              "Invalid broadcast request. Provide selectedEmails or set sendToAll: true.",
+          });
         }
 
-        const bccList = subscribers.map((s) => s.email);
-        const result = await sendMarketingBroadcastEmail(bccList, subject, html);
+        const result = await sendMarketingBroadcastEmail(
+          targetEmails,
+          subject,
+          html,
+        );
+
         if (result.failed > 0) {
           return res.status(502).json({
             success: false,
@@ -2591,7 +2832,11 @@ export async function registerRoutes(
           });
         }
 
-        return res.json({ success: true, count: result.sent });
+        return res.json({
+          success: true,
+          sent: result.sent,
+          failed: result.failed ?? 0,
+        });
       } catch (err) {
         console.error("Error in POST /api/admin/marketing/broadcast", err);
         return res
@@ -3175,29 +3420,166 @@ export async function registerRoutes(
     }
   });
 
+  const adminPromoCodeUpsertSchema = z.object({
+    code: z.string().min(3).max(50),
+    // Backwards compatible inputs
+    discountPct: z.coerce.number().int().min(1).max(100).optional(),
+    discount: z.coerce.number().int().min(1).max(100).optional(),
+    type: z.string().optional(),
+    maxUses: z.coerce.number().int().min(1).optional(),
+    active: z.boolean().optional(),
+    applicableProductIds: z.array(z.coerce.number().int()).optional().nullable(),
+    expiresAt: z.string().optional().nullable(),
+    durationPreset: z.string().optional().nullable(), // 'none' | '1day' | '1week' | 'custom'
+  });
+
+  function computePromoExpiry(input: { expiresAt?: string | null; durationPreset?: string | null }) {
+    const now = new Date();
+
+    const preset = input.durationPreset ?? null;
+    if (!preset || preset === "none") return { expiresAt: null as Date | null, durationPreset: null as string | null };
+
+    if (preset === "1day") {
+      return {
+        expiresAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+        durationPreset: preset,
+      };
+    }
+
+    if (preset === "1week") {
+      return {
+        expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000),
+        durationPreset: preset,
+      };
+    }
+
+    if (preset === "custom") {
+      if (!input.expiresAt) throw new Error("Custom expiry requires expiresAt");
+      return {
+        expiresAt: new Date(input.expiresAt),
+        durationPreset: preset,
+      };
+    }
+
+    // Unknown preset: fall back to explicit expiresAt if provided
+    if (input.expiresAt) {
+      return {
+        expiresAt: new Date(input.expiresAt),
+        durationPreset: "custom",
+      };
+    }
+
+    return { expiresAt: null as Date | null, durationPreset: null as string | null };
+  }
+
   app.post("/api/admin/promo-codes", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const { code, discountPct, maxUses, expiresAt } = req.body;
+      const parsed = adminPromoCodeUpsertSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, error: "Invalid promo code payload" });
+      }
+
+      const {
+        code,
+        discountPct,
+        discount,
+        maxUses,
+        active,
+        applicableProductIds,
+        expiresAt,
+        durationPreset,
+      } = parsed.data;
+
+      const resolvedDiscountPct = discountPct ?? discount;
+      if (!resolvedDiscountPct || resolvedDiscountPct < 1) {
+        return res.status(400).json({ success: false, error: "Discount is required" });
+      }
+
+      const { expiresAt: resolvedExpiresAt, durationPreset: resolvedDurationPreset } = computePromoExpiry({
+        expiresAt,
+        durationPreset,
+      });
+
+      const resolvedApplicableProductIds =
+        applicableProductIds && applicableProductIds.length > 0 ? applicableProductIds : null;
+
       const item = await storage.createPromoCode({
         code: code.toUpperCase(),
-        discountPct,
-        maxUses,
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        discountPct: resolvedDiscountPct,
+        ...(typeof maxUses === "number" ? { maxUses } : {}),
+        ...(typeof active === "boolean" ? { active } : {}),
+        expiresAt: resolvedExpiresAt,
+        applicableProductIds: resolvedApplicableProductIds,
+        durationPreset: resolvedDurationPreset,
       });
+
       res.status(201).json({ success: true, data: item });
     } catch (err) {
       handleApiError(res, err, "POST /api/admin/promo-codes");
     }
   });
 
+  async function updatePromoCodeById(id: string, payload: unknown, res: Response) {
+    const parsed = adminPromoCodeUpsertSchema.safeParse(payload);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, error: "Invalid promo code payload" });
+    }
+
+    const {
+      code,
+      discountPct,
+      discount,
+      maxUses,
+      active,
+      applicableProductIds,
+      expiresAt,
+      durationPreset,
+    } = parsed.data;
+
+    const resolvedDiscountPct = discountPct ?? discount;
+    if (!resolvedDiscountPct || resolvedDiscountPct < 1) {
+      return res.status(400).json({ success: false, error: "Discount is required" });
+    }
+
+    const { expiresAt: resolvedExpiresAt, durationPreset: resolvedDurationPreset } = computePromoExpiry({
+      expiresAt,
+      durationPreset,
+    });
+
+    const resolvedApplicableProductIds =
+      applicableProductIds && applicableProductIds.length > 0 ? applicableProductIds : null;
+
+    const updated = await storage.updatePromoCode(id, {
+      code: code.toUpperCase(),
+      discountPct: resolvedDiscountPct,
+      ...(typeof maxUses === "number" ? { maxUses } : {}),
+      ...(typeof active === "boolean" ? { active } : {}),
+      expiresAt: resolvedExpiresAt,
+      applicableProductIds: resolvedApplicableProductIds,
+      durationPreset: resolvedDurationPreset,
+    });
+
+    return res.json({ success: true, data: updated });
+  }
+
   app.put("/api/admin/promo-codes/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const id = getQueryParam(req.params.id);
       if (!id) return sendError(res, "Invalid ID", undefined, 400);
-      const updated = await storage.updatePromoCode(id, req.body);
-      res.json({ success: true, data: updated });
+      return updatePromoCodeById(id, req.body, res);
     } catch (err) {
       handleApiError(res, err, "PUT /api/admin/promo-codes/:id");
+    }
+  });
+
+  // Alias for spec compatibility
+  app.patch("/api/admin/promo-codes/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) return sendError(res, "Invalid ID", undefined, 400);
+      return updatePromoCodeById(id, req.body, res);
+    } catch (err) {
+      handleApiError(res, err, "PATCH /api/admin/promo-codes/:id");
     }
   });
 
@@ -3229,6 +3611,74 @@ export async function registerRoutes(
       res.json({ success: true, data: promo });
     } catch (err) {
       handleApiError(res, err, "GET /api/promo-codes/validate");
+    }
+  });
+
+  // Checkout validation (used for product-restricted promo codes)
+  app.post("/api/promo/validate", async (req: Request, res: Response) => {
+    try {
+      const schema = z.object({
+        code: z.string().min(3).max(50),
+        items: z
+          .array(
+            z.object({
+              productId: z.union([z.coerce.number().int(), z.string().min(1)]),
+            }),
+          )
+          .min(1),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ valid: false, reason: "Invalid payload" });
+      }
+
+      const now = new Date();
+      const promo = await storage.getPromoCodeByCode(parsed.data.code);
+
+      if (!promo || !promo.active) {
+        return res.status(200).json({ valid: false, reason: "Invalid promo code" });
+      }
+
+      if (promo.expiresAt && new Date(promo.expiresAt) < now) {
+        return res.status(200).json({ valid: false, reason: "Promo code has expired" });
+      }
+
+      if (promo.usedCount >= promo.maxUses) {
+        return res.status(200).json({ valid: false, reason: "Promo code usage limit reached" });
+      }
+
+      if (promo.applicableProductIds) {
+        const cartProductIds = new Set(
+          parsed.data.items
+            .map((it) => Number(it.productId))
+            .filter((n) => Number.isFinite(n)),
+        );
+
+        const matches = promo.applicableProductIds.some((pid: number) =>
+          cartProductIds.has(pid),
+        );
+
+        if (!matches) {
+          return res
+            .status(200)
+            .json({
+              valid: false,
+              reason: "This promo code is not valid for items in your cart",
+            });
+        }
+      }
+
+      return res.status(200).json({
+        valid: true,
+        data: {
+          id: promo.id,
+          code: promo.code,
+          discountPct: promo.discountPct,
+        },
+      });
+    } catch (err) {
+      handleApiError(res, err, "POST /api/promo/validate");
     }
   });
 
@@ -3282,38 +3732,45 @@ export async function registerRoutes(
   app.post(
     "/api/admin/images/upload",
     requireAdmin,
-    memoryUpload.single("file"),
+    memoryUpload.array("images", 10),
     async (req: Request, res: Response) => {
       try {
         const category = String((req.body as any)?.category || "product");
         const provider = String((req.body as any)?.provider || "local");
 
-        const file = (req as any).file as Express.Multer.File | undefined;
-        if (!file) return sendError(res, "Missing file", undefined, 400);
-
-        if (provider === "local") {
-          const asset = await processAndStoreImage(
-            file.buffer,
-            category,
-            file.originalname || "image.jpg"
-          );
-          return res.json({ success: true, data: asset });
-        } else {
-          // Cloudinary path
-          const uploaded = await uploadMediaToCloudinary(file.buffer, category);
-          const [row] = await db
-            .insert(mediaAssets)
-            .values({
-              url: uploaded.url,
-              provider: "cloudinary",
-              category,
-              publicId: uploaded.publicId,
-              filename: file.originalname ?? null,
-              bytes: file.size ?? null,
-            })
-            .returning();
-          return res.json({ success: true, data: row });
+        const files = (req as any).files as Express.Multer.File[] | undefined;
+        if (!files || files.length === 0) {
+          return sendError(res, "Missing images", undefined, 400);
         }
+
+        const results = [];
+
+        for (const file of files) {
+          if (provider === "local") {
+            const asset = await processAndStoreImage(
+              file.buffer,
+              category,
+              file.originalname || "image.jpg"
+            );
+            results.push(asset);
+          } else {
+            const uploaded = await uploadMediaToCloudinary(file.buffer, category);
+            const [row] = await db
+              .insert(mediaAssets)
+              .values({
+                url: uploaded.url,
+                provider: "cloudinary",
+                category,
+                publicId: uploaded.publicId,
+                filename: file.originalname ?? null,
+                bytes: file.size ?? null,
+              })
+              .returning();
+            results.push(row);
+          }
+        }
+
+        return res.json({ success: true, data: results });
       } catch (err) {
         handleApiError(res, err, "POST /api/admin/images/upload");
       }

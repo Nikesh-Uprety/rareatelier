@@ -122,6 +122,63 @@ export async function sendInviteEmail(
   }
 }
 
+export async function sendStoreUserWelcomeEmail(
+  to: string,
+  name: string,
+  password: string,
+  invitedBy: string,
+) {
+  if (!isSMTPConfigured || !transporter) {
+    console.warn(
+      "[DEV] SMTP not configured. Store user welcome for",
+      to,
+      "->",
+      `password=${password}`,
+    );
+    return;
+  }
+
+  try {
+    await transporter.sendMail({
+      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+      to,
+      subject: "Welcome to RARE.np Admin",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
+          <h1 style="font-size: 22px; color: #111; margin-bottom: 8px;">Welcome to RARE.np Admin</h1>
+          <p style="color: #555; margin-bottom: 20px;">
+            Hi ${name}, <strong>${invitedBy}</strong> has added you as a team member for RARE Nepal.
+          </p>
+
+          <p style="color: #555; margin-bottom: 10px;">Your login password is:</p>
+          <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 12px; padding: 18px 16px; text-align: center; margin: 18px 0 24px;">
+            <p style="font-size: 22px; font-weight: 700; letter-spacing: 2px; color: #2D4A35; margin: 0;">${password}</p>
+          </div>
+
+          <p style="color: #666; font-size: 13px; margin-bottom: 24px;">
+            Login at:
+            <a href="https://rarenp.com/login" style="color: #2D4A35; text-decoration: none;">rarenp.com/login</a>
+          </p>
+
+          <p style="color: #999; font-size: 12px; margin: 0;">
+            If you did not expect this email, you can ignore it.
+          </p>
+        </div>
+      `,
+    });
+
+    console.log(`[SMTP] Store user welcome email sent to: ${to}`);
+  } catch (err: any) {
+    console.warn("[SMTP] Store user welcome email failed for", to, "Error:", {
+      message: err.message,
+      code: err.code,
+      command: err.command,
+      response: err.response,
+      stack: err.stack,
+    });
+  }
+}
+
 export async function sendContactReplyEmail(to: string, subject: string, html: string) {
   if (!isSMTPConfigured || !transporter) {
     console.warn("[DEV] SMTP not configured. Contact reply for", to, "->", subject);

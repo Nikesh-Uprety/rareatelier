@@ -33,7 +33,9 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
       requireAdmin &&
       user &&
       user.role !== "admin" &&
-      user.role !== "staff"
+      user.role !== "staff" &&
+      user.role !== "owner" &&
+      user.role !== "manager"
     ) {
       if (location !== "/") {
         setLocation("/");
@@ -57,7 +59,9 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
     requireAdmin &&
     user &&
     user.role !== "admin" &&
-    user.role !== "staff"
+    user.role !== "staff" &&
+    user.role !== "owner" &&
+    user.role !== "manager"
   ) {
     return null;
   }

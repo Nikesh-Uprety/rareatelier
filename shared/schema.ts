@@ -16,11 +16,16 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
-  role: text("role").notNull().default("user"),
+  // Team roles for internal users (admin panel users) or customers
+  role: text("role").notNull().default("staff"),
   displayName: text("display_name"),
   profileImageUrl: text("profile_image_url"),
+  emailNotifications: boolean("email_notifications").notNull().default(true),
   twoFactorEnabled: integer("two_factor_enabled").notNull().default(0),
   lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   status: text("status").notNull().default("active"),
 });
 
@@ -398,6 +403,10 @@ export const promoCodes = pgTable("promo_codes", {
   usedCount: integer("used_count").notNull().default(0),
   active: boolean("active").notNull().default(true),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
+  // Null means applies to all products
+  applicableProductIds: integer("applicable_product_ids").array(),
+  // e.g. '1day' | '1week' | 'custom'
+  durationPreset: varchar("duration_preset"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
