@@ -40,7 +40,7 @@ import {
   type SiteAsset,
   type InsertSiteAsset,
 } from "@shared/schema";
-import { and, or, asc, desc, eq, gte, ilike, inArray, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, sql } from "drizzle-orm";
 import { broadcastNotification } from "./websocket";
 
 export interface CreateOrderItemInput {
@@ -50,6 +50,7 @@ export interface CreateOrderItemInput {
 }
 
 export interface CreateOrderInput {
+  userId?: string | null;
   email: string;
   fullName: string;
   addressLine1: string;
@@ -366,6 +367,58 @@ export interface IStorage {
 }
 
 export class PgStorage implements IStorage {
+  private async getCustomerFinancialStats(customer: {
+    id: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber: string | null;
+  }): Promise<{ totalSpent: number; orderCount: number }> {
+    const normalizedEmail = customer.email.toLowerCase();
+    const fullName = `${customer.firstName} ${customer.lastName}`;
+
+    const [onlineSummary] = await db
+      .select({
+        total: sql<number>`coalesce(sum(${orders.total}), 0)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(sql`lower(${orders.email})`, normalizedEmail),
+          sql`${orders.status} != 'cancelled'`,
+        ),
+      );
+
+    const billMatchClauses = [eq(bills.customerId, customer.id)];
+    if (customer.email) {
+      billMatchClauses.push(eq(sql`lower(${bills.customerEmail})`, normalizedEmail));
+    }
+    if (customer.phoneNumber) {
+      billMatchClauses.push(eq(bills.customerPhone, customer.phoneNumber));
+    }
+    billMatchClauses.push(eq(bills.customerName, fullName));
+
+    const [posSummary] = await db
+      .select({
+        total: sql<number>`coalesce(sum(${bills.totalAmount}), 0)`,
+        count: sql<number>`count(*)`,
+      })
+      .from(bills)
+      .where(
+        and(
+          sql`${bills.status} != 'void'`,
+          isNull(bills.orderId),
+          or(...billMatchClauses),
+        ),
+      );
+
+    return {
+      totalSpent: Number(onlineSummary?.total ?? 0) + Number(posSummary?.total ?? 0),
+      orderCount: Number(onlineSummary?.count ?? 0) + Number(posSummary?.count ?? 0),
+    };
+  }
+
   async getBills(): Promise<Bill[]> {
     return db.select().from(bills).orderBy(desc(bills.createdAt));
   }
@@ -427,6 +480,8 @@ export class PgStorage implements IStorage {
         originalPrice: products.originalPrice,
         salePercentage: products.salePercentage,
         saleActive: products.saleActive,
+        homeFeatured: products.homeFeatured,
+        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -457,6 +512,8 @@ export class PgStorage implements IStorage {
         originalPrice: products.originalPrice,
         salePercentage: products.salePercentage,
         saleActive: products.saleActive,
+        homeFeatured: products.homeFeatured,
+        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       })
@@ -487,6 +544,8 @@ export class PgStorage implements IStorage {
         originalPrice: data.originalPrice ?? null,
         salePercentage: data.salePercentage ?? 0,
         saleActive: data.saleActive ?? false,
+        homeFeatured: data.homeFeatured ?? false,
+        homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
       })
       .returning({
         id: products.id,
@@ -504,6 +563,8 @@ export class PgStorage implements IStorage {
         originalPrice: products.originalPrice,
         salePercentage: products.salePercentage,
         saleActive: products.saleActive,
+        homeFeatured: products.homeFeatured,
+        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -539,6 +600,9 @@ export class PgStorage implements IStorage {
         salePercentage: data.salePercentage,
         saleActive: data.saleActive,
         originalPrice: data.originalPrice,
+        homeFeatured: data.homeFeatured,
+        homeFeaturedImageIndex: data.homeFeaturedImageIndex,
+        updatedAt: new Date(),
       })
       .where(eq(products.id, id))
       .returning({
@@ -557,6 +621,8 @@ export class PgStorage implements IStorage {
         originalPrice: products.originalPrice,
         salePercentage: products.salePercentage,
         saleActive: products.saleActive,
+        homeFeatured: products.homeFeatured,
+        homeFeaturedImageIndex: products.homeFeaturedImageIndex,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
       });
@@ -772,6 +838,7 @@ export class PgStorage implements IStorage {
     const result = await db.execute(
       sql`
         INSERT INTO "orders" (
+          "user_id",
           "email",
           "full_name",
           "address_line1",
@@ -791,6 +858,7 @@ export class PgStorage implements IStorage {
           "delivery_provider",
           "delivery_address"
         ) VALUES (
+          ${data.userId ?? null},
           ${data.email},
           ${data.fullName},
           ${data.addressLine1},
@@ -1014,7 +1082,25 @@ export class PgStorage implements IStorage {
       .where(whereClause)
       .orderBy(desc(customers.createdAt));
 
-    return rows;
+    const rowsWithLiveStats = await Promise.all(
+      rows.map(async (row) => {
+        const stats = await this.getCustomerFinancialStats({
+          id: row.id,
+          email: row.email,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          phoneNumber: row.phoneNumber ?? null,
+        });
+
+        return {
+          ...row,
+          totalSpent: stats.totalSpent.toString(),
+          orderCount: stats.orderCount,
+        };
+      }),
+    );
+
+    return rowsWithLiveStats;
   }
 
   async getCustomerById(
@@ -1128,7 +1214,21 @@ export class PgStorage implements IStorage {
         : null;
     }
 
-    return { ...customerRow, orders: customerOrders, deliveryAddress };
+    const stats = await this.getCustomerFinancialStats({
+      id: customerRow.id,
+      email: customerRow.email,
+      firstName: customerRow.firstName,
+      lastName: customerRow.lastName,
+      phoneNumber: customerRow.phoneNumber ?? null,
+    });
+
+    return {
+      ...customerRow,
+      totalSpent: stats.totalSpent.toString(),
+      orderCount: stats.orderCount,
+      orders: customerOrders,
+      deliveryAddress,
+    };
   }
 
   async getCustomerOrders(id: string) {
@@ -1217,7 +1317,7 @@ export class PgStorage implements IStorage {
         items: bills.items,
       })
       .from(bills)
-      .where(or(...billConditions))
+      .where(and(isNull(bills.orderId), or(...billConditions)))
       .orderBy(desc(bills.createdAt));
 
     const posMapped = posBills.map((b) => {
@@ -1347,33 +1447,33 @@ export class PgStorage implements IStorage {
 
   async syncCustomerStats(email: string): Promise<void> {
     const emailLower = email.toLowerCase();
-    const customerOrders = await db
+    const [customer] = await db
       .select({
-        total: orders.total,
-        status: orders.status,
+        id: customers.id,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        email: customers.email,
+        phoneNumber: customers.phoneNumber,
       })
-      .from(orders)
-      .where(eq(sql`lower(${orders.email})`, emailLower));
+      .from(customers)
+      .where(eq(sql`lower(${customers.email})`, emailLower))
+      .limit(1);
 
-    // We only count completed or pos orders for totalSpent? 
-    // Usually totalSpent is for completed transactions.
-    const completedOrders = customerOrders.filter(
-      (o) => o.status === "completed" || o.status === "pos" || o.status === "shipped" || o.status === "delivered"
-    );
+    if (!customer) return;
 
-    const totalSpent = completedOrders.reduce(
-      (sum, o) => sum + Number(o.total || 0),
-      0
-    );
-    const orderCount = customerOrders.length; // Count all orders (even pending) for orderCount? 
-    // Let's count all except cancelled for orderCount.
-    const validOrderCount = customerOrders.filter(o => o.status !== "cancelled").length;
+    const stats = await this.getCustomerFinancialStats({
+      id: customer.id,
+      email: customer.email,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      phoneNumber: customer.phoneNumber ?? null,
+    });
 
     await db
       .update(customers)
       .set({
-        totalSpent: totalSpent.toString(),
-        orderCount: validOrderCount,
+        totalSpent: stats.totalSpent.toString(),
+        orderCount: stats.orderCount,
       })
       .where(eq(sql`lower(${customers.email})`, emailLower));
   }
@@ -2168,6 +2268,7 @@ export class PgStorage implements IStorage {
         and(
           eq(bills.status, "issued"),
           eq(bills.billType, "pos"),
+          isNull(bills.orderId),
           sql.raw(`"created_at" >= now() - interval '${days} days'`),
         ),
       )
@@ -2413,6 +2514,8 @@ export class MemStorage implements IStorage {
       originalPrice: data.originalPrice ?? null,
       salePercentage: data.salePercentage ?? 0,
       saleActive: data.saleActive ?? false,
+      homeFeatured: data.homeFeatured ?? false,
+      homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

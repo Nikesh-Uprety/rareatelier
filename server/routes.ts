@@ -24,6 +24,7 @@ import {
     insertProductAttributeSchema,
     mediaAssets,
     newsletterSubscribers,
+    orders,
     posSessions,
     platforms,
     Product,
@@ -557,6 +558,21 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/products/home-featured", async (_req: Request, res: Response) => {
+    try {
+      const featured = await db
+        .select()
+        .from(products)
+        .where(eq(products.homeFeatured, true))
+        .orderBy(desc(products.updatedAt))
+        .limit(8);
+      return res.json({ success: true, data: featured });
+    } catch (err) {
+      console.error("Error in GET /api/products/home-featured", err);
+      return res.status(500).json({ success: false, error: "Failed to load featured products" });
+    }
+  });
+
   app.get("/api/products", async (req: Request, res: Response) => {
     try {
       const { category, search, page, limit } = req.query;
@@ -733,6 +749,7 @@ export async function registerRoutes(
       );
 
       const order = await storage.createOrder({
+        userId: (req.user as Express.User | undefined)?.id ?? null,
         email: shipping.email,
         fullName: `${shipping.firstName} ${shipping.lastName}`,
         addressLine1: shipping.address,
@@ -804,6 +821,23 @@ export async function registerRoutes(
         return res.status(400).json({ success: false, error: "Order ID is required" });
       }
       const order = await storage.getOrderById(id);
+      const user = req.user as Express.User | undefined;
+      const userRole = user?.role?.toLowerCase();
+      const isAdminOrStaff = userRole === "admin" || userRole === "staff";
+      const userEmail = user?.email?.toLowerCase();
+      const orderEmail = order?.email?.toLowerCase();
+      const isOwner =
+        !!user &&
+        (order.userId === user.id || (!!userEmail && !!orderEmail && userEmail === orderEmail));
+
+      if (!user) {
+        return res.status(401).json({ success: false, error: "Authentication required" });
+      }
+
+      if (!isAdminOrStaff && !isOwner) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+
       return res.json({ success: true, data: order });
     } catch (err) {
       console.error("Error in GET /api/orders/:id", err);
@@ -1432,6 +1466,8 @@ export async function registerRoutes(
     salePercentage: z.number().int().min(0).max(100).optional().default(0),
     saleActive: z.boolean().optional().default(false),
     originalPrice: z.number().positive().optional().nullable(),
+    homeFeatured: z.boolean().optional().default(false),
+    homeFeaturedImageIndex: z.number().int().min(0).max(3).optional().default(2),
   });
 
   app.get(
@@ -1525,6 +1561,8 @@ export async function registerRoutes(
           salePercentage: parsed.data.salePercentage || 0,
           saleActive: parsed.data.saleActive || false,
           originalPrice: parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null,
+          homeFeatured: parsed.data.homeFeatured || false,
+          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex ?? 2,
         };
         const product = await storage.createProduct(data);
         return res.status(201).json({ success: true, data: product });
@@ -1563,6 +1601,8 @@ export async function registerRoutes(
           salePercentage: parsed.data.salePercentage,
           saleActive: parsed.data.saleActive,
           originalPrice: parsed.data.originalPrice === undefined ? undefined : (parsed.data.originalPrice ? parsed.data.originalPrice.toString() : null),
+          homeFeatured: parsed.data.homeFeatured,
+          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex,
         };
         const updated = await storage.updateProduct(
           req.params.id as string,
@@ -1590,6 +1630,53 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to delete product" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/products/:id/home-featured",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const bodySchema = z.object({
+          homeFeatured: z.boolean(),
+          homeFeaturedImageIndex: z.number().int().min(0).max(3).optional(),
+        });
+        const parsed = bodySchema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({ success: false, error: "Invalid payload" });
+        }
+
+        const productId = req.params.id as string;
+        const existing = await storage.getProductById(productId);
+        if (!existing) {
+          return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        const wantsFeatured = parsed.data.homeFeatured;
+        if (wantsFeatured && !existing.homeFeatured) {
+          const [{ count }] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(products)
+            .where(eq(products.homeFeatured, true));
+          if (count >= 8) {
+            return res.status(400).json({
+              success: false,
+              error: "Max 8 products allowed in New Arrivals.",
+            });
+          }
+        }
+
+        const updated = await storage.updateProduct(productId, {
+          homeFeatured: wantsFeatured,
+          homeFeaturedImageIndex: parsed.data.homeFeaturedImageIndex ?? existing.homeFeaturedImageIndex ?? 2,
+        });
+
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/products/:id/home-featured", err);
+        return res.status(500).json({ success: false, error: "Failed to update home featured flag" });
       }
     },
   );
@@ -3212,6 +3299,7 @@ export async function registerRoutes(
     try {
       const schema = z.object({
         customerName: z.string().optional(),
+        customerEmail: z.string().email().optional().nullable(),
         customerPhone: z.string().optional().nullable(),
         items: z.array(z.any()).min(1),
         source: z.string().optional(),
@@ -3232,9 +3320,9 @@ export async function registerRoutes(
 
       const {
         customerName,
+        customerEmail,
         customerPhone,
         items,
-        source,
         paymentMethod,
         isPaid,
         deliveryRequired,
@@ -3253,12 +3341,52 @@ export async function registerRoutes(
 
       const billNumber = await generateBillNumber();
       const user = req.user as any;
+      const effectiveCustomerName = customerName || "Walk-in Customer";
+      const effectiveCustomerEmail =
+        customerEmail?.trim().toLowerCase() ||
+        `pos-${Date.now()}-${Math.round(Math.random() * 1_000_000)}@local.rare`;
+
+      await storage.upsertCustomerFromOrder(
+        effectiveCustomerEmail,
+        effectiveCustomerName.split(" ").slice(0, 1).join(" ") || "Walk-in",
+        effectiveCustomerName.split(" ").slice(1).join(" ") || "Customer",
+        customerPhone || null,
+      );
+
+      const createdOrder = await storage.createOrder({
+        email: effectiveCustomerEmail,
+        fullName: effectiveCustomerName,
+        addressLine1: deliveryAddress || "POS Counter",
+        addressLine2: null,
+        city: "POS",
+        region: "POS",
+        postalCode: "00000",
+        country: "Nepal",
+        total,
+        paymentMethod,
+        source: "pos",
+        deliveryRequired: deliveryRequired ?? false,
+        deliveryProvider: deliveryProvider ?? null,
+        deliveryAddress: deliveryAddress ?? null,
+        items: items.map((item: any) => ({
+          productId: String(item.productId),
+          quantity: Number(item.quantity ?? 0),
+          unitPrice: Number(item.unitPrice ?? 0),
+        })),
+      });
+
+      // Keep POS-created orders visually distinguishable in Orders page.
+      await db
+        .update(orders)
+        .set({ status: "pos" })
+        .where(eq(orders.id, createdOrder.id));
 
       const [bill] = await db.insert(bills).values({
         id: crypto.randomUUID(),
         billNumber,
-        orderId: null,
-        customerName: customerName || "Walk-in Customer",
+        orderId: createdOrder.id,
+        customerName: effectiveCustomerName,
+        customerEmail: customerEmail || null,
         customerPhone: customerPhone || null,
         items,
         subtotal: String(subtotal),
@@ -3267,7 +3395,7 @@ export async function registerRoutes(
         discountAmount: String(discount),
         totalAmount: String(total),
         paymentMethod,
-        source: source || "pos",
+        source: "pos",
         isPaid: isPaid ?? true,
         deliveryRequired: deliveryRequired ?? false,
         deliveryProvider: deliveryProvider ?? null,

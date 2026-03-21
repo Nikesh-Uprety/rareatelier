@@ -45,11 +45,19 @@ import {
   UserPlus,
   History,
   ParkingCircle as ParkIcon,
+  IndianRupee,
   Users,
   User,
   Grid,
   List,
+  ChevronDown,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -68,7 +76,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Label } from "@/components/ui/label";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface CartItem {
   productId: string;
@@ -78,6 +86,12 @@ interface CartItem {
   quantity: number;
   lineTotal: number;
 }
+
+const ESEWA_QR_IMAGE_PATH = "/public/images/esewa-qr.png";
+const BANK_QR_IMAGE_PATH = "/public/images/bank-qr.png";
+const BANK_NAME = "Nepal Investment Mega Bank";
+const BANK_ACCOUNT_NAME = "TO_BE_FILLED_BY_NIKESH";
+const BANK_ACCOUNT_NUMBER = "TO_BE_FILLED_BY_NIKESH";
 
 export default function AdminPOS() {
   const [search, setSearch] = useState("");
@@ -115,10 +129,13 @@ export default function AdminPOS() {
     }
   });
   const [showQR, setShowQR] = useState(false);
+  const [cashRollTick, setCashRollTick] = useState(0);
+  const [showPaidCashIcon, setShowPaidCashIcon] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [isCustomersOpen, setIsCustomersOpen] = useState(false);
   const [customerViewMode, setCustomerViewMode] = useState<"grid" | "list">("list");
+  const lastProductClickAtRef = useRef<Record<string, number>>({});
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -152,6 +169,8 @@ export default function AdminPOS() {
     const cats = Array.from(new Set(products.map((p) => p.category || "General").filter(Boolean)));
     return ["All", ...cats.sort()];
   }, [products]);
+  const visibleCategories = categories.slice(0, 8);
+  const moreCategories = categories.slice(8);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -238,6 +257,29 @@ export default function AdminPOS() {
   const cashReceivedNum = Number(cashReceived) || 0;
   const changeAmount =
     paymentMethod === "cash" ? Math.max(0, cashReceivedNum - total) : 0;
+  const hasValidCashPayment = paymentMethod === "cash" && cashReceivedNum >= total && total > 0;
+  const prevHasValidCashPayment = useRef(false);
+
+  useEffect(() => {
+    if (paymentMethod !== "cash") return;
+    setCashRollTick((prev) => prev + 1);
+  }, [cashReceivedNum, paymentMethod]);
+
+  useEffect(() => {
+    if (hasValidCashPayment && !prevHasValidCashPayment.current) {
+      setShowPaidCashIcon(true);
+      const t = window.setTimeout(() => setShowPaidCashIcon(false), 1000);
+      prevHasValidCashPayment.current = true;
+      return () => window.clearTimeout(t);
+    }
+    if (!hasValidCashPayment) {
+      prevHasValidCashPayment.current = false;
+      setShowPaidCashIcon(false);
+    }
+  }, [hasValidCashPayment]);
+
+  const formatNprNumber = (amount: number) =>
+    amount.toLocaleString("en-NP", { maximumFractionDigits: 0 });
 
   // Cart operations
 
@@ -312,6 +354,23 @@ export default function AdminPOS() {
     setCart((prev) => prev.filter((i) => i.productId !== productId));
   };
 
+  const handleProductCardClick = (product: AdminProduct) => {
+    if (product.stock <= 0) return;
+
+    const now = Date.now();
+    const lastClickedAt = lastProductClickAtRef.current[product.id] ?? 0;
+    if (now - lastClickedAt < 300) return;
+    lastProductClickAtRef.current[product.id] = now;
+
+    const inCart = cart.some((i) => i.productId === product.id);
+    if (inCart) {
+      removeFromCart(product.id);
+      return;
+    }
+
+    addToCart(product);
+  };
+
   const addCustomerMutation = useMutation({
     mutationFn: createAdminCustomer,
     onSuccess: (newCustomer) => {
@@ -362,6 +421,7 @@ export default function AdminPOS() {
         customerName: selectedCustomer 
           ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}` 
           : (customerName || "Walk-in Customer"),
+        customerEmail: selectedCustomer?.email || undefined,
         customerPhone: "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
         items: cart.map((i) => ({
           productId: i.productId,
@@ -463,7 +523,7 @@ export default function AdminPOS() {
 
   const platformOptions = useMemo(() => {
     const defaults = [
-      { key: "website", label: "Website" },
+      { key: "website", label: "Store" },
       { key: "pos", label: "POS" },
       { key: "instagram", label: "Instagram" },
       { key: "tiktok", label: "TikTok" },
@@ -667,8 +727,8 @@ export default function AdminPOS() {
           </div>
 
           {/* Category pills */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {categories.map((cat) => (
+          <div className="flex flex-wrap items-center gap-2 pb-1 min-w-0">
+            {visibleCategories.map((cat) => (
               <button
                 key={cat}
                 className={cn(
@@ -682,6 +742,32 @@ export default function AdminPOS() {
                 {cat}
               </button>
             ))}
+            {moreCategories.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="px-4 py-1.5 h-auto rounded-full text-sm font-medium whitespace-nowrap border-[#E5E5E0] dark:border-border"
+                  >
+                    More <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
+                  {moreCategories.map((cat) => (
+                    <DropdownMenuItem
+                      key={cat}
+                      onClick={() => setSelectedCategory(cat)}
+                      className={cn(
+                        "cursor-pointer",
+                        selectedCategory === cat && "bg-muted font-semibold",
+                      )}
+                    >
+                      {cat}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
 
           {/* Workspaces (Parked Sales) */}
@@ -734,6 +820,9 @@ export default function AdminPOS() {
                 ) : (
                   filteredProducts.map((product) => {
                     const inCart = cart.find((i) => i.productId === product.id);
+                    const isOutOfStock = product.stock <= 0;
+                    const isLowStock = product.stock > 0 && product.stock <= 9;
+                    const isInStock = product.stock >= 10;
                     return (
                       <motion.div
                         layout
@@ -745,10 +834,13 @@ export default function AdminPOS() {
                           inCart
                             ? "border-[#2C3E2D] dark:border-green-600 ring-1 ring-[#2C3E2D]/20"
                             : "border-[#E5E5E0] dark:border-border",
-                          product.stock <= 0 && "opacity-40 pointer-events-none"
+                          isOutOfStock && "opacity-60"
                         )}
                       >
-                        <div onClick={() => addToCart(product)} className="cursor-pointer">
+                        <div
+                          onClick={() => handleProductCardClick(product)}
+                          className={cn("cursor-pointer", isOutOfStock && "cursor-not-allowed")}
+                        >
                           {product.imageUrl && (
                             <img
                               src={product.imageUrl}
@@ -762,9 +854,19 @@ export default function AdminPOS() {
                           <div className="text-sm font-bold text-[#2C3E2D] dark:text-foreground">
                             {formatPrice(product.price)}
                           </div>
-                          {product.stock <= 5 && product.stock > 0 && (
-                            <div className="text-[10px] text-red-500 mt-1">
-                              Only {product.stock} left
+                          {isInStock && (
+                            <div className="text-[10px] text-green-600 mt-1 font-medium">
+                              In Stock: {product.stock}
+                            </div>
+                          )}
+                          {isLowStock && (
+                            <div className="text-[10px] text-amber-600 mt-1 font-medium">
+                              Low Stock: {product.stock}
+                            </div>
+                          )}
+                          {isOutOfStock && (
+                            <div className="text-[10px] text-red-600 mt-1 font-medium">
+                              Out of Stock
                             </div>
                           )}
                         </div>
@@ -823,6 +925,9 @@ export default function AdminPOS() {
                   ) : (
                     filteredProducts.map((product) => {
                       const inCart = cart.find((i) => i.productId === product.id);
+                      const isOutOfStock = product.stock <= 0;
+                      const isLowStock = product.stock > 0 && product.stock <= 9;
+                      const isInStock = product.stock >= 10;
                       return (
                         <motion.div
                           layout
@@ -831,10 +936,10 @@ export default function AdminPOS() {
                           className={cn(
                             "w-full flex items-center gap-4 p-3 text-left transition-all border-b border-border last:border-none",
                             inCart && "bg-primary/5",
-                            product.stock <= 0 && "opacity-40 pointer-events-none"
+                            isOutOfStock && "opacity-60"
                           )}
                         >
-                          <div className="relative w-12 h-12 flex-shrink-0 cursor-pointer" onClick={() => addToCart(product)}>
+                          <div className={cn("relative w-12 h-12 flex-shrink-0", isOutOfStock ? "cursor-not-allowed" : "cursor-pointer")} onClick={() => handleProductCardClick(product)}>
                             {product.imageUrl ? (
                               <img
                                 src={product.imageUrl}
@@ -850,7 +955,7 @@ export default function AdminPOS() {
                               </div>
                             )}
                           </div>
-                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => addToCart(product)}>
+                          <div className={cn("flex-1 min-w-0", isOutOfStock ? "cursor-not-allowed" : "cursor-pointer")} onClick={() => handleProductCardClick(product)}>
                             <div className="text-sm font-medium truncate">{product.name}</div>
                             <div className="text-xs text-muted-foreground uppercase">{product.category || "General"}</div>
                           </div>
@@ -858,23 +963,37 @@ export default function AdminPOS() {
                             <div className="text-sm font-bold">{formatPrice(product.price)}</div>
                             <div className={cn(
                               "text-[10px] font-medium",
-                              product.stock <= 5 ? "text-red-500" : "text-muted-foreground"
+                              isOutOfStock
+                                ? "text-red-600"
+                                : isLowStock
+                                  ? "text-amber-600"
+                                  : "text-green-600"
                             )}>
-                              {product.stock} in stock
+                              {isOutOfStock
+                                ? "Out of Stock"
+                                : isLowStock
+                                  ? `Low Stock: ${product.stock}`
+                                  : `In Stock: ${product.stock}`}
                             </div>
                           </div>
                           {inCart && (
                             <div className="flex items-center gap-1 shrink-0">
                               <button
                                 className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                                onClick={() => updateQuantity(product.id, -1)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateQuantity(product.id, -1);
+                                }}
                               >
                                 <Minus className="h-3 w-3" />
                               </button>
                               <span className="w-6 text-center text-sm font-bold">{inCart.quantity}</span>
                               <button
                                 className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                                onClick={() => updateQuantity(product.id, 1)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateQuantity(product.id, 1);
+                                }}
                               >
                                 <Plus className="h-3 w-3" />
                               </button>
@@ -1066,15 +1185,11 @@ export default function AdminPOS() {
                     Platform
                   </div>
                   <select
-                    value={platformSource}
-                    onChange={(e) => setPlatformSource(e.target.value)}
+                    value="pos"
+                    disabled
                     className="h-10 w-full rounded-full border border-[#E5E5E0] dark:border-border bg-background px-4 text-sm"
                   >
-                    {platformOptions.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.label}
-                      </option>
-                    ))}
+                    <option value="pos">POS</option>
                   </select>
                 </div>
                 <div className="space-y-1">
@@ -1163,6 +1278,52 @@ export default function AdminPOS() {
                 })}
               </div>
 
+              {paymentMethod === "esewa" && (
+                <div className="rounded-xl border border-[#E5E5E0] dark:border-border bg-muted/10 p-4 space-y-3">
+                  <p className="text-sm font-medium text-center">Scan to pay via eSewa</p>
+                  <div className="flex justify-center">
+                    <div className="bg-white rounded-xl border border-[#E5E5E0] dark:border-border p-3 shadow-sm">
+                      <OptimizedImage
+                        src={ESEWA_QR_IMAGE_PATH}
+                        alt="eSewa QR"
+                        className="w-full max-w-[220px] rounded-lg"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(paymentMethod === "fonepay" || paymentMethod === "bank_transfer") && (
+                <div className="rounded-xl border border-[#E5E5E0] dark:border-border bg-muted/10 p-4 space-y-3">
+                  <p className="text-sm font-medium text-center">
+                    Scan to pay via Fonepay / Bank Transfer
+                  </p>
+                  <div className="flex justify-center">
+                    <div className="bg-white rounded-xl border border-[#E5E5E0] dark:border-border p-3 shadow-sm">
+                      <OptimizedImage
+                        src={BANK_QR_IMAGE_PATH}
+                        alt="Fonepay or Bank Transfer QR"
+                        className="w-full max-w-[220px] rounded-lg"
+                      />
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-white/80 dark:bg-card border border-[#E5E5E0] dark:border-border p-3 space-y-1 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Bank Name: </span>
+                      <span className="font-medium">{BANK_NAME}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Account Name: </span>
+                      <span className="font-medium">{BANK_ACCOUNT_NAME}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Account Number: </span>
+                      <span className="font-medium">{BANK_ACCOUNT_NUMBER}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Cash input */}
               {paymentMethod === "cash" && (
                 <div className="space-y-2 pt-2">
@@ -1178,21 +1339,51 @@ export default function AdminPOS() {
                       className="bg-background border-[#E5E5E0] text-sm rounded-full"
                     />
                   </div>
-                  {cashReceivedNum > 0 && (
-                    <div className="flex justify-between text-sm font-medium text-green-600">
-                      <span>Change</span>
-                      <span>{formatPrice(changeAmount)}</span>
+                  <div className="relative overflow-hidden rounded-xl border border-[#E5E5E0] dark:border-border bg-muted/20 px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      Amount Received
                     </div>
-                  )}
+                    <div className="flex items-center gap-1 text-lg font-semibold text-[#2C3E2D] dark:text-foreground">
+                      <span className="text-sm">NPR</span>
+                      <div
+                        key={cashRollTick}
+                        className="inline-flex items-center gap-[1px]"
+                        aria-live="polite"
+                      >
+                        {formatNprNumber(Math.max(0, cashReceivedNum))
+                          .split("")
+                          .map((ch, idx) => (
+                            <span
+                              key={`${ch}-${idx}`}
+                              className={/\d/.test(ch) ? "pos-digit-roll" : "text-muted-foreground"}
+                              style={{ animationDelay: `${idx * 8}ms` }}
+                            >
+                              {ch}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                    {showPaidCashIcon && (
+                      <div className="absolute right-2 top-2 flex items-center text-green-600 pos-paid-icon-pop">
+                        <IndianRupee className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between text-sm font-medium text-green-600">
+                    <span>Change to Return</span>
+                    <span>NPR {formatNprNumber(changeAmount)}</span>
+                  </div>
                   {/* Quick cash buttons */}
                   <div className="flex gap-1 flex-wrap">
-                    {[100, 500, 1000, 5000].map((amt) => (
+                    {[100, 200, 500, 1000].map((amt) => (
                       <Button
                         key={amt}
                         variant="outline"
                         size="sm"
                         className="text-xs h-7 rounded-full"
-                        onClick={() => setCashReceived(String(amt))}
+                        onClick={() =>
+                          setCashReceived((prev) => String((Number(prev) || 0) + amt))
+                        }
                       >
                         Rs. {amt}
                       </Button>
@@ -1230,7 +1421,7 @@ export default function AdminPOS() {
                 Charge {formatPrice(total)}
               </Button>
 
-              {(paymentMethod === "esewa" || paymentMethod === "khalti") && (
+              {paymentMethod === "esewa" && (
                 <Button
                   variant="outline"
                   className="w-full h-10 mt-2 border-[#2C3E2D] text-[#2C3E2D]"
@@ -1255,11 +1446,12 @@ export default function AdminPOS() {
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="bg-white border-2 border-[#2C3E2D] rounded-xl p-4 shadow-sm">
               <OptimizedImage
-                src="/images/esewa-qr.webp"
-                alt="Payment QR"
+                src={ESEWA_QR_IMAGE_PATH}
+                alt="eSewa QR"
                 className="w-full max-w-[200px] rounded-lg"
               />
             </div>
+            <p className="text-sm font-medium">Scan to pay via eSewa</p>
             <p className="text-sm text-muted-foreground">
               Total Amount: <span className="font-bold text-foreground">{formatPrice(total)}</span>
             </p>

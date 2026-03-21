@@ -71,10 +71,10 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col transition-colors duration-300">
+    <div className="min-h-screen bg-background flex flex-col transition-colors duration-200 ease-in-out">
       <TopLoadingBar isLoading={isLoading} />
       <Navbar />
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col transition-colors duration-200 ease-in-out">
         {children}
       </main>
       <Footer />
@@ -261,6 +261,11 @@ function Router() {
       <Route path="/checkout/payment">
         <StorefrontLayout>
           <PaymentProcess />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/order-confirmation/:orderId">
+        <StorefrontLayout>
+          <OrderSuccess />
         </StorefrontLayout>
       </Route>
       <Route path="/checkout/success/:id">

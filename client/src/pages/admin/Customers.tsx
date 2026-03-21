@@ -454,8 +454,19 @@ export default function AdminCustomers() {
                                                     <div className="text-xs font-bold">
                                                       Order #{order.id.slice(0, 8)}
                                                     </div>
-                                                    <div className="text-[10px] text-muted-foreground">
-                                                      {new Date(order.createdAt).toLocaleDateString()} • {order.source === "pos" ? "POS" : "Online"}
+                                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                                      <span>{new Date(order.createdAt).toLocaleDateString()}</span>
+                                                      <span>•</span>
+                                                      <Badge
+                                                        className={cn(
+                                                          "h-4 px-1.5 text-[9px] leading-none uppercase border-0",
+                                                          order.source === "pos"
+                                                            ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+                                                            : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                                                        )}
+                                                      >
+                                                        {order.source === "pos" ? "POS" : "ONLINE"}
+                                                      </Badge>
                                                     </div>
 
                                                     <div className="mt-2 space-y-1">

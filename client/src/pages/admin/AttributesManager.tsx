@@ -53,6 +53,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  PreviewLinkCard,
+  PreviewLinkCardContent,
+  PreviewLinkCardImage,
+  PreviewLinkCardTrigger,
+} from "@/components/ui/preview-link-card";
 
 // Helper for color contrast
 function getContrastColor(hex: string): string {
@@ -404,20 +410,49 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
               <Button className="h-11 rounded-xl" onClick={() => catMutation.mutate({ name: newValue, slug: slugify(newValue) })}><Plus className="w-4 h-4" /></Button>
             </div>
 
-            <div className="space-y-3 pb-20">
+            <div className="space-y-3 pb-20 max-h-[60vh] overflow-y-auto pr-1">
                {categories?.map(cat => {
                  const Icon = CATEGORY_ICONS[cat.slug] || CATEGORY_ICONS.DEFAULT;
+                 const categoryHref = `/admin/products?category=${encodeURIComponent(cat.slug)}`;
+                 const categoryPreviewSrc =
+                   (cat as CategoryApi & {
+                     coverImage?: string | null;
+                     coverImageUrl?: string | null;
+                     imageUrl?: string | null;
+                   }).coverImage ??
+                   (cat as CategoryApi & { coverImageUrl?: string | null }).coverImageUrl ??
+                   (cat as CategoryApi & { imageUrl?: string | null }).imageUrl ??
+                   undefined;
                  return (
                    <div key={cat.id} className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-muted/10 border hover:shadow-md transition-all group">
-                      <div className="flex items-center gap-4">
-                         <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                            <Icon className="w-5 h-5" />
-                         </div>
-                         <div>
-                            <p className="font-serif text-lg leading-none">{cat.name}</p>
-                            <p className="text-[10px] uppercase font-bold tracking-widest opacity-40">{cat.slug}</p>
-                         </div>
-                      </div>
+                     <PreviewLinkCard
+                       href={categoryHref}
+                       followCursor
+                       src={categoryPreviewSrc}
+                       openDelay={80}
+                       closeDelay={80}
+                     >
+                       <PreviewLinkCardTrigger asChild>
+                         <a
+                           href={categoryHref}
+                           className="flex items-center gap-4 min-w-0 flex-1"
+                         >
+                           <div className="w-10 h-10 rounded-xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
+                              <Icon className="w-5 h-5" />
+                           </div>
+                           <div className="min-w-0">
+                              <p className="font-serif text-lg leading-none truncate">{cat.name}</p>
+                              <p className="text-[10px] uppercase font-bold tracking-widest opacity-40 truncate">{cat.slug}</p>
+                           </div>
+                         </a>
+                       </PreviewLinkCardTrigger>
+                       <PreviewLinkCardContent className="w-[260px] rounded-xl border bg-popover p-0 shadow-xl">
+                         <PreviewLinkCardImage
+                           alt={`${cat.name} preview`}
+                           className="h-[150px] w-[260px] object-cover"
+                         />
+                       </PreviewLinkCardContent>
+                     </PreviewLinkCard>
                       <div className="flex items-center gap-2">
                          <Button variant="ghost" size="sm" className="rounded-full text-[10px] font-bold uppercase tracking-widest" onClick={() => setViewCategoryProducts(cat.slug)}>View</Button>
                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { if(confirm("Confirm deletion?")) deleteCatMutation.mutate(cat.id); }}>

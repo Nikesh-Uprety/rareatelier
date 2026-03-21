@@ -5,7 +5,7 @@ import { MOCK_PRODUCTS } from "@/lib/mockData";
 import { Link } from "wouter";
 import { ExternalLink, Sparkles, Star, Gem, Diamond, ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchProducts, type ProductApi } from "@/lib/api";
+import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib/api";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { Helmet } from "react-helmet-async";
@@ -294,10 +294,26 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
   );
 }
 
-function NewArrivalCard({ product }: { product: ProductApi }) {
+function NewArrivalCard({
+  product,
+  imageAspectClass = "aspect-[3/4]",
+}: {
+  product: ProductApi;
+  imageAspectClass?: string;
+}) {
+  const preferredIndex = Number.isInteger(product.homeFeaturedImageIndex)
+    ? Number(product.homeFeaturedImageIndex)
+    : 0;
   const images = useMemo(
-    () => getGalleryImagesForCard(product, { addDummyFallback: true }),
-    [product],
+    () => {
+      const all = getGalleryImagesForCard(product, { addDummyFallback: true });
+      if (all.length <= 1) return all;
+      const clamped = Math.max(0, Math.min(preferredIndex, all.length - 1));
+      const preferred = all[clamped] ?? all[0];
+      const rest = all.filter((_, idx) => idx !== clamped);
+      return [preferred, ...rest];
+    },
+    [preferredIndex, product],
   );
   const [idx, setIdx] = useState(0);
 
@@ -311,7 +327,7 @@ function NewArrivalCard({ product }: { product: ProductApi }) {
 
   return (
     <Link href={`/product/${product.id}`} className="group cursor-pointer">
-      <div className="relative overflow-hidden bg-gray-50 dark:bg-muted/30 aspect-[3/4] mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500">
+      <div className={`relative overflow-hidden bg-gray-50 dark:bg-muted/30 ${imageAspectClass} mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500`}>
         <div className="absolute inset-0">
           {/* Cross-fade blend: all images stacked, active one has opacity 1 */}
           {images.slice(0, 6).map((src: string, imgIdx: number) => (
@@ -425,9 +441,54 @@ export default function Home() {
   });
 
   const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
-    queryKey: ["products", "arrivals"],
-    queryFn: () => fetchProducts({ category: "arrivals", limit: 4 }),
+    queryKey: ["products", "home-featured"],
+    queryFn: fetchHomeFeaturedProducts,
   });
+
+  const normalizedNewArrivals = useMemo(() => {
+    const capped = newArrivals.slice(0, 8);
+    if (capped.length % 2 === 1) return capped.slice(0, capped.length - 1);
+    return capped;
+  }, [newArrivals]);
+
+  const newArrivalsLayout = useMemo(() => {
+    const count = normalizedNewArrivals.length;
+    if (count === 4) {
+      return {
+        container: "grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8",
+        item: (index: number) =>
+          index === 0
+            ? "md:col-span-2 md:row-span-3"
+            : "md:col-span-1",
+        aspect: (index: number) => (index === 0 ? "aspect-[4/5]" : "aspect-[3/4]"),
+      };
+    }
+    if (count === 6) {
+      return {
+        container: "grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8",
+        item: (index: number) =>
+          index < 2
+            ? "col-span-1 md:col-span-2"
+            : "col-span-1",
+        aspect: (index: number) => (index < 2 ? "aspect-[4/5]" : "aspect-[3/4]"),
+      };
+    }
+    if (count === 8) {
+      return {
+        container: "columns-1 md:columns-2 gap-6 md:gap-8 space-y-6 md:space-y-8",
+        item: (index: number) =>
+          index % 2 === 0
+            ? "break-inside-avoid mb-6 md:mb-8"
+            : "break-inside-avoid mb-6 md:mb-8",
+        aspect: (index: number) => (index % 2 === 0 ? "aspect-[4/5]" : "aspect-[3/4]"),
+      };
+    }
+    return {
+      container: "grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-16",
+      item: () => "",
+      aspect: () => "aspect-[3/4]",
+    };
+  }, [normalizedNewArrivals.length]);
 
   const {
     data: heroAssets = [],
@@ -1006,9 +1067,14 @@ export default function Home() {
         <h3 className="text-4xl font-black uppercase tracking-tighter text-center mb-20">
           New Arrivals
         </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-16">
-          {newArrivals.map((product) => (
-            <NewArrivalCard key={product.id} product={product} />
+        <div className={newArrivalsLayout.container}>
+          {normalizedNewArrivals.map((product, index) => (
+            <div key={product.id} className={newArrivalsLayout.item(index)}>
+              <NewArrivalCard
+                product={product}
+                imageAspectClass={newArrivalsLayout.aspect(index)}
+              />
+            </div>
           ))}
         </div>
       </section>

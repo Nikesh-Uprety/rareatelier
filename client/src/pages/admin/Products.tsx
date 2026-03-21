@@ -13,7 +13,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput, Box, CheckCircle2
+  FolderInput, Box, CheckCircle2, ChevronDown
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,7 @@ import {
   fetchAdminProducts, 
   createAdminProduct, 
   updateAdminProduct, 
+  updateAdminProductHomeFeatured,
   deleteAdminProduct, 
   uploadProductImage, 
   fetchAdminAttributes, 
@@ -96,6 +97,7 @@ import {
 } from "@/components/ui/sheet";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AttributesManager } from "./AttributesManager";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 function slugify(s: string): string {
   return s
@@ -535,6 +537,20 @@ export default function AdminProducts() {
     },
   });
 
+  const homeFeaturedMutation = useMutation({
+    mutationFn: (input: { id: string; homeFeatured: boolean; homeFeaturedImageIndex?: number }) =>
+      updateAdminProductHomeFeatured(input.id, {
+        homeFeatured: input.homeFeatured,
+        homeFeaturedImageIndex: input.homeFeaturedImageIndex,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update home featured product", variant: "destructive" });
+    },
+  });
+
   const filteredProducts = useMemo(() => {
     if (!products) return [];
     return products.filter((p) => {
@@ -544,6 +560,16 @@ export default function AdminProducts() {
       return matchesCategory;
     });
   }, [products, categoryFilter]);
+  const featuredCount = useMemo(
+    () => allAdminProducts.filter((p) => p.homeFeatured).length,
+    [allAdminProducts],
+  );
+  const categoryTabs = useMemo(
+    () => [{ id: "all", slug: "all", name: "All" }, ...categories],
+    [categories],
+  );
+  const visibleCategoryTabs = categoryTabs.slice(0, 8);
+  const moreCategoryTabs = categoryTabs.slice(8);
 
   const selectedProductsForMove = useMemo(
     () => filteredProducts.filter(p => moveSelectionIds.has(p.id)),
@@ -1371,18 +1397,8 @@ export default function AdminProducts() {
       />
 
       <div className="flex flex-col gap-6 px-2 pt-4 pb-2 border-b border-border/50">
-        <div className="flex gap-2 min-w-0 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-none justify-start sm:justify-center no-scrollbar">
-          <Button
-            variant={categoryFilter === "all" ? "default" : "outline"}
-            onClick={() => setCategoryFilter("all")}
-            className={cn(
-              "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
-              categoryFilter !== "all" && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-            )}
-          >
-            All
-          </Button>
-          {categories.map((cat) => (
+        <div className="flex flex-wrap items-center gap-2 min-w-0 pb-2 -mx-2 px-2 justify-start sm:justify-center">
+          {visibleCategoryTabs.map((cat) => (
             <Button
               key={cat.id}
               variant={categoryFilter === cat.slug ? "default" : "outline"}
@@ -1395,6 +1411,32 @@ export default function AdminProducts() {
               {cat.name}
             </Button>
           ))}
+          {moreCategoryTabs.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0"
+                >
+                  More <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
+                {moreCategoryTabs.map((cat) => (
+                  <DropdownMenuItem
+                    key={cat.id}
+                    onClick={() => setCategoryFilter(cat.slug)}
+                    className={cn(
+                      "cursor-pointer",
+                      categoryFilter === cat.slug && "bg-muted font-semibold",
+                    )}
+                  >
+                    {cat.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -1620,6 +1662,71 @@ export default function AdminProducts() {
                       {product.stock === 0 ? "OUT OF STOCK" : `${product.stock} IN STOCK`}
                     </Badge>
                   </div>
+
+                  <div
+                    className="mt-4 space-y-2"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider">
+                        ⭐ Feature on Home
+                      </span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Switch
+                                checked={Boolean(product.homeFeatured)}
+                                disabled={
+                                  homeFeaturedMutation.isPending ||
+                                  (!product.homeFeatured && featuredCount >= 8)
+                                }
+                                onCheckedChange={(checked) =>
+                                  homeFeaturedMutation.mutate({
+                                    id: product.id,
+                                    homeFeatured: checked,
+                                    homeFeaturedImageIndex: product.homeFeaturedImageIndex ?? 2,
+                                  })
+                                }
+                              />
+                            </span>
+                          </TooltipTrigger>
+                          {!product.homeFeatured && featuredCount >= 8 && (
+                            <TooltipContent>
+                              Max 8 products allowed in New Arrivals.
+                            </TooltipContent>
+                          )}
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    {product.homeFeatured && (
+                      <div className="flex items-center justify-between rounded-md border border-border/60 px-2 py-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">
+                          Display Image
+                        </span>
+                        <Select
+                          value={String(product.homeFeaturedImageIndex ?? 2)}
+                          onValueChange={(value) =>
+                            homeFeaturedMutation.mutate({
+                              id: product.id,
+                              homeFeatured: true,
+                              homeFeaturedImageIndex: Number(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-7 w-[120px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Image 1</SelectItem>
+                            <SelectItem value="1">Image 2</SelectItem>
+                            <SelectItem value="2">Image 3</SelectItem>
+                            <SelectItem value="3">Image 4</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
                   
                   {/* Always Visible Edit/Delete Buttons (as requested) */}
                   <div className="mt-6 pt-4 border-t border-border flex gap-2">
@@ -1678,6 +1785,8 @@ export default function AdminProducts() {
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Category</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Price</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Stock</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Home</th>
+                    <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground">Display Image</th>
                     <th className="p-4 font-medium text-xs uppercase tracking-wider text-muted-foreground text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1752,6 +1861,58 @@ export default function AdminProducts() {
                             />
                           </div>
                         </div>
+                      </td>
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Switch
+                                  checked={Boolean(product.homeFeatured)}
+                                  disabled={
+                                    homeFeaturedMutation.isPending ||
+                                    (!product.homeFeatured && featuredCount >= 8)
+                                  }
+                                  onCheckedChange={(checked) =>
+                                    homeFeaturedMutation.mutate({
+                                      id: product.id,
+                                      homeFeatured: checked,
+                                      homeFeaturedImageIndex: product.homeFeaturedImageIndex ?? 2,
+                                    })
+                                  }
+                                />
+                              </span>
+                            </TooltipTrigger>
+                            {!product.homeFeatured && featuredCount >= 8 && (
+                              <TooltipContent>
+                                Max 8 products allowed in New Arrivals.
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </td>
+                      <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                        <Select
+                          value={String(product.homeFeaturedImageIndex ?? 2)}
+                          disabled={!product.homeFeatured}
+                          onValueChange={(value) =>
+                            homeFeaturedMutation.mutate({
+                              id: product.id,
+                              homeFeatured: true,
+                              homeFeaturedImageIndex: Number(value),
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-8 w-[110px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">Image 1</SelectItem>
+                            <SelectItem value="1">Image 2</SelectItem>
+                            <SelectItem value="2">Image 3</SelectItem>
+                            <SelectItem value="3">Image 4</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-1">

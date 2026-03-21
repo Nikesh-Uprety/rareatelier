@@ -177,7 +177,7 @@ export default function PaymentProcess() {
               <span className="text-sm font-medium">Screenshot uploaded. We will verify your payment shortly.</span>
             </div>
             <Button asChild className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold">
-              <Link href={`/checkout/success/${orderId}`}>View Order Summary</Link>
+              <Link href={`/order-confirmation/${orderId}`}>View Order Summary</Link>
             </Button>
           </div>
         ) : (

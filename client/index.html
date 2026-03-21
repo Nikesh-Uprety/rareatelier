@@ -27,16 +27,22 @@
     rel="stylesheet">
   <title>Rare Atelier | Premium Streetwear</title>
   <script>
-    // Blocking script to prevent Flash of Wrong Theme (FOIT)
-    let isDark = false;
-    try {
-      isDark = localStorage.getItem("theme") === "dark" || (!("theme" in localStorage) && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    } catch (e) {}
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
+    // Apply theme class before React mounts to avoid flash.
+    (function () {
+      var root = document.documentElement;
+      var theme = "light";
+      try {
+        var saved = localStorage.getItem("theme");
+        if (saved === "dark" || saved === "light") {
+          theme = saved;
+        } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          theme = "dark";
+        }
+      } catch (e) {}
+
+      root.classList.toggle("dark", theme === "dark");
+      root.style.colorScheme = theme;
+    })();
   </script>
   <style>
     /* Prevent white flash before any CSS loads by forcing dark background immediately */

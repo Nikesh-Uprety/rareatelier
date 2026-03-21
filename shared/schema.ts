@@ -82,6 +82,8 @@ export const products = pgTable("products", {
   originalPrice: numeric("original_price", { precision: 10, scale: 2 }),
   salePercentage: integer("sale_percentage").default(0),
   saleActive: boolean("sale_active").default(false),
+  homeFeatured: boolean("home_featured").notNull().default(false),
+  homeFeaturedImageIndex: integer("home_featured_image_index").notNull().default(2),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

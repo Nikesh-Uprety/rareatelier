@@ -16,6 +16,8 @@ export interface ProductApi {
   originalPrice?: number | string | null;
   salePercentage?: number | null;
   saleActive?: boolean | null;
+  homeFeatured?: boolean;
+  homeFeaturedImageIndex?: number;
 }
 
 export interface CategoryApi {
@@ -83,6 +85,12 @@ export async function fetchProductById(id: string): Promise<ProductApi | null> {
   return json.data ?? null;
 }
 
+export async function fetchHomeFeaturedProducts(): Promise<ProductApi[]> {
+  const res = await apiRequest("GET", "/api/products/home-featured");
+  const json = (await res.json()) as { success: boolean; data: ProductApi[] };
+  return json.data ?? [];
+}
+
 export async function fetchCategories(): Promise<CategoryApi[]> {
   const res = await apiRequest("GET", "/api/categories");
   const json = (await res.json()) as { success: boolean; data: CategoryApi[] };
@@ -115,6 +123,9 @@ export interface OrderDetail {
   paymentVerified: string | null;
   locationCoordinates: string | null;
   deliveryLocation?: string | null;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
   promoCode?: string | null;
   promoDiscountAmount?: number | null;
   createdAt: string | Date;

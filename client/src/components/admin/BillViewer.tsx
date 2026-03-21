@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { Printer, Download, X } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Printer, Download, X, Share2 } from "lucide-react";
 import Barcode from "react-barcode";
 import { formatPrice } from "@/lib/format";
 
@@ -37,14 +37,25 @@ interface BillViewerProps {
 
 export function BillViewer({ bill, onClose }: BillViewerProps) {
   const billRef = useRef<HTMLDivElement>(null);
+  const [showShareFallback, setShowShareFallback] = useState(false);
 
   const subtotal = Number(bill.subtotal);
-  const taxRate = Number(bill.taxRate);
-  const taxAmount = Number(bill.taxAmount);
   const discountAmount = Number(bill.discountAmount);
-  const totalAmount = Number(bill.totalAmount);
+  const computedTotalAmount = Math.max(0, subtotal - discountAmount);
   const cashReceived = bill.cashReceived ? Number(bill.cashReceived) : null;
   const changeGiven = bill.changeGiven ? Number(bill.changeGiven) : null;
+
+  const sharePayload = useMemo(() => {
+    const url = `${window.location.origin}/admin/bills?search=${encodeURIComponent(bill.billNumber)}`;
+    const text = `Order #${bill.billNumber} — NPR ${computedTotalAmount.toFixed(2)} — RARE.NP`;
+    return {
+      title: `Bill ${bill.billNumber}`,
+      text,
+      url,
+      whatsappUrl: `https://wa.me/?text=${encodeURIComponent(text)}`,
+      facebookUrl: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`,
+    };
+  }, [bill.billNumber, computedTotalAmount]);
 
   const handlePrint = () => {
     window.print();
@@ -70,6 +81,23 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
     const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
     pdf.save(`${bill.billNumber}.pdf`);
+  };
+
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: sharePayload.title,
+          text: sharePayload.text,
+          url: sharePayload.url,
+        });
+        setShowShareFallback(false);
+      } catch {
+        // User cancelled share sheet or share failed; keep UI quiet.
+      }
+      return;
+    }
+    setShowShareFallback(true);
   };
 
   const paymentLabels: Record<string, string> = {
@@ -113,7 +141,6 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
           <h1>RARE ATELIER</h1>
           <p>Khusibu, Nayabazar, Kathmandu</p>
           <p>(+977)-9705203050 · rarenepal888@gmail.com</p>
-          <p>instagram.com/rare.np</p>
         </div>
 
         <div className="bill-divider">━━━━━━━━━━━━━━━━━━━━━━━━━━</div>
@@ -205,14 +232,10 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
               <span>- {formatPrice(discountAmount)}</span>
             </div>
           )}
-          <div className="bill-total-row">
-            <span>VAT ({taxRate}%)</span>
-            <span>{formatPrice(taxAmount)}</span>
-          </div>
           <div className="bill-divider">──────────────────────────</div>
           <div className="bill-total-row bill-grand-total">
             <span>TOTAL</span>
-            <span>{formatPrice(totalAmount)}</span>
+            <span>{formatPrice(computedTotalAmount)}</span>
           </div>
           {cashReceived !== null && (
             <>
@@ -251,6 +274,23 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
 
         {bill.status === "void" && (
           <div className="bill-void-stamp">VOID</div>
+        )}
+      </div>
+
+      <div className="no-print mt-4 flex flex-col items-center gap-2">
+        <button onClick={handleShare}>
+          <Share2 size={16} /> Share
+        </button>
+        {showShareFallback && (
+          <div className="text-sm text-muted-foreground flex items-center gap-3">
+            <a href={sharePayload.whatsappUrl} target="_blank" rel="noreferrer">
+              Share on WhatsApp
+            </a>
+            <span>·</span>
+            <a href={sharePayload.facebookUrl} target="_blank" rel="noreferrer">
+              Share on Facebook
+            </a>
+          </div>
         )}
       </div>
     </div>

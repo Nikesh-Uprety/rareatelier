@@ -199,7 +199,7 @@ export default function Checkout() {
 
       clearCart();
       localStorage.setItem("ra_last_order_id", result.data.order.id);
-      setLocation(`/checkout/success/${result.data.order.id}`);
+      setLocation(`/order-confirmation/${result.data.order.id}`);
       toast({ title: "Order Placed" });
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");

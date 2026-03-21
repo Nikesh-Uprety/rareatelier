@@ -274,6 +274,15 @@ export async function deleteAdminProduct(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/products/${id}`);
 }
 
+export async function updateAdminProductHomeFeatured(
+  id: string,
+  data: { homeFeatured: boolean; homeFeaturedImageIndex?: number },
+): Promise<ProductApi> {
+  const res = await apiRequest("PATCH", `/api/admin/products/${id}/home-featured`, data);
+  const json = (await res.json()) as { success: boolean; data: ProductApi };
+  return json.data;
+}
+
 export async function createCategory(data: {
   name: string;
   slug: string;
@@ -523,6 +532,7 @@ export async function fetchBillByOrder(orderId: string): Promise<AdminBill | nul
 
 export async function createPosBill(data: {
   customerName: string;
+  customerEmail?: string;
   customerPhone?: string;
   items: any[];
   source?: string;
