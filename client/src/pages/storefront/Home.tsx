@@ -297,7 +297,7 @@ function FeaturedProductCard({ product, index }: { product: ProductApi; index: n
 
 function NewArrivalCard({
   product,
-  imageAspectClass = "aspect-[3/4]",
+  imageAspectClass = "aspect-[4/5] sm:aspect-[3/4]",
 }: {
   product: ProductApi;
   imageAspectClass?: string;
@@ -321,34 +321,36 @@ function NewArrivalCard({
   // Adaptive timing: primary image (idx 0) holds 3.5s, gallery images cycle at 2.0s
   useEffect(() => {
     if (images.length <= 1) return;
-    const duration = idx === 0 ? 3500 : 2000;
+    const duration = idx === 0 ? 3800 : 2300;
     const t = setTimeout(() => setIdx((p) => (p + 1) % images.length), duration);
     return () => clearTimeout(t);
   }, [images.length, idx]);
 
   return (
-    <Link href={`/product/${product.id}`} className="group cursor-pointer">
-      <div className={`relative overflow-hidden bg-gray-50 dark:bg-muted/30 ${imageAspectClass} mb-6 rounded-lg group-hover:shadow-xl transition-all duration-500`}>
+    <Link href={`/product/${product.id}`} className="group block cursor-pointer">
+      <div
+        className={`relative overflow-hidden rounded-xl border border-zinc-200/70 bg-zinc-100/70 dark:border-zinc-800/80 dark:bg-zinc-900/40 ${imageAspectClass} mb-4 shadow-[0_12px_40px_-30px_rgba(0,0,0,0.85)] transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]`}
+      >
         <div className="absolute inset-0">
-          {/* Cross-fade blend: all images stacked, active one has opacity 1 */}
           {images.slice(0, 6).map((src: string, imgIdx: number) => (
             <div
               key={`${product.id}-img-${imgIdx}`}
               className="absolute inset-0"
               style={{
                 opacity: imgIdx === idx ? 1 : 0,
-                transition: 'opacity 1.2s ease-in-out',
+                transition: "opacity 1.4s cubic-bezier(0.22, 1, 0.36, 1)",
                 zIndex: imgIdx === idx ? 1 : 0,
               }}
             >
               <OptimizedImage
                 src={src}
                 alt={`${product.name} view ${imgIdx + 1}`}
-                className="w-full h-full object-cover"
+                className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
               />
             </div>
           ))}
-          <div className="absolute inset-0 opacity-0 group-hover:opacity-30 mix-blend-overlay transition-opacity duration-700 bg-white z-[2]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-60 z-[2]" />
+          <div className="absolute inset-0 z-[3] border border-white/30 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
         </div>
 
         <button
@@ -358,53 +360,40 @@ function NewArrivalCard({
             e.stopPropagation();
             window.open(`/product/${product.id}`, "_blank");
           }}
-          className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-white backdrop-blur-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity border border-white/30"
+          className="absolute right-3 top-3 z-10 hidden h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-black/35 text-white opacity-0 backdrop-blur-md transition-all duration-300 group-hover:opacity-100 lg:flex"
         >
           <ExternalLink className="h-3.5 w-3.5" />
         </button>
 
-        {/* Price: always visible on mobile/tablet, hover-reveal on desktop */}
-        <div className="absolute bottom-2 left-2 max-w-[85%] truncate opacity-100 md:opacity-0 md:group-hover:opacity-100 transform translate-y-0 md:translate-y-2 md:group-hover:translate-y-0 transition-all duration-300 pointer-events-none flex flex-col gap-1 items-start z-[5]">
+        <div className="absolute left-3 top-3 z-[5]">
           {product.saleActive && Number(product.salePercentage) > 0 && (
-            <span className="bg-primary text-primary-foreground text-[8px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded shadow-xl">
+            <span className="rounded-full border border-white/30 bg-black/45 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-white backdrop-blur-md">
               {product.salePercentage}% OFF
             </span>
           )}
-          <span className="bg-white/90 dark:bg-black/80 text-zinc-900 dark:text-white text-[10px] px-2 py-1 rounded-full backdrop-blur-sm font-bold tracking-widest uppercase flex items-center gap-2 border border-black/5 dark:border-white/5">
-            {product.saleActive && Number(product.salePercentage) > 0 ? (
-              <>
-                <span className="text-primary">
-                  {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                </span>
-                <span className="text-zinc-500/50 dark:text-white/50 line-through text-[8px]">
-                  {formatPrice(product.price)}
-                </span>
-              </>
-            ) : (
-              formatPrice(product.price)
-            )}
-          </span>
         </div>
-
-        {/* Slide indicators */}
-        {images.length > 1 && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 flex gap-1.5">
-            {images.slice(0, 6).map((_, dotIdx) => (
-              <div
-                key={dotIdx}
-                className={`h-1 rounded-full transition-all duration-500 ${
-                  dotIdx === idx ? "w-5 bg-white shadow-lg" : "w-1.5 bg-white/40"
-                }`}
-              />
-            ))}
-          </div>
-        )}
       </div>
 
-      <div className="px-1">
-        <h3 className="text-xs font-black uppercase tracking-widest truncate mb-1 text-foreground/80 group-hover:text-primary transition-colors">
+      <div className="px-0.5">
+        <div className="mb-1.5 flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.26em] text-zinc-500 dark:text-zinc-400">
+          <span className="inline-block h-[1px] w-5 bg-zinc-400/70 dark:bg-zinc-600/80" />
+          Crafted Quality
+        </div>
+        <h3 className="mb-1 truncate text-[11px] font-black uppercase tracking-[0.14em] text-zinc-900 transition-colors duration-300 group-hover:text-black dark:text-zinc-100 dark:group-hover:text-white">
           {product.name}
         </h3>
+        <div className="flex items-center gap-2 text-[11px] font-bold tracking-[0.08em] text-zinc-700 dark:text-zinc-300">
+          {product.saleActive && Number(product.salePercentage) > 0 ? (
+            <>
+              <span className="text-primary">
+                {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+              </span>
+              <span className="text-[10px] text-zinc-500 line-through dark:text-zinc-500">{formatPrice(product.price)}</span>
+            </>
+          ) : (
+            <span>{formatPrice(product.price)}</span>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -447,49 +436,8 @@ export default function Home() {
   });
 
   const normalizedNewArrivals = useMemo(() => {
-    const capped = newArrivals.slice(0, 8);
-    if (capped.length % 2 === 1) return capped.slice(0, capped.length - 1);
-    return capped;
+    return newArrivals.slice(0, 8);
   }, [newArrivals]);
-
-  const newArrivalsLayout = useMemo(() => {
-    const count = normalizedNewArrivals.length;
-    if (count === 4) {
-      return {
-        container: "grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8",
-        item: (index: number) =>
-          index === 0
-            ? "md:col-span-2 md:row-span-3"
-            : "md:col-span-1",
-        aspect: (index: number) => (index === 0 ? "aspect-[4/5]" : "aspect-[3/4]"),
-      };
-    }
-    if (count === 6) {
-      return {
-        container: "grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8",
-        item: (index: number) =>
-          index < 2
-            ? "col-span-1 md:col-span-2"
-            : "col-span-1",
-        aspect: (index: number) => (index < 2 ? "aspect-[4/5]" : "aspect-[3/4]"),
-      };
-    }
-    if (count === 8) {
-      return {
-        container: "columns-1 md:columns-2 gap-6 md:gap-8 space-y-6 md:space-y-8",
-        item: (index: number) =>
-          index % 2 === 0
-            ? "break-inside-avoid mb-6 md:mb-8"
-            : "break-inside-avoid mb-6 md:mb-8",
-        aspect: (index: number) => (index % 2 === 0 ? "aspect-[4/5]" : "aspect-[3/4]"),
-      };
-    }
-    return {
-      container: "grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-16",
-      item: () => "",
-      aspect: () => "aspect-[3/4]",
-    };
-  }, [normalizedNewArrivals.length]);
 
   const {
     data: heroAssets = [],
@@ -1062,18 +1010,36 @@ export default function Home() {
 
       {/* New Arrivals */}
       <section className="py-24 container mx-auto px-6 max-w-7xl">
-        <h2 className="text-sm font-bold uppercase tracking-[0.3em] text-center text-muted-foreground mb-4">
+        <h2 className="text-[11px] font-bold uppercase tracking-[0.34em] text-center text-zinc-500 dark:text-zinc-400 mb-3">
           Latest Drops
         </h2>
-        <h3 className="text-4xl font-black uppercase tracking-tighter text-center mb-20">
+        <h3 className="text-4xl md:text-5xl font-black uppercase tracking-[-0.02em] text-center text-zinc-900 dark:text-zinc-100 mb-4">
           New Arrivals
         </h3>
-        <div className={newArrivalsLayout.container}>
+        <p className="mx-auto mb-14 max-w-2xl text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
+          Curated originals from Rare Atelier, crafted to elevate everyday wear.
+        </p>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-12 lg:grid-cols-12 lg:gap-x-8 lg:gap-y-14">
           {normalizedNewArrivals.map((product, index) => (
-            <div key={product.id} className={newArrivalsLayout.item(index)}>
+            <div
+              key={product.id}
+              className={
+                index === 0
+                  ? "lg:col-span-7"
+                  : index === 1
+                    ? "lg:col-span-5"
+                    : index === 4
+                      ? "lg:col-span-8"
+                      : "lg:col-span-4"
+              }
+            >
               <NewArrivalCard
                 product={product}
-                imageAspectClass={newArrivalsLayout.aspect(index)}
+                imageAspectClass={
+                  index === 0
+                    ? "aspect-[4/5] sm:aspect-[3/4] lg:aspect-[4/5]"
+                    : "aspect-[4/5] sm:aspect-[3/4]"
+                }
               />
             </div>
           ))}
