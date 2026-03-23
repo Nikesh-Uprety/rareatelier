@@ -21,8 +21,8 @@ function parseJsonArray(s: string | null | undefined): string[] {
   }
 }
 
-/** Map a point in the container to image % for background-position; matches CSS object-fit: cover + center. */
-function objectCoverPointToImagePercent(
+/** Map a point in the container to image % for background-position; matches CSS object-fit: contain + center. */
+function objectContainPointToImagePercent(
   px: number,
   py: number,
   cw: number,
@@ -33,7 +33,7 @@ function objectCoverPointToImagePercent(
   if (!(iw > 0 && ih > 0 && cw > 0 && ch > 0)) {
     return { x: (px / cw) * 100, y: (py / ch) * 100 };
   }
-  const scale = Math.max(cw / iw, ch / ih);
+  const scale = Math.min(cw / iw, ch / ih);
   const rw = iw * scale;
   const rh = ih * scale;
   const ox = (cw - rw) / 2;
@@ -129,7 +129,7 @@ export default function ProductDetail() {
   }, [mainImageUrl, galleryUrls]);
   const displayImage = allImages[selectedImageIndex] ?? allImages[0];
   const lensHalf = 65;
-  const zoomLevel = 2.5;
+  const zoomLevel = 2.8;
 
   useEffect(() => {
     setCurrentImageSrc(displayImage || "");
@@ -158,11 +158,12 @@ export default function ProductDetail() {
   useEffect(() => {
     if (allImages.length <= 1 || !allImages[0]) return;
     if (isGalleryOpen) return;
+    if (hoverMedia) return;
     const interval = window.setInterval(() => {
       setSelectedImageIndex((prev) => (prev + 1) % allImages.length);
     }, 4000);
     return () => window.clearInterval(interval);
-  }, [allImages, slideTrigger, isGalleryOpen]);
+  }, [allImages, slideTrigger, isGalleryOpen, hoverMedia]);
 
   useEffect(() => {
     if (!isGalleryOpen) return;
@@ -211,7 +212,7 @@ export default function ProductDetail() {
       setPointerOnMain(true);
       setLensPos({ x: x - lensHalf, y: y - lensHalf });
       const { w: iw, h: ih } = activeImageNaturalRef.current;
-      const { x: zx, y: zy } = objectCoverPointToImagePercent(x, y, cw, ch, iw, ih);
+      const { x: zx, y: zy } = objectContainPointToImagePercent(x, y, cw, ch, iw, ih);
       setZoomPos({ x: Number(zx.toFixed(2)), y: Number(zy.toFixed(2)) });
     } else {
       setPointerOnMain(false);
@@ -436,7 +437,7 @@ export default function ProductDetail() {
         </script>
       </Helmet>
       <div className="flex flex-col lg:flex-row gap-12 lg:gap-16">
-        <div className="flex w-full flex-col gap-4 lg:w-3/5 lg:flex-row lg:items-start lg:gap-6">
+        <div className="flex w-full flex-col gap-4 lg:w-2/3 lg:flex-row lg:items-start lg:gap-6">
           {allImages.length > 1 && (
             <div className="scrollbar-hide hidden max-h-[min(100%,70vh)] w-[72px] shrink-0 flex-col gap-2 self-start overflow-y-auto lg:flex">
               {allImages.map((url, i) => (
@@ -461,7 +462,7 @@ export default function ProductDetail() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-4">
               <div
                 ref={mainImageRef}
-                className={`relative box-border aspect-[4/5] overflow-hidden rounded-sm border border-border bg-muted lg:min-h-0 lg:flex-1 ${
+                className={`relative box-border h-[64vh] max-h-[900px] min-h-[460px] overflow-hidden rounded-sm border border-border bg-muted sm:h-[70vh] lg:h-[78vh] lg:flex-1 ${
                   panelZoomEnabled ? "cursor-pointer lg:cursor-crosshair" : "cursor-pointer"
                 }`}
                 onClick={() => {
@@ -505,8 +506,10 @@ export default function ProductDetail() {
                       ref={selectedImageIndex === idx ? selectedMainImgRef : undefined}
                       src={url || ""}
                       alt={`${product.name} - view ${idx + 1}`}
-                      className={`absolute inset-0 h-full w-full select-none object-cover object-center transition-opacity duration-700 ${
-                        selectedImageIndex === idx ? "opacity-100" : "opacity-0"
+                      className={`absolute inset-0 h-full w-full select-none object-contain object-center transition-all duration-500 ${
+                        selectedImageIndex === idx
+                          ? `opacity-100 ${panelZoomEnabled && hoverMedia ? "scale-[1.03]" : "scale-100"}`
+                          : "opacity-0 scale-100"
                       }`}
                       onLoad={(e) => {
                         if (idx !== selectedImageIndex) return;
@@ -537,15 +540,13 @@ export default function ProductDetail() {
                     </div>
                   </div>
                 ) : null}
-              </div>
 
-              <div
-                className={`hidden min-h-0 shrink-0 flex-col justify-end overflow-hidden transition-opacity duration-150 ease-out lg:flex lg:w-[min(36vw,420px)] ${
-                  panelZoomEnabled && hoverMedia ? "opacity-100" : "pointer-events-none opacity-0"
-                }`}
-                aria-hidden
-              >
-                <div className="box-border aspect-[4/5] w-full max-w-full overflow-hidden rounded-sm border border-border bg-muted">
+                <div
+                  className={`pointer-events-none absolute inset-y-4 right-4 z-20 hidden w-[42%] overflow-hidden rounded-sm border border-border/80 bg-muted/90 shadow-lg transition-all duration-150 ease-out lg:block ${
+                    panelZoomEnabled && hoverMedia ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+                  }`}
+                  aria-hidden
+                >
                   <div
                     className="h-full w-full"
                     style={
