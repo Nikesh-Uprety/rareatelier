@@ -3165,37 +3165,6 @@ export async function registerRoutes(
     }
   });
 
-  // GET /api/admin/bills/:id — single bill
-  app.get("/api/admin/bills/:id", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const [bill] = await db
-        .select()
-        .from(bills)
-        .where(eq(bills.id, req.params.id as string))
-        .limit(1);
-      if (!bill) return res.status(404).json({ success: false, error: "Bill not found" });
-      res.json({ success: true, data: bill });
-    } catch (err) {
-      console.error("Error in GET /api/admin/bills/:id", err);
-      res.status(500).json({ success: false, error: "Failed to load bill" });
-    }
-  });
-
-  // GET /api/admin/bills/by-order/:orderId — get bill for a specific order
-  app.get("/api/admin/bills/by-order/:orderId", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const [bill] = await db
-        .select()
-        .from(bills)
-        .where(eq(bills.orderId, req.params.orderId as string))
-        .limit(1);
-      res.json({ success: true, data: bill ?? null });
-    } catch (err) {
-      console.error("Error in GET /api/admin/bills/by-order/:orderId", err);
-      res.status(500).json({ success: false, error: "Failed to load bill" });
-    }
-  });
-
   // GET /api/admin/bills/export — export bills to CSV
   app.get(
     "/api/admin/bills/export",
@@ -3235,6 +3204,37 @@ export async function registerRoutes(
       }
     }
   );
+
+  // GET /api/admin/bills/:id — single bill
+  app.get("/api/admin/bills/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const [bill] = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.id, req.params.id as string))
+        .limit(1);
+      if (!bill) return res.status(404).json({ success: false, error: "Bill not found" });
+      res.json({ success: true, data: bill });
+    } catch (err) {
+      console.error("Error in GET /api/admin/bills/:id", err);
+      res.status(500).json({ success: false, error: "Failed to load bill" });
+    }
+  });
+
+  // GET /api/admin/bills/by-order/:orderId — get bill for a specific order
+  app.get("/api/admin/bills/by-order/:orderId", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const [bill] = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.orderId, req.params.orderId as string))
+        .limit(1);
+      res.json({ success: true, data: bill ?? null });
+    } catch (err) {
+      console.error("Error in GET /api/admin/bills/by-order/:orderId", err);
+      res.status(500).json({ success: false, error: "Failed to load bill" });
+    }
+  });
 
   // POST /api/admin/bills/pos — create bill directly from POS (no order record)
   app.post("/api/admin/bills/pos", requireAdmin, async (req: Request, res: Response) => {

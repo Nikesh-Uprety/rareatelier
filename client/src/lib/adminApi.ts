@@ -572,8 +572,29 @@ export async function voidBill(id: string): Promise<AdminBill> {
   return json.data;
 }
 
-export function exportPosBillsCSV(): void {
-  window.location.href = "/api/admin/bills/export?source=pos";
+export async function exportPosBillsCSV(): Promise<void> {
+  const res = await fetch("/api/admin/bills/export?source=pos", {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to export POS bills");
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const filename = match?.[1] || "pos-bills.csv";
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 // ── POS Session API helpers ──────────────────────────
