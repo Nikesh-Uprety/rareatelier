@@ -10,6 +10,28 @@ export interface CartItem {
   quantity: number;
 }
 
+function getUnitOriginalPrice(product: Product): number {
+  const currentPrice = Number(product.price);
+  const explicitOriginalPrice = Number(product.originalPrice);
+
+  if (Number.isFinite(explicitOriginalPrice) && explicitOriginalPrice > currentPrice) {
+    return explicitOriginalPrice;
+  }
+
+  const salePercentage = Number(product.salePercentage);
+  if (
+    Boolean(product.saleActive) &&
+    Number.isFinite(salePercentage) &&
+    salePercentage > 0 &&
+    salePercentage < 100 &&
+    currentPrice > 0
+  ) {
+    return currentPrice / (1 - salePercentage / 100);
+  }
+
+  return currentPrice;
+}
+
 interface CartState {
   items: CartItem[];
   addItem: (product: Product, variant: { size: string; color: string }, quantity?: number) => void;
@@ -17,6 +39,8 @@ interface CartState {
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   get subtotal(): number;
+  get originalSubtotal(): number;
+  get productDiscountTotal(): number;
 }
 
 export const useCartStore = create<CartState>()(
@@ -121,7 +145,16 @@ export const useCartStore = create<CartState>()(
       clearCart: () => set({ items: [] }),
       get subtotal() {
         return get().items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
-      }
+      },
+      get originalSubtotal() {
+        return get().items.reduce(
+          (total, item) => total + getUnitOriginalPrice(item.product) * item.quantity,
+          0,
+        );
+      },
+      get productDiscountTotal() {
+        return Math.max(0, get().originalSubtotal - get().subtotal);
+      },
     }),
     {
       name: "ra-cart",

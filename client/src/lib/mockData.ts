@@ -3,6 +3,9 @@ export interface Product {
   name: string;
   sku: string;
   price: number;
+  originalPrice?: number | null;
+  salePercentage?: number | null;
+  saleActive?: boolean | null;
   stock: number;
   category: string;
   images: string[];

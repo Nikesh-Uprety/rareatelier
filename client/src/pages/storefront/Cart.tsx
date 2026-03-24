@@ -1,12 +1,35 @@
 import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Trash2, ArrowRight, RotateCcw, ShoppingBag, History } from "lucide-react";
+import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles } from "lucide-react";
 import { formatPrice } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrderById } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { useMemo } from "react";
+
+function getCartOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
+  const currentPrice = Number(price);
+  const explicitOriginalPrice = Number(originalPrice);
+
+  if (Number.isFinite(explicitOriginalPrice) && explicitOriginalPrice > currentPrice) {
+    return explicitOriginalPrice;
+  }
+
+  const resolvedSalePercentage = Number(salePercentage);
+  if (
+    Boolean(saleActive) &&
+    Number.isFinite(resolvedSalePercentage) &&
+    resolvedSalePercentage > 0 &&
+    resolvedSalePercentage < 100 &&
+    currentPrice > 0
+  ) {
+    return currentPrice / (1 - resolvedSalePercentage / 100);
+  }
+
+  return currentPrice;
+}
 
 export default function Cart() {
   const [, setLocation] = useLocation();
@@ -30,6 +53,15 @@ export default function Cart() {
           name: item.product.name,
           sku: item.productId,
           price: parseFloat(item.product.price || item.unitPrice),
+          originalPrice:
+            item.product.originalPrice !== null && item.product.originalPrice !== undefined
+              ? Number(item.product.originalPrice)
+              : null,
+          salePercentage:
+            item.product.salePercentage !== null && item.product.salePercentage !== undefined
+              ? Number(item.product.salePercentage)
+              : null,
+          saleActive: Boolean(item.product.saleActive),
           stock: item.product.stock || 99,
           category: item.product.category || "",
           images: item.product.imageUrl ? [item.product.imageUrl] : [],
@@ -44,7 +76,26 @@ export default function Cart() {
     });
   };
 
-  const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
+  const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [items],
+  );
+  const productDiscountTotal = useMemo(
+    () =>
+      items.reduce((sum, item) => {
+        const originalPrice = getCartOriginalPrice(
+          item.product.price,
+          item.product.originalPrice,
+          item.product.salePercentage,
+          item.product.saleActive,
+        );
+        if (!Number.isFinite(originalPrice) || originalPrice <= item.product.price) {
+          return sum;
+        }
+        return sum + (originalPrice - item.product.price) * item.quantity;
+      }, 0),
+    [items],
+  );
   const shipping = 100;
   const total = subtotal + shipping;
 
@@ -158,15 +209,52 @@ export default function Cart() {
                     <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover rounded-lg" />
                   </Link>
                   <div className="flex-1 flex flex-col">
+                    {(() => {
+                      const originalPrice = getCartOriginalPrice(
+                        item.product.price,
+                        item.product.originalPrice,
+                        item.product.salePercentage,
+                        item.product.saleActive,
+                      );
+                      const hasDiscount = Number.isFinite(originalPrice) && originalPrice > item.product.price;
+                      const resolvedSalePercentage = hasDiscount
+                        ? Math.round(((originalPrice - item.product.price) / originalPrice) * 100)
+                        : 0;
+
+                      return (
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <h3 className="font-black uppercase tracking-widest text-[11px] mb-1.5 line-clamp-1 text-zinc-900 dark:text-zinc-100">{item.product.name}</h3>
                         <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-bold">{item.variant.size} / {item.variant.color}</p>
+                        {hasDiscount && (
+                          <>
+                            <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-emerald-700 dark:text-emerald-300">
+                              <BadgePercent size={10} />
+                              {resolvedSalePercentage}
+                              % Off Applied
+                            </div>
+                            <p className="mt-2 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-300">
+                              You save{" "}
+                              {formatPrice(
+                                (originalPrice - item.product.price) * item.quantity,
+                              )}
+                            </p>
+                          </>
+                        )}
                       </div>
-                      <span className="font-black text-[11px] tracking-widest text-zinc-900 dark:text-zinc-100">
-                        {formatPrice(item.product.price)}
-                      </span>
+                      <div className="text-right">
+                        <span className="block font-black text-[11px] tracking-widest text-zinc-900 dark:text-zinc-100">
+                          {formatPrice(item.product.price)}
+                        </span>
+                        {hasDiscount && (
+                          <span className="mt-1 block text-[9px] font-bold uppercase tracking-[0.18em] text-zinc-400 line-through">
+                            {formatPrice(originalPrice)}
+                          </span>
+                        )}
+                      </div>
                     </div>
+                      );
+                    })()}
                     
                     <div className="mt-auto flex justify-between items-end">
                       <div className="flex items-center rounded-lg border border-black/[0.06] dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.04] backdrop-blur-sm">
@@ -199,10 +287,33 @@ export default function Cart() {
             <h2 className="text-xl font-black uppercase tracking-tighter mb-10 italic text-zinc-900 dark:text-zinc-100">Checkout Summary</h2>
             
             <div className="space-y-5 text-[10px] uppercase tracking-widest font-black mb-12">
+              {productDiscountTotal > 0 && (
+                <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/12 via-lime-400/10 to-amber-300/10 px-4 py-4 text-emerald-700 dark:text-emerald-300">
+                  <div className="mt-0.5 rounded-full bg-emerald-500/15 p-2">
+                    <Sparkles size={14} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[9px] uppercase tracking-[0.22em] font-black">Discount Applied</p>
+                    <p className="mt-1 text-[11px] normal-case tracking-normal font-semibold">
+                      Your bag already includes product savings.
+                    </p>
+                  </div>
+                  <span className="text-[12px] font-black">-{formatPrice(productDiscountTotal)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-zinc-500 dark:text-zinc-400">
                 <span>Items Subtotal</span>
                 <span className="text-[12px] text-zinc-900 dark:text-zinc-100">{formatPrice(subtotal)}</span>
               </div>
+              {productDiscountTotal > 0 && (
+                <div className="flex justify-between items-center text-emerald-600 dark:text-emerald-300">
+                  <span className="inline-flex items-center gap-2">
+                    <BadgePercent size={12} />
+                    Product Savings
+                  </span>
+                  <span className="text-[12px] font-black">-{formatPrice(productDiscountTotal)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center text-zinc-500 dark:text-zinc-400">
                 <span>Shipping & Handling</span>
                 <span className="text-[12px] text-zinc-900 dark:text-zinc-100">{formatPrice(shipping)}</span>

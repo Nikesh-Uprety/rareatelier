@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, AlertCircle, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone } from "lucide-react";
+import { Trash2, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone, BadgePercent, Sparkles } from "lucide-react";
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +19,28 @@ const PAYMENT_OPTIONS = [
 ] as const;
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
+
+function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
+  const currentPrice = Number(price);
+  const explicitOriginalPrice = Number(originalPrice);
+
+  if (Number.isFinite(explicitOriginalPrice) && explicitOriginalPrice > currentPrice) {
+    return explicitOriginalPrice;
+  }
+
+  const resolvedSalePercentage = Number(salePercentage);
+  if (
+    Boolean(saleActive) &&
+    Number.isFinite(resolvedSalePercentage) &&
+    resolvedSalePercentage > 0 &&
+    resolvedSalePercentage < 100 &&
+    currentPrice > 0
+  ) {
+    return currentPrice / (1 - resolvedSalePercentage / 100);
+  }
+
+  return currentPrice;
+}
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
@@ -40,11 +62,23 @@ export default function Checkout() {
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
 
   const subtotal = useMemo(
+    () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [items],
+  );
+  const productDiscountTotal = useMemo(
     () =>
-      items.reduce(
-        (sum, item) => sum + item.product.price * item.quantity,
-        0,
-      ),
+      items.reduce((sum, item) => {
+        const originalPrice = getCheckoutOriginalPrice(
+          item.product.price,
+          item.product.originalPrice,
+          item.product.salePercentage,
+          item.product.saleActive,
+        );
+        if (!Number.isFinite(originalPrice) || originalPrice <= item.product.price) {
+          return sum;
+        }
+        return sum + (originalPrice - item.product.price) * item.quantity;
+      }, 0),
     [items],
   );
 
@@ -476,9 +510,20 @@ export default function Checkout() {
                 <div className="flex-1">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest">{item.product.name}</h4>
                   <p className="text-[10px] text-muted-foreground uppercase">{item.variant.size}</p>
+                  {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
+                    <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                      <BadgePercent className="h-3 w-3" />
+                      Deal applied
+                    </div>
+                  )}
                 </div>
-                <div className="text-[10px] font-black uppercase tracking-widest text-zinc-900">
-                  {formatPrice(item.product.price)}
+                <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-900">
+                  <div>{formatPrice(item.product.price)}</div>
+                  {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
+                    <div className="mt-1 text-[8px] text-zinc-500 line-through">
+                      {formatPrice(Number(item.product.originalPrice))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -520,10 +565,33 @@ export default function Checkout() {
           </div>
 
           <div className="space-y-4 text-[10px] uppercase tracking-widest font-bold text-zinc-600 pt-8 border-t border-zinc-200">
+            {productDiscountTotal > 0 && (
+              <div className="flex items-start gap-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-lime-300/10 to-amber-200/10 px-4 py-4 text-emerald-700">
+                <div className="mt-0.5 rounded-full bg-emerald-500/15 p-2">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-[9px] uppercase tracking-[0.2em] font-black">Product Discount Live</p>
+                  <p className="mt-1 text-[11px] normal-case tracking-normal font-semibold">
+                    Discounted item pricing is already included in this subtotal.
+                  </p>
+                </div>
+                <span className="text-[12px] font-black">-{formatPrice(productDiscountTotal)}</span>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span>Subtotal</span>
               <span className="text-zinc-900 font-black">{formatPrice(subtotal)}</span>
             </div>
+            {productDiscountTotal > 0 && (
+              <div className="flex justify-between items-center text-emerald-600">
+                <span className="inline-flex items-center gap-2">
+                  <BadgePercent className="h-3.5 w-3.5" />
+                  Product Savings
+                </span>
+                <span className="font-black">-{formatPrice(productDiscountTotal)}</span>
+              </div>
+            )}
             {appliedPromo && (
               <div className="flex justify-between items-center text-emerald-600">
                 <span>Discount ({appliedPromo.code})</span>

@@ -306,13 +306,24 @@ export default function ProductDetail() {
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize ?? (sizes[0] ?? null);
+  const hasSale = Boolean(product.saleActive) && Number(product.salePercentage) > 0;
+  const effectiveUnitPrice = hasSale
+    ? Number(product.price) * (1 - Number(product.salePercentage) / 100)
+    : Number(product.price);
 
   const handleAddToCart = () => {
     addItem(
       {
         id: product.id,
         name: product.name,
-        price: Number(product.price),
+        price: effectiveUnitPrice,
+        originalPrice:
+          hasSale ? Number(product.price) : null,
+        salePercentage:
+          product.salePercentage !== null && product.salePercentage !== undefined
+            ? Number(product.salePercentage)
+            : null,
+        saleActive: hasSale,
         stock: product.stock,
         category: product.category ?? "",
         sku: "",
