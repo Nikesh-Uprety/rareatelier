@@ -99,10 +99,62 @@ const sessionMiddleware = session({
   },
 });
 
-app.use(sessionMiddleware);
+const isAppDocumentRequest = (req: Request) =>
+  !req.path.startsWith("/api") && (req.method === "GET" || req.method === "HEAD");
+
+app.use((req, res, next) => {
+  sessionMiddleware(req, res, (err) => {
+    if (!err) return next();
+
+    logger.error(
+      "Session store unavailable",
+      {
+        timestamp: new Date().toISOString(),
+      },
+      err.message || "Unknown session error",
+      {
+        method: req.method,
+        path: req.path,
+      },
+    );
+
+    if (isAppDocumentRequest(req)) {
+      return next();
+    }
+
+    return next(err);
+  });
+});
 configurePassport();
 app.use(passport.initialize());
-app.use(passport.session());
+const passportSessionMiddleware = passport.session();
+app.use((req, res, next) => {
+  if (isAppDocumentRequest(req) && !(req as Request & { session?: unknown }).session) {
+    return next();
+  }
+
+  passportSessionMiddleware(req, res, (err?: any) => {
+    if (!err) return next();
+
+    logger.error(
+      "Passport session unavailable",
+      {
+        timestamp: new Date().toISOString(),
+      },
+      err.message || "Unknown passport session error",
+      {
+        method: req.method,
+        path: req.path,
+      },
+    );
+
+    if (isAppDocumentRequest(req)) {
+      return next();
+    }
+
+    return next(err);
+  });
+});
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

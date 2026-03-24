@@ -1,6 +1,6 @@
 import { Switch, Route, Redirect, Router as WouterRouter, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, onlineManager } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { HelmetProvider } from "react-helmet-async";
@@ -16,6 +16,8 @@ import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import Footer from "@/components/layout/Footer";
 import { TopLoadingBar } from "@/components/layout/TopLoadingBar";
 import { fetchCategories, fetchProducts } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, Wifi, WifiOff } from "lucide-react";
 
 const loadProductsPage = () => import("@/pages/storefront/Products");
 const loadProductDetailPage = () => import("@/pages/storefront/ProductDetail");
@@ -453,6 +455,236 @@ function RouterShell({
   );
 }
 
+const CONNECTIVITY_TOAST_DURATION = 1_000_000;
+const CONNECTIVITY_CHECK_INTERVAL_MS = 2500;
+const CONNECTIVITY_TIMEOUT_MS = 1500;
+
+function getReconnectProgress(elapsedMs: number) {
+  if (elapsedMs <= 1200) return 18 + (elapsedMs / 1200) * 30;
+  if (elapsedMs <= 6000) return 48 + ((elapsedMs - 1200) / 4800) * 28;
+  return Math.min(92, 76 + ((elapsedMs - 6000) / 9000) * 16);
+}
+
+async function probeInternetConnection(): Promise<boolean> {
+  if (typeof window === "undefined") return true;
+  if (!navigator.onLine) return false;
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), CONNECTIVITY_TIMEOUT_MS);
+
+  try {
+    await fetch(`https://www.gstatic.com/generate_204?ts=${Date.now()}`, {
+      method: "GET",
+      mode: "no-cors",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
+function ConnectivityToastContent({
+  checking,
+  progress,
+  connected,
+}: {
+  checking: boolean;
+  progress: number;
+  connected: boolean;
+}) {
+  return (
+    <div className="mt-2 min-w-[260px] space-y-2">
+      <div className="flex items-center gap-2 text-xs leading-relaxed opacity-95">
+        {connected ? (
+          <Wifi className="h-3.5 w-3.5" />
+        ) : checking ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <WifiOff className="h-3.5 w-3.5" />
+        )}
+        <span>
+          {connected
+            ? "Internet restored. Syncing the latest data now."
+            : checking
+              ? "Trying to reconnect and refresh your data."
+              : "Database sync and live requests will resume as soon as the internet is back."}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-black/15">
+        <div
+          className="h-full rounded-full bg-white/90 transition-[width] duration-200 ease-out"
+          style={{ width: `${Math.max(0, Math.min(progress, 100))}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ConnectivityMonitor() {
+  const { toast } = useToast();
+  const toastRef = React.useRef<ReturnType<typeof toast> | null>(null);
+  const offlineSinceRef = React.useRef<number | null>(null);
+  const hasBeenOfflineRef = React.useRef(false);
+  const dismissTimeoutRef = React.useRef<number | null>(null);
+  const [isConnected, setIsConnected] = useState(
+    typeof navigator === "undefined" ? true : navigator.onLine,
+  );
+  const [isChecking, setIsChecking] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  const dismissToast = useCallback(() => {
+    if (dismissTimeoutRef.current !== null) {
+      window.clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+    toastRef.current?.dismiss();
+    toastRef.current = null;
+  }, []);
+
+  const showOrUpdateToast = useCallback(
+    (next: { connected: boolean; checking: boolean; progress: number }) => {
+      const title = next.connected
+        ? "Internet connection restored"
+        : "Computer not connected to internet";
+      const variant = next.connected ? "success" : "warning";
+      const description = (
+        <ConnectivityToastContent
+          connected={next.connected}
+          checking={next.checking}
+          progress={next.progress}
+        />
+      );
+
+      if (!toastRef.current) {
+        toastRef.current = toast({
+          title,
+          description,
+          variant,
+          duration: CONNECTIVITY_TOAST_DURATION,
+        });
+        return;
+      }
+
+      toastRef.current.update({
+        id: toastRef.current.id,
+        title,
+        description,
+        variant,
+        duration: CONNECTIVITY_TOAST_DURATION,
+      });
+    },
+    [toast],
+  );
+
+  const markOffline = useCallback(
+    (checking: boolean) => {
+      onlineManager.setOnline(false);
+      setIsConnected(false);
+      setIsChecking(checking);
+      if (offlineSinceRef.current === null) {
+        offlineSinceRef.current = performance.now();
+        hasBeenOfflineRef.current = true;
+      }
+      const elapsed = performance.now() - offlineSinceRef.current;
+      const nextProgress = getReconnectProgress(elapsed);
+      setProgress(nextProgress);
+      showOrUpdateToast({ connected: false, checking, progress: nextProgress });
+    },
+    [showOrUpdateToast],
+  );
+
+  const markOnline = useCallback(() => {
+    onlineManager.setOnline(true);
+    const shouldAnnounceRecovery = hasBeenOfflineRef.current;
+    offlineSinceRef.current = null;
+    setIsConnected(true);
+    setIsChecking(false);
+    setProgress(100);
+    void queryClient.resumePausedMutations().catch(() => undefined);
+    void queryClient.refetchQueries({ type: "active" }).catch(() => undefined);
+    if (!shouldAnnounceRecovery) {
+      dismissToast();
+      setProgress(0);
+      return;
+    }
+
+    hasBeenOfflineRef.current = false;
+    showOrUpdateToast({ connected: true, checking: false, progress: 100 });
+    if (dismissTimeoutRef.current !== null) {
+      window.clearTimeout(dismissTimeoutRef.current);
+    }
+    dismissTimeoutRef.current = window.setTimeout(() => {
+      dismissToast();
+      setProgress(0);
+    }, 1400);
+  }, [dismissToast, showOrUpdateToast]);
+
+  const verifyConnection = useCallback(async () => {
+    if (typeof window === "undefined") return;
+    if (!navigator.onLine) {
+      markOffline(false);
+      return;
+    }
+
+    setIsChecking(true);
+    if (!isConnected) {
+      showOrUpdateToast({ connected: false, checking: true, progress });
+    }
+
+    const isReachable = await probeInternetConnection();
+    if (isReachable) {
+      markOnline();
+    } else {
+      markOffline(true);
+    }
+  }, [isConnected, markOffline, markOnline, progress, showOrUpdateToast]);
+
+  useEffect(() => {
+    void verifyConnection();
+
+    const handleOffline = () => markOffline(false);
+    const handleOnline = () => {
+      void verifyConnection();
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+      dismissToast();
+    };
+  }, [dismissToast, markOffline, verifyConnection]);
+
+  useEffect(() => {
+    if (isConnected) return;
+
+    const progressTimer = window.setInterval(() => {
+      if (offlineSinceRef.current === null) return;
+      const elapsed = performance.now() - offlineSinceRef.current;
+      const nextProgress = getReconnectProgress(elapsed);
+      setProgress(nextProgress);
+      showOrUpdateToast({ connected: false, checking: isChecking, progress: nextProgress });
+    }, 180);
+
+    const reconnectTimer = window.setInterval(() => {
+      void verifyConnection();
+    }, CONNECTIVITY_CHECK_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(progressTimer);
+      window.clearInterval(reconnectTimer);
+    };
+  }, [isChecking, isConnected, showOrUpdateToast, verifyConnection]);
+
+  return null;
+}
+
 function App() {
   const [routeTransitioning, setRouteTransitioning] = useState(false);
 
@@ -510,6 +742,7 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <Toaster />
+          <ConnectivityMonitor />
           <WouterRouter aroundNav={aroundNav}>
             <RouterShell
               routeTransitioning={routeTransitioning}

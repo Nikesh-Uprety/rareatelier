@@ -21,7 +21,6 @@ import {
   openPosSession,
   fetchAdminCustomers,
   createAdminCustomer,
-  exportPosBillsCSV,
   fetchPlatforms,
 } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
@@ -732,30 +731,6 @@ export default function AdminPOS() {
           </div>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          <Button
-            variant="outline"
-            className="border-[#E5E5E0] dark:border-border text-[#2C3E2D] dark:text-foreground hidden sm:flex"
-            onClick={async () => {
-              try {
-                await exportPosBillsCSV();
-                toast({ title: "POS CSV exported" });
-              } catch (error) {
-                const rawMessage =
-                  error instanceof Error ? error.message : "Failed to export POS CSV";
-                const friendlyMessage =
-                  rawMessage.toLowerCase().includes("bill not found")
-                    ? "No POS bill is available yet in this session. Complete at least one order first, then export the CSV."
-                    : rawMessage;
-                toast({
-                  title: "Export failed",
-                  description: friendlyMessage,
-                  variant: "destructive",
-                });
-              }
-            }}
-          >
-            Export CSV
-          </Button>
           <div className="flex bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-full p-1 shadow-sm">
             <Button
               variant="ghost"
