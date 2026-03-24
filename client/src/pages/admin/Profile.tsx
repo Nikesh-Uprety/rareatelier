@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
+  ADMIN_FONT_OPTIONS,
   DEFAULT_ADMIN_FONT_SETTINGS,
   type AdminFontMode,
   type AdminFontScale,
@@ -272,9 +273,10 @@ export default function AdminProfilePage() {
     setAdminFontMode(settings.mode);
     setAdminFontScale(settings.scale);
     persistAdminFontSettings(settings);
+    const selectedFont = ADMIN_FONT_OPTIONS.find((option) => option.mode === settings.mode);
     toast({
       title: "Admin font updated",
-      description: `${settings.mode === "iosevka" ? "Iosevka Charon Mono" : "Roboto Slab"} • ${settings.scale === "large" ? "Large" : "Comfortable"} size`,
+      description: `${selectedFont?.label ?? settings.mode} • ${settings.scale === "large" ? "Large" : "Comfortable"} size`,
     });
   };
 
@@ -606,23 +608,21 @@ export default function AdminProfilePage() {
                 <label className="text-xs font-semibold tracking-[0.18em] uppercase text-muted-foreground">
                   Font Family
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant={adminFontMode === "iosevka" ? "default" : "outline"}
-                    className="h-10"
-                    onClick={() => applyDevFontSettings({ mode: "iosevka" })}
-                  >
-                    Iosevka Charon Mono
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={adminFontMode === "roboto-slab" ? "default" : "outline"}
-                    className="h-10"
-                    onClick={() => applyDevFontSettings({ mode: "roboto-slab" })}
-                  >
-                    Roboto Slab
-                  </Button>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                  {ADMIN_FONT_OPTIONS.map((option) => (
+                    <Button
+                      key={option.mode}
+                      type="button"
+                      variant={adminFontMode === option.mode ? "default" : "outline"}
+                      className="h-auto min-h-11 justify-start px-4 py-3 text-left"
+                      onClick={() => applyDevFontSettings({ mode: option.mode })}
+                    >
+                      <span className="block">
+                        <span className="block text-sm font-semibold">{option.label}</span>
+                        <span className="mt-1 block text-[11px] opacity-80">{option.description}</span>
+                      </span>
+                    </Button>
+                  ))}
                 </div>
               </div>
 

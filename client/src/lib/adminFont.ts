@@ -1,4 +1,9 @@
-export type AdminFontMode = "iosevka" | "roboto-slab";
+export type AdminFontMode =
+  | "iosevka"
+  | "roboto-slab"
+  | "inter"
+  | "space-grotesk"
+  | "ibm-plex-sans";
 export type AdminFontScale = "comfortable" | "large";
 
 export const ADMIN_FONT_MODE_KEY = "admin-font-mode";
@@ -9,6 +14,38 @@ export interface AdminFontSettings {
   mode: AdminFontMode;
   scale: AdminFontScale;
 }
+
+export const ADMIN_FONT_OPTIONS: Array<{
+  mode: AdminFontMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    mode: "iosevka",
+    label: "Iosevka Charon Mono",
+    description: "Technical, dense, high-contrast admin reading.",
+  },
+  {
+    mode: "roboto-slab",
+    label: "Roboto Slab",
+    description: "Editorial slab serif with stronger hierarchy.",
+  },
+  {
+    mode: "inter",
+    label: "Inter",
+    description: "Clean product UI default for broad readability.",
+  },
+  {
+    mode: "space-grotesk",
+    label: "Space Grotesk",
+    description: "Modern geometric sans with more personality.",
+  },
+  {
+    mode: "ibm-plex-sans",
+    label: "IBM Plex Sans",
+    description: "Structured system-style font for dashboards.",
+  },
+];
 
 export const DEFAULT_ADMIN_FONT_SETTINGS: AdminFontSettings = {
   mode: "iosevka",
@@ -24,7 +61,9 @@ export function readAdminFontSettings(): AdminFontSettings {
   const storedScale = window.localStorage.getItem(ADMIN_FONT_SCALE_KEY);
 
   return {
-    mode: storedMode === "roboto-slab" ? "roboto-slab" : DEFAULT_ADMIN_FONT_SETTINGS.mode,
+    mode: ADMIN_FONT_OPTIONS.some((option) => option.mode === storedMode)
+      ? (storedMode as AdminFontMode)
+      : DEFAULT_ADMIN_FONT_SETTINGS.mode,
     scale: storedScale === "comfortable" ? "comfortable" : DEFAULT_ADMIN_FONT_SETTINGS.scale,
   };
 }
