@@ -11,6 +11,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
+import { canAccessAdminPanel } from "@shared/auth-policy";
 
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -29,7 +30,6 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<LoginStep>("credentials");
   const [tempToken, setTempToken] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null); // Temp code display
   const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
   const [canResend, setCanResend] = useState(false);
 
@@ -52,7 +52,7 @@ export default function LoginPage() {
         success: boolean;
         requires2FA?: boolean;
         tempToken?: string;
-        code?: string;
+        requires2FASetup?: boolean;
         data?: {
           id: string;
           email: string;
@@ -76,7 +76,7 @@ export default function LoginPage() {
     );
   }
 
-  if (user && (user.role === "admin" || user.role === "staff")) {
+  if (user && canAccessAdminPanel(user.role)) {
     if (location !== "/admin") setLocation("/admin");
     return null;
   }
@@ -92,7 +92,6 @@ export default function LoginPage() {
     // 2FA flow
     if (result.requires2FA && result.tempToken) {
       setTempToken(result.tempToken);
-      if (result.code) setDevCode(result.code);
       setStep("otp");
       setOtpDigits(["", "", "", "", "", ""]);
       setCanResend(false);
@@ -106,11 +105,11 @@ export default function LoginPage() {
 
     if (!result.data) return;
 
-    if (result.data.role !== "admin" && result.data.role !== "staff") {
+    if (!canAccessAdminPanel(result.data.role)) {
       toast({
-        title: "Staff & admin only",
+        title: "Admin panel access only",
         description:
-          "This login is for staff and admin. You can checkout as a guest.",
+          "Only admin, owner, manager, and staff accounts can access the admin panel.",
         variant: "default",
       });
       setLocation("/");
@@ -165,7 +164,6 @@ export default function LoginPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       setStep("credentials");
       setTempToken(null);
-      setDevCode(null);
       setLocation("/admin");
     },
     onError: (err: Error) => {
@@ -183,10 +181,9 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/resend-otp", {
         tempToken,
       });
-      return (await res.json()) as { success: boolean; error?: string; code?: string };
+      return (await res.json()) as { success: boolean; error?: string };
     },
     onSuccess: (result) => {
-      if (result.code) setDevCode(result.code);
       setCanResend(false);
       setTimeout(() => setCanResend(true), 60000);
       toast({
@@ -230,6 +227,7 @@ export default function LoginPage() {
                   type="email"
                   autoComplete="email"
                   placeholder="you@example.com"
+                  data-testid="login-email"
                   {...register("email")}
                   className="h-12 rounded-lg border-neutral-200 dark:border-neutral-700 bg-background focus-visible:ring-2"
                 />
@@ -249,6 +247,7 @@ export default function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     placeholder="••••••••"
+                    data-testid="login-password"
                     {...register("password")}
                     className="h-12 pr-12 rounded-lg border-neutral-200 dark:border-neutral-700 bg-background focus-visible:ring-2"
                   />
@@ -284,6 +283,7 @@ export default function LoginPage() {
                 <div className="flex justify-center">
                   <motion.button
                     type="submit"
+                    data-testid="login-submit"
                     disabled={isPending}
                     initial={false}
                     animate={isPending ? "loading" : "idle"}
@@ -336,14 +336,6 @@ export default function LoginPage() {
               We sent a 6-digit code to your email. Enter it below to complete
               sign in.
             </p>
-            
-            {devCode && (
-              <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-lg text-amber-800 dark:text-amber-200 text-sm">
-                <p className="font-semibold mb-1">SMTP is currently unavailable.</p>
-                <p>Your temporary verification code is: <span className="font-bold text-amber-900 dark:text-amber-100">{devCode}</span></p>
-              </div>
-            )}
-            
             <div className="flex items-center justify-center mb-4">
               <div className="flex gap-2">
                 {otpDigits.map((digit, index) => (

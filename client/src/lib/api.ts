@@ -101,7 +101,7 @@ export async function createOrder(data: OrderInput) {
   const res = await apiRequest("POST", "/api/orders", data);
   return (await res.json()) as {
     success: boolean;
-    data?: { orderNumber: string; total: number; order: { id: string } };
+    data?: { orderNumber: string; total: number; order: OrderDetail };
     error?: string;
   };
 }
@@ -153,6 +153,29 @@ export async function fetchOrderById(id: string): Promise<OrderDetail | null> {
   if (!res.ok) return null;
   const json = (await res.json()) as { success: boolean; data?: OrderDetail };
   return json.data ?? null;
+}
+
+const LAST_ORDER_ID_KEY = "ra_last_order_id";
+const LAST_ORDER_CACHE_KEY = "ra_last_order_cache";
+
+export function cacheLatestOrder(order: OrderDetail): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LAST_ORDER_ID_KEY, order.id);
+  localStorage.setItem(LAST_ORDER_CACHE_KEY, JSON.stringify(order));
+}
+
+export function getCachedLatestOrder(orderId?: string | null): OrderDetail | null {
+  if (typeof window === "undefined") return null;
+  const raw = localStorage.getItem(LAST_ORDER_CACHE_KEY);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as OrderDetail;
+    if (orderId && parsed.id !== orderId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export async function uploadPaymentProof(

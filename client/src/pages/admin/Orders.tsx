@@ -96,10 +96,9 @@ export default function AdminOrders() {
 
   const filters = useMemo(
     () => ({
-      search: search || undefined,
       status: statusFilter === "all" ? undefined : statusFilter,
     }),
-    [search, statusFilter],
+    [statusFilter],
   );
 
   const {
@@ -144,6 +143,7 @@ export default function AdminOrders() {
 
   const sortedOrders = useMemo(() => {
     if (!orders) return [];
+    const normalizedSearch = search.trim().toLowerCase();
     const now = Date.now();
     const cutoffMs =
       timeRange === "1d"
@@ -154,12 +154,27 @@ export default function AdminOrders() {
             ? now - 7 * 24 * 60 * 60 * 1000
             : null;
 
-    const filtered =
+    const timeFiltered =
       cutoffMs === null
         ? orders
         : orders.filter((o) => {
             const t = new Date(o.createdAt).getTime();
             return Number.isFinite(t) && t >= cutoffMs;
+          });
+
+    const filtered =
+      normalizedSearch.length === 0
+        ? timeFiltered
+        : timeFiltered.filter((order) => {
+            const haystacks = [
+              order.fullName,
+              order.email,
+              order.id,
+              order.phoneNumber ?? "",
+            ];
+            return haystacks.some((value) =>
+              value.toLowerCase().includes(normalizedSearch),
+            );
           });
 
     return [...filtered].sort((a, b) => {
@@ -168,7 +183,7 @@ export default function AdminOrders() {
       // Always latest first (ORDER BY created_at DESC)
       return dateB - dateA;
     });
-  }, [orders, timeRange]);
+  }, [orders, search, timeRange]);
 
   // Display serial numbers based on creation order (oldest = 1),
   // while still showing the list latest-first.
@@ -325,6 +340,7 @@ export default function AdminOrders() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search orders, customers..."
+            data-testid="admin-orders-search"
             className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -433,6 +449,7 @@ export default function AdminOrders() {
                     return (
                       <tr
                         key={order.id}
+                        data-testid={`admin-order-row-${order.id}`}
                         className="hover:bg-muted/50 transition-colors cursor-pointer"
                         onClick={() => {
                           setSelectedOrder(order);
@@ -634,7 +651,7 @@ export default function AdminOrders() {
                       setSelectedOrder(prev => prev ? { ...prev, status: val } : null);
                     }}
                   >
-                    <SelectTrigger className={cn(
+                    <SelectTrigger data-testid="admin-order-status-select" className={cn(
                         "h-10 text-xs font-bold uppercase tracking-wider rounded-md",
                         selectedOrder.status === "completed" ? "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20" :
                         selectedOrder.status === "pending" ? "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20" :
@@ -753,6 +770,7 @@ export default function AdminOrders() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                data-testid="admin-order-verify-payment"
                                 className="h-7 text-[10px] font-bold tracking-wider"
                                 onClick={() => {
                                   verifyMutation.mutate({ id: selectedOrder.id, paymentVerified: "verified" });

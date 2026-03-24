@@ -170,15 +170,16 @@ export default function Cart() {
                     
                     <div className="mt-auto flex justify-between items-end">
                       <div className="flex items-center rounded-lg border border-black/[0.06] dark:border-white/[0.08] bg-white/50 dark:bg-white/[0.04] backdrop-blur-sm">
-                        <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors" disabled={item.quantity <= 1}>
+                        <button data-testid={`cart-decrement-${item.id}`} onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors" disabled={item.quantity <= 1}>
                           <Minus size={12} />
                         </button>
                         <span className="w-8 text-center text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.quantity}</span>
-                        <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors">
+                        <button data-testid={`cart-increment-${item.id}`} onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors">
                           <Plus size={12} />
                         </button>
                       </div>
                       <button 
+                        data-testid={`cart-remove-${item.id}`}
                         onClick={() => removeItem(item.id)} 
                         className="text-[9px] uppercase tracking-widest text-white bg-red-500 md:bg-transparent md:text-red-500 md:hover:bg-red-500 md:hover:text-white transition-all font-black border border-red-500 md:border-red-500/20 px-4 py-2 rounded-full backdrop-blur-sm"
                       >
@@ -212,7 +213,7 @@ export default function Cart() {
               </div>
             </div>
             
-            <Button size="lg" className="w-full h-16 rounded-none bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-xl" onClick={() => setLocation('/checkout')}>
+            <Button data-testid="cart-proceed-checkout" size="lg" className="w-full h-16 rounded-none bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-xl" onClick={() => setLocation('/checkout')}>
               Proceed to Checkout
             </Button>
             

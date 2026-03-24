@@ -35,8 +35,19 @@ if (isSMTPConfigured) {
 // Sender configuration - can be set via environment or use default
 const SENDER_EMAIL = process.env.SENDER_EMAIL || "upretynikesh021@gmail.com";
 const SENDER_NAME = process.env.SENDER_NAME || "RARE Nepal";
+const isE2ETestMode = process.env.E2E_TEST_MODE === "1";
+
+function skipEmailInE2EMode(kind: string, meta: Record<string, unknown> = {}) {
+  if (!isE2ETestMode) return false;
+  console.log(`[E2E] Skipping ${kind} email delivery`, meta);
+  return true;
+}
 
 export async function sendOTPEmail(to: string, code: string, name: string) {
+  if (skipEmailInE2EMode("otp", { to, code, name })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn(
       "[DEV] SMTP not configured (SMTP_HOST, SMTP_USER, SMTP_PASS missing). OTP for",
@@ -83,6 +94,10 @@ export async function sendInviteEmail(
   code: string,
   invitedBy: string,
 ) {
+  if (skipEmailInE2EMode("invite", { to, name, code, invitedBy })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn(
       "[DEV] SMTP not configured. Invite code for",
@@ -125,16 +140,14 @@ export async function sendInviteEmail(
 export async function sendStoreUserWelcomeEmail(
   to: string,
   name: string,
-  password: string,
   invitedBy: string,
 ) {
+  if (skipEmailInE2EMode("store-user-welcome", { to, name, invitedBy })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
-    console.warn(
-      "[DEV] SMTP not configured. Store user welcome for",
-      to,
-      "->",
-      `password=${password}`,
-    );
+    console.warn("[DEV] SMTP not configured. Store user welcome for", to);
     return;
   }
 
@@ -150,10 +163,12 @@ export async function sendStoreUserWelcomeEmail(
             Hi ${name}, <strong>${invitedBy}</strong> has added you as a team member for RARE Nepal.
           </p>
 
-          <p style="color: #555; margin-bottom: 10px;">Your login password is:</p>
-          <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 12px; padding: 18px 16px; text-align: center; margin: 18px 0 24px;">
-            <p style="font-size: 22px; font-weight: 700; letter-spacing: 2px; color: #2D4A35; margin: 0;">${password}</p>
-          </div>
+          <p style="color: #555; margin-bottom: 14px;">
+            Use the email address on this message and the password shared with you by your administrator.
+          </p>
+          <p style="color: #555; margin-bottom: 18px;">
+            On your first successful sign-in, you'll complete a one-time email verification step to finish setting up secure access.
+          </p>
 
           <p style="color: #666; font-size: 13px; margin-bottom: 24px;">
             Login at:
@@ -180,6 +195,10 @@ export async function sendStoreUserWelcomeEmail(
 }
 
 export async function sendContactReplyEmail(to: string, subject: string, html: string) {
+  if (skipEmailInE2EMode("contact-reply", { to, subject })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn("[DEV] SMTP not configured. Contact reply for", to, "->", subject);
     throw new Error("SMTP not configured");
@@ -205,6 +224,10 @@ export async function sendContactReplyEmail(to: string, subject: string, html: s
 }
 
 export async function sendMarketingBroadcastEmail(bccList: string[], subject: string, html: string) {
+  if (skipEmailInE2EMode("marketing-broadcast", { recipients: bccList.length, subject })) {
+    return { sent: bccList.length, failed: 0, errors: [] };
+  }
+
   if (!isSMTPConfigured || !transporter || bccList.length === 0) {
     console.warn("[DEV] SMTP not configured or empty BCC. Broadcast ->", subject);
     return { sent: 0, failed: bccList.length, errors: ["SMTP not configured"] };
@@ -242,6 +265,10 @@ export async function sendMarketingBroadcastEmail(bccList: string[], subject: st
 }
 
 export async function sendNewsletterWelcomeEmail(to: string) {
+  if (skipEmailInE2EMode("newsletter-welcome", { to })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn("[DEV] SMTP not configured. Newsletter welcome for", to);
     return;
@@ -316,6 +343,10 @@ function paymentMethodLabel(method: string): string {
 }
 
 export async function sendOrderConfirmationEmail(data: OrderConfirmationData) {
+  if (skipEmailInE2EMode("order-confirmation", { to: data.email, orderId: data.orderId })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn(
       "[DEV] SMTP not configured. Order confirmation for",
@@ -441,6 +472,10 @@ export async function sendOrderStatusUpdateEmail(
   orderId: string,
   newStatus: string,
 ) {
+  if (skipEmailInE2EMode("order-status", { email, fullName, orderId, newStatus })) {
+    return;
+  }
+
   if (!isSMTPConfigured || !transporter) {
     console.warn(
       "[DEV] SMTP not configured. Status update for",

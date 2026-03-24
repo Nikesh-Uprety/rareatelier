@@ -107,6 +107,23 @@ function slugify(s: string): string {
     .replace(/[^a-z0-9-]/g, "");
 }
 
+function resolveCategorySlug(
+  productCategory: string | null | undefined,
+  categories: CategoryApi[],
+): string {
+  const productCategoryRaw = (productCategory ?? "").trim();
+  const normalize = (s: string) => s.trim().toLowerCase().replace(/[_\s-]+/g, "");
+  const wanted = normalize(productCategoryRaw);
+  const matchedCategory = categories.find((c) => {
+    const slug = normalize(c.slug);
+    const name = normalize(c.name);
+    const nameAsSlug = normalize(slugify(c.name));
+    return wanted.length > 0 && (slug === wanted || name === wanted || nameAsSlug === wanted);
+  });
+
+  return matchedCategory?.slug ?? (productCategoryRaw || categories[0]?.slug || "");
+}
+
 const productSchema = z.object({
   name: z.string().min(2, "Name required"),
   shortDetails: z.string().optional(),
@@ -268,18 +285,7 @@ export default function AdminProducts() {
       const galleryUrls = parseJsonArray(editProduct.galleryUrls);
       const colorOptions = parseJsonArray(editProduct.colorOptions);
       const sizeOptions = parseJsonArray(editProduct.sizeOptions);
-
-      const productCategoryRaw = (editProduct.category ?? "").trim();
-      const normalize = (s: string) => s.trim().toLowerCase().replace(/[_\s-]+/g, "");
-      const wanted = normalize(productCategoryRaw);
-      const matchedCategory = categories.find((c) => {
-        const slug = normalize(c.slug);
-        const name = normalize(c.name);
-        const nameAsSlug = normalize(slugify(c.name));
-        return wanted.length > 0 && (slug === wanted || name === wanted || nameAsSlug === wanted);
-      });
-      // Important: prefer current product category; don't silently replace with the first category.
-      const categorySlug = matchedCategory?.slug ?? "";
+      const categorySlug = resolveCategorySlug(editProduct.category, categories);
 
       editForm.reset({
         name: editProduct.name,
@@ -298,6 +304,21 @@ export default function AdminProducts() {
       });
     }
   }, [editProduct, editForm, categories]);
+
+  useEffect(() => {
+    if (!editOpen || !editProduct || categories.length === 0) return;
+    const currentCategory = editForm.getValues("category");
+    if (currentCategory) return;
+
+    const fallbackCategory = resolveCategorySlug(editProduct.category, categories);
+    if (!fallbackCategory) return;
+
+    editForm.setValue("category", fallbackCategory, {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+  }, [categories, editForm, editOpen, editProduct]);
 
   function parseJsonArray(s: string | null | undefined): string[] {
     if (!s || !s.trim()) return [];
@@ -616,6 +637,7 @@ export default function AdminProducts() {
             <Search className={`h-4 w-4 shrink-0 transition-colors ${search.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
             <Input 
               placeholder="Search products..." 
+              data-testid="admin-products-search"
               className="border-none focus-visible:ring-0 bg-transparent h-full text-sm placeholder:text-muted-foreground/50 px-3 w-full"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -669,6 +691,7 @@ export default function AdminProducts() {
         
         <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto justify-end">
           <Button 
+            data-testid="admin-products-add-open"
             className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white shadow-sm flex-1 sm:flex-none"
             onClick={() => setAddOpen(true)}
           >
@@ -717,7 +740,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Product Name *</FormLabel>
                             <FormControl>
-                              <Input placeholder="Two-Way Zip Hoodie" {...field} />
+                              <Input data-testid="admin-product-name" placeholder="Two-Way Zip Hoodie" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -730,7 +753,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Short details</FormLabel>
                             <FormControl>
-                              <Input placeholder="Brief tagline or key features" {...field} />
+                              <Input data-testid="admin-product-short-details" placeholder="Brief tagline or key features" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -758,7 +781,7 @@ export default function AdminProducts() {
                             <div className="flex gap-2 flex-wrap">
                               <Select onValueChange={field.onChange} value={field.value}>
                                 <FormControl>
-                                  <SelectTrigger className="min-w-[180px]">
+                                  <SelectTrigger data-testid="admin-product-category" className="min-w-[180px]">
                                     <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
                                 </FormControl>
@@ -790,7 +813,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Price (NPR) *</FormLabel>
                             <FormControl>
-                              <Input type="number" min={0} step="1" {...field} />
+                              <Input data-testid="admin-product-price" type="number" min={0} step="1" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -901,7 +924,7 @@ export default function AdminProducts() {
                             <FormItem>
                               <FormLabel>Quantity</FormLabel>
                               <FormControl>
-                                <Input type="number" min={0} step="1" {...field} />
+                                <Input data-testid="admin-product-stock" type="number" min={0} step="1" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -918,7 +941,7 @@ export default function AdminProducts() {
                       <Button type="button" variant="outline" onClick={() => { setAddOpen(false); addForm.reset(); }}>
                         Cancel
                       </Button>
-                      <Button type="submit" form="add-product-form" loading={addMutation.isPending} loadingText="Saving...">
+                      <Button data-testid="admin-product-save" type="submit" form="add-product-form" loading={addMutation.isPending} loadingText="Saving...">
                         Save Product
                       </Button>
                     </div>
@@ -1731,6 +1754,7 @@ export default function AdminProducts() {
                   {/* Always Visible Edit/Delete Buttons (as requested) */}
                   <div className="mt-6 pt-4 border-t border-border flex gap-2">
                     <Button 
+                      data-testid={`admin-product-edit-open-${product.id}`}
                       variant="outline" 
                       size="sm" 
                       className="flex-1 text-xs font-bold uppercase tracking-wider h-9"
@@ -1917,6 +1941,7 @@ export default function AdminProducts() {
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-1">
                           <Button 
+                            data-testid={`admin-product-edit-open-${product.id}`}
                             variant="outline" 
                             size="icon" 
                             className="h-8 w-8"
@@ -2193,7 +2218,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Product Name *</FormLabel>
                             <FormControl>
-                              <Input placeholder="Two-Way Zip Hoodie" {...field} />
+                              <Input data-testid="admin-product-edit-name" placeholder="Two-Way Zip Hoodie" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2206,7 +2231,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Short details</FormLabel>
                             <FormControl>
-                              <Input placeholder="Brief tagline" {...field} />
+                              <Input data-testid="admin-product-edit-short-details" placeholder="Brief tagline" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2234,7 +2259,7 @@ export default function AdminProducts() {
                             <div className="flex gap-2 flex-wrap">
                               <Select onValueChange={field.onChange} value={field.value || undefined}>
                                 <FormControl>
-                                  <SelectTrigger className="min-w-[180px]">
+                                  <SelectTrigger data-testid="admin-product-edit-category" className="min-w-[180px]">
                                     <SelectValue placeholder="Select category" />
                                   </SelectTrigger>
                                 </FormControl>
@@ -2266,7 +2291,7 @@ export default function AdminProducts() {
                           <FormItem>
                             <FormLabel>Price (NPR) *</FormLabel>
                             <FormControl>
-                              <Input type="number" min={0} step="1" {...field} />
+                              <Input data-testid="admin-product-edit-price" type="number" min={0} step="1" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -2377,7 +2402,7 @@ export default function AdminProducts() {
                             <FormItem>
                               <FormLabel>Quantity</FormLabel>
                               <FormControl>
-                                <Input type="number" min={0} step="1" {...field} />
+                                <Input data-testid="admin-product-edit-stock" type="number" min={0} step="1" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -2399,13 +2424,13 @@ export default function AdminProducts() {
                         >
                           Cancel
                         </Button>
-                        <Button type="submit" form="edit-product-form" loading={editMutation.isPending} loadingText="Saving...">
+                        <Button data-testid="admin-product-edit-save" type="submit" form="edit-product-form" loading={editMutation.isPending} loadingText="Saving...">
                           Save Changes
                         </Button>
                       </div>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button type="button" variant="destructive" className="w-full mt-4">
+                          <Button data-testid="admin-product-delete" type="button" variant="destructive" className="w-full mt-4">
                             Delete Product
                           </Button>
                         </AlertDialogTrigger>

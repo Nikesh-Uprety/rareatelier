@@ -163,7 +163,7 @@ export default function StoreUsers() {
         toast({ title: "Failed to add user", variant: "destructive" });
         return;
       }
-      toast({ title: "User added", description: "Welcome email sent (SMTP may be delayed)." });
+      toast({ title: "User added", description: "Setup email sent (SMTP may be delayed)." });
       setIsAddOpen(false);
       setAddForm({ name: "", email: "", password: "", role: "staff" });
       invalidate();
@@ -667,4 +667,3 @@ export default function StoreUsers() {
     </div>
   );
 }
-

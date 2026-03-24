@@ -13,6 +13,7 @@ declare global {
       name?: string;
       profileImageUrl?: string;
       twoFactorEnabled?: boolean;
+      requires2FASetup?: boolean;
       status?: string;
     }
   }
@@ -41,6 +42,7 @@ export function configurePassport(): void {
             name: user.displayName || user.username,
             profileImageUrl: user.profileImageUrl || undefined,
             twoFactorEnabled: !!user.twoFactorEnabled,
+            requires2FASetup: !!user.requires2FASetup,
             status: user.status,
           };
 
@@ -69,6 +71,7 @@ export function configurePassport(): void {
         name: user.displayName || user.username,
         profileImageUrl: user.profileImageUrl || undefined,
         twoFactorEnabled: !!user.twoFactorEnabled,
+        requires2FASetup: !!user.requires2FASetup,
       };
       return done(null, expressUser);
     } catch (err) {

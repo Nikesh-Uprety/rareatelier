@@ -7,7 +7,7 @@ import { Trash2, AlertCircle, CheckCircle2, ShoppingBag, Wallet, Banknote, Build
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createOrder, validatePromoCode } from "@/lib/api";
+import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
 const PAYMENT_OPTIONS = [
@@ -189,17 +189,19 @@ export default function Checkout() {
         paymentMethod === "card";
 
       if (needsPaymentPage) {
-        clearCart();
-        localStorage.setItem("ra_last_order_id", result.data.order.id);
+        setStep(3);
+        cacheLatestOrder(result.data.order);
         setLocation(
           `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
         );
+        clearCart();
         return;
       }
 
-      clearCart();
-      localStorage.setItem("ra_last_order_id", result.data.order.id);
+      setStep(3);
+      cacheLatestOrder(result.data.order);
       setLocation(`/order-confirmation/${result.data.order.id}`);
+      clearCart();
       toast({ title: "Order Placed" });
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");
@@ -210,6 +212,7 @@ export default function Checkout() {
     <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
       <div className="flex flex-col lg:flex-row gap-20">
         <form
+          data-testid="checkout-form"
           className="flex-1 space-y-12"
           onSubmit={handlePlaceOrder}
         >
@@ -221,6 +224,7 @@ export default function Checkout() {
                 name="email"
                 type="email"
                 placeholder="Email Address"
+                data-testid="checkout-email"
                 className={`h-14 rounded-none transition-colors ${errors.email ? "border-red-500 border-2" : "border-gray-200"}`}
                 onFocus={() => clearError("email")}
                 onChange={(e) => {
@@ -239,6 +243,7 @@ export default function Checkout() {
                   ref={fieldRefs.firstName}
                   name="firstName"
                   placeholder="First name"
+                  data-testid="checkout-first-name"
                   className={`h-14 rounded-none transition-colors ${errors.firstName ? "border-red-500 border-2" : "border-gray-200"}`}
                   onFocus={() => clearError("firstName")}
                   onChange={(e) => {
@@ -252,6 +257,7 @@ export default function Checkout() {
                   ref={fieldRefs.lastName}
                   name="lastName"
                   placeholder="Last name"
+                  data-testid="checkout-last-name"
                   className={`h-14 rounded-none transition-colors ${errors.lastName ? "border-red-500 border-2" : "border-gray-200"}`}
                   onFocus={() => clearError("lastName")}
                   onChange={(e) => {
@@ -267,6 +273,7 @@ export default function Checkout() {
                   ref={fieldRefs.address}
                   name="address"
                   placeholder="Address"
+                  data-testid="checkout-address"
                   className={`h-14 rounded-none transition-colors ${errors.address ? "border-red-500 border-2" : "border-gray-200"}`}
                   onFocus={() => clearError("address")}
                   onChange={(e) => {
@@ -281,6 +288,7 @@ export default function Checkout() {
                     ref={fieldRefs.city}
                     name="city"
                     placeholder="City"
+                    data-testid="checkout-city"
                     className={`h-14 rounded-none transition-colors ${errors.city ? "border-red-500 border-2" : "border-gray-200"}`}
                     onFocus={() => clearError("city")}
                     onChange={(e) => {
@@ -295,6 +303,7 @@ export default function Checkout() {
                   ref={fieldRefs.phone}
                   name="phone"
                   placeholder="Phone"
+                  data-testid="checkout-phone"
                   className={`h-14 rounded-none transition-colors ${errors.phone ? "border-red-500 border-2" : "border-gray-200"}`}
                   onFocus={() => clearError("phone")}
                   onChange={(e) => {
@@ -324,9 +333,10 @@ export default function Checkout() {
                   <p className="text-sm font-semibold uppercase tracking-wide">
                     Delivery
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setDeliveryRequired((v) => !v)}
+                <button
+                  type="button"
+                  data-testid="checkout-toggle-delivery"
+                  onClick={() => setDeliveryRequired((v) => !v)}
                     className={`text-[10px] uppercase font-bold underline hover:text-muted-foreground ${
                       deliveryRequired ? "" : "opacity-70"
                     }`}
@@ -341,6 +351,7 @@ export default function Checkout() {
                         Delivery Partner
                       </label>
                       <select
+                        data-testid="checkout-delivery-provider"
                         value={deliveryProvider}
                         onChange={(e) => setDeliveryProvider(e.target.value)}
                         className="h-14 w-full rounded-none border-2 border-gray-200 bg-background px-4 text-sm"
@@ -356,6 +367,7 @@ export default function Checkout() {
                         Address (optional)
                       </label>
                       <Input
+                        data-testid="checkout-delivery-address"
                         value={deliveryAddress}
                         onChange={(e) => setDeliveryAddress(e.target.value)}
                         placeholder="Extra address details for the rider"
@@ -379,6 +391,7 @@ export default function Checkout() {
                   <button
                     key={opt.id}
                     type="button"
+                    data-testid={`checkout-payment-${opt.id}`}
                     onClick={() => setPaymentMethod(opt.id)}
                     className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
                       isSelected
@@ -416,6 +429,7 @@ export default function Checkout() {
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <button
                   type="button"
+                  data-testid="checkout-payment-cash-on-delivery"
                   onClick={() => setPaymentMethod("cash_on_delivery")}
                   className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
                     paymentMethod === "cash_on_delivery"
@@ -443,6 +457,7 @@ export default function Checkout() {
 
           <Button
             type="submit"
+            data-testid="checkout-submit"
             className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
             disabled={isPending}
           >
@@ -473,6 +488,7 @@ export default function Checkout() {
             <div className="flex-1 relative">
               <Input 
                 placeholder="Gift card or discount code" 
+                data-testid="checkout-promo-input"
                 className={`h-12 rounded-none bg-white border-gray-200 uppercase ${appliedPromo ? "pr-10 border-emerald-500" : ""}`} 
                 value={promoCodeInput}
                 onChange={(e) => setPromoCodeInput(e.target.value)}
@@ -493,6 +509,7 @@ export default function Checkout() {
             </div>
             <Button 
               type="button"
+              data-testid="checkout-apply-promo"
               variant="secondary" 
               className="h-12 rounded-none px-6 text-xs uppercase tracking-widest font-bold"
               onClick={handleApplyPromo}

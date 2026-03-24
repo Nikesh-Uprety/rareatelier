@@ -254,6 +254,7 @@ export interface IStorage {
     password: string;
     role: string;
     status?: string;
+    requires2FASetup?: boolean;
     twoFactorEnabled?: number;
     lastLoginAt?: Date | null;
   }): Promise<User>;
@@ -722,7 +723,11 @@ export class PgStorage implements IStorage {
     if (filters?.search) {
       const q = `%${filters.search}%`;
       conditions.push(
-        ilike(orders.fullName, q),
+        or(
+          ilike(orders.fullName, q),
+          ilike(orders.email, q),
+          ilike(orders.id, q),
+        ),
       );
     }
 
@@ -1626,6 +1631,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
@@ -1648,6 +1654,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
@@ -1666,6 +1673,7 @@ export class PgStorage implements IStorage {
     password: string;
     role: string;
     status?: string;
+    requires2FASetup?: boolean;
     twoFactorEnabled?: number;
     lastLoginAt?: Date | null;
     displayName?: string | null;
@@ -1679,6 +1687,7 @@ export class PgStorage implements IStorage {
         role: data.role,
         displayName: data.displayName ?? null,
         profileImageUrl: data.profileImageUrl ?? null,
+        requires2FASetup: data.requires2FASetup ?? false,
         twoFactorEnabled: data.twoFactorEnabled ?? 0,
         emailNotifications: true,
         status: data.status ?? "active",
@@ -1690,6 +1699,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
@@ -1717,7 +1727,7 @@ export class PgStorage implements IStorage {
   async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {
     await db
       .update(users)
-      .set({ twoFactorEnabled: enabled ? 1 : 0 })
+      .set({ twoFactorEnabled: enabled ? 1 : 0, requires2FASetup: false })
       .where(eq(users.id, id));
   }
 
@@ -1817,6 +1827,7 @@ export class PgStorage implements IStorage {
         role: data.role,
         displayName: data.name,
         profileImageUrl: null,
+        requires2FASetup: true,
         twoFactorEnabled: 0,
         status: "active",
         emailNotifications: true,
@@ -1886,6 +1897,7 @@ export class PgStorage implements IStorage {
         role: data.role,
         displayName: data.name,
         status: "invited",
+        requires2FASetup: true,
         twoFactorEnabled: 1,
       })
       .returning({
@@ -1895,6 +1907,7 @@ export class PgStorage implements IStorage {
         role: users.role,
         displayName: users.displayName,
         profileImageUrl: users.profileImageUrl,
+        requires2FASetup: users.requires2FASetup,
         emailNotifications: users.emailNotifications,
         twoFactorEnabled: users.twoFactorEnabled,
         lastLoginAt: users.lastLoginAt,
@@ -1956,7 +1969,6 @@ export class PgStorage implements IStorage {
   async refreshOtpToken(
     id: string,
   ): Promise<{ email: string; code: string; name?: string } | null> {
-    const now = new Date();
     const [otp] = await db
       .select()
       .from(otpTokens)
@@ -1964,7 +1976,6 @@ export class PgStorage implements IStorage {
         and(
           eq(otpTokens.id, id),
           eq(otpTokens.used, 0),
-          sql`${otpTokens.expiresAt} > ${now}`,
         ),
       )
       .limit(1);
@@ -2866,6 +2877,7 @@ export class MemStorage implements IStorage {
     password: string;
     role: string;
     status?: string;
+    requires2FASetup?: boolean;
     twoFactorEnabled?: number;
     lastLoginAt?: Date | null;
     displayName?: string | null;
@@ -2878,6 +2890,7 @@ export class MemStorage implements IStorage {
       role: data.role,
       displayName: data.displayName ?? null,
       profileImageUrl: data.profileImageUrl ?? null,
+      requires2FASetup: data.requires2FASetup ?? false,
       emailNotifications: true,
       twoFactorEnabled: 0,
       lastLoginAt: data.lastLoginAt ?? null,
@@ -2906,7 +2919,7 @@ export class MemStorage implements IStorage {
   }
 
   async inviteAdminUser(data: { name: string; email: string; role: string; passwordHash: string }): Promise<User> {
-    return this.createUser({ username: data.email, password: data.passwordHash, role: data.role, displayName: data.name, profileImageUrl: null, twoFactorEnabled: 0, lastLoginAt: null, status: "active" } as any);
+    return this.createUser({ username: data.email, password: data.passwordHash, role: data.role, displayName: data.name, profileImageUrl: null, requires2FASetup: false, twoFactorEnabled: 0, lastLoginAt: null, status: "active" } as any);
   }
 
   async createOtpToken(data: { id: string; userId: string; token: string; expiresAt: Date }): Promise<OtpToken> {
@@ -2940,7 +2953,12 @@ export class MemStorage implements IStorage {
     return [];
   }
 
-  async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {}
+  async updateUserTwoFactor(id: string, enabled: boolean): Promise<void> {
+    const user = this._users.find((u) => u.id === id);
+    if (!user) return;
+    user.twoFactorEnabled = enabled ? 1 : 0;
+    user.requires2FASetup = false;
+  }
   async updateUserProfile(id: string, data: { displayName?: string; profileImageUrl?: string }): Promise<void> {}
   async updateUserEmail(id: string, newEmail: string): Promise<void> {}
   async deleteUser(id: string): Promise<void> {}
@@ -2997,6 +3015,7 @@ export class MemStorage implements IStorage {
       role: data.role,
       displayName: data.name,
       profileImageUrl: null,
+      requires2FASetup: true,
       twoFactorEnabled: 0,
       lastLoginAt: null,
       createdAt: new Date(),

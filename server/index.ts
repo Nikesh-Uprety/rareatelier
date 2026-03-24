@@ -16,6 +16,7 @@ import os from "node:os";
 
 
 const app = express();
+app.disable("etag");
 
 // UPLOADS PERSISTENCE NOTE:
 // Uploaded images are written to `UPLOADS_DIR`. On Railway, mount a persistent volume

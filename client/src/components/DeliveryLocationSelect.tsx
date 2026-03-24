@@ -203,6 +203,7 @@ export function DeliveryLocationSelect({
           ref={inputRef}
           value={searchText}
           placeholder="Search your district or city..."
+          data-testid="checkout-delivery-location"
           className={cn(
             "h-14 rounded-none transition-colors pl-10 pr-3 bg-background border-gray-200",
             error ? "border-red-500 border-2" : "",
@@ -265,4 +266,3 @@ export function DeliveryLocationSelect({
     </div>
   );
 }
-

@@ -68,4 +68,11 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: ["../tests/setup/vitest.setup.ts"],
+    include: ["../tests/unit/**/*.test.ts", "../tests/unit/**/*.test.tsx"],
+    css: true,
+  },
 });

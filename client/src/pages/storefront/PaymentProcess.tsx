@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { fetchOrderById, uploadPaymentProof } from "@/lib/api";
+import { fetchOrderById, getCachedLatestOrder, uploadPaymentProof } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { Upload, CheckCircle2, Loader2 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
@@ -17,14 +17,36 @@ export default function PaymentProcess() {
   const orderId = query.get("orderId") ?? "";
   const method = query.get("method") ?? "esewa";
   const { toast } = useToast();
-  const [order, setOrder] = useState<Awaited<ReturnType<typeof fetchOrderById>>>(null);
+  const [order, setOrder] = useState<Awaited<ReturnType<typeof fetchOrderById>>>(() => getCachedLatestOrder(orderId));
+  const [isResolved, setIsResolved] = useState(() => !!getCachedLatestOrder(orderId));
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!orderId) return;
-    fetchOrderById(orderId).then(setOrder);
+    const cached = getCachedLatestOrder(orderId);
+    if (cached) {
+      setOrder(cached);
+      setIsResolved(true);
+      return;
+    }
+
+    let cancelled = false;
+
+    fetchOrderById(orderId)
+      .then((fetched) => {
+        if (cancelled) return;
+        setOrder(fetched ?? getCachedLatestOrder(orderId));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setIsResolved(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [orderId]);
 
   const MAX_FILE_SIZE_MB = 5;
@@ -86,10 +108,21 @@ export default function PaymentProcess() {
     );
   }
 
-  if (!order) {
+  if (!isResolved && !order) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center">
         <BrandedLoader />
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="container mx-auto px-4 py-32 text-center">
+        <p className="text-muted-foreground">We could not load this order.</p>
+        <Button asChild className="mt-6 rounded-none">
+          <Link href="/cart">Back to Cart</Link>
+        </Button>
       </div>
     );
   }
@@ -165,6 +198,7 @@ export default function PaymentProcess() {
         <input
           ref={fileInputRef}
           type="file"
+          data-testid="payment-proof-input"
           accept="image/*"
           className="hidden"
           onChange={handleFileChange}
@@ -183,6 +217,7 @@ export default function PaymentProcess() {
         ) : (
           <Button
             type="button"
+            data-testid="payment-proof-trigger"
             variant="outline"
             className="w-full h-14 rounded-none border-2 border-dashed border-gray-300"
             onClick={() => fileInputRef.current?.click()}

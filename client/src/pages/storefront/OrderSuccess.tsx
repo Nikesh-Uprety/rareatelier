@@ -2,7 +2,7 @@ import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Package, Truck, MapPin, Printer, LifeBuoy } from "lucide-react";
 import { Helmet } from "react-helmet-async";
-import { fetchOrderById } from "@/lib/api";
+import { fetchOrderById, getCachedLatestOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { formatPrice } from "@/lib/format";
@@ -29,12 +29,14 @@ export default function OrderSuccess() {
   const [, newParams] = useRoute("/order-confirmation/:orderId");
   const [, legacyParams] = useRoute("/checkout/success/:id");
   const orderId = newParams?.orderId ?? legacyParams?.id;
+  const cachedOrder = getCachedLatestOrder(orderId);
 
-  const { data: order, isLoading } = useQuery({
+  const { data: fetchedOrder, isLoading } = useQuery({
     queryKey: ["order", orderId],
     queryFn: () => fetchOrderById(orderId!),
-    enabled: !!orderId,
+    enabled: !!orderId && !cachedOrder,
   });
+  const order = fetchedOrder ?? cachedOrder;
 
   const itemsSubtotal = order
     ? order.items.reduce(

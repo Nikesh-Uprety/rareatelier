@@ -7,11 +7,17 @@ import path from "path";
 import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
+import { canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
 import { storage } from "./storage";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
 import bcrypt from "bcryptjs";
 import { resolveUploadsDir } from "./uploads";
+import {
+  createLoginHandler,
+  createStoreUserHandler,
+  createVerify2FAHandler,
+} from "./authHandlers";
 
 
 
@@ -117,6 +123,11 @@ function listImagesInUploadsDir(options: { maxDepth?: number; maxFiles?: number 
 function ensureUploadsDir() {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+}
+function ensurePaymentProofUploadsDir() {
+  if (!fs.existsSync(PAYMENT_PROOFS_DIR)) {
+    fs.mkdirSync(PAYMENT_PROOFS_DIR, { recursive: true });
   }
 }
 function ensureProductUploadsDir() {
@@ -241,101 +252,10 @@ export async function registerRoutes(
     }
   });
 
-  const loginSchema = z.object({
-    email: z.string().email(),
-    password: z.string().min(1),
-  });
-
   app.post(
     "/api/auth/login",
     rateLimit(),
-    (req: Request, res: Response, next: NextFunction) => {
-      const parsed = loginSchema.safeParse(req.body);
-      if (!parsed.success) {
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid request body" });
-      }
-      passport.authenticate("local", (err: any, user: Express.User | false) => {
-        if (err) {
-          console.error("DEBUG AUTH ERROR:", err);
-          return res.status(500).json({ message: "DEBUG AUTH ERROR: " + (err.message || "Unknown") });
-        }
-        if (!user) {
-          return res.status(401).json({
-            success: false,
-            error: "Invalid email or password",
-          });
-        }
-        (async () => {
-          const fullUser = await storage.getUserById(user.id);
-          if (!fullUser || fullUser.status === "suspended") {
-            return res.status(403).json({
-              success: false,
-              error: "Account is not active",
-            });
-          }
-
-          const twoFactorEnabled = !!fullUser.twoFactorEnabled;
-
-          if (twoFactorEnabled) {
-            // Create OTP entry and send email, but do not create a session yet.
-            const code = Math.floor(100000 + Math.random() * 900000)
-              .toString()
-              .slice(0, 6);
-            const tempToken = crypto.randomUUID();
-            const expiresMinutes = Number(
-              process.env.OTP_EXPIRY_MINUTES ?? "10",
-            );
-            const expiresAt = new Date(
-              Date.now() + expiresMinutes * 60 * 1000,
-            );
-
-            await storage.createOtpToken({
-              id: tempToken,
-              userId: fullUser.id,
-              token: code,
-              expiresAt,
-            });
-
-            await sendOTPEmail(fullUser.username, code, fullUser.username);
-
-            return res.status(200).json({
-              success: true,
-              requires2FA: true,
-              tempToken,
-              code, // Temporary: expose code since SMTP is down
-            });
-          }
-
-          // No 2FA: create session as usual
-          req.logIn(
-            {
-              ...user,
-              twoFactorEnabled: false,
-            },
-            async (loginErr) => {
-              if (loginErr) {
-                return next(loginErr);
-              }
-
-              await storage.updateLastLoginAt(fullUser.id);
-
-              return res.status(200).json({
-                success: true,
-                data: {
-                  id: user.id,
-                  email: user.email,
-                  name: user.name,
-                  role: user.role,
-                  twoFactorEnabled: false,
-                },
-              });
-            },
-          );
-        })().catch((error) => next(error));
-      })(req, res, next);
-    },
+    createLoginHandler({ storage, passport, sendOTPEmail }),
   );
 
   app.post(
@@ -369,69 +289,10 @@ export async function registerRoutes(
     });
   });
 
-  const verify2FASchema = z.object({
-    tempToken: z.string().min(1),
-    code: z.string().min(4).max(6),
-  });
-
   app.post(
     "/api/auth/verify-2fa",
     rateLimit(),
-    async (req: Request, res: Response, next: NextFunction) => {
-      try {
-        const parsed = verify2FASchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid request body" });
-        }
-
-        const { tempToken, code } = parsed.data;
-        const otp = await storage.consumeOtpToken(tempToken, code);
-        if (!otp) {
-          return res
-            .status(400)
-            .json({ success: false, error: "Invalid or expired code" });
-        }
-
-        const fullUser = await storage.getUserById(otp.userId);
-        if (!fullUser || fullUser.status === "suspended") {
-          return res
-            .status(403)
-            .json({ success: false, error: "Account is not active" });
-        }
-
-        const expressUser: Express.User = {
-          id: fullUser.id,
-          email: fullUser.username,
-          role: fullUser.role,
-          name: fullUser.username,
-          twoFactorEnabled: !!fullUser.twoFactorEnabled,
-          status: fullUser.status,
-        };
-
-        req.logIn(expressUser, async (loginErr) => {
-          if (loginErr) {
-            return next(loginErr);
-          }
-
-          await storage.updateLastLoginAt(fullUser.id);
-
-          return res.status(200).json({
-            success: true,
-            data: {
-              id: expressUser.id,
-              email: expressUser.email,
-              name: expressUser.name,
-              role: expressUser.role,
-              twoFactorEnabled: !!expressUser.twoFactorEnabled,
-            },
-          });
-        });
-      } catch (err) {
-        return next(err);
-      }
-    },
+    createVerify2FAHandler({ storage }),
   );
 
   const resendOtpSchema = z.object({
@@ -823,8 +684,7 @@ export async function registerRoutes(
       }
       const order = await storage.getOrderById(id);
       const user = req.user as Express.User | undefined;
-      const userRole = user?.role?.toLowerCase();
-      const isAdminOrStaff = userRole === "admin" || userRole === "staff";
+      const isAdminOrStaff = canAccessAdminPanel(user?.role);
       const userEmail = user?.email?.toLowerCase();
       const orderEmail = order?.email?.toLowerCase();
       const isOwner =
@@ -866,17 +726,22 @@ export async function registerRoutes(
         await storage.getOrderById(orderId);
         const base64 = parsed.data.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
+        const mimeSubtype = (match?.[1] ?? "png").toLowerCase();
+        const normalizedExt =
+          mimeSubtype === "jpeg"
+            ? "jpg"
+            : mimeSubtype === "png" || mimeSubtype === "jpg" || mimeSubtype === "webp"
+              ? mimeSubtype
+              : "png";
         const buffer = Buffer.from(
           match ? match[2] : base64,
           "base64",
         );
-        ensureUploadsDir();
-        const filename = `${orderId}.webp`;
-        const filePath = path.join(UPLOADS_DIR, filename);
-        
-        await sharp(buffer)
-          .webp({ quality: 80 })
-          .toFile(filePath);
+        ensurePaymentProofUploadsDir();
+        const filename = `${orderId}.${normalizedExt}`;
+        const filePath = path.join(PAYMENT_PROOFS_DIR, filename);
+
+        fs.writeFileSync(filePath, buffer);
 
         const proofUrl = `/api/uploads/payment-proofs/${filename}`;
 
@@ -896,7 +761,7 @@ export async function registerRoutes(
     if (!/^[a-zA-Z0-9._-]+\.(png|jpg|jpeg|webp)$/.test(filename)) {
       return res.status(400).send("Invalid filename");
     }
-    const filePath = path.join(UPLOADS_DIR, filename);
+    const filePath = path.join(PAYMENT_PROOFS_DIR, filename);
     if (!fs.existsSync(filePath)) {
       return res.status(404).send("Not found");
     }
@@ -2138,15 +2003,6 @@ export async function registerRoutes(
   );
 
   // ── Store Users (team members) ─────────────────────────────
-  const storeUserRoleEnum = z.enum(["owner", "manager", "csr", "admin", "staff"]);
-
-  const createStoreUserSchema = z.object({
-    name: z.string().min(1).max(100),
-    email: z.string().email(),
-    password: z.string().min(6),
-    role: storeUserRoleEnum,
-  });
-
   app.get(
     "/api/admin/store-users",
     requireAdmin,
@@ -2166,52 +2022,14 @@ export async function registerRoutes(
   app.post(
     "/api/admin/store-users",
     requireAdmin,
-    async (req: Request, res: Response) => {
-      try {
-        const parsed = createStoreUserSchema.safeParse(req.body);
-        if (!parsed.success) {
-          return res.status(400).json({ success: false, error: "Invalid request body" });
-        }
-
-        const { name, email, password, role } = parsed.data;
-
-        const existing = await storage.getUserByEmail(email);
-        if (existing) {
-          return res.status(400).json({ success: false, error: "Email already in use" });
-        }
-
-        const bcrypt = await import("bcryptjs");
-        const hashed = await bcrypt.default.hash(password, 10);
-
-        const created = await storage.createStoreUser({
-          name,
-          email,
-          role,
-          passwordHash: hashed,
-        });
-
-        // Fire-and-forget welcome email via SMTP/Brevo
-        const inviter = req.user as Express.User | undefined;
-        sendStoreUserWelcomeEmail(
-          email,
-          name,
-          password,
-          inviter?.name || inviter?.email || "Admin",
-        ).catch((e) => {
-          console.error("Failed to send store user welcome email:", e);
-        });
-
-        return res.status(201).json({ success: true, data: created });
-      } catch (err) {
-        console.error("Error in POST /api/admin/store-users", err);
-        return res.status(500).json({ success: false, error: "Failed to create store user" });
-      }
-    },
+    createStoreUserHandler({ storage, sendStoreUserWelcomeEmail }),
   );
+
+  const updateStoreUserRoleEnum = z.enum(["owner", "manager", "csr", "admin", "staff"]);
 
   const updateStoreUserSchema = z
     .object({
-      role: storeUserRoleEnum.optional(),
+      role: updateStoreUserRoleEnum.optional(),
       email_notifications: z.boolean().optional(),
     })
     .refine((v) => v.role !== undefined || v.email_notifications !== undefined, {

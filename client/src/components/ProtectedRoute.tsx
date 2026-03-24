@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { canAccessAdminPanel } from "@shared/auth-policy";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -29,14 +30,7 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
       }
       return;
     }
-    if (
-      requireAdmin &&
-      user &&
-      user.role !== "admin" &&
-      user.role !== "staff" &&
-      user.role !== "owner" &&
-      user.role !== "manager"
-    ) {
+    if (requireAdmin && user && !canAccessAdminPanel(user.role)) {
       if (location !== "/") {
         setLocation("/");
       }
@@ -55,17 +49,9 @@ export function ProtectedRoute({ children, requireAdmin }: ProtectedRouteProps) 
     return null;
   }
 
-  if (
-    requireAdmin &&
-    user &&
-    user.role !== "admin" &&
-    user.role !== "staff" &&
-    user.role !== "owner" &&
-    user.role !== "manager"
-  ) {
+  if (requireAdmin && user && !canAccessAdminPanel(user.role)) {
     return null;
   }
 
   return <>{children}</>;
 }
-

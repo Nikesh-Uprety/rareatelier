@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { Product } from '@/lib/mockData';
 import { apiRequest } from '@/lib/queryClient';
 
@@ -18,9 +19,11 @@ interface CartState {
   get subtotal(): number;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
-  items: [],
-  addItem: (product, variant, quantity = 1) => {
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [],
+      addItem: (product, variant, quantity = 1) => {
     let shouldNotify = false;
     let notifyPayload: {
       action: "add" | "update" | "remove";
@@ -71,8 +74,8 @@ export const useCartStore = create<CartState>((set, get) => ({
         // Don't block cart UX if notifications fail.
       });
     }
-  },
-  removeItem: (id) => {
+      },
+      removeItem: (id) => {
     let target: CartItem | undefined;
     set((state) => ({
       items: state.items.filter((item) => {
@@ -92,8 +95,8 @@ export const useCartStore = create<CartState>((set, get) => ({
         // Don't block cart UX if notifications fail.
       });
     }
-  },
-  updateQuantity: (id, quantity) => {
+      },
+      updateQuantity: (id, quantity) => {
     let target: CartItem | undefined;
     set((state) => ({
       items: state.items.map((item) => {
@@ -114,9 +117,16 @@ export const useCartStore = create<CartState>((set, get) => ({
         // Don't block cart UX if notifications fail.
       });
     }
-  },
-  clearCart: () => set({ items: [] }),
-  get subtotal() {
-    return get().items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
-  }
-}));
+      },
+      clearCart: () => set({ items: [] }),
+      get subtotal() {
+        return get().items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+      }
+    }),
+    {
+      name: "ra-cart",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({ items: state.items }),
+    },
+  ),
+);
