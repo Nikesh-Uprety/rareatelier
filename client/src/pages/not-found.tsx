@@ -1,9 +1,45 @@
 import { useEffect, useRef } from "react";
+import notFoundSound from "../../../faah.mp3";
+
+const NOT_FOUND_PLAYBACK_RATE = 1.28;
 
 export default function NotFound() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Removed heavy canvas/particle animation per user request
+  useEffect(() => {
+    const audio = new Audio(notFoundSound);
+    audioRef.current = audio;
+    audio.preload = "auto";
+    audio.volume = 1;
+    audio.playbackRate = NOT_FOUND_PLAYBACK_RATE;
+    audio.defaultPlaybackRate = NOT_FOUND_PLAYBACK_RATE;
+
+    const safePlay = () => {
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.catch === "function") {
+        playPromise.catch(() => {
+          // Ignore autoplay restrictions. The 404 page still renders correctly.
+        });
+      }
+    };
+
+    const handleCanPlay = () => {
+      audio.currentTime = 0;
+      safePlay();
+    };
+
+    audio.addEventListener("canplay", handleCanPlay, { once: true });
+    audio.load();
+
+    return () => {
+      audio.removeEventListener("canplay", handleCanPlay);
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
+    };
+  }, []);
 
 
   return (
