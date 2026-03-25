@@ -111,7 +111,6 @@ function FemaleModelSVG() {
 export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
   const [gender, setGender] = useState<'male' | 'female'>('male')
   const [heightFt, setHeightFt] = useState('')
-  const [heightIn, setHeightIn] = useState('')
   const [weight, setWeight] = useState('')
   const [recommended, setRecommended] = useState<string | null>(null)
   const [animating, setAnimating] = useState(false)
@@ -250,7 +249,7 @@ export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
             Get size recommendation
           </p>
 
-          <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="grid grid-cols-2 gap-2 mb-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs text-muted-foreground">
                 Height (ft)
@@ -261,28 +260,6 @@ export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
                 onChange={e => setHeightFt(e.target.value)}
                 placeholder="5"
                 min={4} max={7}
-                className="w-full px-3 py-2 text-sm rounded-md border
-                           border-border bg-background text-foreground
-                           focus:outline-none focus:ring-1
-                           focus:ring-foreground"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground flex
-                                items-center gap-1">
-                Height (in)
-                <span className="text-[9px] bg-muted border border-border
-                                 text-muted-foreground px-1 py-0.5
-                                 rounded">
-                  optional
-                </span>
-              </label>
-              <input
-                type="number"
-                value={heightIn}
-                onChange={e => setHeightIn(e.target.value)}
-                placeholder="11"
-                min={0} max={11}
                 className="w-full px-3 py-2 text-sm rounded-md border
                            border-border bg-background text-foreground
                            focus:outline-none focus:ring-1
