@@ -10,6 +10,7 @@ import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion"
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { Helmet } from "react-helmet-async";
 import OurServices from "@/components/home/OurServices";
+import { ScrollProgress } from "@/components/ScrollProgress";
 
 type SiteAsset = {
   id: string;
@@ -634,6 +635,9 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen pt-20">
+      {/* Scroll Progress Indicator - Minimal premium line at top */}
+      <ScrollProgress />
+
       <Helmet>
         <title>Rare Atelier | Home - Premium Streetwear</title>
         <meta name="description" content="Welcome to Rare Atelier. Explore our premium streetwear and minimal luxury collection. Authentic style, timeless designs." />
@@ -1019,27 +1023,12 @@ export default function Home() {
         <p className="mx-auto mb-14 max-w-2xl text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
           Curated originals from Rare Atelier, crafted to elevate everyday wear.
         </p>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-10 sm:grid-cols-2 sm:gap-x-6 sm:gap-y-12 lg:grid-cols-12 lg:gap-x-8 lg:gap-y-14">
-          {normalizedNewArrivals.map((product, index) => (
-            <div
-              key={product.id}
-              className={
-                index === 0
-                  ? "lg:col-span-7"
-                  : index === 1
-                    ? "lg:col-span-5"
-                    : index === 4
-                      ? "lg:col-span-8"
-                      : "lg:col-span-4"
-              }
-            >
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-10">
+          {normalizedNewArrivals.map((product) => (
+            <div key={product.id}>
               <NewArrivalCard
                 product={product}
-                imageAspectClass={
-                  index === 0
-                    ? "aspect-[4/5] sm:aspect-[3/4] lg:aspect-[4/5]"
-                    : "aspect-[4/5] sm:aspect-[3/4]"
-                }
+                imageAspectClass="aspect-[4/5]"
               />
             </div>
           ))}

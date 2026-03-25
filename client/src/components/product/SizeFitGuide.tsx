@@ -191,14 +191,14 @@ export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
           </div>
 
           {/* Model figure */}
-          <div className={`flex flex-col items-center gap-4
+          <div className={`flex flex-col items-center gap-4 overflow-visible
                            transition-opacity duration-200
                            ${animating ? 'opacity-0' : 'opacity-100'}`}>
-            <div className="relative flex items-end justify-center
-                            min-h-[180px]">
+            <div className="relative flex items-center justify-center
+                            min-h-[200px] px-20 py-8 overflow-visible">
 
               {/* Floating height tag */}
-              <div className="absolute -top-2 left-1/2 -translate-x-1/2
+              <div className="absolute top-1 left-1/2 -translate-x-1/2
                               bg-background border border-border
                               rounded-md px-2 py-1 text-xs font-semibold
                               z-10 whitespace-nowrap
@@ -207,7 +207,7 @@ export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
               </div>
 
               {/* Floating weight tag */}
-              <div className="absolute top-8 -right-2
+              <div className="absolute top-1/2 right-3 -translate-y-1/2
                               bg-background border border-border
                               rounded-md px-2 py-1 text-xs font-medium
                               whitespace-nowrap z-10
@@ -216,7 +216,7 @@ export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
               </div>
 
               {/* Floating size tag */}
-              <div className="absolute top-8 -left-2
+              <div className="absolute top-1/2 left-3 -translate-y-1/2
                               bg-background border border-border
                               rounded-md px-2 py-1 text-xs font-medium
                               whitespace-nowrap z-10

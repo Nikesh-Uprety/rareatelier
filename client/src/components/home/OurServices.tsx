@@ -246,7 +246,7 @@ export default function OurServices() {
             <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
               <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">Easy Exchange</h3>
               <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
-                Need a different size? Our exchange process is straightforward—reach out and we will help you swap with
+                Need a different size? Our exchange process is straightforward reach out and we will help you swap with
                 confidence.
               </p>
               <button
