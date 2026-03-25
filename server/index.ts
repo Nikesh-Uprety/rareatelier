@@ -9,6 +9,7 @@ import { configurePassport, passport } from "./auth";
 import { pool } from "./db";
 import { logger } from "./logger";
 import { corsHeaders, securityHeaders } from "./middleware/security";
+import { ensureDefaultProductAttributes } from "./productAttributeDefaults";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { initWebSocketServer } from "./websocket";
@@ -211,6 +212,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  await ensureDefaultProductAttributes();
+
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
   const uploadsPath = path.resolve(UPLOADS_DIR);

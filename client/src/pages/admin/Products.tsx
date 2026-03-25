@@ -98,6 +98,14 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AttributesManager } from "./AttributesManager";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  DEFAULT_PRODUCT_SIZES,
+  DEFAULT_PRODUCT_VARIANTS,
+  DEFAULT_PRODUCT_VARIANT_SWATCHES,
+  extractAttributeLabel,
+  normalizeAttributeLabel,
+  uniqueNormalizedValues,
+} from "@shared/productAttributes";
 
 function slugify(s: string): string {
   return s
@@ -122,6 +130,20 @@ function resolveCategorySlug(
   });
 
   return matchedCategory?.slug ?? (productCategoryRaw || categories[0]?.slug || "");
+}
+
+function orderByDefaults(values: string[], defaults: readonly string[]): string[] {
+  const defaultOrder = new Map(defaults.map((value, index) => [value, index]));
+
+  return [...values].sort((a, b) => {
+    const aIndex = defaultOrder.get(normalizeAttributeLabel(a));
+    const bIndex = defaultOrder.get(normalizeAttributeLabel(b));
+
+    if (aIndex !== undefined && bIndex !== undefined) return aIndex - bIndex;
+    if (aIndex !== undefined) return -1;
+    if (bIndex !== undefined) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 const productSchema = z.object({
@@ -171,13 +193,42 @@ export default function AdminProducts() {
     queryFn: () => fetchAdminAttributes(),
   });
 
-  const dynamicColors = useMemo(() => 
-    attributes?.filter(a => a.type === "color").map(a => a.value) || [], 
-    [attributes]
+  const colorSwatches = useMemo(() => {
+    const swatches: Record<string, string> = { ...DEFAULT_PRODUCT_VARIANT_SWATCHES };
+    (attributes ?? [])
+      .filter((attribute) => attribute.type === "color")
+      .forEach((attribute) => {
+        const [label, hex] = attribute.value.split("|");
+        const normalized = normalizeAttributeLabel(label);
+        if (normalized && hex?.trim()) swatches[normalized] = hex.trim();
+      });
+    return swatches;
+  }, [attributes]);
+  const dynamicColors = useMemo(
+    () =>
+      orderByDefaults(
+        uniqueNormalizedValues([
+          ...DEFAULT_PRODUCT_VARIANTS,
+          ...((attributes ?? [])
+            .filter((attribute) => attribute.type === "color")
+            .map((attribute) => attribute.value)),
+        ]),
+        DEFAULT_PRODUCT_VARIANTS,
+      ),
+    [attributes],
   );
-  const dynamicSizes = useMemo(() => 
-    attributes?.filter(a => a.type === "size").map(a => a.value) || [], 
-    [attributes]
+  const dynamicSizes = useMemo(
+    () =>
+      orderByDefaults(
+        uniqueNormalizedValues([
+          ...DEFAULT_PRODUCT_SIZES,
+          ...((attributes ?? [])
+            .filter((attribute) => attribute.type === "size")
+            .map((attribute) => attribute.value)),
+        ]),
+        DEFAULT_PRODUCT_SIZES,
+      ),
+    [attributes],
   );
   const [newCategorySlug, setNewCategorySlug] = useState("");
   const [pendingCategoryForm, setPendingCategoryForm] = useState<"add" | "edit" | null>(null);
@@ -283,8 +334,8 @@ export default function AdminProducts() {
   useEffect(() => {
     if (editProduct) {
       const galleryUrls = parseJsonArray(editProduct.galleryUrls);
-      const colorOptions = parseJsonArray(editProduct.colorOptions);
-      const sizeOptions = parseJsonArray(editProduct.sizeOptions);
+      const colorOptions = uniqueNormalizedValues(parseJsonArray(editProduct.colorOptions));
+      const sizeOptions = uniqueNormalizedValues(parseJsonArray(editProduct.sizeOptions));
       const categorySlug = resolveCategorySlug(editProduct.category, categories);
 
       editForm.reset({
@@ -1132,7 +1183,7 @@ export default function AdminProducts() {
                       {/* Interactive Colors */}
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Colors</p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Product Variants</p>
                           <button
                             type="button"
                             className="text-[10px] text-primary hover:underline font-medium"
@@ -1151,9 +1202,11 @@ export default function AdminProducts() {
                         </div>
                         <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicColors.map((c) => {
-                            const [name, hex] = c.split("|");
                             const selectedColors = addForm.watch("colorOptions") || [];
                             const isSelected = selectedColors.includes(c);
+                            const colorName = extractAttributeLabel(c);
+                            const colorHex =
+                              colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
                             return (
                               <button
                                 key={c}
@@ -1175,20 +1228,22 @@ export default function AdminProducts() {
                               >
                                 <div
                                   className="w-3 h-3 rounded-full border border-black/10 shadow-sm"
-                                  style={{ backgroundColor: hex || "#ccc" }}
+                                  style={{ backgroundColor: colorHex }}
                                 />
-                                {name}
+                                {colorName}
                               </button>
                             );
                           })}
                         </div>
                         <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Colors
+                            Product Variants
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {(addForm.watch("colorOptions") || []).map((c) => {
-                              const [name, hex] = c.split("|");
+                              const colorName = extractAttributeLabel(c);
+                              const colorHex =
+                                colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
                               return (
                                 <div
                                   key={c}
@@ -1196,9 +1251,9 @@ export default function AdminProducts() {
                                 >
                                   <span
                                     className="w-3 h-3 rounded-full border border-black/10"
-                                    style={{ backgroundColor: hex || "#ccc" }}
+                                    style={{ backgroundColor: colorHex }}
                                   />
-                                  <span>{name}</span>
+                                  <span>{colorName}</span>
                                   <button
                                     type="button"
                                     className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
@@ -1230,7 +1285,7 @@ export default function AdminProducts() {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">
-                            Sizes
+                            Product Sizes
                           </p>
                           <button
                             type="button"
@@ -1271,7 +1326,7 @@ export default function AdminProducts() {
                                     : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                {s}
+                                {extractAttributeLabel(s)}
                               </button>
                             );
                           })}
@@ -1286,7 +1341,7 @@ export default function AdminProducts() {
                                 key={s}
                                 className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
                               >
-                                <span>{s}</span>
+                                <span>{extractAttributeLabel(s)}</span>
                                 <button
                                   type="button"
                                   className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
@@ -2643,7 +2698,7 @@ export default function AdminProducts() {
                       {/* Interactive Colors */}
                       <div>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Colors</p>
+                          <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">Product Variants</p>
                           <button
                             type="button"
                             className="text-[10px] text-primary hover:underline font-medium"
@@ -2662,9 +2717,11 @@ export default function AdminProducts() {
                         </div>
                         <div className="flex flex-wrap gap-2 mb-3">
                           {dynamicColors.map((c) => {
-                            const [name, hex] = c.split("|");
                             const selectedColors = editForm.watch("colorOptions") || [];
                             const isSelected = selectedColors.includes(c);
+                            const colorName = extractAttributeLabel(c);
+                            const colorHex =
+                              colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
                             return (
                               <button
                                 key={c}
@@ -2686,20 +2743,22 @@ export default function AdminProducts() {
                               >
                                 <div
                                   className="w-3 h-3 rounded-full border border-black/10 shadow-sm"
-                                  style={{ backgroundColor: hex || "#ccc" }}
+                                  style={{ backgroundColor: colorHex }}
                                 />
-                                {name}
+                                {colorName}
                               </button>
                             );
                           })}
                         </div>
                         <div className="rounded-md border border-dashed border-border/70 bg-muted/30 p-3 space-y-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold">
-                            Product Colors
+                            Product Variants
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {(editForm.watch("colorOptions") || []).map((c) => {
-                              const [name, hex] = c.split("|");
+                              const colorName = extractAttributeLabel(c);
+                              const colorHex =
+                                colorSwatches[normalizeAttributeLabel(c)] || "#cccccc";
                               return (
                                 <div
                                   key={c}
@@ -2707,9 +2766,9 @@ export default function AdminProducts() {
                                 >
                                   <span
                                     className="w-3 h-3 rounded-full border border-black/10"
-                                    style={{ backgroundColor: hex || "#ccc" }}
+                                    style={{ backgroundColor: colorHex }}
                                   />
-                                  <span>{name}</span>
+                                  <span>{colorName}</span>
                                   <button
                                     type="button"
                                     className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"
@@ -2741,7 +2800,7 @@ export default function AdminProducts() {
                       <div>
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-bold italic">
-                            Sizes
+                            Product Sizes
                           </p>
                           <button
                             type="button"
@@ -2782,7 +2841,7 @@ export default function AdminProducts() {
                                     : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground bg-white/50 dark:bg-card"
                                 }`}
                               >
-                                {s}
+                                {extractAttributeLabel(s)}
                               </button>
                             );
                           })}
@@ -2797,7 +2856,7 @@ export default function AdminProducts() {
                                 key={s}
                                 className="flex items-center gap-2 px-2 py-1 rounded-full border bg-background text-xs"
                               >
-                                <span>{s}</span>
+                                <span>{extractAttributeLabel(s)}</span>
                                 <button
                                   type="button"
                                   className="ml-1 text-[10px] text-muted-foreground hover:text-red-500"

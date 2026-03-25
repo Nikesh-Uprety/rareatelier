@@ -59,6 +59,7 @@ import {
   PreviewLinkCardImage,
   PreviewLinkCardTrigger,
 } from "@/components/ui/preview-link-card";
+import { extractAttributeLabel, normalizeAttributeLabel } from "@shared/productAttributes";
 
 // Helper for color contrast
 function getContrastColor(hex: string): string {
@@ -132,7 +133,10 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
   const createAttrMutation = useMutation({
     mutationFn: (data: { type: string; value: string }) => {
       const [name, hex] = data.value.split('|');
-      const isDuplicateName = attributes?.some(a => a.type === data.type && a.value.split('|')[0] === name);
+      const normalizedName = normalizeAttributeLabel(name);
+      const isDuplicateName = attributes?.some(
+        (a) => a.type === data.type && normalizeAttributeLabel(a.value) === normalizedName,
+      );
       const finalValue = isDuplicateName && data.type === 'color' 
         ? `${name} (${hex})|${hex}` 
         : data.value;
@@ -246,14 +250,14 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
     <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
       <SheetHeader className="p-6 border-b bg-white dark:bg-card">
         <SheetTitle className="text-2xl font-serif">Store Attributes</SheetTitle>
-        <SheetDescription>Manage colors, sizing, and categories in one place.</SheetDescription>
+        <SheetDescription>Manage product variants, sizes, and categories in one place.</SheetDescription>
       </SheetHeader>
 
       <div className="flex-1 p-6 space-y-8">
         <Tabs defaultValue="color" onValueChange={setActiveTab} className="w-full">
           <TabsList className="bg-muted/50 w-full mb-6">
-            <TabsTrigger value="color" className="flex-1"><Palette className="w-4 h-4 mr-2" /> Colors</TabsTrigger>
-            <TabsTrigger value="size" className="flex-1"><Ruler className="w-4 h-4 mr-2" /> Sizes</TabsTrigger>
+            <TabsTrigger value="color" className="flex-1"><Palette className="w-4 h-4 mr-2" /> Product Variants</TabsTrigger>
+            <TabsTrigger value="size" className="flex-1"><Ruler className="w-4 h-4 mr-2" /> Product Sizes</TabsTrigger>
             <TabsTrigger value="category" className="flex-1"><Tags className="w-4 h-4 mr-2" /> Category</TabsTrigger>
           </TabsList>
 
@@ -337,14 +341,14 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
 
           <TabsContent value="size" className="space-y-6">
             <div className="flex gap-2">
-              <Input placeholder="Size (e.g. XL, 42)" value={newValue} onChange={(e) => setNewValue(e.target.value)} className="h-11 rounded-xl" />
+              <Input placeholder="Size (e.g. m, xl, xxl)" value={newValue} onChange={(e) => setNewValue(e.target.value)} className="h-11 rounded-xl" />
               <Button className="h-11 rounded-xl" onClick={() => createAttrMutation.mutate({ type: "size", value: newValue })}><Plus className="w-4 h-4" /></Button>
             </div>
             
             <div className="grid grid-cols-4 gap-3">
               {attributes?.filter(a => a.type === 'size').map(attr => (
                 <div key={attr.id} className="relative group p-4 border rounded-xl bg-white dark:bg-muted/10 text-center font-bold tracking-widest hover:border-primary transition-colors">
-                   {attr.value}
+                   {extractAttributeLabel(attr.value)}
                    <Button 
                     variant="ghost" 
                     size="icon" 

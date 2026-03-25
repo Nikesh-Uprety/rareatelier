@@ -6,6 +6,12 @@ import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Slider } from "@/components/ui/slider";
+import {
+  DEFAULT_PRODUCT_SIZES,
+  DEFAULT_PRODUCT_VARIANTS,
+  extractAttributeLabel,
+  normalizeAttributeLabel,
+} from "@shared/productAttributes";
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -17,6 +23,20 @@ function parseJsonArray(s: string | null | undefined): string[] {
   } catch {
     return [];
   }
+}
+
+function orderByDefaults(values: string[], defaults: readonly string[]): string[] {
+  const defaultOrder = new Map(defaults.map((value, index) => [value, index]));
+
+  return [...values].sort((a, b) => {
+    const aIndex = defaultOrder.get(normalizeAttributeLabel(a));
+    const bIndex = defaultOrder.get(normalizeAttributeLabel(b));
+
+    if (aIndex !== undefined && bIndex !== undefined) return aIndex - bIndex;
+    if (aIndex !== undefined) return -1;
+    if (bIndex !== undefined) return 1;
+    return a.localeCompare(b);
+  });
 }
 
 export default function Products() {
@@ -60,21 +80,27 @@ export default function Products() {
   });
 
   const availableSizes = useMemo(() => {
-    if (!products) return [];
-    const sizeSet = new Set<string>();
+    const sizeSet = new Set<string>(DEFAULT_PRODUCT_SIZES);
+    if (!products) return orderByDefaults(Array.from(sizeSet), DEFAULT_PRODUCT_SIZES);
     products.forEach((product) => {
-      parseJsonArray(product.sizeOptions).forEach((size) => sizeSet.add(size));
+      parseJsonArray(product.sizeOptions).forEach((size) => {
+        const normalized = normalizeAttributeLabel(size);
+        if (normalized) sizeSet.add(normalized);
+      });
     });
-    return Array.from(sizeSet);
+    return orderByDefaults(Array.from(sizeSet), DEFAULT_PRODUCT_SIZES);
   }, [products]);
 
   const availableColors = useMemo(() => {
-    if (!products) return [];
-    const colorSet = new Set<string>();
+    const colorSet = new Set<string>(DEFAULT_PRODUCT_VARIANTS);
+    if (!products) return orderByDefaults(Array.from(colorSet), DEFAULT_PRODUCT_VARIANTS);
     products.forEach((product) => {
-      parseJsonArray(product.colorOptions).forEach((color) => colorSet.add(color));
+      parseJsonArray(product.colorOptions).forEach((color) => {
+        const normalized = normalizeAttributeLabel(color);
+        if (normalized) colorSet.add(normalized);
+      });
     });
-    return Array.from(colorSet);
+    return orderByDefaults(Array.from(colorSet), DEFAULT_PRODUCT_VARIANTS);
   }, [products]);
 
   useEffect(() => {
@@ -112,16 +138,20 @@ export default function Products() {
       const matchesPriceRange =
         Number.isFinite(price) && price >= priceRange[0] && price <= priceRange[1];
 
-      const productSizes = parseJsonArray(p.sizeOptions);
-      const productColors = parseJsonArray(p.colorOptions);
+      const productSizes = parseJsonArray(p.sizeOptions).map((size) =>
+        normalizeAttributeLabel(size),
+      );
+      const productColors = parseJsonArray(p.colorOptions).map((color) =>
+        normalizeAttributeLabel(color),
+      );
 
       const matchesSizes =
         selectedSizes.length === 0 ||
-        selectedSizes.some((size) => productSizes.includes(size));
+        selectedSizes.some((size) => productSizes.includes(normalizeAttributeLabel(size)));
 
       const matchesColors =
         selectedColors.length === 0 ||
-        selectedColors.some((color) => productColors.includes(color));
+        selectedColors.some((color) => productColors.includes(normalizeAttributeLabel(color)));
 
       const matchesStock = !inStockOnly || p.stock > 0;
       const matchesSale =
@@ -304,61 +334,7 @@ export default function Products() {
 
                 <section className="space-y-3">
                   <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                    Size
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {availableSizes.length === 0 ? (
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">No size options</p>
-                    ) : (
-                      availableSizes.map((size) => (
-                        <button
-                          key={size}
-                          type="button"
-                          onClick={() => toggleChip(size, selectedSizes, setSelectedSizes)}
-                          className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                            selectedSizes.includes(size)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-black/[0.12] dark:border-white/[0.18] text-zinc-600 dark:text-zinc-300 hover:border-primary"
-                          }`}
-                        >
-                          {size}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="space-y-3">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                    Color
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {availableColors.length === 0 ? (
-                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">No color options</p>
-                    ) : (
-                      availableColors.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          onClick={() =>
-                            toggleChip(color, selectedColors, setSelectedColors)
-                          }
-                          className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                            selectedColors.includes(color)
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-black/[0.12] dark:border-white/[0.18] text-zinc-600 dark:text-zinc-300 hover:border-primary"
-                          }`}
-                        >
-                          {color}
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </section>
-
-                <section className="space-y-2">
-                  <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-                    Other
+                    Availability
                   </h3>
                   <label className="flex items-center gap-2 text-[11px] text-zinc-700 dark:text-zinc-300 cursor-pointer">
                     <input
@@ -378,6 +354,66 @@ export default function Products() {
                     />
                     On sale only
                   </label>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                    Product Sizes
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {availableSizes.length === 0 ? (
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">No size options</p>
+                    ) : (
+                      availableSizes.map((size) => (
+                        <label
+                          key={size}
+                          className={`flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                            selectedSizes.includes(size)
+                              ? "bg-primary/10 text-zinc-900 border-primary dark:text-white"
+                              : "border-black/[0.12] dark:border-white/[0.18] text-zinc-600 dark:text-zinc-300 hover:border-primary"
+                          }`}
+                        >
+                          <span>{extractAttributeLabel(size)}</span>
+                          <input
+                            type="checkbox"
+                            checked={selectedSizes.includes(size)}
+                            onChange={() => toggleChip(size, selectedSizes, setSelectedSizes)}
+                            className="h-4 w-4 accent-primary cursor-pointer"
+                          />
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </section>
+
+                <section className="space-y-3">
+                  <h3 className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+                    Product Variants
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2">
+                    {availableColors.length === 0 ? (
+                      <p className="text-[10px] text-zinc-400 dark:text-zinc-500">No color options</p>
+                    ) : (
+                      availableColors.map((color) => (
+                        <label
+                          key={color}
+                          className={`flex cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                            selectedColors.includes(color)
+                              ? "bg-primary/10 text-zinc-900 border-primary dark:text-white"
+                              : "border-black/[0.12] dark:border-white/[0.18] text-zinc-600 dark:text-zinc-300 hover:border-primary"
+                          }`}
+                        >
+                          <span>{extractAttributeLabel(color)}</span>
+                          <input
+                            type="checkbox"
+                            checked={selectedColors.includes(color)}
+                            onChange={() => toggleChip(color, selectedColors, setSelectedColors)}
+                            className="h-4 w-4 accent-primary cursor-pointer"
+                          />
+                        </label>
+                      ))
+                    )}
+                  </div>
                 </section>
               </aside>
 

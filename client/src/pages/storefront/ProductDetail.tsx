@@ -4,12 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Minus, Plus, X } from "lucide-react";
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Helmet } from "react-helmet-async";
+import SizeFitGuide from "@/components/product/SizeFitGuide";
 
 function parseJsonArray(s: string | null | undefined): string[] {
   if (!s || !s.trim()) return [];
@@ -122,11 +122,7 @@ export default function ProductDetail() {
   const [currentImageSrc, setCurrentImageSrc] = useState("");
   const [panelZoomEnabled, setPanelZoomEnabled] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
-  const [isSizeGuideOpen, setIsSizeGuideOpen] = useState(false);
-  const [heightFt, setHeightFt] = useState("");
-  const [heightIn, setHeightIn] = useState("");
-  const [weightKg, setWeightKg] = useState("");
-  const [sizeRecommendation, setSizeRecommendation] = useState<string | null>(null);
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
   const mainImageRef = useRef<HTMLDivElement | null>(null);
@@ -367,34 +363,6 @@ export default function ProductDetail() {
 
   const closeGallery = () => {
     setIsGalleryVisible(false);
-  };
-
-  const getSizeRecommendation = () => {
-    const parsedWeight = Number(weightKg);
-    const parsedFt = Number(heightFt);
-    const parsedIn = Number(heightIn);
-
-    if (!Number.isFinite(parsedWeight) || parsedWeight <= 0) {
-      setSizeRecommendation("Please enter a valid weight in kg.");
-      return;
-    }
-
-    const hasHeight = Number.isFinite(parsedFt) && parsedFt >= 0 && Number.isFinite(parsedIn) && parsedIn >= 0;
-    const heightNote = hasHeight ? ` for ${parsedFt}'${parsedIn}"` : "";
-
-    if (parsedWeight < 60) {
-      setSizeRecommendation(`Recommended size${heightNote}: S/M`);
-      return;
-    }
-    if (parsedWeight <= 75) {
-      setSizeRecommendation(`Recommended size${heightNote}: M/L`);
-      return;
-    }
-    if (parsedWeight <= 90) {
-      setSizeRecommendation(`Recommended size${heightNote}: L/XL`);
-      return;
-    }
-    setSizeRecommendation(`Recommended size${heightNote}: XL`);
   };
 
   const handleMainImagePointerEnter = (event: PointerEvent<HTMLDivElement>) => {
@@ -688,141 +656,44 @@ export default function ProductDetail() {
             )}
 
             {sizes.length > 0 && (
-              <Sheet open={isSizeGuideOpen} onOpenChange={setIsSizeGuideOpen}>
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
-                    Size
-                  </p>
-                  <div className="flex justify-end mb-3">
-                    <SheetTrigger asChild>
-                      <button
-                        type="button"
-                        className="text-[10px] uppercase tracking-[0.2em] font-light text-muted-foreground hover:text-foreground hover:underline underline-offset-4 transition-colors"
-                      >
-                        Size &amp; Fit Guide &#8594;
-                      </button>
-                    </SheetTrigger>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {sizes.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSelectedSize(s)}
-                        className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
-                          effectiveSize === s
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground mb-3 font-bold">
+                  Size
+                </p>
+                <div className="flex justify-end mb-3">
+                  <button
+                    onClick={() => setShowSizeGuide(true)}
+                    className="flex items-center gap-1.5 text-sm font-semibold
+                               text-foreground underline underline-offset-4
+                               decoration-foreground hover:opacity-70
+                               transition-opacity duration-200"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24"
+                      fill="none" stroke="currentColor" strokeWidth="2.5"
+                      strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="11" cy="11" r="7"/>
+                      <path d="m21 21-4.35-4.35"/>
+                    </svg>
+                    Size &amp; Fit Guide
+                  </button>
                 </div>
-
-                <SheetContent
-                  side="right"
-                  className="w-full sm:max-w-md md:max-w-lg p-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
-                >
-                  <div className="h-full overflow-y-auto px-5 py-6 sm:px-7 sm:py-8">
-                    <SheetTitle className="text-3xl font-semibold tracking-tight mb-6">
-                      Size &amp; Fit Guide
-                    </SheetTitle>
-
-                    <div className="border border-border/70 rounded-sm p-4 sm:p-5 mb-6">
-                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-3">
-                        Our Models
-                      </h3>
-                      <div className="space-y-2 text-sm leading-relaxed text-foreground/90">
-                        <p>Male Model: 5&apos;11&quot; height · 72kg · wears size XL</p>
-                        <p>Female Model: 5&apos;3&quot; height · 54kg · wears size M</p>
-                      </div>
-                    </div>
-
-                    <div className="border border-border/70 rounded-sm p-4 sm:p-5 mb-6">
-                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground mb-4">
-                        Size Recommendation Tool
-                      </h3>
-                      <div className="grid grid-cols-3 gap-2 mb-4">
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="0"
-                          value={heightFt}
-                          onChange={(event) => setHeightFt(event.target.value)}
-                          placeholder="Height (ft)"
-                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="0"
-                          value={heightIn}
-                          onChange={(event) => setHeightIn(event.target.value)}
-                          placeholder="Height (in)"
-                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          min="0"
-                          value={weightKg}
-                          onChange={(event) => setWeightKg(event.target.value)}
-                          placeholder="Weight (kg)"
-                          className="h-10 px-3 border border-border bg-background text-sm rounded-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                        />
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={getSizeRecommendation}
-                        className="w-full h-10 rounded-none uppercase tracking-[0.2em] text-[10px] font-bold"
-                      >
-                        Get Size Recommendation
-                      </Button>
-                      {sizeRecommendation && (
-                        <p className="mt-3 text-sm text-foreground/90">{sizeRecommendation}</p>
-                      )}
-                    </div>
-
-                    <div className="border border-border/70 rounded-sm overflow-hidden">
-                      <h3 className="text-sm uppercase tracking-[0.2em] text-muted-foreground px-4 py-3 border-b border-border/70">
-                        Size Chart
-                      </h3>
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/40">
-                          <tr className="text-left">
-                            <th className="px-4 py-3 font-medium border-b border-border/70">Size</th>
-                            <th className="px-4 py-3 font-medium border-b border-border/70">Chest</th>
-                            <th className="px-4 py-3 font-medium border-b border-border/70">Length</th>
-                            <th className="px-4 py-3 font-medium border-b border-border/70">Shoulder</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr className="bg-background">
-                            <td className="px-4 py-3 border-b border-border/60">M</td>
-                            <td className="px-4 py-3 border-b border-border/60">42 inch</td>
-                            <td className="px-4 py-3 border-b border-border/60">26.5 inch</td>
-                            <td className="px-4 py-3 border-b border-border/60">18.5 inch</td>
-                          </tr>
-                          <tr className="bg-muted/20">
-                            <td className="px-4 py-3 border-b border-border/60">L</td>
-                            <td className="px-4 py-3 border-b border-border/60">44 inch</td>
-                            <td className="px-4 py-3 border-b border-border/60">27.5 inch</td>
-                            <td className="px-4 py-3 border-b border-border/60">20.5 inch</td>
-                          </tr>
-                          <tr className="bg-background">
-                            <td className="px-4 py-3">XL</td>
-                            <td className="px-4 py-3">46 inch</td>
-                            <td className="px-4 py-3">28.5 inch</td>
-                            <td className="px-4 py-3">22.5 inch</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </SheetContent>
-              </Sheet>
+                <div className="flex flex-wrap gap-2">
+                  {sizes.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setSelectedSize(s)}
+                      className={`w-12 h-10 border text-xs font-medium transition-all rounded-sm ${
+                        effectiveSize === s
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-foreground/50 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
 
             <div>
@@ -884,6 +755,8 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      <SizeFitGuide open={showSizeGuide} onClose={() => setShowSizeGuide(false)} />
 
       <div className="mt-24 pt-16 border-t border-gray-100">
         <h2 className="text-xl font-black uppercase tracking-tighter text-center mb-12">
