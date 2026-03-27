@@ -223,7 +223,6 @@ export default function Canvas() {
     queryFn: () =>
       fetchAdminImages({
         provider: mediaProvider,
-        category: "landing_page",
         limit: 120,
       }),
     enabled: !!mediaPickerTarget,

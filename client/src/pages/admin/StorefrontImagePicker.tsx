@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
-import { deleteAdminStorefrontImage } from "@/lib/adminApi";
+import { deleteAdminImage, deleteAdminStorefrontImage, fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Image as ImageIcon, Loader2, RefreshCcw, Trash2, Eye, CheckCircle2 } from "lucide-react";
 
@@ -13,6 +13,16 @@ type StorefrontImageEntry = {
   filename: string;
   url: string;
   relPath: string;
+};
+
+type StorefrontLibraryEntry = {
+  key: string;
+  filename: string;
+  url: string;
+  provider: "local" | "cloudinary";
+  relPath?: string;
+  id?: string;
+  category?: string;
 };
 
 type SlotKey = "feature1" | "feature2" | "feature3" | "explore";
@@ -43,7 +53,8 @@ export default function StorefrontImagePicker() {
   );
   const [exploreImage, setExploreImage] = useState<string>(EXPLORE_COLLECTION_IMAGE_DEFAULT);
   const [search, setSearch] = useState("");
-  const [imageToDelete, setImageToDelete] = useState<StorefrontImageEntry | null>(null);
+  const [providerFilter, setProviderFilter] = useState<"all" | "local" | "cloudinary">("all");
+  const [imageToDelete, setImageToDelete] = useState<StorefrontLibraryEntry | null>(null);
 
   useEffect(() => {
     const parsedFeatures = safeParseJson(localStorage.getItem("storefront_feature_images"));
@@ -60,20 +71,49 @@ export default function StorefrontImagePicker() {
     }
   }, []);
 
-  const imagesQuery = useQuery<StorefrontImageEntry[]>({
+  const imagesQuery = useQuery<StorefrontLibraryEntry[]>({
     queryKey: ["admin", "storefront-image-library"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/admin/storefront-image-library");
-      const json = await res.json();
-      return (json.data as StorefrontImageEntry[]) ?? [];
+      const [localImages, cloudinaryImages] = await Promise.all([
+        apiRequest("GET", "/api/admin/storefront-image-library")
+          .then((res) => res.json())
+          .then((json) => ((json.data as StorefrontImageEntry[]) ?? []).map((img) => ({
+            key: `local:${img.relPath}`,
+            filename: img.filename,
+            url: img.url,
+            relPath: img.relPath,
+            provider: "local" as const,
+          }))),
+        fetchAdminImages({ provider: "cloudinary", limit: 120 }).then((assets) =>
+          assets.map((asset: AdminImageAsset) => ({
+            key: `cloudinary:${asset.id}`,
+            id: asset.id,
+            filename: asset.filename || asset.publicId || `cloudinary-${asset.id.slice(0, 8)}`,
+            url: asset.url,
+            provider: "cloudinary" as const,
+            category: asset.category,
+          })),
+        ),
+      ]);
+
+      return [...cloudinaryImages, ...localImages];
     },
     staleTime: 60 * 1000,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (relPath: string) => deleteAdminStorefrontImage(relPath),
-    onSuccess: (_, relPath) => {
-      const deletedEntry = (imagesQuery.data ?? []).find((item) => item.relPath === relPath);
+    mutationFn: async (entry: StorefrontLibraryEntry) => {
+      if (entry.provider === "cloudinary" && entry.id) {
+        await deleteAdminImage(entry.id);
+        return entry;
+      }
+      if (entry.relPath) {
+        await deleteAdminStorefrontImage(entry.relPath);
+        return entry;
+      }
+      throw new Error("Missing image identifier");
+    },
+    onSuccess: (deletedEntry) => {
       const deletedUrl = deletedEntry?.url;
 
       if (deletedUrl) {
@@ -89,12 +129,13 @@ export default function StorefrontImagePicker() {
       }
 
       queryClient.invalidateQueries({ queryKey: ["admin", "storefront-image-library"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       setImageToDelete(null);
       toast({
-        title: "Storefront image deleted",
+        title: deletedEntry.provider === "cloudinary" ? "Cloudinary image deleted" : "Storefront image deleted",
         description: deletedUrl
           ? "Any slot using that image was reset to its default visual."
-          : "The local storefront image was removed.",
+          : "The image was removed from the library.",
       });
     },
     onError: (err: Error) => {
@@ -109,9 +150,22 @@ export default function StorefrontImagePicker() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const items = imagesQuery.data ?? [];
-    if (!q) return items;
-    return items.filter((img) => img.filename.toLowerCase().includes(q) || img.url.toLowerCase().includes(q));
-  }, [imagesQuery.data, search]);
+    const providerScoped = providerFilter === "all"
+      ? items
+      : items.filter((img) => img.provider === providerFilter);
+    if (!q) return providerScoped;
+    return providerScoped.filter((img) =>
+      img.filename.toLowerCase().includes(q) ||
+      img.url.toLowerCase().includes(q) ||
+      (img.category ?? "").toLowerCase().includes(q),
+    );
+  }, [imagesQuery.data, providerFilter, search]);
+
+  const groupedImages = useMemo(() => {
+    const local = filtered.filter((img) => img.provider === "local");
+    const cloudinary = filtered.filter((img) => img.provider === "cloudinary");
+    return { cloudinary, local };
+  }, [filtered]);
 
   const slotPreview = useMemo(() => {
     if (activeSlot === "feature1") return featureImages[0] ?? FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT[0];
@@ -252,8 +306,8 @@ export default function StorefrontImagePicker() {
       <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div>
-            <h2 className="text-base font-black uppercase tracking-wider">Available uploads</h2>
-            <p className="text-muted-foreground mt-1 text-sm">Pick, preview, or delete local uploads used by the storefront.</p>
+            <h2 className="text-base font-black uppercase tracking-wider">Storefront image library</h2>
+            <p className="text-muted-foreground mt-1 text-sm">Browse both local uploads and Cloudinary assets in one place, then assign them to the active storefront slot.</p>
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -265,6 +319,26 @@ export default function StorefrontImagePicker() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {(
+            [
+              { key: "all" as const, label: "All images" },
+              { key: "cloudinary" as const, label: "Cloudinary" },
+              { key: "local" as const, label: "Local uploads" },
+            ] as const
+          ).map((option) => (
+            <Button
+              key={option.key}
+              type="button"
+              variant={providerFilter === option.key ? "default" : "outline"}
+              className="h-8 rounded-full px-4 text-xs uppercase tracking-[0.2em]"
+              onClick={() => setProviderFilter(option.key)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
         {imagesQuery.isLoading ? (
           <div className="py-10 text-center text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin mx-auto" />
@@ -273,44 +347,88 @@ export default function StorefrontImagePicker() {
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">No images found.</div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {filtered.slice(0, 120).map((img) => {
-              const isSelected = currentlySelectedUrls.has(img.url);
+          <div className="space-y-8">
+            {(["cloudinary", "local"] as const).map((provider) => {
+              const items = groupedImages[provider];
+              if (items.length === 0) return null;
+
               return (
-                <div
-                  key={img.relPath}
-                  className={cn(
-                    "group overflow-hidden rounded-2xl border border-border/60 bg-muted/40 transition-colors",
-                    isSelected ? "ring-2 ring-emerald-500/30 border-emerald-400/50" : "hover:border-black/30 dark:hover:border-white/20",
-                  )}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handlePick(img.url)}
-                    className="relative block w-full"
-                    aria-label={`Pick ${img.filename}`}
-                  >
-                    <img src={img.url} alt={img.filename} className="h-32 w-full object-cover transition-transform duration-200 group-hover:scale-105" />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent px-3 py-2 text-left text-white">
-                      <div className="truncate text-[11px] font-semibold">{img.filename}</div>
-                      <div className="mt-1 flex items-center gap-1 text-[10px] text-white/80">
-                        {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                        {isSelected ? "Assigned to a storefront slot" : "Click to assign to active slot"}
-                      </div>
+                <div key={provider} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-[0.22em]">
+                        {provider === "cloudinary" ? "Cloudinary Library" : "Local Uploads"}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {provider === "cloudinary"
+                          ? "Reusable hosted images from your Cloudinary-backed media library."
+                          : "Files currently available inside local uploads for storefront mapping."}
+                      </p>
                     </div>
-                  </button>
-                  <div className="flex items-center justify-between gap-2 border-t border-border/50 bg-background/90 px-3 py-2">
-                    <span className="truncate text-[11px] text-muted-foreground">{img.relPath}</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 gap-1.5 rounded-full px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
-                      onClick={() => setImageToDelete(img)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete
-                    </Button>
+                    <span className="rounded-full border border-border/60 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                      {items.length} image{items.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                    {items.slice(0, 120).map((img) => {
+                      const isSelected = currentlySelectedUrls.has(img.url);
+                      return (
+                        <div
+                          key={img.key}
+                          className={cn(
+                            "group overflow-hidden rounded-2xl border border-border/60 bg-muted/40 transition-colors",
+                            isSelected ? "ring-2 ring-emerald-500/30 border-emerald-400/50" : "hover:border-black/30 dark:hover:border-white/20",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handlePick(img.url)}
+                            className="relative block w-full"
+                            aria-label={`Pick ${img.filename}`}
+                          >
+                            <img src={img.url} alt={img.filename} className="h-36 w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                            <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 py-2">
+                              <span className={cn(
+                                "rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em]",
+                                provider === "cloudinary"
+                                  ? "bg-sky-500/85 text-white"
+                                  : "bg-black/70 text-white",
+                              )}>
+                                {provider}
+                              </span>
+                              {img.category ? (
+                                <span className="rounded-full bg-black/55 px-2 py-1 text-[9px] uppercase tracking-[0.16em] text-white">
+                                  {img.category}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent px-3 py-2 text-left text-white">
+                              <div className="truncate text-[11px] font-semibold">{img.filename}</div>
+                              <div className="mt-1 flex items-center gap-1 text-[10px] text-white/80">
+                                {isSelected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                {isSelected ? "Assigned to a storefront slot" : "Click to assign to active slot"}
+                              </div>
+                            </div>
+                          </button>
+                          <div className="flex items-center justify-between gap-2 border-t border-border/50 bg-background/90 px-3 py-2">
+                            <span className="truncate text-[11px] text-muted-foreground">
+                              {img.provider === "local" ? img.relPath : img.filename}
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 gap-1.5 rounded-full px-2.5 text-red-600 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+                              onClick={() => setImageToDelete(img)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -328,7 +446,9 @@ export default function StorefrontImagePicker() {
           <DialogHeader>
             <DialogTitle>Delete Storefront Image</DialogTitle>
             <DialogDescription>
-              This removes the file from the local uploads folder used by the storefront image picker.
+              {imageToDelete?.provider === "cloudinary"
+                ? "This removes the selected image from Cloudinary-backed admin media."
+                : "This removes the file from the local uploads folder used by the storefront image picker."}
             </DialogDescription>
           </DialogHeader>
           {imageToDelete ? (
@@ -338,7 +458,11 @@ export default function StorefrontImagePicker() {
               </div>
               <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm">
                 <p className="font-medium">{imageToDelete.filename}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{imageToDelete.relPath}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {imageToDelete.provider === "cloudinary"
+                    ? `${imageToDelete.provider} • ${imageToDelete.category ?? "uncategorized"}`
+                    : imageToDelete.relPath}
+                </p>
               </div>
               {currentlySelectedUrls.has(imageToDelete.url) && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
@@ -356,7 +480,7 @@ export default function StorefrontImagePicker() {
               loading={deleteMutation.isPending}
               loadingText="Deleting..."
               onClick={() => {
-                if (imageToDelete) deleteMutation.mutate(imageToDelete.relPath);
+                if (imageToDelete) deleteMutation.mutate(imageToDelete);
               }}
             >
               Delete Image
