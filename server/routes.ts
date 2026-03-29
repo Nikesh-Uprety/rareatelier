@@ -8,6 +8,7 @@ import sharp from "sharp";
 import multer from "multer";
 import { z } from "zod";
 import { canAccessAdminPage, canAccessAdminPanel, requiresTwoFactorChallenge } from "@shared/auth-policy";
+import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 import { storage } from "./storage";
 import passport from "passport";
 import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
@@ -378,40 +379,7 @@ export async function registerRoutes(
           isVisible: true,
           config: {
             variant: "maison-nocturne",
-            slides: [
-              {
-                tag: "W'25 / Archive",
-                headline: "Beyond Trends.",
-                eyebrow: "Authenticity in Motion",
-                body: "Kathmandu-made silhouettes with editorial weight and everyday ease.",
-                ctaLabel: "Explore Shop",
-                ctaHref: "/products",
-              },
-              {
-                tag: "New Arrival · SS25",
-                headline: "Basics Collar Jacket",
-                eyebrow: "Unisex · Limited Edition",
-                body: "Layered structure, sharp tailoring, and a restrained modern finish.",
-                ctaLabel: "Shop Now",
-                ctaHref: "/products",
-              },
-              {
-                tag: "Lookbook",
-                headline: "Street Atelier",
-                eyebrow: "Where craft meets the city",
-                body: "A luxury streetwear wardrobe built for long days and late nights.",
-                ctaLabel: "View Collection",
-                ctaHref: "/new-collection",
-              },
-              {
-                tag: "Footwear",
-                headline: "Ground Work.",
-                eyebrow: "Every step — considered",
-                body: "Foundational pieces designed to hold form, tone, and movement.",
-                ctaLabel: "Shop Footwear",
-                ctaHref: "/products",
-              },
-            ],
+            slides: MAISON_NOCTURNE_DEFAULT_HERO_SLIDES,
           },
         },
         {

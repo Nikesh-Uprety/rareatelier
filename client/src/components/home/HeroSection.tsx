@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { useThemeStore } from "@/store/theme";
+import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 
 interface HeroSectionProps {
   heroImages: string[];
@@ -19,46 +20,9 @@ interface HeroSectionProps {
   config?: Record<string, any>;
 }
 
-const DEFAULT_MAISON_SLIDES = [
-  {
-    tag: "W'25 / Archive",
-    headline: "Beyond Trends.",
-    eyebrow: "Authenticity in Motion",
-    body: "Kathmandu-made silhouettes with editorial weight and everyday ease.",
-    ctaLabel: "Explore Shop",
-    ctaHref: "/products",
-  },
-  {
-    tag: "New Arrival · SS25",
-    headline: "Basics Collar Jacket",
-    eyebrow: "Unisex · Limited Edition",
-    body: "Layered structure, sharp tailoring, and a restrained modern finish.",
-    ctaLabel: "Shop Now",
-    ctaHref: "/products",
-  },
-  {
-    tag: "Lookbook",
-    headline: "Street Atelier",
-    eyebrow: "Where craft meets the city",
-    body: "A luxury streetwear wardrobe built for long days and late nights.",
-    ctaLabel: "View Collection",
-    ctaHref: "/new-collection",
-  },
-  {
-    tag: "Footwear",
-    headline: "Ground Work.",
-    eyebrow: "Every step — considered",
-    body: "Foundational pieces designed to hold form, tone, and movement.",
-    ctaLabel: "Shop Footwear",
-    ctaHref: "/products?category=footwear",
-  },
-];
+const DEFAULT_MAISON_SLIDES = MAISON_NOCTURNE_DEFAULT_HERO_SLIDES;
 
-const DEFAULT_MAISON_HERO_IMAGES = [
-  "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=80",
-  "https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=80",
-  "https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1800&q=80",
-];
+const DEFAULT_MAISON_HERO_IMAGES = DEFAULT_MAISON_SLIDES.map((slide) => slide.image);
 
 const DEFAULT_NIKESH_SLIDES = [
   {
@@ -124,6 +88,32 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef(0);
+  const progressTrackColor = isDarkTheme ? "rgba(255,255,255,0.14)" : "rgba(17,17,17,0.12)";
+  const progressFillColor = isDarkTheme ? "#ffffff" : "#111111";
+  const primaryButtonStyle = isDarkTheme
+    ? {
+        background: "#ffffff",
+        color: "#111111",
+        border: "1px solid rgba(255,255,255,0.92)",
+        boxShadow: "0 14px 36px rgba(0,0,0,0.24)",
+      }
+    : {
+        background: "#111111",
+        color: "#ffffff",
+        border: "1px solid rgba(17,17,17,0.96)",
+        boxShadow: "0 14px 36px rgba(17,17,17,0.16)",
+      };
+  const secondaryButtonStyle = isDarkTheme
+    ? {
+        background: "rgba(255,255,255,0.06)",
+        color: "#ffffff",
+        border: "1px solid rgba(255,255,255,0.22)",
+      }
+    : {
+        background: "rgba(255,255,255,0.58)",
+        color: "#111111",
+        border: "1px solid rgba(17,17,17,0.14)",
+      };
 
   useEffect(() => {
     if (slides.length <= 1) return;
@@ -145,7 +135,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
         background: "var(--bg)",
       }}
     >
-      <div className="absolute left-0 right-0 z-20 flex gap-2 px-4 sm:px-6 lg:px-10" style={{ top: "calc(var(--nav-h) + 14px)" }}>
+      <div className="absolute inset-x-0 bottom-0 z-30 flex gap-0">
         {slides.map((_, index) => {
           const isDone = index < activeIndex;
           const isActive = index === activeIndex;
@@ -153,14 +143,15 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
             <button
               key={index}
               type="button"
-              className="relative h-[1.5px] flex-1 overflow-hidden rounded-full"
-              style={{ background: "rgba(255,255,255,0.2)" }}
+              className="relative h-[4px] flex-1 overflow-hidden"
+              style={{ background: progressTrackColor }}
               onClick={() => goTo(index)}
               aria-label={`Go to story ${index + 1}`}
             >
               <span
-                className={`absolute inset-y-0 left-0 bg-[var(--gold)] ${isActive ? "rare-story-bar-fill" : ""}`}
+                className={`absolute inset-y-0 left-0 ${isActive ? "rare-story-bar-fill" : ""}`}
                 style={{
+                  background: progressFillColor,
                   width: isDone ? "100%" : "0%",
                   animationDuration: `${durations[index]}ms`,
                 }}
@@ -273,24 +264,16 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                   <div className="mt-8 flex flex-wrap items-center gap-5">
                     <Link
                       href={slide.ctaHref}
-                      className="inline-flex items-center gap-3 px-6 py-3 text-[11px] uppercase tracking-[0.22em] transition-transform hover:scale-[1.02]"
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        background: "var(--gold)",
-                        color: "var(--bg)",
-                        boxShadow: isDarkTheme ? "none" : "0 10px 30px rgba(24,20,17,0.12)",
-                      }}
+                      className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-[11px] uppercase tracking-[0.22em] transition-all duration-300 hover:-translate-y-[1px] hover:scale-[1.01]"
+                      style={{ fontFamily: "var(--font-mono)", ...primaryButtonStyle }}
                     >
                       {slide.ctaLabel}
                       <ArrowRight className="h-4 w-4" />
                     </Link>
                     <Link
                       href={secondaryCtaHref}
-                      className="inline-flex items-center gap-3 text-[11px] uppercase tracking-[0.24em] text-[var(--fg)]"
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        color: isDarkTheme ? "var(--fg)" : "#181411",
-                      }}
+                      className="inline-flex items-center gap-3 rounded-full px-6 py-3 text-[11px] uppercase tracking-[0.24em] transition-all duration-300 hover:-translate-y-[1px]"
+                      style={{ fontFamily: "var(--font-mono)", ...secondaryButtonStyle }}
                     >
                       {secondaryCtaLabel}
                     </Link>
@@ -304,12 +287,18 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
 
       <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.26em] text-[var(--fg-dim)]">
         <span style={{ fontFamily: "var(--font-mono)" }}>Scroll</span>
-        <span className="rare-scroll-line block h-8 w-px bg-[var(--gold)]" />
+        <span className="rare-scroll-line block h-8 w-px" style={{ background: progressFillColor }} />
       </div>
 
       <div
-        className="absolute bottom-8 right-6 z-30 text-[10px] uppercase tracking-[0.3em] text-[var(--fg)] sm:right-8 lg:right-12"
-        style={{ fontFamily: "var(--font-mono)", color: isDarkTheme ? "var(--fg)" : "#181411" }}
+        className="absolute bottom-10 right-6 z-30 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.3em] sm:right-8 lg:right-12"
+        style={{
+          fontFamily: "var(--font-mono)",
+          color: isDarkTheme ? "#ffffff" : "#111111",
+          background: isDarkTheme ? "rgba(0,0,0,0.36)" : "rgba(255,255,255,0.58)",
+          border: isDarkTheme ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(17,17,17,0.08)",
+          backdropFilter: "blur(8px)",
+        }}
       >
         {String(activeIndex + 1).padStart(2, "0")} / {String(slides.length).padStart(2, "0")}
       </div>

@@ -57,6 +57,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES, type CanvasHeroSlide } from "@shared/canvasDefaults";
 
 type CanvasTemplate = {
   id: number;
@@ -145,6 +146,70 @@ type SectionPreset = {
   apply: Partial<SectionDraft>;
 };
 
+type SectionMutationArgs = {
+  sectionId: number;
+  payload: Partial<CanvasSection>;
+  feedback?: "save" | "silent";
+};
+
+type HeroSlideDraft = {
+  tag: string;
+  headline: string;
+  eyebrow: string;
+  body: string;
+  ctaLabel: string;
+  ctaHref: string;
+  image: string;
+  duration: string;
+};
+
+const serializeHeroSlides = (slides: HeroSlideDraft[]) =>
+  slides
+    .map((slide) =>
+      [
+        slide.tag,
+        slide.headline,
+        slide.eyebrow,
+        slide.body,
+        slide.ctaLabel,
+        slide.ctaHref,
+        slide.image,
+        slide.duration,
+      ].join(" | "),
+    )
+    .join("\n");
+
+const formatHeroSlideDraft = (slide?: Partial<CanvasHeroSlide>): HeroSlideDraft => ({
+  tag: typeof slide?.tag === "string" ? slide.tag : "",
+  headline: typeof slide?.headline === "string" ? slide.headline : "",
+  eyebrow: typeof slide?.eyebrow === "string" ? slide.eyebrow : "",
+  body: typeof slide?.body === "string" ? slide.body : "",
+  ctaLabel: typeof slide?.ctaLabel === "string" ? slide.ctaLabel : "",
+  ctaHref: typeof slide?.ctaHref === "string" ? slide.ctaHref : "",
+  image: typeof slide?.image === "string" ? slide.image : "",
+  duration:
+    slide?.duration != null && Number.isFinite(Number(slide.duration))
+      ? String(slide.duration)
+      : "",
+});
+
+const deserializeHeroSlides = (value: string) =>
+  value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [tag = "", headline = "", eyebrow = "", body = "", ctaLabel = "", ctaHref = "", image = "", duration = ""] = line
+        .split("|")
+        .map((part) => part.trim());
+      return { tag, headline, eyebrow, body, ctaLabel, ctaHref, image, duration };
+    });
+
+const DEFAULT_MAISON_HERO_SLIDE_DRAFTS = MAISON_NOCTURNE_DEFAULT_HERO_SLIDES.map((slide) =>
+  formatHeroSlideDraft(slide),
+);
+const DEFAULT_MAISON_HERO_SLIDES_TEXT = serializeHeroSlides(DEFAULT_MAISON_HERO_SLIDE_DRAFTS);
+
 export default function Canvas() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -163,6 +228,7 @@ export default function Canvas() {
   });
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
   const [mediaProvider, setMediaProvider] = useState<"local" | "cloudinary">("local");
+  const [savingSectionId, setSavingSectionId] = useState<number | null>(null);
   const [sectionDraft, setSectionDraft] = useState<SectionDraft>({
     label: "",
     variant: "",
@@ -253,13 +319,21 @@ export default function Canvas() {
   });
 
   const sectionMutation = useMutation({
-    mutationFn: async ({ sectionId, payload }: { sectionId: number; payload: Partial<CanvasSection> }) => {
+    mutationFn: async ({ sectionId, payload }: SectionMutationArgs) => {
       const res = await apiRequest("PATCH", `/api/admin/canvas/sections/${sectionId}`, payload);
       return res.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "sections", effectiveTemplateId] });
       await queryClient.invalidateQueries({ queryKey: ["page-config"] });
+      if (variables.feedback === "save") {
+        toast({
+          title: "Section saved successfully",
+          description: "Your Canvas selection has been updated.",
+          variant: "success",
+        });
+        setPreviewKey((prev) => prev + 1);
+      }
     },
     onError: (error: Error) => {
       toast({
@@ -267,6 +341,11 @@ export default function Canvas() {
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSettled: (_data, _error, variables) => {
+      if (variables.feedback === "save") {
+        setSavingSectionId((current) => (current === variables.sectionId ? null : current));
+      }
     },
   });
 
@@ -467,7 +546,7 @@ export default function Canvas() {
         secondaryCtaHref: "/atelier",
         layoutPreset: "",
         items: "",
-        heroSlides: "W'25 / Archive | Beyond Trends. | Authenticity in Motion | Kathmandu-made silhouettes with editorial weight and everyday ease. | Explore Shop | /products |  | 7000",
+        heroSlides: DEFAULT_MAISON_HERO_SLIDES_TEXT,
         campaignImages: "",
         serviceCards: "",
         productIds: "",
@@ -586,8 +665,7 @@ export default function Canvas() {
             apply: {
               secondaryCtaLabel: "Discover Atelier",
               secondaryCtaHref: "/atelier",
-              heroSlides:
-                "W'25 / Archive | Beyond Trends. | Authenticity in Motion | Kathmandu-made silhouettes with editorial weight and everyday ease. | Explore Shop | /products |  | 7000\nNew Arrival · SS25 | Basics Collar Jacket | Unisex · Limited Edition | Layered structure, sharp tailoring, and a restrained modern finish. | Shop Now | /products |  | 6000",
+              heroSlides: DEFAULT_MAISON_HERO_SLIDES_TEXT,
             },
           },
           {
@@ -597,7 +675,7 @@ export default function Canvas() {
               secondaryCtaLabel: "View Collection",
               secondaryCtaHref: "/new-collection",
               heroSlides:
-                "Drop 01 | Statement Outerwear | Engineered for the season | Sharp construction, premium feel, and a clear silhouette. | Shop Jackets | /products |  | 6500",
+                "Product Focus / 01 | Statement Outerwear | Engineered for the season | Sharp construction, premium feel, and a clear monochrome silhouette. | Shop Jackets | /products | https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=80 | 6500\nProduct Focus / 02 | Refined Layers | Tailored for the new collection | A quiet editorial setup with stronger contrasts and purposeful detail. | View Collection | /new-collection | https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=80 | 6200\nProduct Focus / 03 | Atelier Notes | Crafted with intent | Studio-led storytelling for the atelier page and campaign rhythm. | Atelier | /atelier | https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1800&q=80 | 6400",
             },
           },
         ];
@@ -703,10 +781,14 @@ export default function Canvas() {
             return [
               typeof entry.tag === "string" ? entry.tag : "",
               typeof entry.headline === "string" ? entry.headline : "",
+              typeof entry.eyebrow === "string" ? entry.eyebrow : "",
               typeof entry.body === "string" ? entry.body : "",
               typeof entry.ctaLabel === "string" ? entry.ctaLabel : "",
               typeof entry.ctaHref === "string" ? entry.ctaHref : "",
               typeof entry.image === "string" ? entry.image : "",
+              entry.duration != null && Number.isFinite(Number(entry.duration))
+                ? String(entry.duration)
+                : "",
             ].join(" | ");
           })
           .filter(Boolean)
@@ -957,12 +1039,14 @@ export default function Canvas() {
         break;
     }
 
+    setSavingSectionId(selectedSection.id);
     sectionMutation.mutate({
       sectionId: selectedSection.id,
       payload: {
         label: sectionDraft.label.trim() || selectedSection.sectionType,
         config: nextConfig,
       },
+      feedback: "save",
     });
   };
 
@@ -1233,17 +1317,7 @@ export default function Canvas() {
   const sectionPresets = getSectionPresets(selectedSection);
 
   const parsedHeroSlides = useMemo(
-    () =>
-      sectionDraft.heroSlides
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [tag = "", headline = "", eyebrow = "", body = "", ctaLabel = "", ctaHref = "", image = "", duration = ""] = line
-            .split("|")
-            .map((part) => part.trim());
-          return { tag, headline, eyebrow, body, ctaLabel, ctaHref, image, duration };
-        }),
+    () => deserializeHeroSlides(sectionDraft.heroSlides),
     [sectionDraft.heroSlides],
   );
 
@@ -1283,24 +1357,13 @@ export default function Canvas() {
     value: string,
   ) => {
     setSectionDraft((prev) => {
-      const slides = prev.heroSlides
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [tag = "", headline = "", eyebrow = "", body = "", ctaLabel = "", ctaHref = "", image = "", duration = ""] = line
-            .split("|")
-            .map((part) => part.trim());
-          return { tag, headline, eyebrow, body, ctaLabel, ctaHref, image, duration };
-        });
-      const nextSlides = slides.length ? slides : [{ tag: "", headline: "", eyebrow: "", body: "", ctaLabel: "", ctaHref: "", image: "", duration: "" }];
-      if (!nextSlides[index]) nextSlides[index] = { tag: "", headline: "", eyebrow: "", body: "", ctaLabel: "", ctaHref: "", image: "", duration: "" };
+      const slides = deserializeHeroSlides(prev.heroSlides);
+      const nextSlides = slides.length ? slides : DEFAULT_MAISON_HERO_SLIDE_DRAFTS.map((slide) => ({ ...slide }));
+      if (!nextSlides[index]) nextSlides[index] = formatHeroSlideDraft();
       nextSlides[index] = { ...nextSlides[index], [field]: value };
       return {
         ...prev,
-        heroSlides: nextSlides
-          .map((slide) => [slide.tag, slide.headline, slide.eyebrow, slide.body, slide.ctaLabel, slide.ctaHref, slide.image, slide.duration].join(" | "))
-          .join("\n"),
+        heroSlides: serializeHeroSlides(nextSlides),
       };
     });
   };
@@ -1309,8 +1372,8 @@ export default function Canvas() {
     setSectionDraft((prev) => ({
       ...prev,
       heroSlides: prev.heroSlides.trim()
-        ? `${prev.heroSlides}\n |  |  |  |  |  |  | `
-        : " |  |  |  |  |  |  | ",
+        ? `${prev.heroSlides}\n${serializeHeroSlides([formatHeroSlideDraft()])}`
+        : DEFAULT_MAISON_HERO_SLIDES_TEXT,
     }));
   };
 
@@ -2313,7 +2376,7 @@ export default function Canvas() {
                         <div className="space-y-3">
                           {(parsedHeroSlides.length
                             ? parsedHeroSlides
-                            : [{ tag: "", headline: "", eyebrow: "", body: "", ctaLabel: "", ctaHref: "", image: "", duration: "" }]).map((slide, index) => (
+                            : DEFAULT_MAISON_HERO_SLIDE_DRAFTS).map((slide, index) => (
                             <Card key={`hero-slide-${index}`} className="rounded-2xl border-border/60">
                               <CardContent
                                 className="space-y-3 p-4"
@@ -2859,8 +2922,19 @@ export default function Canvas() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <Button className="rounded-xl" onClick={handleSaveSectionDraft}>
-                        Save Section
+                      <Button
+                        className="rounded-xl"
+                        onClick={handleSaveSectionDraft}
+                        disabled={savingSectionId === selectedSection?.id}
+                      >
+                        {savingSectionId === selectedSection?.id ? (
+                          <>
+                            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          "Save Section"
+                        )}
                       </Button>
                     </div>
                   </CardContent>

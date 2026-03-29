@@ -127,6 +127,21 @@ export default function Navbar() {
     };
   }, [isLuxuryEditorialHome, isMaisonNocturne]);
 
+  useEffect(() => {
+    if (!isStorefront || isLuxuryEditorialHome) return;
+
+    const onScroll = () => {
+      setIsScrolled(window.scrollY > 8);
+    };
+
+    const frame = window.requestAnimationFrame(onScroll);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [isLuxuryEditorialHome, isStorefront, location]);
+
   if (!isStorefront) return null;
 
   const initials =
@@ -152,23 +167,23 @@ export default function Navbar() {
     const isTransparentState = isHomeRoute && !isScrolled;
     const shouldUseChrome = !isHomeRoute || isScrolled;
     const navLinkColor = isTransparentState && isMaisonNocturne
-      ? "rgba(24,20,17,0.84)"
+      ? "#111111"
       : isMaisonLight
-        ? "rgba(24,20,17,0.82)"
-        : "var(--fg)";
+        ? "#111111"
+        : "rgba(255,255,255,0.96)";
     const navChrome = shouldUseChrome
       ? isMaisonLight
         ? {
-            background: "rgba(244, 239, 231, 0.42)",
-            backdropFilter: "blur(12px) saturate(128%)",
+            background: "rgba(255, 255, 255, 0.72)",
+            backdropFilter: "blur(10px) saturate(118%)",
             borderColor: "rgba(24,20,17,0.08)",
-            boxShadow: "0 12px 40px rgba(104, 122, 145, 0.10)",
+            boxShadow: "0 12px 34px rgba(20, 20, 20, 0.08)",
           }
         : {
-            background: "rgba(21,18,15,0.56)",
-            backdropFilter: "blur(12px) saturate(132%)",
-            borderColor: "rgba(232,228,219,0.12)",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.24)",
+            background: "rgba(10, 10, 10, 0.72)",
+            backdropFilter: "blur(10px) saturate(132%)",
+            borderColor: "rgba(255,255,255,0.1)",
+            boxShadow: "0 12px 34px rgba(0,0,0,0.26)",
           }
       : {
           background: "transparent",
@@ -176,13 +191,47 @@ export default function Navbar() {
           borderColor: "transparent",
           boxShadow: "none",
         };
-    const logoFilter = isTransparentState
-      ? isMaisonNocturne
-        ? "brightness(0)"
-        : "brightness(0) invert(1)"
-      : theme === "dark"
-        ? "brightness(0) invert(1)"
-        : "brightness(0)";
+    const logoFilter = isTransparentState || isMaisonLight ? "brightness(0)" : "brightness(0) invert(1)";
+    const logoChrome = isTransparentState
+      ? {
+          background: "rgba(255,255,255,0.92)",
+          borderColor: "rgba(17,17,17,0.1)",
+          boxShadow: "0 16px 42px rgba(0,0,0,0.18)",
+        }
+      : isMaisonLight
+        ? {
+            background: "rgba(255,255,255,0.82)",
+            borderColor: "rgba(17,17,17,0.08)",
+            boxShadow: "0 16px 38px rgba(0,0,0,0.08)",
+          }
+        : {
+            background: "rgba(12,12,12,0.88)",
+            borderColor: "rgba(255,255,255,0.12)",
+            boxShadow: "0 18px 44px rgba(0,0,0,0.3)",
+          };
+    const navLinkPill = isTransparentState
+      ? {
+          background: "rgba(255,255,255,0.72)",
+          hoverBackground: "rgba(255,255,255,0.96)",
+          activeBackground: "rgba(17,17,17,0.96)",
+          activeColor: "#ffffff",
+          shadow: "0 12px 28px rgba(0,0,0,0.12)",
+        }
+      : isMaisonLight
+        ? {
+            background: "rgba(17,17,17,0.04)",
+            hoverBackground: "rgba(17,17,17,0.08)",
+            activeBackground: "#111111",
+            activeColor: "#ffffff",
+            shadow: "0 10px 22px rgba(0,0,0,0.08)",
+          }
+        : {
+            background: "rgba(255,255,255,0.06)",
+            hoverBackground: "rgba(255,255,255,0.12)",
+            activeBackground: "#ffffff",
+            activeColor: "#111111",
+            shadow: "0 12px 28px rgba(0,0,0,0.18)",
+          };
 
     return (
       <>
@@ -236,12 +285,21 @@ export default function Navbar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="relative py-1 text-[10.5px] font-semibold uppercase transition-colors after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:bg-[var(--gold)] after:transition-transform after:duration-300 hover:after:scale-x-100"
+                    className="rounded-full px-4 py-2 text-[12px] font-semibold uppercase transition-all duration-300 hover:-translate-y-[1px]"
                     style={{
                       fontFamily: "var(--font-mono)",
-                      letterSpacing: "0.2em",
-                      color: navLinkColor,
-                      textShadow: isMaisonNocturne && isTransparentState ? "0 1px 10px rgba(255,255,255,0.08)" : "none",
+                      letterSpacing: "0.18em",
+                      color: location === item.href ? navLinkPill.activeColor : navLinkColor,
+                      background: location === item.href ? navLinkPill.activeBackground : navLinkPill.background,
+                      boxShadow: location === item.href ? navLinkPill.shadow : "none",
+                    }}
+                    onMouseEnter={(event) => {
+                      if (location === item.href) return;
+                      event.currentTarget.style.background = navLinkPill.hoverBackground;
+                    }}
+                    onMouseLeave={(event) => {
+                      if (location === item.href) return;
+                      event.currentTarget.style.background = navLinkPill.background;
                     }}
                   >
                     {item.name}
@@ -263,16 +321,25 @@ export default function Navbar() {
 
               <Link href="/" className="justify-self-center text-center">
                 {isMaisonNocturne ? (
-                  <img
-                    src="/images/logo.webp"
-                    alt="Rare Atelier"
-                    className="mx-auto h-10 w-auto object-contain sm:h-11"
+                  <span
+                    className="flex items-center justify-center rounded-full border px-5 py-3 sm:px-6"
                     style={{
-                      filter: logoFilter,
-                      transition: "filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease",
-                      opacity: shouldUseChrome ? 0.96 : 1,
+                      background: logoChrome.background,
+                      borderColor: logoChrome.borderColor,
+                      boxShadow: logoChrome.boxShadow,
+                      transition: "background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease",
                     }}
-                  />
+                  >
+                    <img
+                      src="/images/logo.webp"
+                      alt="Rare Atelier"
+                      className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
+                      style={{
+                        filter: logoFilter,
+                        transition: "filter 0.25s ease, transform 0.25s ease",
+                      }}
+                    />
+                  </span>
                 ) : (
                   <span
                     className="block text-[18px] uppercase"
@@ -437,8 +504,39 @@ export default function Navbar() {
     );
   }
 
+  const defaultNavChrome = !isLuxuryEditorialHome && location !== "/"
+    ? {
+        background: isScrolled
+          ? theme === "dark"
+            ? "rgba(10,10,10,0.42)"
+            : "rgba(255,255,255,0.5)"
+          : "rgba(255,255,255,0.02)",
+        backdropFilter: isScrolled ? "blur(1px)" : "none",
+        borderColor: isScrolled
+          ? theme === "dark"
+            ? "rgba(255,255,255,0.08)"
+            : "rgba(17,17,17,0.06)"
+          : "transparent",
+        boxShadow: isScrolled ? "0 10px 24px rgba(0,0,0,0.05)" : "none",
+      }
+    : {
+        background: theme === "dark" ? "rgba(10,10,10,0.7)" : "rgba(255,255,255,0.9)",
+        backdropFilter: theme === "dark" ? "blur(10px)" : "blur(8px)",
+        borderColor: "transparent",
+        boxShadow: "none",
+      };
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-background border-none">
+    <header
+      className="fixed top-0 left-0 right-0 z-50 border-none"
+      style={{
+        background: defaultNavChrome.background,
+        backdropFilter: defaultNavChrome.backdropFilter,
+        borderBottom: `1px solid ${defaultNavChrome.borderColor}`,
+        boxShadow: defaultNavChrome.boxShadow,
+        transition: "background 0.25s ease, backdrop-filter 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease",
+      }}
+    >
       <div className="max-w-screen-2xl mx-auto px-6 sm:px-12">
         <div className="flex justify-between items-center h-20">
           <div className="flex items-center gap-4">
@@ -467,16 +565,23 @@ export default function Navbar() {
             </Link>
           </div>
 
-          <nav className="hidden md:flex items-center bg-gray-50 dark:bg-muted/50 rounded-full px-2 py-1 space-x-1">
+          <nav className="hidden md:flex items-center rounded-full px-2 py-1 space-x-1">
             {navLinks.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`text-sm font-medium px-4 py-2 rounded-full transition-all ${
+                className={`text-sm font-semibold px-4 py-2 rounded-full transition-all ${
                   location === item.href
-                    ? "bg-white dark:bg-background shadow-sm"
-                    : "text-muted-foreground hover:text-primary"
+                    ? "bg-white/95 text-black shadow-sm dark:bg-white dark:text-black"
+                    : "text-foreground/72 hover:text-foreground"
                 }`}
+                style={{
+                  background: location === item.href
+                    ? undefined
+                    : theme === "dark"
+                      ? "rgba(255,255,255,0.04)"
+                      : "rgba(255,255,255,0.22)",
+                }}
               >
                 {item.name}
               </Link>
