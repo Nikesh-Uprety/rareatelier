@@ -216,8 +216,12 @@ export async function uploadAdminImage(input: {
     credentials: "include",
     body: form,
   });
-  const json = (await res.json()) as { success: boolean; data: AdminImageAsset | AdminImageAsset[]; error?: string };
-  if (!json.success || !json.data) throw new Error(json.error || "Upload failed");
+  const json = (await res.json().catch(() => null)) as
+    | { success?: boolean; data?: AdminImageAsset | AdminImageAsset[]; error?: string; message?: string }
+    | null;
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || json?.message || "Upload failed");
+  }
   return Array.isArray(json.data) ? json.data[0] : json.data;
 }
 

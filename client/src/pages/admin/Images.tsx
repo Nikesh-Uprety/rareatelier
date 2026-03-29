@@ -35,6 +35,9 @@ const CATEGORY_LABELS: Record<ImageCategory, string> = {
   collection_page: "Collection page",
 };
 
+const MAX_IMAGE_SIZE_BYTES = 30 * 1024 * 1024;
+const MAX_IMAGE_SIZE_LABEL = "30MB";
+
 export default function AdminImagesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -214,11 +217,10 @@ export default function AdminImagesPage() {
     },
   });
 
-  const MAX_SIZE = 5 * 1024 * 1024;
-
   function addBulkFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     const next: BulkFile[] = [];
+    let oversizedCount = 0;
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith("image/")) return;
       const cleanedName = sanitizeFilename(file.name);
@@ -226,19 +228,29 @@ export default function AdminImagesPage() {
         type: file.type,
         lastModified: file.lastModified,
       });
-      const tooLarge = file.size > MAX_SIZE;
+      const tooLarge = file.size > MAX_IMAGE_SIZE_BYTES;
       const previewUrl = URL.createObjectURL(normalizedFile);
+      if (tooLarge) oversizedCount += 1;
       next.push({
         id: `${cleanedName}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
         file: normalizedFile,
         previewUrl,
         tooLarge,
         status: tooLarge ? "skipped" : "idle",
-        error: tooLarge ? "File exceeds 5MB limit" : undefined,
+        error: tooLarge ? `File exceeds ${MAX_IMAGE_SIZE_LABEL} limit` : undefined,
       });
     });
     if (next.length === 0) return;
     setBulkFiles((prev) => [...prev, ...next]);
+
+    if (oversizedCount > 0) {
+      toast({
+        title: "Large image skipped",
+        description: `Files over ${MAX_IMAGE_SIZE_LABEL} are not allowed. Reduce the image size or upload a smaller file.`,
+        variant: "warning",
+        duration: 2000,
+      });
+    }
   }
 
   async function handleBulkUpload() {
@@ -246,6 +258,8 @@ export default function AdminImagesPage() {
     if (pending.length === 0) return;
     setIsBulkUploading(true);
     setCompletedCount(0);
+    let successCount = 0;
+    const failedNames: string[] = [];
 
     const chunkSize = 3;
     const batches: BulkFile[][] = [];
@@ -265,13 +279,15 @@ export default function AdminImagesPage() {
           );
           try {
             await uploadAdminImage({ file: bf.file, category, provider });
+            successCount += 1;
             setBulkFiles((prev) =>
               prev.map((f) => (f.id === bf.id ? { ...f, status: "success" } : f)),
             );
           } catch (err: any) {
             const message =
               err?.message ||
-              (bf.file.size > MAX_SIZE ? "File exceeds 5MB limit" : "Upload failed");
+              (bf.file.size > MAX_IMAGE_SIZE_BYTES ? `File exceeds ${MAX_IMAGE_SIZE_LABEL} limit` : "Upload failed");
+            failedNames.push(bf.file.name);
             setBulkFiles((prev) =>
               prev.map((f) =>
                 f.id === bf.id ? { ...f, status: "error", error: message } : f,
@@ -287,17 +303,13 @@ export default function AdminImagesPage() {
     setIsBulkUploading(false);
     queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
 
-    const successCount = bulkFiles.filter((f) => f.status === "success").length;
-    const errorFiles = bulkFiles.filter((f) => f.status === "error");
-
     if (successCount > 0) {
       toast({ title: `${successCount} images uploaded.` });
     }
-    if (errorFiles.length > 0) {
-      const names = errorFiles.map((f) => f.file.name).join(", ");
+    if (failedNames.length > 0) {
       toast({
         title: "Some uploads failed",
-        description: names,
+        description: failedNames.join(", "),
         variant: "destructive",
       });
     }
@@ -424,7 +436,7 @@ export default function AdminImagesPage() {
             Drag & drop images here
           </p>
           <p className="text-[10px] text-muted-foreground">
-            Max 5MB per image. Accepted formats: JPG, JPEG, PNG, WEBP.
+            Max {MAX_IMAGE_SIZE_LABEL} per image. Accepted formats: JPG, JPEG, PNG, WEBP.
           </p>
           {bulkFiles.length > 0 && (
             <div className="w-full mt-3 space-y-3">
@@ -499,7 +511,7 @@ export default function AdminImagesPage() {
                       </p>
                       {bf.tooLarge && (
                         <p className="text-[10px] text-red-500">
-                          Exceeds 5MB — will be skipped
+                          Exceeds {MAX_IMAGE_SIZE_LABEL} — will be skipped
                         </p>
                       )}
                       <p className="text-[10px]">

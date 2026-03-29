@@ -112,6 +112,9 @@ const THEME_FONT_OPTIONS = [
   { id: "ibm-plex-sans", label: "IBM Plex Sans", description: "Structured SaaS-style reading rhythm." },
 ] as const;
 
+const MAX_CANVAS_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
+const MAX_CANVAS_IMAGE_UPLOAD_LABEL = "30MB";
+
 type SectionDraft = {
   label: string;
   variant: string;
@@ -445,12 +448,16 @@ export default function Canvas() {
   });
 
   const uploadMediaMutation = useMutation({
-    mutationFn: async (file: File) =>
-      uploadAdminImage({
+    mutationFn: async (file: File) => {
+      if (file.size > MAX_CANVAS_IMAGE_UPLOAD_BYTES) {
+        throw new Error(`File exceeds ${MAX_CANVAS_IMAGE_UPLOAD_LABEL} limit`);
+      }
+      return uploadAdminImage({
         file,
         category: "landing_page",
         provider: mediaProvider,
-      }),
+      });
+    },
     onSuccess: async (asset) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "media-library"] });
       applyPickedImage(asset.url);
@@ -467,6 +474,20 @@ export default function Canvas() {
       });
     },
   });
+
+  const handleCanvasImageUploadSelection = (file?: File | null) => {
+    if (!file) return;
+    if (file.size > MAX_CANVAS_IMAGE_UPLOAD_BYTES) {
+      toast({
+        title: "Large image skipped",
+        description: `Files over ${MAX_CANVAS_IMAGE_UPLOAD_LABEL} are not allowed. Reduce the image size or upload a smaller file.`,
+        variant: "warning",
+        duration: 2000,
+      });
+      return;
+    }
+    uploadMediaMutation.mutate(file);
+  };
 
   const reorderSectionsMutation = useMutation({
     mutationFn: async ({ sourceId, targetId }: { sourceId: number; targetId: number }) => {
@@ -2986,7 +3007,7 @@ export default function Canvas() {
                   : "Choose Section Image"}
             </DialogTitle>
             <DialogDescription>
-              Pick an image from the shared library or upload a new one from your device. New uploads are saved into the same media library for reuse across templates and sections.
+              Pick an image from the shared library or upload a new one from your device. New uploads are saved into the same media library for reuse across templates and sections. Maximum upload size: {MAX_CANVAS_IMAGE_UPLOAD_LABEL}.
             </DialogDescription>
           </DialogHeader>
 
@@ -3024,9 +3045,7 @@ export default function Canvas() {
                   className="hidden"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
-                    if (file) {
-                      uploadMediaMutation.mutate(file);
-                    }
+                    handleCanvasImageUploadSelection(file);
                     event.currentTarget.value = "";
                   }}
                 />

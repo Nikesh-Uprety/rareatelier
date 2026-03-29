@@ -340,9 +340,9 @@ async function ensureE2ETestState() {
     }
 
     // PayloadTooLargeError from body-parser when request body exceeds limit
-    if (err.type === "entity.too.large" || err.status === 413 || err.statusCode === 413) {
+    if (err.code === "LIMIT_FILE_SIZE" || err.type === "entity.too.large" || err.status === 413 || err.statusCode === 413) {
       return res.status(413).json({
-        message: "File too large. Maximum file size is 20 MB. Please use a smaller image.",
+        message: "File too large. Maximum file size is 30 MB. Please reduce the image size or upload a smaller file.",
       });
     }
 

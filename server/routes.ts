@@ -67,11 +67,12 @@ const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
 const PRODUCTS_UPLOADS_DIR = path.join(UPLOADS_DIR, "products");
 const MEDIA_UPLOADS_DIR = path.join(UPLOADS_DIR, "media");
+const MAX_ADMIN_IMAGE_UPLOAD_BYTES = 30 * 1024 * 1024;
+const MAX_ADMIN_IMAGE_UPLOAD_LABEL = "30 MB";
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
-  // Max 5MB per image as required
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: MAX_ADMIN_IMAGE_UPLOAD_BYTES },
   fileFilter: (
     _req: Request,
     file: Express.Multer.File,
@@ -4960,6 +4961,12 @@ export async function registerRoutes(
 
         return res.json({ success: true, data: results });
       } catch (err) {
+        if (err instanceof multer.MulterError && err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({
+            success: false,
+            error: `File too large. Maximum file size is ${MAX_ADMIN_IMAGE_UPLOAD_LABEL}. Please reduce the image size or upload a smaller file.`,
+          });
+        }
         handleApiError(res, err, "POST /api/admin/images/upload");
       }
     },
