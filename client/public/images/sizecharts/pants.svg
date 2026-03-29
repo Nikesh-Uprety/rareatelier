@@ -1,0 +1,20 @@
+<svg width="720" height="520" viewBox="0 0 720 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="520" fill="#F8F8F8"/>
+  <path d="M254 82H466L438 430H384L360 286L336 430H282L254 82Z" fill="#FFFFFF" stroke="#111111" stroke-width="3"/>
+  <line x1="360" y1="82" x2="360" y2="286" stroke="#111111" stroke-width="2" stroke-dasharray="6 6"/>
+
+  <line x1="254" y1="72" x2="466" y2="72" stroke="#111111" stroke-width="2"/>
+  <line x1="254" y1="72" x2="254" y2="86" stroke="#111111" stroke-width="2"/>
+  <line x1="466" y1="72" x2="466" y2="86" stroke="#111111" stroke-width="2"/>
+  <text x="360" y="54" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Waist</text>
+
+  <line x1="238" y1="82" x2="238" y2="430" stroke="#111111" stroke-width="2"/>
+  <line x1="230" y1="82" x2="246" y2="82" stroke="#111111" stroke-width="2"/>
+  <line x1="230" y1="430" x2="246" y2="430" stroke="#111111" stroke-width="2"/>
+  <text x="190" y="260" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Outseam</text>
+
+  <line x1="382" y1="160" x2="382" y2="430" stroke="#111111" stroke-width="2"/>
+  <line x1="374" y1="160" x2="390" y2="160" stroke="#111111" stroke-width="2"/>
+  <line x1="374" y1="430" x2="390" y2="430" stroke="#111111" stroke-width="2"/>
+  <text x="432" y="306" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Inseam</text>
+</svg>

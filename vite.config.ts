@@ -108,8 +108,9 @@ export default defineConfig({
           // Charts (admin only - extracted to reduce initial load)
           'charts': ['recharts'],
 
-          // PDF generation (billing only)
-          'pdf': ['jspdf', 'html2canvas'],
+          // PDF generation (billing only) split to avoid oversized chunk warning
+          'pdf-jspdf': ['jspdf'],
+          'pdf-html2canvas': ['html2canvas'],
 
           // Maps (location picker only)
           'maps': ['leaflet', 'react-leaflet'],

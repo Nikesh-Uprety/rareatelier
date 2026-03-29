@@ -57,7 +57,8 @@ async function buildAll() {
     },
     minify: true,
     external: externals,
-    logLevel: "info",
+    // Keep build output clean unless there are real warnings/errors.
+    logLevel: "warning",
   });
 }
 

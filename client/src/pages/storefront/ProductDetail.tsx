@@ -5,7 +5,7 @@ import { useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { fetchProductById, fetchProducts, type ProductApi } from "@/lib/api";
+import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Helmet } from "react-helmet-async";
@@ -23,6 +23,78 @@ function parseJsonArray(s: string | null | undefined): string[] {
 
 function getDominantWheelDelta(deltaY: number, deltaX: number): number {
   return Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+}
+
+const SHIRT_SIZE_CHART: ProductSizeChart = {
+  image: "/images/sizecharts/shirt.svg",
+  units: "cm",
+  measureOverlay: {
+    shoulder: { top: "11%", left: "20%", width: "60%" },
+    chest: { top: "40%", left: "25%", width: "50%" },
+    length: { top: "12%", left: "80%", height: "70%" },
+    sleeve: { top: "28%", left: "13%", height: "48%", rotate: "-20deg" },
+  },
+  measurements: [
+    { size: "XS", length: 70, shoulder: 50, chest: 60, sleeve: 62 },
+    { size: "S", length: 72, shoulder: 52, chest: 62, sleeve: 63 },
+    { size: "M", length: 74, shoulder: 54, chest: 64, sleeve: 64 },
+    { size: "L", length: 76, shoulder: 56, chest: 66, sleeve: 65 },
+    { size: "XL", length: 78, shoulder: 58, chest: 68, sleeve: 66 },
+    { size: "XXL", length: 80, shoulder: 60, chest: 70, sleeve: 67 },
+  ],
+};
+
+const HOODIE_SIZE_CHART: ProductSizeChart = {
+  image: "/images/sizecharts/hoodie.svg",
+  units: "cm",
+  measureOverlay: {
+    shoulder: { top: "10%", left: "20%", width: "60%" },
+    chest: { top: "45%", left: "25%", width: "50%" },
+    length: { top: "15%", left: "80%", height: "65%" },
+    sleeve: { top: "30%", left: "10%", height: "50%", rotate: "-25deg" },
+  },
+  measurements: [
+    { size: "XS", length: 66, shoulder: 52, chest: 58, sleeve: 60 },
+    { size: "S", length: 68, shoulder: 54, chest: 60, sleeve: 61 },
+    { size: "M", length: 70, shoulder: 56, chest: 62, sleeve: 62 },
+    { size: "L", length: 72, shoulder: 58, chest: 64, sleeve: 63 },
+    { size: "XL", length: 74, shoulder: 60, chest: 66, sleeve: 64 },
+    { size: "XXL", length: 76, shoulder: 62, chest: 68, sleeve: 65 },
+  ],
+};
+
+const PANTS_SIZE_CHART: ProductSizeChart = {
+  image: "/images/sizecharts/pants.svg",
+  units: "cm",
+  measureOverlay: {
+    waist: { top: "24%", left: "30%", width: "40%" },
+    hip: { top: "36%", left: "26%", width: "48%" },
+    inseam: { top: "44%", left: "52%", height: "42%" },
+    outseam: { top: "24%", left: "68%", height: "62%" },
+  },
+  measurements: [
+    { size: "XS", waist: 72, inseam: 70, outseam: 98 },
+    { size: "S", waist: 76, inseam: 72, outseam: 100 },
+    { size: "M", waist: 80, inseam: 74, outseam: 102 },
+    { size: "L", waist: 84, inseam: 76, outseam: 104 },
+    { size: "XL", waist: 88, inseam: 78, outseam: 106 },
+    { size: "XXL", waist: 92, inseam: 80, outseam: 108 },
+  ],
+};
+
+function resolveSizeChart(product: ProductApi | null): ProductSizeChart {
+  if (product?.sizeChart?.measurements?.length) {
+    return product.sizeChart;
+  }
+
+  const signature = `${product?.name ?? ""} ${product?.category ?? ""}`.toLowerCase();
+  if (/(pant|trouser|jean|cargo|bottom)/.test(signature)) {
+    return PANTS_SIZE_CHART;
+  }
+  if (/(hoodie|sweatshirt|pullover)/.test(signature)) {
+    return HOODIE_SIZE_CHART;
+  }
+  return SHIRT_SIZE_CHART;
 }
 
 export default function ProductDetail() {
@@ -59,11 +131,15 @@ export default function ProductDetail() {
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
   const [imageMotionTick, setImageMotionTick] = useState(0);
   const [imageMotionDirection, setImageMotionDirection] = useState<"down" | "up">("down");
-  const [imageMotionDistance, setImageMotionDistance] = useState(1);
+  const [imageMotionDurationMs, setImageMotionDurationMs] = useState(300);
+  const [previousImageIndex, setPreviousImageIndex] = useState<number | null>(null);
   const [mainImageScrollUnlocked, setMainImageScrollUnlocked] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
+  const [isTinyPreviewMode, setIsTinyPreviewMode] = useState(false);
+  const [isPreviewRailExpanded, setIsPreviewRailExpanded] = useState(true);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
+  const imageTransitionTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
   const galleryWheelLockRef = useRef(false);
   const pageWheelLockRef = useRef(false);
@@ -101,6 +177,7 @@ export default function ProductDetail() {
     const list = mainImageUrl ? [mainImageUrl, ...galleryUrls] : [...galleryUrls];
     return list.length ? list : [""];
   }, [mainImageUrl, galleryUrls]);
+  const productSizeChart = useMemo(() => resolveSizeChart(product ?? null), [product]);
 
   useEffect(() => {
     if (selectedImageIndex > allImages.length - 1) {
@@ -109,8 +186,25 @@ export default function ProductDetail() {
   }, [allImages.length, selectedImageIndex]);
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 379px)");
+    const syncPreviewRailMode = () => {
+      const isTiny = mediaQuery.matches;
+      setIsTinyPreviewMode(isTiny);
+      setIsPreviewRailExpanded(!isTiny);
+    };
+
+    syncPreviewRailMode();
+    mediaQuery.addEventListener("change", syncPreviewRailMode);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncPreviewRailMode);
+    };
+  }, []);
+
+  useEffect(() => {
     setSelectedImageIndex(0);
     setImageMotionTick(0);
+    setPreviousImageIndex(null);
     setMainImageScrollUnlocked(allImages.length <= 1);
   }, [product?.id, allImages.length]);
 
@@ -135,9 +229,21 @@ export default function ProductDetail() {
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = isGalleryOpen || shouldLockMainPageScroll ? "hidden" : "";
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
+
+    const shouldLockOverflow = isGalleryOpen || shouldLockMainPageScroll;
+    document.body.style.overflow = shouldLockOverflow ? "hidden" : "";
+    document.documentElement.style.overflow = shouldLockOverflow ? "hidden" : "";
+    document.body.style.overscrollBehaviorY = shouldLockOverflow ? "none" : "";
+    document.documentElement.style.overscrollBehaviorY = shouldLockOverflow ? "none" : "";
+
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
+      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
     };
   }, [isGalleryOpen, shouldLockMainPageScroll]);
 
@@ -160,18 +266,27 @@ export default function ProductDetail() {
   }, [isGalleryOpen, isGalleryVisible]);
 
   useEffect(() => {
-    if (isGalleryOpen || allImages.length <= 1 || mainImageScrollUnlocked) return;
+    return () => {
+      if (imageTransitionTimeoutRef.current) {
+        window.clearTimeout(imageTransitionTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isGalleryOpen || allImages.length <= 1) return;
 
     const onPageWheel = (event: WheelEvent) => {
-      if (!mainImageViewportRef.current) return;
+      if (mainImageScrollUnlocked) return;
 
+      // While locked, never allow the page itself to scroll.
       event.preventDefault();
       event.stopPropagation();
 
-      if (pageWheelLockRef.current) return;
       const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
       if (Math.abs(delta) < 8) return;
 
+      if (pageWheelLockRef.current) return;
       pageWheelLockRef.current = true;
       window.setTimeout(() => {
         pageWheelLockRef.current = false;
@@ -179,15 +294,15 @@ export default function ProductDetail() {
 
       if (delta > 0) {
         if (selectedImageIndex < allImages.length - 1) {
-          goToImage(selectedImageIndex + 1, { direction: "down" });
-        } else {
+          goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
+        } else if (!mainImageScrollUnlocked) {
           setMainImageScrollUnlocked(true);
         }
         return;
       }
 
       if (selectedImageIndex > 0) {
-        goToImage(selectedImageIndex - 1, { direction: "up" });
+        goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
       }
     };
 
@@ -307,10 +422,18 @@ export default function ProductDetail() {
             ? "down"
             : "up");
     const inferredDistance = Math.max(1, options?.distance ?? Math.abs(next - currentIndex));
+    const motionDuration = Math.max(190, 340 - Math.min(inferredDistance - 1, 5) * 28);
+    if (imageTransitionTimeoutRef.current) {
+      window.clearTimeout(imageTransitionTimeoutRef.current);
+    }
+    setPreviousImageIndex(currentIndex);
     setImageMotionDirection(inferredDirection);
-    setImageMotionDistance(inferredDistance);
+    setImageMotionDurationMs(motionDuration);
     setImageMotionTick((prev) => prev + 1);
     setSelectedImageIndex(next);
+    imageTransitionTimeoutRef.current = window.setTimeout(() => {
+      setPreviousImageIndex(null);
+    }, motionDuration + 30);
   };
 
   const goToNextImage = () => {
@@ -363,38 +486,6 @@ export default function ProductDetail() {
     goToImage(selectedImageIndex - 1, { direction: "up" });
   };
 
-  const handleMainImageWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    if (isGalleryOpen || allImages.length <= 1) return;
-    const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
-    if (Math.abs(delta) < 8) return;
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (pageWheelLockRef.current) return;
-    pageWheelLockRef.current = true;
-    window.setTimeout(() => {
-      pageWheelLockRef.current = false;
-    }, 130);
-
-    if (delta > 0) {
-      if (selectedImageIndex < allImages.length - 1) {
-        goToImage(selectedImageIndex + 1, { direction: "down", distance: 1 });
-      } else if (!mainImageScrollUnlocked) {
-        setMainImageScrollUnlocked(true);
-      } else {
-        goToImage(0, { direction: "down", distance: allImages.length - 1 });
-      }
-      return;
-    }
-
-    if (selectedImageIndex > 0) {
-      goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
-    } else if (mainImageScrollUnlocked) {
-      goToImage(allImages.length - 1, { direction: "up", distance: allImages.length - 1 });
-    }
-  };
-
   const structuredData = {
     "@context": "https://schema.org/",
     "@type": "Product",
@@ -418,13 +509,21 @@ export default function ProductDetail() {
   return (
     <div className="mt-10 w-full px-3 py-24 sm:px-6 lg:px-8 xl:px-10">
       <style>{`
-        @keyframes product-image-slide-down {
+        @keyframes product-image-enter-down {
           0% { transform: translateY(-72px) scale(0.992); opacity: 0; filter: blur(5px); }
           100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
         }
-        @keyframes product-image-slide-up {
+        @keyframes product-image-enter-up {
           0% { transform: translateY(72px) scale(0.992); opacity: 0; filter: blur(5px); }
           100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+        }
+        @keyframes product-image-exit-down {
+          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+          100% { transform: translateY(72px) scale(1.006); opacity: 0; filter: blur(4px); }
+        }
+        @keyframes product-image-exit-up {
+          0% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0px); }
+          100% { transform: translateY(-72px) scale(1.006); opacity: 0; filter: blur(4px); }
         }
         @keyframes accordion-fade-down {
           0% { opacity: 0; transform: translateY(-6px); }
@@ -566,7 +665,6 @@ export default function ProductDetail() {
             <div
               ref={mainImageViewportRef}
               className="relative h-[72vh] min-h-[500px] overflow-hidden rounded-sm border border-border bg-black/5 sm:h-[76vh] lg:h-[86vh] dark:bg-black/40"
-              onWheel={handleMainImageWheel}
               onClick={() => {
                 if (didSwipeRef.current) {
                   didSwipeRef.current = false;
@@ -598,64 +696,100 @@ export default function ProductDetail() {
               ) : null}
 
               {allImages.length > 1 ? (
-                <div className="scrollbar-hide absolute left-3 top-1/2 z-20 hidden max-h-[74%] w-[70px] -translate-y-1/2 flex-col gap-2 overflow-y-auto rounded-md border border-white/30 bg-black/20 p-2 backdrop-blur-sm lg:flex">
-                  {allImages.map((url, i) => (
+                <div
+                  className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
+                    isTinyPreviewMode && !isPreviewRailExpanded
+                      ? "max-h-[36%] w-[26px] p-1"
+                      : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
+                  }`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                >
+                  {isTinyPreviewMode && !isPreviewRailExpanded ? (
                     <button
-                      key={i}
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
-                        goToImage(i);
+                        setIsPreviewRailExpanded(true);
                       }}
-                      className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
-                        selectedImageIndex === i
-                          ? "border-white opacity-100"
-                          : "border-white/30 opacity-70 hover:opacity-100"
-                      }`}
+                      className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
+                      aria-label="Expand image preview rail"
                     >
-                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ••
                     </button>
-                  ))}
+                  ) : (
+                    <>
+                      {isTinyPreviewMode ? (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setIsPreviewRailExpanded(false);
+                          }}
+                          className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
+                          aria-label="Collapse image preview rail"
+                        >
+                          −
+                        </button>
+                      ) : null}
+                      {allImages.map((url, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            goToImage(i);
+                          }}
+                          className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
+                            selectedImageIndex === i
+                              ? "border-white opacity-100"
+                              : "border-white/30 opacity-70 hover:opacity-100"
+                          }`}
+                        >
+                          <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               ) : null}
 
+              {previousImageIndex !== null && previousImageIndex !== selectedImageIndex ? (
+                <img
+                  key={`main-prev-${previousImageIndex}-${imageMotionTick}`}
+                  src={allImages[previousImageIndex] || ""}
+                  alt={`${product.name} - previous view`}
+                  loading="lazy"
+                  className="absolute inset-0 z-10 h-full w-full select-none object-cover object-center"
+                  style={{
+                    animation:
+                      imageMotionTick > 0
+                        ? imageMotionDirection === "down"
+                          ? `product-image-exit-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`
+                          : `product-image-exit-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1) forwards`
+                        : "none",
+                  }}
+                />
+              ) : null}
+
               <img
-                key={`main-${selectedImageIndex}-${imageMotionTick}`}
+                key={`main-current-${selectedImageIndex}-${imageMotionTick}`}
                 src={allImages[selectedImageIndex] || ""}
                 alt={`${product.name} - view ${selectedImageIndex + 1}`}
                 loading={selectedImageIndex === 0 ? "eager" : "lazy"}
-                className="absolute inset-0 h-full w-full select-none object-cover object-center"
+                className="absolute inset-0 z-20 h-full w-full select-none object-cover object-center"
                 style={{
                   animation:
                     imageMotionTick > 0
                       ? imageMotionDirection === "down"
-                        ? `product-image-slide-down ${Math.max(180, 320 - Math.min(imageMotionDistance - 1, 4) * 30)}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                        : `product-image-slide-up ${Math.max(180, 320 - Math.min(imageMotionDistance - 1, 4) * 30)}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                        ? `product-image-enter-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
+                        : `product-image-enter-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
                       : "none",
                 }}
               />
             </div>
           </div>
-
-          {allImages.length > 1 ? (
-            <div className="overflow-x-auto lg:hidden">
-              <div className="flex min-w-max gap-2 pr-2">
-                {allImages.map((url, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => goToImage(i)}
-                    className={`h-[64px] w-[52px] overflow-hidden rounded-sm border transition-all ${
-                      selectedImageIndex === i ? "border-black dark:border-white" : "border-transparent opacity-70"
-                    }`}
-                    aria-label={`Select image ${i + 1}`}
-                  >
-                    <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </section>
 
         <aside className="space-y-6 lg:sticky lg:top-28 lg:self-start">
@@ -831,7 +965,14 @@ export default function ProductDetail() {
         </aside>
       </div>
 
-      <SizeFitGuide open={showSizeGuide} onClose={() => setShowSizeGuide(false)} />
+      <SizeFitGuide
+        open={showSizeGuide}
+        onClose={() => setShowSizeGuide(false)}
+        productName={product.name}
+        sizeChart={productSizeChart}
+        productImage={allImages.find(Boolean) ?? null}
+        selectedSize={selectedSize}
+      />
 
       <div className="mt-24 pt-16 border-t border-gray-100">
         <h2 className="text-xl font-black uppercase tracking-tighter text-center mb-12">

@@ -1,0 +1,26 @@
+<svg width="720" height="520" viewBox="0 0 720 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="520" fill="#F8F8F8"/>
+  <path d="M280 90C300 70 322 58 360 58C398 58 420 70 440 90L420 136H300L280 90Z" fill="#FFFFFF" stroke="#111111" stroke-width="3"/>
+  <path d="M236 132L286 102H434L484 132L536 166L510 222L470 200V426H250V200L210 222L184 166L236 132Z" fill="#FFFFFF" stroke="#111111" stroke-width="3"/>
+  <path d="M318 264H402L390 310H330L318 264Z" fill="none" stroke="#111111" stroke-width="2"/>
+
+  <line x1="250" y1="440" x2="470" y2="440" stroke="#111111" stroke-width="2"/>
+  <line x1="246" y1="426" x2="246" y2="440" stroke="#111111" stroke-width="2"/>
+  <line x1="474" y1="426" x2="474" y2="440" stroke="#111111" stroke-width="2"/>
+  <text x="360" y="466" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Length</text>
+
+  <line x1="286" y1="94" x2="434" y2="94" stroke="#111111" stroke-width="2"/>
+  <line x1="286" y1="94" x2="286" y2="108" stroke="#111111" stroke-width="2"/>
+  <line x1="434" y1="94" x2="434" y2="108" stroke="#111111" stroke-width="2"/>
+  <text x="360" y="74" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Shoulder</text>
+
+  <line x1="250" y1="236" x2="470" y2="236" stroke="#111111" stroke-width="2"/>
+  <line x1="250" y1="228" x2="250" y2="244" stroke="#111111" stroke-width="2"/>
+  <line x1="470" y1="228" x2="470" y2="244" stroke="#111111" stroke-width="2"/>
+  <text x="360" y="224" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Chest</text>
+
+  <line x1="484" y1="132" x2="596" y2="300" stroke="#111111" stroke-width="2"/>
+  <line x1="478" y1="132" x2="492" y2="132" stroke="#111111" stroke-width="2"/>
+  <line x1="590" y1="300" x2="604" y2="300" stroke="#111111" stroke-width="2"/>
+  <text x="628" y="226" fill="#111111" font-size="18" text-anchor="middle" font-family="Inter, Arial">Sleeve</text>
+</svg>

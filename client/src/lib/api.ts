@@ -1,5 +1,30 @@
 import { apiRequest } from "./queryClient";
 
+export interface ProductSizeMeasurement {
+  size: string;
+  [key: string]: string | number;
+}
+
+export interface ProductMeasurementOverlayPoint {
+  top: string;
+  left: string;
+  width?: string;
+  height?: string;
+  rotate?: string;
+  label?: string;
+}
+
+export interface ProductMeasurementOverlay {
+  [measurementKey: string]: ProductMeasurementOverlayPoint | undefined;
+}
+
+export interface ProductSizeChart {
+  image: string;
+  measurements: ProductSizeMeasurement[];
+  units?: string;
+  measureOverlay?: ProductMeasurementOverlay;
+}
+
 export interface ProductApi {
   id: string;
   name: string;
@@ -26,6 +51,7 @@ export interface ProductApi {
     stock: number;
     sku: string | null;
   }>;
+  sizeChart?: ProductSizeChart | null;
 }
 
 export interface CategoryApi {

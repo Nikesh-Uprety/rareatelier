@@ -1,403 +1,463 @@
-import { useState } from 'react'
-import { X } from 'lucide-react'
+import { Ruler, Sparkles, X } from "lucide-react";
+import type { CSSProperties } from "react";
+
+import type {
+  ProductMeasurementOverlay,
+  ProductMeasurementOverlayPoint,
+  ProductSizeChart,
+  ProductSizeMeasurement,
+} from "@/lib/api";
 
 interface SizeFitGuideProps {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
+  productName?: string;
+  sizeChart?: ProductSizeChart | null;
+  productImage?: string | null;
+  selectedSize?: string | null;
 }
 
-const SIZE_DATA = [
-  { size: 'M', chest: 42, length: 26.5, shoulder: 18.5, chestPct: 60, lengthPct: 55, shoulderPct: 52 },
-  { size: 'L', chest: 44, length: 27.5, shoulder: 20.5, chestPct: 72, lengthPct: 66, shoulderPct: 64 },
-  { size: 'XL', chest: 46, length: 28.5, shoulder: 22.5, chestPct: 84, lengthPct: 77, shoulderPct: 76 },
-]
+const DEFAULT_SIZE_CHART: ProductSizeChart = {
+  image: "/images/sizecharts/shirt.svg",
+  units: "cm",
+  measurements: [
+    { size: "XS", length: 70, shoulder: 50, chest: 60, sleeve: 62 },
+    { size: "S", length: 72, shoulder: 52, chest: 62, sleeve: 63 },
+    { size: "M", length: 74, shoulder: 54, chest: 64, sleeve: 64 },
+    { size: "L", length: 76, shoulder: 56, chest: 66, sleeve: 65 },
+    { size: "XL", length: 78, shoulder: 58, chest: 68, sleeve: 66 },
+    { size: "XXL", length: 80, shoulder: 60, chest: 70, sleeve: 67 },
+  ],
+};
 
-const MODELS = {
-  male: {
-    height: "5'11\"",
-    weight: '72 kg',
-    size: 'XL',
-    svgHeight: 170,
-    svgWidth: 90,
+const PREFERRED_COLUMN_ORDER = ["length", "shoulder", "chest", "sleeve", "waist", "inseam", "outseam", "hip"];
+
+const MEASUREMENT_GUIDE: Record<string, string> = {
+  length: "Distance from top shoulder (near collar) to bottom hem.",
+  shoulder: "Width from left shoulder seam to right shoulder seam.",
+  chest: "Measured across chest (pit to pit).",
+  sleeve: "Distance from shoulder seam to sleeve end.",
+  waist: "Measured straight across waistband.",
+  inseam: "Distance from crotch seam down to hem.",
+  outseam: "Distance from top waist to hem along outer seam.",
+  hip: "Measured across the widest hip point.",
+};
+
+type ChartVisualKind = "hoodie" | "shirt" | "pants" | "generic";
+
+const DEFAULT_MEASURE_OVERLAY_BY_KIND: Record<ChartVisualKind, ProductMeasurementOverlay> = {
+  hoodie: {
+    shoulder: { top: "10%", left: "20%", width: "60%" },
+    chest: { top: "45%", left: "25%", width: "50%" },
+    length: { top: "15%", left: "80%", height: "65%" },
+    sleeve: { top: "30%", left: "10%", height: "50%", rotate: "-25deg" },
   },
-  female: {
-    height: "5'3\"",
-    weight: '54 kg',
-    size: 'M',
-    svgHeight: 158,
-    svgWidth: 80,
+  shirt: {
+    shoulder: { top: "11%", left: "20%", width: "60%" },
+    chest: { top: "40%", left: "25%", width: "50%" },
+    length: { top: "12%", left: "80%", height: "70%" },
+    sleeve: { top: "28%", left: "13%", height: "48%", rotate: "-20deg" },
   },
+  pants: {
+    waist: { top: "24%", left: "30%", width: "40%" },
+    hip: { top: "36%", left: "26%", width: "48%" },
+    inseam: { top: "44%", left: "52%", height: "42%" },
+    outseam: { top: "24%", left: "68%", height: "62%" },
+  },
+  generic: {
+    shoulder: { top: "24%", left: "28%", width: "44%" },
+    chest: { top: "42%", left: "23%", width: "54%" },
+    length: { top: "14%", left: "17%", height: "70%" },
+    sleeve: { top: "26%", left: "72%", height: "38%" },
+  },
+};
+
+const MEASUREMENT_OVERLAY_CSS = `
+.measure-container {
+  position: relative;
 }
 
-function MaleModelSVG() {
-  return (
-    <svg width="90" height="170" viewBox="0 0 90 170" fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <circle cx="45" cy="18" r="11"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M20,45 L15,42 L10,50 L12,85 L20,88 L20,150 L70,150
-               L70,88 L78,85 L80,50 L75,42 L70,45 L62,38 L55,35
-               L45,34 L35,35 L28,38 Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M30,34 Q32,20 45,18 Q58,20 60,34 Q55,30 45,29
-               Q35,30 30,34Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <line x1="45" y1="38" x2="45" y2="90"
-        className="stroke-border" strokeWidth="0.8" strokeDasharray="3 2"/>
-      <rect x="28" y="95" width="14" height="10" rx="2"
-        fill="none" className="stroke-border" strokeWidth="0.6"/>
-      <rect x="48" y="95" width="14" height="10" rx="2"
-        fill="none" className="stroke-border" strokeWidth="0.6"/>
-      <path d="M20,45 L10,50 L12,85 L20,88"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M70,45 L80,50 L78,85 L70,88"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M20,150 L18,170 L40,170 L45,155 L50,170 L72,170 L70,150Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <line x1="6" y1="7" x2="6" y2="170"
-        className="stroke-border" strokeWidth="0.5" strokeDasharray="2 2"/>
-      <line x1="3" y1="7" x2="9" y2="7"
-        className="stroke-border" strokeWidth="0.8"/>
-      <line x1="3" y1="170" x2="9" y2="170"
-        className="stroke-border" strokeWidth="0.8"/>
-      <text x="45" y="72" textAnchor="middle" fontSize="6"
-        className="fill-muted-foreground" letterSpacing="2"
-        fontFamily="system-ui">RARE</text>
-    </svg>
-  )
+.measure-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
-function FemaleModelSVG() {
-  return (
-    <svg width="80" height="158" viewBox="0 0 80 158" fill="none"
-      xmlns="http://www.w3.org/2000/svg">
-      <circle cx="40" cy="16" r="11"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M48,10 Q58,8 56,18"
-        className="stroke-border" strokeWidth="1.2"
-        fill="none" strokeLinecap="round"/>
-      <path d="M18,40 L14,38 L9,46 L11,78 L18,80 L18,138 L62,138
-               L62,80 L69,78 L71,46 L66,38 L62,40 L56,34 L50,31
-               L40,30 L30,31 L24,34 Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M27,31 Q29,18 40,16 Q51,18 53,31 Q48,27 40,26
-               Q32,27 27,31Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <line x1="40" y1="34" x2="40" y2="80"
-        className="stroke-border" strokeWidth="0.8" strokeDasharray="3 2"/>
-      <rect x="25" y="85" width="12" height="9" rx="2"
-        fill="none" className="stroke-border" strokeWidth="0.6"/>
-      <rect x="43" y="85" width="12" height="9" rx="2"
-        fill="none" className="stroke-border" strokeWidth="0.6"/>
-      <path d="M18,40 L9,46 L11,78 L18,80"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M62,40 L71,46 L69,78 L62,80"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <path d="M18,138 L16,158 L35,158 L40,145 L45,158 L64,158 L62,138Z"
-        className="fill-muted stroke-border" strokeWidth="0.8"/>
-      <line x1="5" y1="5" x2="5" y2="158"
-        className="stroke-border" strokeWidth="0.5" strokeDasharray="2 2"/>
-      <line x1="2" y1="5" x2="8" y2="5"
-        className="stroke-border" strokeWidth="0.8"/>
-      <line x1="2" y1="158" x2="8" y2="158"
-        className="stroke-border" strokeWidth="0.8"/>
-      <text x="40" y="64" textAnchor="middle" fontSize="6"
-        className="fill-muted-foreground" letterSpacing="2"
-        fontFamily="system-ui">RARE</text>
-    </svg>
-  )
+.measure-overlay-item {
+  position: absolute;
 }
 
-export default function SizeFitGuide({ open, onClose }: SizeFitGuideProps) {
-  const [gender, setGender] = useState<'male' | 'female'>('male')
-  const [heightFt, setHeightFt] = useState('')
-  const [weight, setWeight] = useState('')
-  const [recommended, setRecommended] = useState<string | null>(null)
-  const [animating, setAnimating] = useState(false)
+.measure-overlay-line {
+  position: relative;
+  color: rgba(255, 255, 255, 0.92);
+  background: currentColor;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28), 0 0 12px rgba(0, 0, 0, 0.22);
+  transform: rotate(var(--measure-rotate, 0deg));
+  transform-origin: top left;
+}
 
-  const model = MODELS[gender]
+.measure-overlay-line::before,
+.measure-overlay-line::after {
+  content: "";
+  position: absolute;
+  background: currentColor;
+}
 
-  function switchGender(g: 'male' | 'female') {
-    if (g === gender) return
-    setAnimating(true)
-    setTimeout(() => {
-      setGender(g)
-      setAnimating(false)
-    }, 200)
+.measure-overlay-line.is-horizontal::before,
+.measure-overlay-line.is-horizontal::after {
+  width: 1px;
+  height: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.measure-overlay-line.is-horizontal::before {
+  left: 0;
+}
+
+.measure-overlay-line.is-horizontal::after {
+  right: 0;
+}
+
+.measure-overlay-line.is-vertical::before,
+.measure-overlay-line.is-vertical::after {
+  width: 8px;
+  height: 1px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.measure-overlay-line.is-vertical::before {
+  top: 0;
+}
+
+.measure-overlay-line.is-vertical::after {
+  bottom: 0;
+}
+
+.measure-overlay-label {
+  position: absolute;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.3;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.measure-overlay-label.is-horizontal {
+  top: -1.2rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.measure-overlay-label.is-vertical {
+  top: 50%;
+  left: calc(100% + 0.45rem);
+  transform: translateY(-50%);
+}
+`;
+
+function titleCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function toDisplayValue(value: string | number | undefined, units: string, isSizeCell: boolean): string {
+  if (value === undefined || value === null || value === "") return "-";
+  if (isSizeCell) return String(value).toUpperCase();
+  if (typeof value === "number") return `${value}${units}`;
+  const numericValue = Number(value);
+  if (Number.isFinite(numericValue)) return `${numericValue}${units}`;
+  return String(value);
+}
+
+// Reusable chart renderer: updates dynamic image, dynamic columns, and table rows.
+function renderSizeChart(incomingChart?: ProductSizeChart | null): {
+  image: string;
+  units: string;
+  columnKeys: string[];
+  columnLabels: string[];
+  measurementKeys: string[];
+  rows: ProductSizeMeasurement[];
+  explanationItems: Array<{ title: string; description: string }>;
+} {
+  const chart = incomingChart?.measurements?.length ? incomingChart : DEFAULT_SIZE_CHART;
+  const units = chart.units || "cm";
+  const rows = chart.measurements;
+
+  // Build column keys from the union of all row keys so sparse first rows don't hide later data.
+  const keyUnion = new Set<string>();
+  rows.forEach((row) => {
+    Object.keys(row).forEach((key) => {
+      if (key !== "size") keyUnion.add(key);
+    });
+  });
+
+  const measurementKeys = Array.from(keyUnion);
+  const orderedKeys = [
+    ...PREFERRED_COLUMN_ORDER.filter((key) => measurementKeys.includes(key)),
+    ...measurementKeys.filter((key) => !PREFERRED_COLUMN_ORDER.includes(key)),
+  ];
+  const columnKeys = ["size", ...orderedKeys];
+  const columnLabels = columnKeys.map((key) => (key === "size" ? "Size" : titleCase(key)));
+
+  const explanationItems = orderedKeys.map((key) => ({
+    title: titleCase(key),
+    description: MEASUREMENT_GUIDE[key] || `Measured in ${units} for the ${titleCase(key)} area.`,
+  }));
+
+  return {
+    image: chart.image,
+    units,
+    columnKeys,
+    columnLabels,
+    measurementKeys: orderedKeys,
+    rows,
+    explanationItems,
+  };
+}
+
+function highlightSelectedSize(rowSize: string | number | undefined, selectedSize?: string | null): boolean {
+  if (!selectedSize || rowSize === undefined || rowSize === null) return false;
+  return String(rowSize).trim().toUpperCase() === selectedSize.trim().toUpperCase();
+}
+
+function resolveChartVisualKind(measurementKeys: string[], chartImage?: string, productName?: string): ChartVisualKind {
+  const keySet = new Set(measurementKeys);
+  const hintSignature = `${chartImage ?? ""} ${productName ?? ""}`.toLowerCase();
+  const hasPantsKeys = keySet.has("waist") || keySet.has("inseam") || keySet.has("outseam");
+  const hasTopKeys = keySet.has("shoulder") || keySet.has("chest") || keySet.has("sleeve");
+  if (hasPantsKeys && !hasTopKeys) return "pants";
+  if (/(hoodie|sweatshirt|pullover|fleece)/.test(hintSignature)) return "hoodie";
+  if (hasTopKeys) return "shirt";
+  return "generic";
+}
+
+function getProductImageCropStyle(kind: ChartVisualKind): CSSProperties {
+  if (kind === "pants") {
+    return {
+      objectFit: "cover",
+      objectPosition: "center 52%",
+      transform: "scale(1.14)",
+      transformOrigin: "center center",
+    };
   }
-
-  function getRecommendation() {
-    const w = parseFloat(weight)
-    if (!w) return
-    let size = 'M'
-    if (w < 55) size = 'S'
-    else if (w <= 65) size = 'M'
-    else if (w <= 80) size = 'L'
-    else size = 'XL'
-    setRecommended(size)
+  if (kind === "hoodie") {
+    return {
+      objectFit: "cover",
+      objectPosition: "center 28%",
+      transform: "scale(1.3)",
+      transformOrigin: "center center",
+    };
   }
+  if (kind === "shirt") {
+    return {
+      objectFit: "cover",
+      objectPosition: "center 32%",
+      transform: "scale(1.22)",
+      transformOrigin: "center center",
+    };
+  }
+  return {
+    objectFit: "cover",
+    objectPosition: "center 38%",
+    transform: "scale(1.12)",
+    transformOrigin: "center center",
+  };
+}
 
-  if (!open) return null
+interface OverlayRenderProduct {
+  name?: string;
+  sizeChart: ProductSizeChart;
+  measurementKeys: string[];
+}
+
+function resolveMeasureOverlay(product: OverlayRenderProduct): ProductMeasurementOverlay {
+  const customOverlay = product.sizeChart.measureOverlay;
+  const hasCustomOverlay = customOverlay && Object.keys(customOverlay).length > 0;
+  if (hasCustomOverlay) return customOverlay;
+
+  const kind = resolveChartVisualKind(product.measurementKeys, product.sizeChart.image, product.name);
+  return DEFAULT_MEASURE_OVERLAY_BY_KIND[kind];
+}
+
+function renderMeasurementOverlay(product: OverlayRenderProduct) {
+  const overlayConfig = resolveMeasureOverlay(product);
+  const measurementSet = new Set(product.measurementKeys.map((key) => key.toLowerCase()));
+
+  const overlayEntries = Object.entries(overlayConfig).filter(([key, value]) => {
+    if (!value) return false;
+    if (measurementSet.size === 0) return true;
+    return measurementSet.has(key.toLowerCase());
+  });
+
+  return overlayEntries.map(([key, point]) => {
+    const config = point as ProductMeasurementOverlayPoint;
+    const isVertical = Boolean(config.height) && !config.width;
+    const isHorizontal = Boolean(config.width) && !config.height;
+    const orientationClass = isVertical ? "is-vertical" : "is-horizontal";
+
+    const computedWidth = config.width ?? (isVertical ? "2px" : "40%");
+    const computedHeight = config.height ?? (isHorizontal ? "2px" : "2px");
+    const lineStyle: CSSProperties = {
+      width: computedWidth,
+      height: computedHeight,
+      ["--measure-rotate" as string]: config.rotate ?? "0deg",
+    };
+
+    return (
+      <div key={`overlay-${key}`} className="measure-overlay-item" style={{ top: config.top, left: config.left }}>
+        <div className={`measure-overlay-line ${orientationClass}`} style={lineStyle} />
+        <span className={`measure-overlay-label ${orientationClass}`}>
+          {config.label || titleCase(key)}
+        </span>
+      </div>
+    );
+  });
+}
+
+export default function SizeFitGuide({ open, onClose, productName, sizeChart, productImage, selectedSize }: SizeFitGuideProps) {
+  if (!open) return null;
+
+  const chart = renderSizeChart(sizeChart);
+  const visualImage = productImage?.trim() ? productImage : chart.image;
+  const isUsingProductVisual = Boolean(productImage?.trim());
+  const visualKind = resolveChartVisualKind(chart.measurementKeys, chart.image, productName);
+  const resolvedSizeChart: ProductSizeChart = {
+    image: chart.image,
+    units: chart.units,
+    measurements: chart.rows,
+    measureOverlay: sizeChart?.measureOverlay,
+  };
+  const overlayNodes = renderMeasurementOverlay({
+    name: productName,
+    sizeChart: resolvedSizeChart,
+    measurementKeys: chart.measurementKeys,
+  });
 
   return (
     <>
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40 transition-opacity duration-300"
-        onClick={onClose}
-      />
+      <style>{MEASUREMENT_OVERLAY_CSS}</style>
+      <div className="fixed inset-0 z-[120] bg-black/65 backdrop-blur-[3px] transition-opacity duration-300" onClick={onClose} />
 
-      {/* Panel */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-sm
-                      bg-background border-l border-border z-50
-                      overflow-y-auto shadow-xl
-                      animate-in slide-in-from-right duration-300">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4
-                        border-b border-border sticky top-0 bg-background z-10">
-          <h2 className="text-base font-semibold tracking-tight">
-            Size &amp; Fit Guide
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center
-                       bg-muted hover:bg-muted/80 transition-colors"
-          >
-            <X size={14} />
-          </button>
-        </div>
-
-        {/* Model section */}
-        <div className="bg-muted/30 border-b border-border px-5 py-5">
-
-          {/* Gender toggle */}
-          <div className="flex border border-border rounded-lg
-                          overflow-hidden mb-5">
-            {(['male', 'female'] as const).map(g => (
-              <button
-                key={g}
-                onClick={() => switchGender(g)}
-                className={`flex-1 py-2 text-xs font-medium transition-all
-                            duration-200 capitalize tracking-wide
-                            ${gender === g
-                              ? 'bg-foreground text-background'
-                              : 'bg-transparent text-muted-foreground hover:bg-muted'
-                            }`}
-              >
-                {g} model
-              </button>
-            ))}
-          </div>
-
-          {/* Model figure */}
-          <div className={`flex flex-col items-center gap-4 overflow-visible
-                           transition-opacity duration-200
-                           ${animating ? 'opacity-0' : 'opacity-100'}`}>
-            <div className="relative flex items-center justify-center
-                            min-h-[200px] px-20 py-8 overflow-visible">
-
-              {/* Floating height tag */}
-              <div className="absolute top-1 left-1/2 -translate-x-1/2
-                              bg-background border border-border
-                              rounded-md px-2 py-1 text-xs font-semibold
-                              z-10 whitespace-nowrap
-                              animate-[float_3s_ease-in-out_infinite]">
-                {model.height}
-              </div>
-
-              {/* Floating weight tag */}
-              <div className="absolute top-1/2 right-3 -translate-y-1/2
-                              bg-background border border-border
-                              rounded-md px-2 py-1 text-xs font-medium
-                              whitespace-nowrap z-10
-                              animate-[float_3s_ease-in-out_infinite_0.8s]">
-                {model.weight}
-              </div>
-
-              {/* Floating size tag */}
-              <div className="absolute top-1/2 left-3 -translate-y-1/2
-                              bg-background border border-border
-                              rounded-md px-2 py-1 text-xs font-medium
-                              whitespace-nowrap z-10
-                              animate-[float_3s_ease-in-out_infinite_1.6s]">
-                Wears {model.size}
-              </div>
-
-              {gender === 'male' ? <MaleModelSVG /> : <FemaleModelSVG />}
-            </div>
-
-            <p className="text-xs text-muted-foreground text-center
-                          leading-relaxed">
-              <span className="font-medium text-foreground">
-                {model.height}
-              </span> height &nbsp;·&nbsp;
-              <span className="font-medium text-foreground">
-                {model.weight}
-              </span> weight &nbsp;·&nbsp; wears size&nbsp;
-              <span className="font-medium text-foreground">
-                {model.size}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        {/* Size Recommender */}
-        <div className="px-5 py-5 border-b border-border">
-          <p className="text-xs font-semibold uppercase tracking-widest
-                        text-foreground mb-3">
-            Get size recommendation
-          </p>
-
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground">
-                Height (ft)
-              </label>
-              <input
-                type="number"
-                value={heightFt}
-                onChange={e => setHeightFt(e.target.value)}
-                placeholder="5"
-                min={4} max={7}
-                className="w-full px-3 py-2 text-sm rounded-md border
-                           border-border bg-background text-foreground
-                           focus:outline-none focus:ring-1
-                           focus:ring-foreground"
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs text-muted-foreground">
-                Weight (kg)
-              </label>
-              <input
-                type="number"
-                value={weight}
-                onChange={e => setWeight(e.target.value)}
-                placeholder="72"
-                min={30} max={200}
-                className="w-full px-3 py-2 text-sm rounded-md border
-                           border-border bg-background text-foreground
-                           focus:outline-none focus:ring-1
-                           focus:ring-foreground"
-              />
-            </div>
-          </div>
-
-          <button
-            onClick={getRecommendation}
-            className="w-full py-2.5 text-sm font-medium bg-foreground
-                       text-background rounded-md hover:opacity-85
-                       transition-opacity tracking-wide"
-          >
-            Get my size
-          </button>
-
-          {recommended && (
-            <div className="mt-3 p-3 bg-muted rounded-md border
-                            border-border">
-              <p className="text-xs text-muted-foreground mb-1">
-                Recommended size
+      <aside className="fixed right-0 top-0 z-[121] h-full w-full max-w-3xl overflow-y-auto border-l border-white/20 bg-background/95 shadow-[0_30px_90px_rgba(0,0,0,0.45)] backdrop-blur-xl animate-in slide-in-from-right duration-300">
+        <header className="sticky top-0 z-10 border-b border-border/70 bg-background/95 px-5 py-4 sm:px-7 sm:py-5 backdrop-blur-md">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                <Sparkles className="h-3.5 w-3.5" />
+                Size Guide
               </p>
-              <p className="text-2xl font-semibold text-foreground">
-                {recommended}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Based on your weight — fits well for this product
+              <h2 className="text-xl font-black tracking-tight text-foreground sm:text-2xl">Find Your Best Fit</h2>
+              <p className="text-sm text-muted-foreground">
+                {productName ? `${productName} · Measurements in ${chart.units}` : `Measurements in ${chart.units}`}
               </p>
             </div>
-          )}
-        </div>
 
-        {/* Size chart */}
-        <div className="px-5 py-5">
-          <p className="text-xs font-semibold uppercase tracking-widest
-                        text-foreground mb-4">
-            Size chart — measurements in inches
-          </p>
-
-          {/* Header row */}
-          <div className="grid grid-cols-4 mb-1">
-            {['Size', 'Chest', 'Length', 'Shoulder'].map(h => (
-              <div key={h}
-                className="text-[10px] uppercase tracking-widest
-                           text-muted-foreground py-1.5 px-2">
-                {h}
-              </div>
-            ))}
-          </div>
-
-          {SIZE_DATA.map(row => (
-            <div
-              key={row.size}
-              className={`grid grid-cols-4 rounded-sm transition-colors
-                          duration-200 mb-0.5
-                          ${recommended === row.size
-                            ? 'bg-muted'
-                            : 'hover:bg-muted/50'}`}
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-border/70 bg-background transition-all duration-200 hover:bg-muted"
+              aria-label="Close size chart"
             >
-              {/* Size label */}
-              <div className="py-2.5 px-2 text-sm font-semibold
-                              text-foreground border-b border-border">
-                {row.size}
-              </div>
+              <X size={16} />
+            </button>
+          </div>
+        </header>
 
-              {/* Chest bar */}
-              <div className="py-2.5 px-2 border-b border-border
-                              flex items-center gap-2">
-                <div className="flex-1 h-0.5 bg-border rounded-full
-                                overflow-hidden">
-                  <div
-                    className="h-full bg-foreground rounded-full
-                               transition-all duration-700"
-                    style={{ width: `${row.chestPct}%` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground
-                                 min-w-[28px]">
-                  {row.chest}"
-                </span>
-              </div>
-
-              {/* Length bar */}
-              <div className="py-2.5 px-2 border-b border-border
-                              flex items-center gap-2">
-                <div className="flex-1 h-0.5 bg-border rounded-full
-                                overflow-hidden">
-                  <div
-                    className="h-full bg-foreground rounded-full
-                               transition-all duration-700"
-                    style={{ width: `${row.lengthPct}%` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground
-                                 min-w-[28px]">
-                  {row.length}"
-                </span>
-              </div>
-
-              {/* Shoulder bar */}
-              <div className="py-2.5 px-2 border-b border-border
-                              flex items-center gap-2">
-                <div className="flex-1 h-0.5 bg-border rounded-full
-                                overflow-hidden">
-                  <div
-                    className="h-full bg-foreground rounded-full
-                               transition-all duration-700"
-                    style={{ width: `${row.shoulderPct}%` }}
-                  />
-                </div>
-                <span className="text-xs text-muted-foreground
-                                 min-w-[28px]">
-                  {row.shoulder}"
-                </span>
-              </div>
+        <section className="space-y-6 px-5 py-5 sm:space-y-8 sm:px-7 sm:py-7">
+          <div className="rounded-2xl border border-border/70 bg-gradient-to-b from-muted/20 to-muted/5 p-4 sm:p-6">
+            <div
+              className={`measure-container relative mx-auto flex items-center justify-center overflow-hidden rounded-xl border border-white/15 bg-black/5 dark:bg-black/25 ${
+                isUsingProductVisual
+                  ? visualKind === "pants"
+                    ? "aspect-[3/4] w-full max-w-[290px] p-0 sm:max-w-[340px]"
+                    : "aspect-[4/5] w-full max-w-[270px] p-0 sm:max-w-[320px]"
+                  : "w-full max-w-[760px] p-2"
+              }`}
+            >
+              <img
+                id="sizeChartImg"
+                src={visualImage}
+                alt={`${productName || "Product"} measurement diagram`}
+                className={
+                  isUsingProductVisual
+                    ? "h-full w-full"
+                    : "h-auto max-h-[520px] w-full max-w-[760px] object-contain"
+                }
+                style={isUsingProductVisual ? getProductImageCropStyle(visualKind) : undefined}
+                loading="lazy"
+              />
+              {overlayNodes.length > 0 ? <div className="measure-overlay">{overlayNodes}</div> : null}
             </div>
-          ))}
-        </div>
+          </div>
 
-        {/* Add float animation to global CSS if not present */}
-      </div>
+          <div className="overflow-x-auto rounded-2xl border border-border/75 shadow-sm">
+            <table className="size-table min-w-full text-left text-sm">
+              <thead className="bg-muted/30">
+                <tr>
+                  {chart.columnLabels.map((label) => (
+                    <th
+                      key={label}
+                      className="whitespace-nowrap px-4 py-3.5 text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground"
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody id="sizeTableBody">
+                {chart.rows.map((row) => {
+                  const isSelectedRow = highlightSelectedSize(row.size, selectedSize);
+                  return (
+                    <tr
+                      key={String(row.size)}
+                      className={`border-t border-border/70 transition-colors duration-200 ${
+                        isSelectedRow ? "bg-black text-white dark:bg-white dark:text-black" : "bg-background hover:bg-muted/25"
+                      }`}
+                    >
+                      {chart.columnKeys.map((key) => (
+                        <td
+                          key={`${row.size}-${key}`}
+                          className={`whitespace-nowrap px-4 py-3.5 text-[14px] ${
+                            isSelectedRow ? "font-semibold text-inherit" : "text-foreground"
+                          }`}
+                        >
+                          {toDisplayValue(row[key], chart.units, key === "size")}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {chart.explanationItems.map((item) => (
+              <article
+                key={item.title}
+                className="rounded-xl border border-border/70 bg-muted/10 p-4 transition-colors duration-200 hover:bg-muted/20"
+              >
+                <p className="mb-1.5 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.16em] text-foreground">
+                  <Ruler className="h-3.5 w-3.5" />
+                  {item.title}
+                </p>
+                <p className="text-sm leading-6 text-muted-foreground">{item.description}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </aside>
     </>
-  )
+  );
 }
