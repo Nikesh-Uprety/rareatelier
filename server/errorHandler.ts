@@ -90,9 +90,24 @@ export function handleApiError(
   context: string,
   statusCode: number = 500
 ): Response {
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  const normalizedError = (() => {
+    if (error instanceof Error) return error;
+    if (typeof error === "string") return new Error(error);
+    if (error && typeof error === "object") {
+      const maybeMessage =
+        typeof (error as { message?: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : typeof (error as { error?: unknown }).error === "string"
+            ? (error as { error: string }).error
+            : undefined;
+      return new Error(maybeMessage || JSON.stringify(error));
+    }
+    return new Error(String(error));
+  })();
 
-  logger.error(`Error in ${context}`, { source: context }, error);
+  const errorMessage = normalizedError.message;
+
+  logger.error(`Error in ${context}`, { source: context }, normalizedError);
 
   if (statusCode === 400) {
     return sendError(res, "Invalid request", errorMessage, statusCode, "BAD_REQUEST");

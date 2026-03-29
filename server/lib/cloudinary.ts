@@ -28,6 +28,21 @@ if (cloudinaryUrl) {
 
 export { cloudinary };
 
+function normalizeCloudinaryError(error: unknown, fallbackMessage: string): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === "string") return new Error(error);
+  if (error && typeof error === "object") {
+    const message =
+      typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : typeof (error as { error?: unknown }).error === "string"
+          ? (error as { error: string }).error
+          : fallbackMessage;
+    return new Error(message);
+  }
+  return new Error(fallbackMessage);
+}
+
 // Upload a buffer to Cloudinary
 // Returns { url, publicId }
 export async function uploadToCloudinary(
@@ -66,7 +81,11 @@ export async function uploadToCloudinary(
         overwrite: false,
       },
       (error, result) => {
-        if (error || !result) return reject(error);
+        if (error || !result) {
+          return reject(
+            normalizeCloudinaryError(error, "Cloudinary upload failed for site asset."),
+          );
+        }
         resolve({
           url: result.secure_url,
           publicId: result.public_id,
@@ -109,7 +128,11 @@ export async function uploadMediaToCloudinary(
         overwrite: false,
       },
       (error, result) => {
-        if (error || !result) return reject(error);
+        if (error || !result) {
+          return reject(
+            normalizeCloudinaryError(error, "Cloudinary upload failed for admin media asset."),
+          );
+        }
         resolve({
           url: result.secure_url,
           publicId: result.public_id,

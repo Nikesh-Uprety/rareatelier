@@ -31,29 +31,45 @@ export async function processAndStoreImage(
   const relativePath = `media/${category}/${filename}`;
   const absolutePath = path.join(MEDIA_DIR, category, filename);
 
-  // Process image with sharp: convert to WebP with reasonable quality
-  const image = sharp(buffer);
-  const metadata = await image.metadata();
+  try {
+    // Process image with sharp: convert to WebP with reasonable quality
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
 
-  await image
-    .webp({ quality: 85, effort: 4 }) // Balanced quality and compression speed
-    .toFile(absolutePath);
+    await image
+      .webp({ quality: 85, effort: 4 }) // Balanced quality and compression speed
+      .toFile(absolutePath);
 
-  const stats = fs.statSync(absolutePath);
+    const stats = fs.statSync(absolutePath);
 
-  // Register entry in mediaAssets table for centralized management
-  const assetData: NewMediaAsset = {
-    url: `/uploads/${relativePath}`,
-    provider: "local",
-    category,
-    filename: originalName,
-    bytes: stats.size,
-    width: metadata.width || null,
-    height: metadata.height || null,
-  };
+    // Register entry in mediaAssets table for centralized management
+    const assetData: NewMediaAsset = {
+      url: `/uploads/${relativePath}`,
+      provider: "local",
+      category,
+      filename: originalName,
+      bytes: stats.size,
+      width: metadata.width || null,
+      height: metadata.height || null,
+    };
 
-  const asset = await storage.createMediaAsset(assetData);
-  return asset;
+    const asset = await storage.createMediaAsset(assetData);
+    return asset;
+  } catch (error) {
+    if (fs.existsSync(absolutePath)) {
+      await fs.promises.unlink(absolutePath).catch(() => undefined);
+    }
+
+    if (error instanceof Error) {
+      throw new Error(`Failed to store ${category} image "${originalName}": ${error.message}`);
+    }
+
+    throw new Error(
+      `Failed to store ${category} image "${originalName}": ${
+        typeof error === "object" && error !== null ? JSON.stringify(error) : String(error)
+      }`,
+    );
+  }
 }
 
 /**

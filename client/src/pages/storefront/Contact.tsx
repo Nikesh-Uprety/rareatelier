@@ -108,21 +108,7 @@ export default function Contact() {
           }}
         />
         <div className="absolute inset-0 bg-black/45 dark:bg-black/60" />
-        <div className="relative container mx-auto px-4 py-28 md:py-40 max-w-6xl">
-          <div className="max-w-2xl">
-            <p className="text-[10px] uppercase tracking-[0.35em] text-white/75 font-semibold mb-5">
-              About Us
-            </p>
-            <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white uppercase">
-              Rare.NP
-            </h1>
-            <p className="mt-6 text-sm md:text-base text-white/90 leading-relaxed">
-              Rare.NP is a luxury streetwear label from Nepal, crafting limited pieces that fuse
-              Himalayan identity with contemporary street culture. Our garments are cut with intent,
-              built in small runs, and designed to carry both altitude and attitude.
-            </p>
-          </div>
-        </div>
+        <div className="relative h-[72vh] min-h-[520px] md:h-[88vh] md:min-h-[760px]" />
       </section>
 
       <section
@@ -146,11 +132,19 @@ export default function Contact() {
               <p className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground font-semibold mb-5">
                 The Concept
               </p>
-              <h2 className="text-3xl md:text-5xl font-black tracking-tight uppercase mb-6">
-                Himalayan Code, Global Street
+              <h2 className="text-3xl md:text-5xl font-black tracking-tight uppercase mb-5">
+                Rare.NP
               </h2>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
-                Rare.NP exists at the intersection of Himalayan culture and global streetwear,
+                Rare Atelier is a luxury streetwear label from Nepal, crafting limited pieces. Our
+                garments are cut with intent, built in small runs, and designed to carry both
+                altitude and attitude.
+              </p>
+              <h3 className="mt-10 text-2xl md:text-4xl font-black tracking-tight uppercase mb-5">
+                Global Street
+              </h3>
+              <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
+                Rare Atelier exists at the intersection of culture and global streetwear,
                 translating local memory into a modern silhouette. Every release is treated as a
                 limited object rather than a product, created for those who collect meaning as much
                 as design.
