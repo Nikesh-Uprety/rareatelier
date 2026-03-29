@@ -222,11 +222,11 @@ export default function CampaignBanner({
   }
 
   return (
-    <section className="relative h-[72vh] min-h-[420px] w-full overflow-hidden md:h-[100svh] md:min-h-[100svh]">
-      <motion.div
-        style={{ y: parallaxOffset }}
-        className="absolute inset-x-0 -top-[6%] h-[112%] w-full md:-top-[8%] md:h-[116%]"
-      >
+    <section
+      className="relative w-full overflow-hidden"
+      style={{ aspectRatio: "1960 / 1176" }}
+    >
+      <motion.div className="absolute inset-0 h-full w-full">
         <img
           alt={imageAlt}
           className="w-full h-full object-cover object-center"

@@ -133,21 +133,12 @@ export default function Contact() {
                 The Concept
               </p>
               <h2 className="text-3xl md:text-5xl font-black tracking-tight uppercase mb-5">
-                Rare.NP
+                Rare Atelier
               </h2>
               <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
-                Rare Atelier is a luxury streetwear label from Nepal, crafting limited pieces. Our
-                garments are cut with intent, built in small runs, and designed to carry both
-                altitude and attitude.
-              </p>
-              <h3 className="mt-10 text-2xl md:text-4xl font-black tracking-tight uppercase mb-5">
-                Global Street
-              </h3>
-              <p className="text-sm md:text-base text-muted-foreground leading-relaxed">
-                Rare Atelier exists at the intersection of culture and global streetwear,
-                translating local memory into a modern silhouette. Every release is treated as a
-                limited object rather than a product, created for those who collect meaning as much
-                as design.
+                Rare Atelier is a luxury streetwear label from Nepal, creating limited pieces where
+                local memory meets a modern global silhouette. Each garment is cut with intent,
+                built in small runs, and released as an object of meaning as much as design.
               </p>
             </div>
           </div>
