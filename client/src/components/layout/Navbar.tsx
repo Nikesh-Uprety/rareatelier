@@ -23,6 +23,7 @@ export default function Navbar() {
   const [location, setLocation] = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [hoveredNavHref, setHoveredNavHref] = useState<string | null>(null);
   const [hideAnnouncement, setHideAnnouncement] = useState(false);
   const [isNavHidden, setIsNavHidden] = useState(false);
   const announceRef = useRef<HTMLDivElement>(null);
@@ -93,10 +94,10 @@ export default function Navbar() {
     const onScroll = () => {
       const y = window.scrollY;
       if (isMaisonNocturne) {
-        const trigger = document.querySelector<HTMLElement>("[data-navbar-trigger='maison-nocturne']");
-        if (trigger) {
-          const triggerBottom = trigger.offsetTop + trigger.offsetHeight;
-          setIsScrolled(y > Math.max(60, triggerBottom - 120));
+        const hero = document.querySelector<HTMLElement>("#hero");
+        if (hero) {
+          const triggerPoint = hero.offsetTop + hero.offsetHeight * 0.5;
+          setIsScrolled(y >= Math.max(80, triggerPoint));
         } else {
           setIsScrolled(false);
         }
@@ -174,13 +175,13 @@ export default function Navbar() {
     const navChrome = shouldUseChrome
       ? isMaisonLight
         ? {
-            background: "rgba(255, 255, 255, 0.72)",
+            background: "rgba(255, 255, 255, 0.78)",
             backdropFilter: "blur(10px) saturate(118%)",
             borderColor: "rgba(24,20,17,0.08)",
             boxShadow: "0 12px 34px rgba(20, 20, 20, 0.08)",
           }
         : {
-            background: "rgba(10, 10, 10, 0.72)",
+            background: "rgba(10, 10, 10, 0.78)",
             backdropFilter: "blur(10px) saturate(132%)",
             borderColor: "rgba(255,255,255,0.1)",
             boxShadow: "0 12px 34px rgba(0,0,0,0.26)",
@@ -192,47 +193,14 @@ export default function Navbar() {
           boxShadow: "none",
         };
     const logoFilter = isTransparentState || isMaisonLight ? "brightness(0)" : "brightness(0) invert(1)";
-    const logoChrome = isTransparentState
-      ? {
-          background: "rgba(255,255,255,0.92)",
-          borderColor: "rgba(17,17,17,0.1)",
-          boxShadow: "0 16px 42px rgba(0,0,0,0.18)",
-        }
-      : isMaisonLight
-        ? {
-            background: "rgba(255,255,255,0.82)",
-            borderColor: "rgba(17,17,17,0.08)",
-            boxShadow: "0 16px 38px rgba(0,0,0,0.08)",
-          }
-        : {
-            background: "rgba(12,12,12,0.88)",
-            borderColor: "rgba(255,255,255,0.12)",
-            boxShadow: "0 18px 44px rgba(0,0,0,0.3)",
-          };
-    const navLinkPill = isTransparentState
-      ? {
-          background: "rgba(255,255,255,0.72)",
-          hoverBackground: "rgba(255,255,255,0.96)",
-          activeBackground: "rgba(17,17,17,0.96)",
-          activeColor: "#ffffff",
-          shadow: "0 12px 28px rgba(0,0,0,0.12)",
-        }
-      : isMaisonLight
-        ? {
-            background: "rgba(17,17,17,0.04)",
-            hoverBackground: "rgba(17,17,17,0.08)",
-            activeBackground: "#111111",
-            activeColor: "#ffffff",
-            shadow: "0 10px 22px rgba(0,0,0,0.08)",
-          }
-        : {
-            background: "rgba(255,255,255,0.06)",
-            hoverBackground: "rgba(255,255,255,0.12)",
-            activeBackground: "#ffffff",
-            activeColor: "#111111",
-            shadow: "0 12px 28px rgba(0,0,0,0.18)",
-          };
-
+    const navUnderlineColor = isMaisonLight || isTransparentState ? "#111111" : "#ffffff";
+    const navTextShadow = shouldUseChrome
+      ? isMaisonLight
+        ? "none"
+        : "0 0 12px rgba(255,255,255,0.32)"
+      : isTransparentState
+        ? "0 1px 12px rgba(0,0,0,0.18)"
+        : "none";
     return (
       <>
         {showTopAnnouncement ? (
@@ -285,24 +253,36 @@ export default function Navbar() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="rounded-full px-4 py-2 text-[12px] font-semibold uppercase transition-all duration-300 hover:-translate-y-[1px]"
+                    className="relative px-1 py-2 text-[12px] font-semibold uppercase transition-all duration-300 hover:-translate-y-[1px] after:absolute after:bottom-0 after:left-0 after:h-px after:w-full after:origin-left after:scale-x-0 after:transition-transform after:duration-300"
                     style={{
                       fontFamily: "var(--font-mono)",
                       letterSpacing: "0.18em",
-                      color: location === item.href ? navLinkPill.activeColor : navLinkColor,
-                      background: location === item.href ? navLinkPill.activeBackground : navLinkPill.background,
-                      boxShadow: location === item.href ? navLinkPill.shadow : "none",
+                      color: navLinkColor,
+                      opacity: location === item.href ? 1 : 0.88,
+                      textShadow: navTextShadow,
                     }}
                     onMouseEnter={(event) => {
-                      if (location === item.href) return;
-                      event.currentTarget.style.background = navLinkPill.hoverBackground;
+                      setHoveredNavHref(item.href);
+                      event.currentTarget.style.opacity = "1";
                     }}
                     onMouseLeave={(event) => {
-                      if (location === item.href) return;
-                      event.currentTarget.style.background = navLinkPill.background;
+                      setHoveredNavHref((current) => (current === item.href ? null : current));
+                      event.currentTarget.style.opacity = location === item.href ? "1" : "0.88";
                     }}
+                    aria-current={location === item.href ? "page" : undefined}
                   >
                     {item.name}
+                    <span
+                      className="absolute bottom-0 left-0 h-px w-full origin-left transition-transform duration-300"
+                      style={{
+                        background: navUnderlineColor,
+                        boxShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.45)" : "none",
+                        transform:
+                          location === item.href || hoveredNavHref === item.href
+                            ? "scaleX(1)"
+                            : "scaleX(0)",
+                      }}
+                    />
                   </Link>
                 ))}
               </div>
@@ -321,25 +301,19 @@ export default function Navbar() {
 
               <Link href="/" className="justify-self-center text-center">
                 {isMaisonNocturne ? (
-                  <span
-                    className="flex items-center justify-center rounded-full border px-5 py-3 sm:px-6"
+                  <img
+                    src="/images/logo.webp"
+                    alt="Rare Atelier"
+                    className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
                     style={{
-                      background: logoChrome.background,
-                      borderColor: logoChrome.borderColor,
-                      boxShadow: logoChrome.boxShadow,
-                      transition: "background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease",
+                      filter: !isMaisonLight && shouldUseChrome
+                        ? `${logoFilter} drop-shadow(0 0 14px rgba(255,255,255,0.28))`
+                        : `${logoFilter} drop-shadow(0 4px 14px rgba(0,0,0,0.18))`,
+                      transition: "filter 0.25s ease, transform 0.25s ease",
+                      opacity: 1,
+                      transform: "translateZ(0)",
                     }}
-                  >
-                    <img
-                      src="/images/logo.webp"
-                      alt="Rare Atelier"
-                      className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
-                      style={{
-                        filter: logoFilter,
-                        transition: "filter 0.25s ease, transform 0.25s ease",
-                      }}
-                    />
-                  </span>
+                  />
                 ) : (
                   <span
                     className="block text-[18px] uppercase"
@@ -376,13 +350,23 @@ export default function Navbar() {
                     type="button"
                     onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                     className="flex h-10 w-10 items-center justify-center"
-                    style={{ color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "var(--fg)" }}
+                    style={{
+                      color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                      textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                    }}
                     aria-label="Toggle theme"
                   >
                     {theme === "light" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
                   </button>
                 )}
-                <Link href="/cart" className="relative flex h-10 w-10 items-center justify-center" style={{ color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "var(--fg)" }}>
+                <Link
+                  href="/cart"
+                  className="relative flex h-10 w-10 items-center justify-center"
+                  style={{
+                    color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                    textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                  }}
+                >
                   <ShoppingBag className="h-4.5 w-4.5" />
                   {cartItemsCount > 0 ? (
                     <span
@@ -402,7 +386,10 @@ export default function Navbar() {
                     type="button"
                     onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                     className="hidden h-10 w-10 items-center justify-center lg:flex"
-                    style={{ color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "var(--fg)" }}
+                    style={{
+                      color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                      textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
+                    }}
                     aria-label="Toggle menu"
                   >
                     <span className="flex w-5 flex-col gap-[5px]">
@@ -560,30 +547,45 @@ export default function Navbar() {
                 style={{ originX: "50%", originY: "50%" }}
               />
             </button>
-            <Link href="/" className="transition-opacity hover:opacity-80">
-              <img src="/images/logo.webp" alt="Logo" className="h-10 md:h-12 w-auto object-contain dark:brightness-0 dark:invert" />
+            <Link
+              href="/"
+              className="group inline-flex items-center focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 dark:focus-visible:ring-white dark:focus-visible:ring-offset-zinc-950"
+            >
+              <span
+                className="text-sm font-extrabold uppercase tracking-[0.32em] text-zinc-950 transition-all duration-300 group-hover:scale-[1.02] group-hover:opacity-80 dark:text-white sm:text-base md:text-lg lg:text-xl"
+                style={{ fontFamily: "var(--font-body)" }}
+              >
+                RARE ATELIER
+              </span>
             </Link>
           </div>
 
-          <nav className="hidden md:flex items-center rounded-full px-2 py-1 space-x-1">
+          <nav className="hidden md:flex items-center gap-8">
             {navLinks.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className={`text-sm font-semibold px-4 py-2 rounded-full transition-all ${
-                  location === item.href
-                    ? "bg-white/95 text-black shadow-sm dark:bg-white dark:text-black"
-                    : "text-foreground/72 hover:text-foreground"
-                }`}
+                className="relative text-sm font-medium uppercase tracking-[0.18em] transition-all duration-300 hover:opacity-100 after:absolute after:bottom-[-6px] after:left-0 after:h-px after:w-full after:origin-left after:transition-transform after:duration-300"
                 style={{
-                  background: location === item.href
-                    ? undefined
-                    : theme === "dark"
-                      ? "rgba(255,255,255,0.04)"
-                      : "rgba(255,255,255,0.22)",
+                  color: theme === "dark" ? "rgba(255,255,255,0.88)" : "rgba(24,24,27,0.88)",
+                  opacity: location === item.href ? 1 : 0.8,
+                  fontFamily: "var(--font-body)",
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.opacity = "1";
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.opacity = location === item.href ? "1" : "0.8";
                 }}
               >
                 {item.name}
+                <span
+                  className="absolute bottom-[-6px] left-0 h-px w-full origin-left transition-transform duration-300"
+                  style={{
+                    background: theme === "dark" ? "#ffffff" : "#111111",
+                    transform: location === item.href ? "scaleX(1)" : "scaleX(0)",
+                  }}
+                />
               </Link>
             ))}
           </nav>
@@ -593,7 +595,7 @@ export default function Navbar() {
 
             <button
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors text-muted-foreground hover:text-primary"
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 text-zinc-950 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
             >
               {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -603,7 +605,7 @@ export default function Navbar() {
                 type="button"
                 title="Admin Dashboard"
                 onClick={() => setLocation(dashboardPath)}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors"
+                className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
               >
                 <LayoutDashboard className="w-5 h-5 text-emerald-500" />
               </button>
@@ -612,7 +614,7 @@ export default function Navbar() {
             {cartItemsCount > 0 && (
               <Link
                 href="/cart"
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 dark:hover:bg-muted transition-colors relative"
+                className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 relative"
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">
