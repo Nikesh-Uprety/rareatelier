@@ -2399,6 +2399,7 @@ export async function registerRoutes(
             name: product.name,
             sku: product.sku || `RR-${product.id}`,
             category: product.category || "Uncategorized",
+            imageUrl: product.imageUrl || null,
             price,
             costPrice,
             stockBySize,

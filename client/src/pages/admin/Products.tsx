@@ -150,7 +150,7 @@ const productSchema = z.object({
   name: z.string().min(2, "Name required"),
   shortDetails: z.string().optional(),
   description: z.string().optional(),
-  category: z.string().min(1, "Category required"),
+  category: z.string().optional(),
   price: z.coerce.number().min(1, "Price required"),
   stockStatus: z.enum(["in_stock", "out_of_stock"]),
   stock: z.coerce.number().min(0).default(0),
@@ -430,7 +430,7 @@ export default function AdminProducts() {
         price: values.price,
         imageUrl: values.imageUrl?.trim() || null,
         galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
-        category: values.category,
+        category: values.category || categories[0]?.slug || "",
         stock,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
@@ -515,7 +515,11 @@ export default function AdminProducts() {
         price: values.price,
         imageUrl: values.imageUrl?.trim() || null,
         galleryUrls: galleryUrls.length ? JSON.stringify(galleryUrls) : undefined,
-        category: values.category,
+        category:
+          values.category ||
+          resolveCategorySlug(editProduct.category, categories) ||
+          editProduct.category ||
+          "",
         stock,
         colorOptions: values.colorOptions.length ? JSON.stringify(values.colorOptions) : undefined,
         sizeOptions: values.sizeOptions.length ? JSON.stringify(values.sizeOptions) : undefined,
@@ -2301,37 +2305,6 @@ export default function AdminProducts() {
                             <FormControl>
                               <Textarea rows={4} placeholder="Full description..." {...field} />
                             </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={editForm.control}
-                        name="category"
-                        render={({ field }) => (
-                          <FormItem key={editProduct?.id}>
-                            <FormLabel>Category *</FormLabel>
-                            <div className="flex gap-2 flex-wrap">
-                              <Select onValueChange={field.onChange} value={field.value || undefined}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="admin-product-edit-category" className="min-w-[180px]">
-                                    <SelectValue placeholder="Select category" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {categories.map((c) => (
-                                    <SelectItem key={c.id} value={c.slug}>{c.name}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => { setPendingCategoryForm("edit"); setNewCategoryOpen(true); }}
-                              >
-                                Add new
-                              </Button>
-                            </div>
                             <FormMessage />
                           </FormItem>
                         )}

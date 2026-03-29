@@ -35,6 +35,7 @@ interface InventoryProduct {
   name: string;
   sku: string;
   category: string;
+  imageUrl?: string | null;
   price: number;
   costPrice: number;
   stockBySize: Record<string, number>;
@@ -106,7 +107,17 @@ const InventoryRow = React.memo(function InventoryRow({
     <tr className="border-t border-border">
       <td className="px-4 py-4">
         <div className="flex items-center gap-3">
-          <span className="h-8 w-8 rounded-md bg-primary/10" />
+          <div className="h-10 w-10 overflow-hidden rounded-md border border-border bg-muted/40 shrink-0">
+            {product.imageUrl ? (
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center bg-primary/10" />
+            )}
+          </div>
           <div>
             <p className="font-medium">{product.name}</p>
             <p className="text-xs text-muted-foreground">{product.sku || "No SKU"}</p>
