@@ -129,6 +129,19 @@ function ensureUploadsDir() {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
 }
+
+function sanitizeUploadFilename(name: string) {
+  const base = name.split("/").pop() || name;
+  const trimmed = base.replace(/\?.*$/, "").replace(/#[^]*$/, "").trim();
+  const extMatch = trimmed.match(/\.[a-z0-9]+$/i);
+  const ext = extMatch ? extMatch[0].toLowerCase() : "";
+  const body = (ext ? trimmed.slice(0, -ext.length) : trimmed)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const safeBody = body || "image";
+  return `${safeBody}${ext || ".jpg"}`;
+}
 function ensurePaymentProofUploadsDir() {
   if (!fs.existsSync(PAYMENT_PROOFS_DIR)) {
     fs.mkdirSync(PAYMENT_PROOFS_DIR, { recursive: true });
@@ -4952,11 +4965,12 @@ export async function registerRoutes(
         const results = [];
 
         for (const file of files) {
+          const cleanedName = sanitizeUploadFilename(file.originalname || "image.jpg");
           if (provider === "local") {
             const asset = await processAndStoreImage(
               file.buffer,
               category,
-              file.originalname || "image.jpg"
+              cleanedName
             );
             results.push(asset);
           } else {
@@ -4968,7 +4982,7 @@ export async function registerRoutes(
                 provider: "cloudinary",
                 category,
                 publicId: uploaded.publicId,
-                filename: file.originalname ?? null,
+                filename: cleanedName,
                 bytes: file.size ?? null,
               })
               .returning();

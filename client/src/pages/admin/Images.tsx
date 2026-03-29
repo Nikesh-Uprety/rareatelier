@@ -41,7 +41,6 @@ export default function AdminImagesPage() {
   const [provider, setProvider] = useState<"local" | "cloudinary">("local");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const bulkInputRef = useRef<HTMLInputElement | null>(null);
 
   type BulkFileStatus = "idle" | "uploading" | "success" | "error" | "skipped";
@@ -68,12 +67,63 @@ export default function AdminImagesPage() {
     queryFn: () => fetchAdminImages({ provider, category, limit: 120 }),
   });
 
+  const normalizeName = (value: string) =>
+    (value.split("/").pop() || value)
+      .toLowerCase()
+      .replace(/\?.*$/, "")
+      .replace(/#[^]*$/, "")
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[%_]+/g, " ")
+      .replace(/-+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const getDisplayName = (value?: string | null) => {
+    if (!value) return "untitled";
+    const base = value.split("/").pop() || value;
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(base);
+      } catch {
+        return base;
+      }
+    })();
+    const stripped = decoded.replace(/\?.*$/, "").replace(/#[^]*$/, "");
+    const withoutExt = stripped.replace(/\.[a-z0-9]+$/i, "");
+    const cleaned = withoutExt
+      .replace(/[%_]+/g, " ")
+      .replace(/-+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return cleaned || withoutExt || stripped;
+  };
+
+  const sanitizeFilename = (value: string) => {
+    const base = value.split("/").pop() || value;
+    const decoded = (() => {
+      try {
+        return decodeURIComponent(base);
+      } catch {
+        return base;
+      }
+    })();
+    const trimmed = decoded.replace(/\?.*$/, "").replace(/#[^]*$/, "").trim();
+    const extMatch = trimmed.match(/\\.[a-z0-9]+$/i);
+    const ext = extMatch ? extMatch[0].toLowerCase() : "";
+    const body = (ext ? trimmed.slice(0, -ext.length) : trimmed)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    const safeBody = body || "image";
+    return `${safeBody}${ext || ".jpg"}`;
+  };
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeName(search.trim());
     const data = imagesQuery.data ?? [];
     if (!q) return data;
     return data.filter((img) =>
-      (img.filename || img.url).toLowerCase().includes(q),
+      normalizeName(img.filename || img.url).includes(q),
     );
   }, [imagesQuery.data, search]);
 
@@ -82,19 +132,6 @@ export default function AdminImagesPage() {
       bulkFiles.forEach((bf) => URL.revokeObjectURL(bf.previewUrl));
     };
   }, [bulkFiles]);
-
-  const uploadMutation = useMutation({
-    mutationFn: async (file: File): Promise<AdminImageAsset> => {
-      return uploadAdminImage({ file, category, provider });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
-      toast({ title: provider === "local" ? "WebP image uploaded successfully" : "Image uploaded to Cloudinary" });
-    },
-    onError: (err: any) => {
-      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-    }
-  });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => {
@@ -115,11 +152,16 @@ export default function AdminImagesPage() {
     const next: BulkFile[] = [];
     Array.from(files).forEach((file) => {
       if (!file.type.startsWith("image/")) return;
+      const cleanedName = sanitizeFilename(file.name);
+      const normalizedFile = new File([file], cleanedName, {
+        type: file.type,
+        lastModified: file.lastModified,
+      });
       const tooLarge = file.size > MAX_SIZE;
-      const previewUrl = URL.createObjectURL(file);
+      const previewUrl = URL.createObjectURL(normalizedFile);
       next.push({
-        id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file,
+        id: `${cleanedName}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+        file: normalizedFile,
         previewUrl,
         tooLarge,
         status: tooLarge ? "skipped" : "idle",
@@ -248,27 +290,6 @@ export default function AdminImagesPage() {
               className="h-9"
             />
             <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadMutation.mutate(file);
-                e.currentTarget.value = "";
-              }}
-            />
-            <Button
-              type="button"
-              className="h-9"
-              loading={uploadMutation.isPending}
-              loadingText="Uploading…"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
-            </Button>
-            <input
               ref={bulkInputRef}
               type="file"
               accept="image/*"
@@ -282,11 +303,11 @@ export default function AdminImagesPage() {
             <Button
               type="button"
               variant="outline"
-              className="h-9"
+              className="h-9 min-w-[160px] px-5"
               onClick={() => bulkInputRef.current?.click()}
             >
               <Upload className="h-4 w-4 mr-2" />
-              Bulk Upload
+              Upload Multiple
             </Button>
           </div>
         </div>
@@ -307,15 +328,14 @@ export default function AdminImagesPage() {
             addBulkFiles(e.dataTransfer.files);
           }}
           className={cn(
-            "mt-3 border-2 border-dashed rounded-xl p-4 flex flex-col gap-3 items-center justify-center text-center cursor-pointer transition-colors",
+            "mt-3 border-2 border-dashed rounded-xl p-4 flex flex-col gap-3 items-center justify-center text-center transition-colors",
             isDragging
               ? "border-primary bg-primary/5"
               : "border-border hover:border-primary/60 hover:bg-muted/40",
           )}
-          onClick={() => bulkInputRef.current?.click()}
         >
           <p className="text-xs font-black uppercase tracking-[0.25em] text-muted-foreground">
-            Drag & drop images here or click to select
+            Drag & drop images here
           </p>
           <p className="text-[10px] text-muted-foreground">
             Max 5MB per image. Accepted formats: JPG, JPEG, PNG, WEBP.
@@ -428,7 +448,7 @@ export default function AdminImagesPage() {
             {filtered.map((item: AdminImageAsset) => {
               const id = item.id;
               const url = item.url;
-              const displayName = item.filename ?? url.split("/").pop();
+              const displayName = getDisplayName(item.filename ?? url);
 
               return (
               <div
@@ -496,7 +516,7 @@ export default function AdminImagesPage() {
               </div>
               <div className="space-y-5 p-6">
                 <DialogHeader>
-                  <DialogTitle>{previewAsset.filename ?? "Image preview"}</DialogTitle>
+                  <DialogTitle>{getDisplayName(previewAsset.filename ?? previewAsset.url)}</DialogTitle>
                   <DialogDescription>
                     Review the uploaded asset, copy its URL, or remove it from the media library.
                   </DialogDescription>
@@ -564,7 +584,7 @@ export default function AdminImagesPage() {
                 />
               </div>
               <div className="rounded-2xl border border-border bg-muted/10 px-4 py-3 text-sm">
-                <p className="font-medium">{assetToDelete.filename ?? assetToDelete.url.split("/").pop()}</p>
+                <p className="font-medium">{getDisplayName(assetToDelete.filename ?? assetToDelete.url)}</p>
                 <p className="mt-1 text-xs text-muted-foreground capitalize">
                   {assetToDelete.provider} • {CATEGORY_LABELS[assetToDelete.category as ImageCategory] ?? assetToDelete.category}
                 </p>

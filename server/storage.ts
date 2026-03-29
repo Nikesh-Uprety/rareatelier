@@ -1808,10 +1808,11 @@ export class PgStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<void> {
-    // Delete related OTP tokens first
-    await db.delete(otpTokens).where(eq(otpTokens.userId, id));
-    // Hard delete the user
-    await db.delete(users).where(eq(users.id, id));
+    await db.transaction(async (tx) => {
+      await tx.update(orders).set({ userId: null }).where(eq(orders.userId, id));
+      await tx.delete(otpTokens).where(eq(otpTokens.userId, id));
+      await tx.delete(users).where(eq(users.id, id));
+    });
   }
 
   async getAdminUsers(): Promise<
