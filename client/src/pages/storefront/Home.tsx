@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { fetchHomeFeaturedProducts, fetchProducts } from "@/lib/api";
+import { fetchHomeFeaturedProducts, fetchProducts, type ProductApi } from "@/lib/api";
 import { useScroll, useTransform } from "framer-motion";
 import { Helmet } from "react-helmet-async";
 import OurServices from "@/components/home/OurServices";
@@ -26,7 +26,9 @@ type SiteAsset = {
 };
 
 const HERO_IMAGES_FALLBACK = [
-  "https://placehold.co/1920x800/0a0e1a/6366f1?text=RARE.NP",
+  "/images/landingpage3.webp",
+  "/images/landingpage4.webp",
+  "/images/home-campaign-editorial.webp",
 ];
 
 // For now we hardwire the Featured Collection + Explore visuals.
@@ -39,10 +41,77 @@ const FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT = [
 const EXPLORE_COLLECTION_IMAGE_DEFAULT = "/images/home-campaign-editorial.webp";
 
 const LIFESTYLE_IMAGES_FALLBACK = [
-  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/631740212_17994330563913773_2587884432133361953_n.jpg?stp=dst-jpegr_e35_tt6&_nc_cat=100&ig_cache_key=MzgzMDk2Nzc4NDI1NjQ2MTc0OA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTkyMC5oZHIuQzMifQ%3D%3D&_nc_ohc=WHAtzLrmUw0Q7kNvwGZrMhY&_nc_oc=AdkqVNju-2AEOO-fn-AAnUa0TPWgAGyG6Rki48MU9gwLm4w0V1IiaidBIpz8Zd0A4P0&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=291tdQM7tKQUnIlBz26x5g&_nc_ss=8&oh=00_AfxPGSDL-niDxVGt9ePHCQRPO21x9E_0NDNSrJUZGMF2LQ&oe=69BDA11A",
-  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/601064673_17988135542913773_395755096348511217_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc4OTUwOTgwMzg0NTQ5NDg5MA%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=MtEtHv7NcAgQ7kNvwHwy6sz&_nc_oc=Adk6Llzm6Ews4P_r2brHfIZkHXcWlljxFVulZ6urWQfATyMefNIIcH--KNV4K3wKeic&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_Afx0cuyYIHwRuTfg-fnqVA4Vb34Sq-t3VFdoTDT2eFosJQ&oe=69BD72BA",
-  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/589049070_17986476560913773_350565688129391821_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=102&ig_cache_key=Mzc3ODU3ODg0MjAwNTY0NTU5Nw%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTc5NS5zZHIuQzMifQ%3D%3D&_nc_ohc=xHR20j7rQNoQ7kNvwFO9t2s&_nc_oc=AdkrxPNMtgOtY3GmtQghJriONkvXttDjhc9pUDC7HWn0AJ9XWcEIc9u-2t9GjH5P49Y&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=KLgY0WiWUz90hQ3-kU0wjQ&_nc_ss=8&oh=00_AfykWLe3XijJQFThpyjPobnr0u1kWg-W6_FOpPeJUKu8tw&oe=69BD7C79",
-  "https://instagram.fktm8-1.fna.fbcdn.net/v/t51.82787-15/575594259_17984209781913773_7313822284254687486_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=103&ig_cache_key=Mzc2MTk2MjA2MjM5NTM4MDg3NQ%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6InhwaWRzLjE0NDB4MTgwMC5zZHIuQzMifQ%3D%3D&_nc_ohc=T1IjMD62vJ8Q7kNvwGnWT7G&_nc_oc=Adlo703DNg6YfjJOHEClflyLa1KUFDsIe6BF8UY8c_j-h5Gh5WWTKd6r1LJZOTQmMCs&_nc_ad=z-m&_nc_cid=5011&_nc_zt=23&_nc_ht=instagram.fktm8-1.fna&_nc_gid=WcwdBNgmsQH2FyyZK7KI_A&_nc_ss=8&oh=00_AfzGvCdkiyzlTeSs6sqFWTFyQBWQHdmxlrdGxpHsMEj5JA&oe=69BD8D26"
+  "/images/feature1.webp",
+  "/images/feature2.webp",
+  "/images/feature3.webp",
+  "/images/home-campaign-editorial.webp",
+];
+
+const PREVIEW_PRODUCTS: ProductApi[] = [
+  {
+    id: "canvas-preview-1",
+    name: "Editorial Trouser",
+    shortDetails: "Canvas preview sample",
+    description: "Canvas preview sample",
+    price: 12800,
+    imageUrl: "/images/feature1.webp",
+    galleryUrls: JSON.stringify(["/images/feature1.webp", "/images/home-campaign-editorial.webp"]),
+    category: "featured",
+    stock: 10,
+    colorOptions: JSON.stringify(["#1f1f1f", "#c7b9a6"]),
+    sizeOptions: JSON.stringify(["S", "M", "L"]),
+    saleActive: false,
+    homeFeatured: true,
+    homeFeaturedImageIndex: 0,
+  },
+  {
+    id: "canvas-preview-2",
+    name: "Structured Knit",
+    shortDetails: "Canvas preview sample",
+    description: "Canvas preview sample",
+    price: 11200,
+    imageUrl: "/images/feature2.webp",
+    galleryUrls: JSON.stringify(["/images/feature2.webp", "/images/landingpage4.webp"]),
+    category: "featured",
+    stock: 8,
+    colorOptions: JSON.stringify(["#292524", "#e7dfd1"]),
+    sizeOptions: JSON.stringify(["S", "M", "L"]),
+    saleActive: false,
+    homeFeatured: true,
+    homeFeaturedImageIndex: 0,
+  },
+  {
+    id: "canvas-preview-3",
+    name: "Maison Layer",
+    shortDetails: "Canvas preview sample",
+    description: "Canvas preview sample",
+    price: 14900,
+    imageUrl: "/images/feature3.webp",
+    galleryUrls: JSON.stringify(["/images/feature3.webp", "/images/landingpage3.webp"]),
+    category: "arrivals",
+    stock: 6,
+    colorOptions: JSON.stringify(["#171717", "#8a7861"]),
+    sizeOptions: JSON.stringify(["M", "L", "XL"]),
+    saleActive: false,
+    homeFeatured: true,
+    homeFeaturedImageIndex: 0,
+  },
+  {
+    id: "canvas-preview-4",
+    name: "Altitude Coat",
+    shortDetails: "Canvas preview sample",
+    description: "Canvas preview sample",
+    price: 16800,
+    imageUrl: "/images/landingpage3.webp",
+    galleryUrls: JSON.stringify(["/images/landingpage3.webp", "/images/landingpage4.webp"]),
+    category: "arrivals",
+    stock: 5,
+    colorOptions: JSON.stringify(["#0f0f10", "#d9d4cb"]),
+    sizeOptions: JSON.stringify(["M", "L"]),
+    saleActive: false,
+    homeFeatured: true,
+    homeFeaturedImageIndex: 0,
+  },
 ];
 
 export default function Home() {
@@ -70,42 +139,6 @@ export default function Home() {
 
   const { scrollYProgress } = useScroll();
   const yParallax = useTransform(scrollYProgress, [0, 1], [0, -200]);
-
-  const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
-    queryKey: ["products", "featured", { limit: 2 }],
-    queryFn: () => fetchProducts({ limit: 2 }),
-  });
-
-  const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
-    queryKey: ["products", "home-featured"],
-    queryFn: fetchHomeFeaturedProducts,
-  });
-
-  const normalizedNewArrivals = useMemo(() => {
-    return newArrivals.slice(0, 8);
-  }, [newArrivals]);
-
-  const {
-    data: heroAssets = [],
-    isLoading: heroLoading,
-  } = useQuery<SiteAsset[]>({
-    queryKey: ["siteAssets", "hero"],
-    queryFn: () =>
-      fetch("/api/site-assets/hero")
-        .then((r) => r.json())
-        .then((r) => r.data ?? []),
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const { data: campaignAssets = [] } = useQuery<SiteAsset[]>({
-    queryKey: ["siteAssets", "new_collection"],
-    queryFn: () =>
-      fetch("/api/site-assets/new_collection")
-        .then((r) => r.json())
-        .then((r) => r.data ?? []),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
     const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
@@ -120,6 +153,49 @@ export default function Home() {
     if (typeof window === "undefined") return null;
     return new URLSearchParams(window.location.search).get("canvasFontPreset");
   }, []);
+  const isCanvasPreview = previewTemplateId !== null;
+
+  const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
+    queryKey: ["products", "featured", { limit: 2 }],
+    queryFn: () => fetchProducts({ limit: 2 }),
+    enabled: !isCanvasPreview,
+  });
+
+  const { data: newArrivals = [], isSuccess: isNewArrivalsSuccess } = useQuery({
+    queryKey: ["products", "home-featured"],
+    queryFn: fetchHomeFeaturedProducts,
+    enabled: !isCanvasPreview,
+  });
+
+  const {
+    data: heroAssets = [],
+    isLoading: heroLoading,
+  } = useQuery<SiteAsset[]>({
+    queryKey: ["siteAssets", "hero"],
+    queryFn: () =>
+      fetch("/api/site-assets/hero")
+        .then((r) => r.json())
+        .then((r) => r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+    enabled: !isCanvasPreview,
+  });
+
+  const { data: campaignAssets = [] } = useQuery<SiteAsset[]>({
+    queryKey: ["siteAssets", "new_collection"],
+    queryFn: () =>
+      fetch("/api/site-assets/new_collection")
+        .then((r) => r.json())
+        .then((r) => r.data ?? []),
+    staleTime: 5 * 60 * 1000,
+    enabled: !isCanvasPreview,
+  });
+
+  const previewProducts = useMemo(() => PREVIEW_PRODUCTS, []);
+  const featuredProductsSource = isCanvasPreview ? previewProducts.slice(0, 2) : featuredProducts;
+  const newArrivalsSource = isCanvasPreview ? previewProducts : newArrivals;
+  const normalizedNewArrivals = useMemo(() => {
+    return newArrivalsSource.slice(0, 8);
+  }, [newArrivalsSource]);
 
   const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
@@ -169,7 +245,8 @@ export default function Home() {
     }
   }, []);
 
-  const showHeroVideo = isMobile && !videoFailed;
+  const showHeroVideo = !isCanvasPreview && isMobile && !videoFailed;
+  const heroLoadingState = isCanvasPreview ? false : heroLoading;
 
   // Hero images from CMS assets (fallback to placeholder)
   const heroImages = useMemo(() => {
@@ -187,30 +264,33 @@ export default function Home() {
 
   // Finish pre-loader only when data is ready (Hydration-First)
   useEffect(() => {
-    if (isFeaturedSuccess && isNewArrivalsSuccess && !pageConfigLoading) {
+    const canRevealPage = isCanvasPreview
+      ? !pageConfigLoading
+      : isFeaturedSuccess && isNewArrivalsSuccess && !pageConfigLoading;
+
+    if (canRevealPage) {
       // Small delay to ensure browser paint
       const timer = setTimeout(() => {
         if (typeof (window as any).finishLoading === 'function') {
           (window as any).finishLoading();
         }
-      }, 100);
+      }, isCanvasPreview ? 24 : 100);
       return () => clearTimeout(timer);
     }
-  }, [isFeaturedSuccess, isNewArrivalsSuccess, pageConfigLoading]);
+  }, [isCanvasPreview, isFeaturedSuccess, isNewArrivalsSuccess, pageConfigLoading]);
 
   // Preload static campaign images
   useEffect(() => {
-    heroImages.forEach((src: string) => {
+    const assetsToWarm = isCanvasPreview
+      ? [heroImages[0], campaignBannerImage].filter(Boolean)
+      : [...heroImages, ...lifestyleImages];
+
+    assetsToWarm.forEach((src: string) => {
+      if (!src || src.startsWith("http")) return;
       const img = new Image();
       img.src = src;
     });
-    lifestyleImages.forEach((src) => {
-      if (!src.startsWith('http')) {
-        const img = new Image();
-        img.src = src;
-      }
-    });
-  }, [heroImages, lifestyleImages]);
+  }, [campaignBannerImage, heroImages, isCanvasPreview, lifestyleImages]);
 
   const goToSlide = useCallback((index: number) => {
     if (isTransitioning) return;
@@ -348,7 +428,7 @@ export default function Home() {
   const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
 
   useEffect(() => {
-    if (!isLuxuryEditorialTemplate) return;
+    if (!isLuxuryEditorialTemplate || isCanvasPreview) return;
     const nodes = Array.from(document.querySelectorAll(".reveal, .p-card, .ed-cell"));
     if (!nodes.length) return;
 
@@ -374,7 +454,7 @@ export default function Home() {
 
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
-  }, [activeSections, isLuxuryEditorialTemplate]);
+  }, [activeSections, isCanvasPreview, isLuxuryEditorialTemplate]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -440,7 +520,7 @@ export default function Home() {
             key={section.id}
             heroImages={heroImages}
             heroIndex={heroIndex}
-            heroLoading={heroLoading}
+            heroLoading={heroLoadingState}
             videoFailed={videoFailed}
             isMobile={isMobile}
             isTransitioning={isTransitioning}
@@ -460,8 +540,8 @@ export default function Home() {
         return (
           <FeaturedCollection
             key={section.id}
-            featuredProducts={featuredProducts ?? []}
-            isFeaturedSuccess={isFeaturedSuccess}
+            featuredProducts={featuredProductsSource ?? []}
+            isFeaturedSuccess={isCanvasPreview || isFeaturedSuccess}
             featureCollectionImages={lifestyleImages}
             carouselIndex={carouselIndex}
             isTransitioning={isTransitioning}
@@ -500,7 +580,7 @@ export default function Home() {
           <NewArrivalsSection
             key={section.id}
             newArrivals={normalizedNewArrivals}
-            isNewArrivalsSuccess={isNewArrivalsSuccess}
+            isNewArrivalsSuccess={isCanvasPreview || isNewArrivalsSuccess}
             config={section.config}
           />
         );
@@ -532,7 +612,7 @@ export default function Home() {
       }}
     >
       {/* Scroll Progress Indicator - Minimal premium line at top */}
-      <ScrollProgress />
+      {isCanvasPreview ? null : <ScrollProgress />}
       <Helmet>
         <title>Rare Atelier | Home - Premium Streetwear</title>
         <meta name="description" content="Welcome to Rare Atelier. Explore our premium streetwear and minimal luxury collection. Authentic style, timeless designs." />

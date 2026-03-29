@@ -309,10 +309,8 @@ export default function AdminLayout({
             isVisuallyExpanded ? "opacity-100 max-h-24" : "max-h-0 overflow-hidden border-transparent px-0 py-0 opacity-0",
           )}
         >
-          <a
+          <Link
             href="/"
-            target="_blank"
-            rel="noopener noreferrer"
             className="flex items-center justify-center w-full rounded-lg p-2 hover:bg-muted/40 transition-colors"
             title="Open Home Page"
           >
@@ -321,7 +319,7 @@ export default function AdminLayout({
               alt="RARE.NP"
               className="h-10 w-auto object-contain dark:brightness-0 dark:invert"
             />
-          </a>
+          </Link>
         </SidebarHeader>
 
         <SidebarContent className="sidebar-scrollbar p-4">

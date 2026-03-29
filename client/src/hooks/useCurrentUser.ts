@@ -18,7 +18,7 @@ interface MeResponse {
 // Auth query key for consistent cache management
 export const AUTH_QUERY_KEY = ["/api/auth/me"] as const;
 
-export function useCurrentUser() {
+export function useCurrentUser(options?: { enabled?: boolean }) {
   const { data, isLoading } = useQuery<MeResponse | null>({
     queryKey: AUTH_QUERY_KEY,
     queryFn: async () => {
@@ -35,6 +35,7 @@ export function useCurrentUser() {
     gcTime: 1000 * 60 * 60, // 1 hour - keep in cache even if unused
     refetchOnWindowFocus: true, // Refetch when user returns to tab
     refetchOnReconnect: true, // Refetch on network reconnect
+    enabled: options?.enabled ?? true,
   });
 
   const user = data?.success ? data.data ?? null : null;

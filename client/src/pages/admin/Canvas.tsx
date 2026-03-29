@@ -93,6 +93,7 @@ const TEMPLATE_PREVIEW_FALLBACKS: Record<string, string> = {
   "clean-minimal": "/images/landingpage4.webp",
   "editorial-grid": "/images/landingpage3.webp",
 };
+const HIDDEN_CANVAS_TEMPLATE_SLUGS = new Set(["nikeshdesign"]);
 
 const CANVAS_TAB_ITEMS = [
   {
@@ -556,18 +557,35 @@ export default function Canvas() {
     },
   });
 
-  const premiumTemplates = useMemo(
-    () => templates.filter((template) => template.tier === "premium"),
-    [templates],
-  );
-  const freeTemplates = useMemo(
-    () => templates.filter((template) => template.tier !== "premium"),
+  const visibleTemplates = useMemo(
+    () => templates.filter((template) => !HIDDEN_CANVAS_TEMPLATE_SLUGS.has(template.slug)),
     [templates],
   );
 
+  useEffect(() => {
+    if (selectedTemplateId) return;
+    if (!visibleTemplates.length) return;
+    const activeTemplate = templates.find(
+      (template) =>
+        template.id === (settings?.activeTemplate?.id ?? settings?.activeTemplateId ?? null),
+    );
+    if (activeTemplate && HIDDEN_CANVAS_TEMPLATE_SLUGS.has(activeTemplate.slug)) {
+      setSelectedTemplateId(visibleTemplates[0].id);
+    }
+  }, [selectedTemplateId, settings?.activeTemplate?.id, settings?.activeTemplateId, templates, visibleTemplates]);
+
+  const premiumTemplates = useMemo(
+    () => visibleTemplates.filter((template) => template.tier === "premium"),
+    [visibleTemplates],
+  );
+  const freeTemplates = useMemo(
+    () => visibleTemplates.filter((template) => template.tier !== "premium"),
+    [visibleTemplates],
+  );
+
   const selectedTemplate = useMemo(
-    () => templates.find((template) => template.id === effectiveTemplateId) ?? null,
-    [templates, effectiveTemplateId],
+    () => visibleTemplates.find((template) => template.id === effectiveTemplateId) ?? null,
+    [visibleTemplates, effectiveTemplateId],
   );
   const sortedSections = useMemo(
     () => sections.slice().sort((a, b) => a.orderIndex - b.orderIndex),
@@ -914,14 +932,15 @@ export default function Canvas() {
     sectionMutation.mutate({ sectionId: swapTarget.id, payload: { orderIndex: section.orderIndex } });
   };
 
-  const previewTemplateId = effectiveTemplateId ?? settings?.activeTemplateId ?? null;
-  const previewUrl =
+  const previewTemplateId = effectiveTemplateId ?? visibleTemplates[0]?.id ?? settings?.activeTemplateId ?? null;
+  const buildPreviewUrl = (templateId: number) =>
     typeof window !== "undefined"
       ? `${window.location.origin}/?${new URLSearchParams(
           Object.fromEntries(
             [
-              previewTemplateId ? ["canvasPreviewTemplateId", String(previewTemplateId)] : null,
+              ["canvasPreviewTemplateId", String(templateId)],
               previewFontPreset ? ["canvasFontPreset", previewFontPreset] : null,
+              previewKey ? ["canvasPreviewRefresh", String(previewKey)] : null,
             ].filter(Boolean) as Array<[string, string]>,
           ),
         ).toString()}`
@@ -1350,7 +1369,7 @@ export default function Canvas() {
     );
   };
 
-  const templatesForMove = templates.filter((template) => template.id !== effectiveTemplateId);
+  const templatesForMove = visibleTemplates.filter((template) => template.id !== effectiveTemplateId);
 
   const sectionEditorTitle =
     selectedSection?.sectionType === "hero"
@@ -1837,9 +1856,18 @@ export default function Canvas() {
                         return (
                           <Card
                             key={template.id}
-                            className={`overflow-hidden rounded-2xl border transition-all ${
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedTemplateId(template.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedTemplateId(template.id);
+                              }
+                            }}
+                            className={`cursor-pointer overflow-hidden rounded-2xl border transition-all ${
                               isActive ? "border-emerald-500 shadow-emerald-100 dark:shadow-none" : "border-border/50 dark:border-white/[0.06]"
-                            } ${isSelected ? "ring-2 ring-fuchsia-300 dark:ring-fuchsia-700" : ""}`}
+                            } ${isSelected ? "ring-2 ring-fuchsia-300 dark:ring-fuchsia-700" : ""} hover:-translate-y-0.5 hover:shadow-sm dark:hover:shadow-none`}
                           >
                             {renderTemplatePreview(template)}
                             <CardContent className="space-y-3 p-4">
@@ -1873,7 +1901,8 @@ export default function Canvas() {
                                 </Button>
                                 <Button
                                   className="flex-1 rounded-xl"
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     setSelectedTemplateId(template.id);
                                     activateMutation.mutate(template.id);
                                   }}
@@ -1901,9 +1930,18 @@ export default function Canvas() {
                         return (
                           <Card
                             key={template.id}
-                            className={`overflow-hidden rounded-2xl border transition-all ${
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedTemplateId(template.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                setSelectedTemplateId(template.id);
+                              }
+                            }}
+                            className={`cursor-pointer overflow-hidden rounded-2xl border transition-all ${
                               isActive ? "border-emerald-500" : "border-border/50 dark:border-white/[0.06]"
-                            } ${isSelected ? "ring-2 ring-sky-300 dark:ring-sky-700" : ""}`}
+                            } ${isSelected ? "ring-2 ring-sky-300 dark:ring-sky-700" : ""} hover:-translate-y-0.5 hover:shadow-sm dark:hover:shadow-none`}
                           >
                             {renderTemplatePreview(template)}
                             <CardContent className="space-y-3 p-4">
@@ -1927,7 +1965,8 @@ export default function Canvas() {
                                 </Button>
                                 <Button
                                   className="flex-1 rounded-xl"
-                                  onClick={() => {
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     setSelectedTemplateId(template.id);
                                     activateMutation.mutate(template.id);
                                   }}
@@ -2217,7 +2256,7 @@ export default function Canvas() {
               <div>
                 <CardTitle>Full Page Preview</CardTitle>
                 <CardDescription>
-                  {selectedTemplate?.name ?? settings?.activeTemplate?.name ?? "Homepage preview"}
+                  {selectedTemplate?.name ?? "Homepage preview"}
                 </CardDescription>
               </div>
               <Button
@@ -2231,17 +2270,28 @@ export default function Canvas() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="overflow-hidden rounded-3xl border border-border/40 bg-white dark:border-white/[0.06] dark:bg-neutral-950">
-                <div className="origin-top-left" style={{ transform: "scale(0.6)", width: "166.6667%", height: "calc(100vh / 0.6)" }}>
-                  <iframe
-                    key={previewKey}
-                    src={previewUrl}
-                    title="Canvas full-page preview"
-                    className="h-full w-full border-0"
-                  />
+                <div
+                  className="relative origin-top-left"
+                  style={{ transform: "scale(0.6)", width: "166.6667%", height: "calc(100vh / 0.6)" }}
+                >
+                  {visibleTemplates.map((template) => (
+                    <iframe
+                      key={`${template.id}-${previewKey}`}
+                      src={buildPreviewUrl(template.id)}
+                      title={`Canvas preview — ${template.name}`}
+                      loading="eager"
+                      className={cn(
+                        "absolute inset-0 h-full w-full border-0 transition-opacity duration-200",
+                        template.id === previewTemplateId
+                          ? "opacity-100"
+                          : "pointer-events-none opacity-0",
+                      )}
+                    />
+                  ))}
                 </div>
               </div>
               <p className="text-sm text-muted-foreground">
-                Templates are the only place with full-page preview. Select a layout here, compare it, then publish when it feels right.
+                Templates are preloaded here for faster switching, so you can compare layouts without waiting on a full refresh every time.
               </p>
             </CardContent>
           </Card>

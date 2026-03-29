@@ -164,6 +164,39 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const ensureTemplateSections = <
+    T extends {
+      sectionType: string;
+      orderIndex: number;
+      isVisible?: boolean;
+      label?: string | null;
+      config?: unknown;
+      templateId?: number;
+      id?: number;
+    },
+  >(
+    template: { id?: number; slug?: string | null } | null | undefined,
+    sections: T[],
+  ): T[] => {
+    if (template?.slug !== "rare-dark-luxury") return sections;
+    if (sections.some((section) => section.sectionType === "hero")) return sections;
+
+    const fallbackHero = {
+      templateId: template.id ?? 0,
+      id: -1,
+      sectionType: "hero",
+      label: "Hero",
+      orderIndex: 1,
+      isVisible: true,
+      config: { variant: "dark-cinematic" },
+    } as T;
+
+    return [fallbackHero, ...sections.map((section) => ({
+      ...section,
+      orderIndex: Math.max(2, section.orderIndex + 1),
+    }))];
+  };
+
   // Security Logging Middleware
   app.use(async (req, res, next) => {
     const start = Date.now();
@@ -341,10 +374,12 @@ export async function registerRoutes(
         .where(eq(pageSections.templateId, activeId))
         .orderBy(pageSections.orderIndex);
 
+      const normalizedSections = ensureTemplateSections(template[0] ?? null, sections);
+
       res.set("Cache-Control", "public, max-age=30");
       return res.json({
         template: template[0] ?? null,
-        sections: sections.filter((s) => s.isVisible),
+        sections: normalizedSections.filter((s) => s.isVisible),
       });
     } catch (err) {
       console.error("Error in GET /api/public/page-config", err);
@@ -664,12 +699,17 @@ export async function registerRoutes(
     try {
       const rawId = req.params.id;
       const id = Array.isArray(rawId) ? rawId[0] : rawId;
+      const [template] = await db
+        .select()
+        .from(pageTemplates)
+        .where(eq(pageTemplates.id, parseInt(id)))
+        .limit(1);
       const sections = await db
         .select()
         .from(pageSections)
         .where(eq(pageSections.templateId, parseInt(id)))
         .orderBy(pageSections.orderIndex);
-      return res.json(sections);
+      return res.json(ensureTemplateSections(template ?? null, sections));
     } catch (err) {
       console.error("Error in GET /api/admin/canvas/templates/:id/sections", err);
       return res.status(500).json({ error: "Failed to load sections" });

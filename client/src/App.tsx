@@ -166,7 +166,7 @@ function preloadRouteData(path: string): Promise<unknown> {
 }
 
 async function preloadRouteBeforeNavigate(path: string): Promise<void> {
-  const PRELOAD_TIMEOUT_MS = 2500;
+  const PRELOAD_TIMEOUT_MS = 320;
   const preloadTasks = Promise.allSettled([
     preloadRouteModule(path),
     preloadRouteData(path),
@@ -187,7 +187,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
       // Small timeout to allow the layout to fully render first
       setTimeout(() => {
         (window as any).finishLoading();
-      }, 100);
+      }, 40);
     }
   }, []);
 
@@ -707,6 +707,11 @@ function ConnectivityMonitor() {
 
 function App() {
   const [routeTransitioning, setRouteTransitioning] = useState(false);
+  const isCanvasPreview =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("canvasPreviewTemplateId");
+  const initialPath =
+    typeof window !== "undefined" ? window.location.pathname : "/";
 
   const aroundNav = useCallback(
     (
@@ -714,10 +719,15 @@ function App() {
       to: string,
       options?: { replace?: boolean; state?: unknown },
     ) => {
-      setRouteTransitioning(true);
+      const LOADER_DELAY_MS = 120;
+      const loaderTimer = window.setTimeout(() => {
+        setRouteTransitioning(true);
+      }, LOADER_DELAY_MS);
+
       void preloadRouteBeforeNavigate(to)
         .catch(() => undefined)
         .finally(() => {
+          window.clearTimeout(loaderTimer);
           startTransition(() => {
             navigate(to, options);
           });
@@ -727,20 +737,31 @@ function App() {
   );
 
   useEffect(() => {
+    if (isCanvasPreview) {
+      return;
+    }
+
     // Critical warm-up for first Home -> Shop navigation
-    void preloadRouteBeforeNavigate("/products");
+    if (!initialPath.startsWith("/admin")) {
+      void preloadRouteBeforeNavigate("/products");
+    }
 
     const warmup = () => {
+      if (initialPath.startsWith("/admin")) {
+        void loadAdminDashboardPage();
+        void loadAdminProductsPage();
+        void loadAdminInventoryPage();
+        void loadAdminOrdersPage();
+        void loadAdminProfilePage();
+        return;
+      }
+
       void loadProductsPage();
       void loadProductDetailPage();
       void loadNewCollectionPage();
       void loadContactPage();
       void loadCartPage();
       void loadCheckoutPage();
-      void loadAdminDashboardPage();
-      void loadAdminProductsPage();
-      void loadAdminInventoryPage();
-      void loadAdminOrdersPage();
     };
 
     const idleCallback = (globalThis as { requestIdleCallback?: (cb: () => void) => number })
@@ -754,9 +775,9 @@ function App() {
       return () => cancelIdleCallback?.(id);
     }
 
-    const timeout = globalThis.setTimeout(warmup, 500);
+    const timeout = globalThis.setTimeout(warmup, initialPath.startsWith("/admin") ? 900 : 1200);
     return () => globalThis.clearTimeout(timeout);
-  }, []);
+  }, [initialPath, isCanvasPreview]);
 
   return (
     <HelmetProvider>

@@ -31,7 +31,7 @@ export default function Navbar() {
   const cartItemsCount = useCartStore((state) =>
     state.items.reduce((acc, item) => acc + item.quantity, 0),
   );
-  const { user, isAuthenticated } = useCurrentUser();
+  const { user, isAuthenticated } = useCurrentUser({ enabled: previewTemplateId === null });
   const queryClient = useQueryClient();
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
@@ -88,6 +88,7 @@ export default function Navbar() {
       setIsScrolled(false);
       setHideAnnouncement(false);
       setIsNavHidden(false);
+      lastScrollYRef.current = 0;
       return;
     }
 
@@ -102,7 +103,18 @@ export default function Navbar() {
       setHideAnnouncement(y > announceHeight);
 
       if (isMaisonNocturne) {
-        setIsNavHidden(false);
+        const previousY = lastScrollYRef.current;
+        const delta = y - previousY;
+        const nearTop = y <= 40;
+
+        if (nearTop) {
+          setIsNavHidden(false);
+        } else if (delta > 6) {
+          setIsNavHidden(true);
+        } else if (delta < -6) {
+          setIsNavHidden(false);
+        }
+
         lastScrollYRef.current = y;
       }
     };
