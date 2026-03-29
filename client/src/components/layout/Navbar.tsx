@@ -146,6 +146,33 @@ export default function Navbar() {
     { name: "Atelier", href: "/atelier" },
   ];
 
+  const getGlassChrome = (mode: "light" | "dark", options?: { active?: boolean }) => {
+    if (options?.active === false) {
+      return {
+        background: "transparent",
+        backdropFilter: "none",
+        borderColor: "transparent",
+        boxShadow: "none",
+      };
+    }
+
+    return mode === "light"
+      ? {
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.76) 0%, rgba(255,255,255,0.56) 48%, rgba(248,248,248,0.46) 100%)",
+          backdropFilter: "blur(18px) saturate(165%)",
+          borderColor: "rgba(255,255,255,0.62)",
+          boxShadow: "0 18px 42px rgba(15,23,42,0.09), inset 0 1px 0 rgba(255,255,255,0.72)",
+        }
+      : {
+          background:
+            "linear-gradient(135deg, rgba(10,10,12,0.72) 0%, rgba(16,16,20,0.52) 52%, rgba(12,12,14,0.42) 100%)",
+          backdropFilter: "blur(20px) saturate(175%)",
+          borderColor: "rgba(255,255,255,0.14)",
+          boxShadow: "0 22px 48px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)",
+        };
+  };
+
   if (isLuxuryEditorialHome) {
     const announcementItems = [...ANNOUNCEMENT_ITEMS, ...ANNOUNCEMENT_ITEMS];
     const announceHeight = announceRef.current?.offsetHeight ?? 28;
@@ -155,33 +182,14 @@ export default function Navbar() {
     const isTransparentState = isMaisonNocturne && isHomeRoute && !isScrolled;
     const shouldUseChrome = !isTransparentState;
     const navLinkColor = isTransparentState || isMaisonLight ? "#111111" : "rgba(255,255,255,0.96)";
-    const navChrome = shouldUseChrome
-      ? isMaisonLight
-        ? {
-            background: "rgba(255, 255, 255, 0.78)",
-            backdropFilter: "blur(10px) saturate(118%)",
-            borderColor: "rgba(24,20,17,0.08)",
-            boxShadow: "0 12px 34px rgba(20, 20, 20, 0.08)",
-          }
-        : {
-            background: "rgba(10, 10, 10, 0.78)",
-            backdropFilter: "blur(10px) saturate(132%)",
-            borderColor: "rgba(255,255,255,0.1)",
-            boxShadow: "0 12px 34px rgba(0,0,0,0.26)",
-          }
-      : {
-          background: "transparent",
-          backdropFilter: "none",
-          borderColor: "transparent",
-          boxShadow: "none",
-        };
+    const navChrome = getGlassChrome(isMaisonLight ? "light" : "dark", { active: shouldUseChrome });
     const logoFilter = isTransparentState || isMaisonLight ? "brightness(0)" : "brightness(0) invert(1)";
     const navUnderlineColor = isTransparentState || isMaisonLight ? "#111111" : "#ffffff";
     const navTextShadow = isTransparentState
-      ? "0 1px 12px rgba(0,0,0,0.18)"
+      ? "0 1px 10px rgba(0,0,0,0.14)"
       : isMaisonLight
         ? "none"
-        : "0 0 12px rgba(255,255,255,0.32)";
+        : "0 0 14px rgba(255,255,255,0.3)";
     return (
       <>
         {showTopAnnouncement ? (
@@ -257,7 +265,7 @@ export default function Navbar() {
                       className="absolute bottom-0 left-0 h-px w-full origin-left transition-transform duration-300"
                       style={{
                         background: navUnderlineColor,
-                        boxShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.45)" : "none",
+                        boxShadow: !isMaisonLight && shouldUseChrome ? "0 0 12px rgba(255,255,255,0.34)" : "none",
                         transform:
                           location === item.href || hoveredNavHref === item.href
                             ? "scaleX(1)"
@@ -402,9 +410,11 @@ export default function Navbar() {
                 exit={{ opacity: 0, y: -12 }}
                 className="border-t px-5 py-5 lg:hidden"
                 style={{
-                  background: isMaisonLight ? "rgba(247,243,236,0.92)" : "rgba(12,11,9,0.96)",
-                  backdropFilter: isMaisonLight ? "blur(18px) saturate(135%)" : "blur(24px) saturate(180%)",
-                  borderColor: isMaisonLight ? "rgba(24,20,17,0.08)" : "var(--border)",
+                  background: isMaisonLight
+                    ? "linear-gradient(135deg, rgba(250,247,243,0.9) 0%, rgba(255,255,255,0.78) 100%)"
+                    : "linear-gradient(135deg, rgba(12,11,9,0.92) 0%, rgba(18,18,20,0.82) 100%)",
+                  backdropFilter: isMaisonLight ? "blur(20px) saturate(150%)" : "blur(26px) saturate(185%)",
+                  borderColor: isMaisonLight ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.08)",
                 }}
               >
                 <div className="mb-4 sm:hidden">
@@ -472,27 +482,9 @@ export default function Navbar() {
     );
   }
 
-  const defaultNavChrome = !isLuxuryEditorialHome && location !== "/"
-    ? {
-        background: isScrolled
-          ? theme === "dark"
-            ? "rgba(10,10,10,0.42)"
-            : "rgba(255,255,255,0.5)"
-          : "rgba(255,255,255,0.02)",
-        backdropFilter: isScrolled ? "blur(1px)" : "none",
-        borderColor: isScrolled
-          ? theme === "dark"
-            ? "rgba(255,255,255,0.08)"
-            : "rgba(17,17,17,0.06)"
-          : "transparent",
-        boxShadow: isScrolled ? "0 10px 24px rgba(0,0,0,0.05)" : "none",
-      }
-    : {
-        background: theme === "dark" ? "rgba(10,10,10,0.7)" : "rgba(255,255,255,0.9)",
-        backdropFilter: theme === "dark" ? "blur(10px)" : "blur(8px)",
-        borderColor: "transparent",
-        boxShadow: "none",
-      };
+  const defaultNavChrome = location === "/" && !isScrolled
+    ? getGlassChrome(theme === "dark" ? "dark" : "light", { active: false })
+    : getGlassChrome(theme === "dark" ? "dark" : "light");
 
   return (
     <header
@@ -576,7 +568,7 @@ export default function Navbar() {
 
             <button
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-              className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 text-zinc-950 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+              className="w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 text-zinc-950 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:text-white dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
             >
               {theme === "light" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
@@ -586,7 +578,7 @@ export default function Navbar() {
                 type="button"
                 title="Admin Dashboard"
                 onClick={() => setLocation(dashboardPath)}
-                className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10"
+                className="w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
               >
                 <LayoutDashboard className="w-5 h-5 text-emerald-500" />
               </button>
@@ -595,7 +587,7 @@ export default function Navbar() {
             {cartItemsCount > 0 && (
               <Link
                 href="/cart"
-                className="w-10 h-10 flex items-center justify-center rounded-full border border-black/10 bg-white/70 transition-all duration-300 hover:scale-105 hover:bg-white dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10 relative"
+                className="relative w-10 h-10 flex items-center justify-center rounded-full border border-white/35 bg-white/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/55 dark:border-white/12 dark:bg-white/[0.08] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] dark:hover:bg-white/[0.12]"
               >
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground rounded-full min-w-4 h-4 px-1 flex items-center justify-center text-[10px] font-bold">

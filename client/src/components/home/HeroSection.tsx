@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
 import { OptimizedImage } from "@/components/ui/OptimizedImage";
-import { useThemeStore } from "@/store/theme";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
 
 interface HeroSectionProps {
@@ -60,8 +59,6 @@ const DEFAULT_NIKESH_SLIDES = [
 ];
 
 function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; config?: Record<string, any> }) {
-  const theme = useThemeStore((state) => state.theme);
-  const isDarkTheme = theme === "dark";
   const slides = useMemo(() => {
     const visualImageSet = DEFAULT_MAISON_HERO_IMAGES.length > 0 ? DEFAULT_MAISON_HERO_IMAGES : heroImages;
     const sourceSlides = Array.isArray(config?.slides) && config.slides.length > 0
@@ -88,32 +85,19 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
   );
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef(0);
-  const progressTrackColor = isDarkTheme ? "rgba(255,255,255,0.14)" : "rgba(17,17,17,0.12)";
-  const progressFillColor = isDarkTheme ? "#ffffff" : "#111111";
-  const primaryButtonStyle = isDarkTheme
-    ? {
-        background: "#ffffff",
-        color: "#111111",
-        border: "1px solid rgba(255,255,255,0.92)",
-        boxShadow: "0 14px 36px rgba(0,0,0,0.24)",
-      }
-    : {
-        background: "#111111",
-        color: "#ffffff",
-        border: "1px solid rgba(17,17,17,0.96)",
-        boxShadow: "0 14px 36px rgba(17,17,17,0.16)",
-      };
-  const secondaryButtonStyle = isDarkTheme
-    ? {
-        background: "rgba(255,255,255,0.06)",
-        color: "#ffffff",
-        border: "1px solid rgba(255,255,255,0.22)",
-      }
-    : {
-        background: "rgba(255,255,255,0.58)",
-        color: "#111111",
-        border: "1px solid rgba(17,17,17,0.14)",
-      };
+  const progressTrackColor = "rgba(255,255,255,0.16)";
+  const progressFillColor = "#ffffff";
+  const primaryButtonStyle = {
+    background: "#ffffff",
+    color: "#111111",
+    border: "1px solid rgba(255,255,255,0.92)",
+    boxShadow: "0 14px 36px rgba(0,0,0,0.24)",
+  };
+  const secondaryButtonStyle = {
+    background: "rgba(255,255,255,0.06)",
+    color: "#ffffff",
+    border: "1px solid rgba(255,255,255,0.22)",
+  };
 
   useEffect(() => {
     if (slides.length <= 1) return;
@@ -132,7 +116,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
       className="relative w-full overflow-hidden"
       style={{
         minHeight: "100dvh",
-        background: "var(--bg)",
+        background: "#0b0b0c",
       }}
     >
       <div className="absolute inset-x-0 bottom-0 z-30 flex gap-0">
@@ -208,9 +192,8 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: isDarkTheme
-                      ? "linear-gradient(180deg, rgba(14,12,10,0.06) 0%, rgba(14,12,10,0.24) 100%), linear-gradient(90deg, rgba(14,12,10,0.26) 0%, rgba(14,12,10,0.08) 35%, rgba(14,12,10,0.0) 100%), linear-gradient(135deg, rgba(201,169,110,0.12) 0%, transparent 48%)"
-                      : "linear-gradient(180deg, rgba(243,238,230,0.03) 0%, rgba(243,238,230,0.1) 100%), linear-gradient(90deg, rgba(243,238,230,0.18) 0%, rgba(243,238,230,0.06) 34%, rgba(243,238,230,0.0) 100%)",
+                    background:
+                      "linear-gradient(180deg, rgba(14,12,10,0.08) 0%, rgba(14,12,10,0.3) 100%), linear-gradient(90deg, rgba(14,12,10,0.28) 0%, rgba(14,12,10,0.1) 35%, rgba(14,12,10,0.0) 100%), linear-gradient(135deg, rgba(201,169,110,0.08) 0%, transparent 48%)",
                   }}
                 />
               </div>
@@ -223,7 +206,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                       fontFamily: "var(--font-mono)",
                       fontSize: "9px",
                       letterSpacing: "0.28em",
-                      color: isDarkTheme ? "var(--gold)" : "rgba(34, 25, 18, 0.82)",
+                      color: "var(--gold)",
                     }}
                   >
                     <span className="block h-px w-7 bg-[var(--gold)]" />
@@ -235,8 +218,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                       fontFamily: "var(--font-display)",
                       fontWeight: 900,
                       fontSize: "clamp(52px, 11vw, 108px)",
-                      color: isDarkTheme ? "var(--fg)" : "#181411",
-                      textShadow: isDarkTheme ? "none" : "0 1px 18px rgba(243,238,230,0.18)",
+                      color: "#ffffff",
                     }}
                   >
                     {slide.headline}
@@ -247,7 +229,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                       fontFamily: "var(--font-mono)",
                       fontSize: "10.5px",
                       letterSpacing: "0.22em",
-                      color: isDarkTheme ? "var(--fg-dim)" : "rgba(24,20,17,0.72)",
+                      color: "rgba(232,228,219,0.8)",
                     }}
                   >
                     {slide.eyebrow}
@@ -256,7 +238,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                     className="mt-4 max-w-xl text-sm sm:text-base"
                     style={{
                       fontFamily: "var(--font-body)",
-                      color: isDarkTheme ? "rgba(232,228,219,0.72)" : "rgba(24,20,17,0.78)",
+                      color: "rgba(232,228,219,0.74)",
                     }}
                   >
                     {slide.body}
@@ -285,7 +267,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
         })}
       </div>
 
-      <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.26em] text-[var(--fg-dim)]">
+      <div className="absolute bottom-8 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2 text-[9px] uppercase tracking-[0.26em] text-white/70">
         <span style={{ fontFamily: "var(--font-mono)" }}>Scroll</span>
         <span className="rare-scroll-line block h-8 w-px" style={{ background: progressFillColor }} />
       </div>
@@ -294,9 +276,9 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
         className="absolute bottom-10 right-6 z-30 rounded-full px-3 py-2 text-[10px] uppercase tracking-[0.3em] sm:right-8 lg:right-12"
         style={{
           fontFamily: "var(--font-mono)",
-          color: isDarkTheme ? "#ffffff" : "#111111",
-          background: isDarkTheme ? "rgba(0,0,0,0.36)" : "rgba(255,255,255,0.58)",
-          border: isDarkTheme ? "1px solid rgba(255,255,255,0.12)" : "1px solid rgba(17,17,17,0.08)",
+          color: "#ffffff",
+          background: "rgba(0,0,0,0.32)",
+          border: "1px solid rgba(255,255,255,0.12)",
           backdropFilter: "blur(8px)",
         }}
       >
@@ -307,8 +289,6 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
 }
 
 function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config?: Record<string, any> }) {
-  const theme = useThemeStore((state) => state.theme);
-  const isDarkTheme = theme === "dark";
   const slides = useMemo(() => {
     const sourceSlides = Array.isArray(config?.slides) && config.slides.length > 0
       ? config.slides
@@ -399,7 +379,7 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
               <div className="absolute inset-0 overflow-hidden">
                 <div
                   className={`absolute inset-0 transition-transform duration-[7000ms] ease-out ${isActive ? "scale-100" : "scale-[1.08]"}`}
-                  style={{ filter: isDarkTheme ? "brightness(0.42)" : "brightness(0.82) saturate(0.96)" }}
+                  style={{ filter: "brightness(0.52) saturate(0.94)" }}
                 >
                   <OptimizedImage
                     src={slide.image}
@@ -411,9 +391,8 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: isDarkTheme
-                      ? "linear-gradient(180deg, rgba(12,11,9,0.15) 0%, rgba(12,11,9,0.86) 92%), linear-gradient(90deg, rgba(12,11,9,0.76) 0%, rgba(12,11,9,0.24) 45%, rgba(12,11,9,0.08) 100%), linear-gradient(135deg, rgba(201,169,110,0.18) 0%, transparent 45%)"
-                      : "linear-gradient(180deg, rgba(243,238,230,0.1) 0%, rgba(243,238,230,0.34) 100%), linear-gradient(90deg, rgba(243,238,230,0.82) 0%, rgba(243,238,230,0.26) 40%, rgba(243,238,230,0.04) 100%), linear-gradient(135deg, rgba(185,147,86,0.12) 0%, transparent 48%)",
+                    background:
+                      "linear-gradient(180deg, rgba(12,11,9,0.16) 0%, rgba(12,11,9,0.82) 92%), linear-gradient(90deg, rgba(12,11,9,0.72) 0%, rgba(12,11,9,0.24) 45%, rgba(12,11,9,0.08) 100%), linear-gradient(135deg, rgba(201,169,110,0.14) 0%, transparent 45%)",
                   }}
                 />
               </div>
@@ -572,7 +551,7 @@ export default function HeroSection({
           </motion.div>
         </AnimatePresence>
       )}
-      <div className="absolute inset-0 bg-black/0 dark:bg-black/40 transition-colors duration-700 pointer-events-none" />
+      <div className="absolute inset-0 bg-black/24 pointer-events-none" />
 
       <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
         <div className="flex items-center gap-6 md:gap-12 pl-2">

@@ -3214,28 +3214,20 @@ export async function registerRoutes(
 
         const buffer = Buffer.from(matches[2], "base64");
 
-        // Preserve the original orientation and aspect ratio while keeping the result crisp enough
-        // for profile cards, popovers, and larger admin surfaces.
-        let finalBuffer = buffer;
-        let fileExtension = "webp";
-        try {
-          const sharp = (await import("sharp")).default;
-          finalBuffer = await sharp(buffer)
-            .rotate()
-            .resize(1440, 1800, { fit: "inside", withoutEnlargement: true })
-            .webp({ quality: 96, effort: 6, smartSubsample: true })
-            .toBuffer();
-        } catch (error) {
-          console.warn("Avatar resize failed (using original):", error);
-          fileExtension = matches[1] === "jpeg" ? "jpg" : matches[1];
-        }
+        // Keep avatar uploads consistent with the rest of the admin image pipeline:
+        // normalize orientation, constrain dimensions, and always store as WebP.
+        const finalBuffer = await sharp(buffer)
+          .rotate()
+          .resize(1440, 1800, { fit: "inside", withoutEnlargement: true })
+          .webp({ quality: 96, effort: 6, smartSubsample: true })
+          .toBuffer();
 
         const fs = await import("fs");
         const path = await import("path");
         const avatarDir = path.join(UPLOADS_DIR, "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
 
-        const filename = `avatar-${user.id}-${Date.now()}.${fileExtension}`;
+        const filename = `avatar-${user.id}-${Date.now()}.webp`;
         const filepath = path.join(avatarDir, filename);
         fs.writeFileSync(filepath, finalBuffer);
 
