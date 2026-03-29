@@ -94,13 +94,7 @@ export default function Navbar() {
     const onScroll = () => {
       const y = window.scrollY;
       if (isMaisonNocturne) {
-        const hero = document.querySelector<HTMLElement>("#hero");
-        if (hero) {
-          const triggerPoint = hero.offsetTop + hero.offsetHeight * 0.5;
-          setIsScrolled(y >= Math.max(80, triggerPoint));
-        } else {
-          setIsScrolled(false);
-        }
+        setIsScrolled(y > 24);
       } else {
         setIsScrolled(y > 60);
       }
@@ -108,14 +102,7 @@ export default function Navbar() {
       setHideAnnouncement(y > announceHeight);
 
       if (isMaisonNocturne) {
-        const lastY = lastScrollYRef.current;
-        if (y <= 24) {
-          setIsNavHidden(false);
-        } else if (y > lastY + 6) {
-          setIsNavHidden(true);
-        } else if (y < lastY - 6) {
-          setIsNavHidden(false);
-        }
+        setIsNavHidden(false);
         lastScrollYRef.current = y;
       }
     };
@@ -165,13 +152,9 @@ export default function Navbar() {
     const showTopAnnouncement = !isMaisonNocturne;
     const isMaisonLight = isMaisonNocturne && theme !== "dark";
     const isHomeRoute = location === "/";
-    const isTransparentState = isHomeRoute && !isScrolled;
-    const shouldUseChrome = !isHomeRoute || isScrolled;
-    const navLinkColor = isTransparentState && isMaisonNocturne
-      ? "#111111"
-      : isMaisonLight
-        ? "#111111"
-        : "rgba(255,255,255,0.96)";
+    const isTransparentState = isMaisonNocturne && isHomeRoute && !isScrolled;
+    const shouldUseChrome = !isTransparentState;
+    const navLinkColor = isTransparentState || isMaisonLight ? "#111111" : "rgba(255,255,255,0.96)";
     const navChrome = shouldUseChrome
       ? isMaisonLight
         ? {
@@ -193,14 +176,12 @@ export default function Navbar() {
           boxShadow: "none",
         };
     const logoFilter = isTransparentState || isMaisonLight ? "brightness(0)" : "brightness(0) invert(1)";
-    const navUnderlineColor = isMaisonLight || isTransparentState ? "#111111" : "#ffffff";
-    const navTextShadow = shouldUseChrome
-      ? isMaisonLight
+    const navUnderlineColor = isTransparentState || isMaisonLight ? "#111111" : "#ffffff";
+    const navTextShadow = isTransparentState
+      ? "0 1px 12px rgba(0,0,0,0.18)"
+      : isMaisonLight
         ? "none"
-        : "0 0 12px rgba(255,255,255,0.32)"
-      : isTransparentState
-        ? "0 1px 12px rgba(0,0,0,0.18)"
-        : "none";
+        : "0 0 12px rgba(255,255,255,0.32)";
     return (
       <>
         {showTopAnnouncement ? (
@@ -292,7 +273,7 @@ export default function Navbar() {
                   type="button"
                   onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                   className="flex h-10 w-10 items-center justify-center"
-                  style={{ color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "var(--fg)" }}
+                  style={{ color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff" }}
                   aria-label="Toggle menu"
                 >
                   {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -351,7 +332,7 @@ export default function Navbar() {
                     onClick={() => setTheme(theme === "light" ? "dark" : "light")}
                     className="flex h-10 w-10 items-center justify-center"
                     style={{
-                      color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                      color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
                       textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
                     }}
                     aria-label="Toggle theme"
@@ -363,7 +344,7 @@ export default function Navbar() {
                   href="/cart"
                   className="relative flex h-10 w-10 items-center justify-center"
                   style={{
-                    color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                    color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
                     textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
                   }}
                 >
@@ -387,7 +368,7 @@ export default function Navbar() {
                     onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                     className="hidden h-10 w-10 items-center justify-center lg:flex"
                     style={{
-                      color: isTransparentState && isMaisonNocturne ? "#181411" : isMaisonLight ? "#181411" : "#ffffff",
+                      color: isTransparentState || isMaisonLight ? "#181411" : "#ffffff",
                       textShadow: !isMaisonLight && shouldUseChrome ? "0 0 10px rgba(255,255,255,0.28)" : "none",
                     }}
                     aria-label="Toggle menu"

@@ -43,7 +43,7 @@ function SectionMountainSilhouette() {
 
 function Card1TruckArt() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#c4bdb4] via-[#b8b0a4] to-[#a8a098] [background-image:linear-gradient(160deg,#c4bdb4,#b8b0a4,#a8a098)]">
+    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <div className="our-services-truck-wrap relative flex items-center">
         {/* Speed lines */}
         <div className="absolute right-full mr-1 flex flex-col gap-1.5">
@@ -85,7 +85,7 @@ function Card2MountainBg() {
 
 function Card2Art() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#9eb8c8] via-[#b4c8d4] to-[#8aacbc] [background-image:linear-gradient(160deg,#9eb8c8,#b4c8d4,#8aacbc)]">
+    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <Card2MountainBg />
       <div className="our-services-flag-wrap relative z-[2] flex justify-center">
         <img
@@ -103,7 +103,7 @@ function Card2Art() {
 
 function Card3ExchangeArt() {
   return (
-    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#b8b4ae] via-[#c4bfb8] to-[#aaa49c] [background-image:linear-gradient(160deg,#b8b4ae,#c4bfb8,#aaa49c)]">
+    <div className="relative flex h-[200px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <div className="our-services-box-exchange relative flex items-center justify-center">
         <img
           src={`${import.meta.env.BASE_URL}easyexchange.svg`}
@@ -111,7 +111,7 @@ function Card3ExchangeArt() {
           width={180}
           height={194}
           decoding="async"
-          className="block h-[140px] w-[140px] shrink-0 object-contain object-center opacity-[0.88] select-none"
+          className="block h-[118px] w-[118px] shrink-0 object-contain object-center opacity-[0.9] select-none"
           draggable={false}
         />
       </div>
@@ -223,7 +223,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
       ref={sectionRef}
       className="relative min-h-[520px] overflow-hidden px-10 py-[60px] pb-[72px]"
       style={{
-        background: "linear-gradient(to bottom, #d6cfc4, #c8c0b4)",
+        background: "linear-gradient(to bottom, #050505, #0b0b0b 45%, #111111)",
       }}
     >
       <SectionMountainSilhouette />
@@ -240,19 +240,19 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
       <div
         className="pointer-events-none absolute bottom-0 left-0 top-0 z-[3] w-[200px]"
         style={{
-          background: "linear-gradient(to right, rgba(140,130,118,.2), transparent)",
+          background: "linear-gradient(to right, rgba(255,255,255,.06), transparent)",
         }}
       />
       <div
         className="pointer-events-none absolute bottom-0 right-0 top-0 z-[3] w-[180px]"
         style={{
-          background: "linear-gradient(to left, rgba(160,148,130,.25), transparent)",
+          background: "linear-gradient(to left, rgba(255,255,255,.05), transparent)",
         }}
       />
 
       <div className="relative z-10 mx-auto max-w-[960px]">
         <h2
-          className="our-services-heading mb-2 text-center font-extrabold text-[#1a1510]"
+          className="our-services-heading mb-2 text-center font-extrabold text-white"
           style={{
             fontSize: "clamp(32px, 4.5vw, 52px)",
           }}
@@ -260,7 +260,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
           {sectionTitle}
         </h2>
         <p
-          className="mb-11 text-center text-[#3a3028]"
+          className="mb-11 text-center text-white/72"
           style={{ fontSize: "clamp(14px, 1.6vw, 18px)" }}
         >
           {sectionText}
@@ -272,20 +272,20 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
             return (
               <article
                 key={`${card.title}-${index}`}
-                className={`our-services-card flex flex-col overflow-hidden rounded-[20px] bg-[rgba(255,255,255,0.82)] shadow-[0_4px_32px_rgba(0,0,0,0.10)] backdrop-blur-[12px] transition-[transform,box-shadow] duration-300 ease-in-out ${
+                className={`our-services-card flex flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#0b0b0b] shadow-[0_12px_38px_rgba(0,0,0,0.28)] transition-[transform,box-shadow] duration-300 ease-in-out ${
                   cardsVisible ? "visible" : ""
                 }`}
               >
                 {art}
-                <div className="flex flex-1 flex-col items-center bg-[rgba(255,255,255,0.95)] px-6 pb-7 pt-6 text-center">
-                  <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-[#1a1510]">{card.title}</h3>
-                  <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-[#5a524a]">
+                <div className="flex flex-1 flex-col items-center bg-[#0b0b0b] px-6 pb-7 pt-6 text-center">
+                  <h3 className="our-services-card-title mb-2.5 text-[20px] font-bold text-white">{card.title}</h3>
+                  <p className="mb-5 flex-1 text-[13.5px] leading-[1.7] text-white/72">
                     {card.text}
                   </p>
                   <button
                     type="button"
                     onClick={() => handleTarget(card.target)}
-                    className="our-services-btn cursor-pointer rounded-md border-none bg-[#1a1510] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-[#f0c84a] transition-[background,transform] duration-200 hover:scale-[1.02] hover:bg-[#2a2018]"
+                    className="our-services-btn cursor-pointer rounded-md border border-white/14 bg-[#161616] px-8 py-[11px] text-[13px] font-medium tracking-[0.06em] text-white transition-[background,transform,border-color] duration-200 hover:scale-[1.02] hover:bg-[#202020] hover:border-white/22"
                   >
                     {card.buttonLabel || "Learn More"}
                   </button>

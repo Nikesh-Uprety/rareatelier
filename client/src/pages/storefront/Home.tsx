@@ -121,7 +121,7 @@ export default function Home() {
     return new URLSearchParams(window.location.search).get("canvasFontPreset");
   }, []);
 
-  const { data: pageConfig } = useQuery({
+  const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -187,7 +187,7 @@ export default function Home() {
 
   // Finish pre-loader only when data is ready (Hydration-First)
   useEffect(() => {
-    if (isFeaturedSuccess && isNewArrivalsSuccess) {
+    if (isFeaturedSuccess && isNewArrivalsSuccess && !pageConfigLoading) {
       // Small delay to ensure browser paint
       const timer = setTimeout(() => {
         if (typeof (window as any).finishLoading === 'function') {
@@ -196,7 +196,7 @@ export default function Home() {
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [isFeaturedSuccess, isNewArrivalsSuccess]);
+  }, [isFeaturedSuccess, isNewArrivalsSuccess, pageConfigLoading]);
 
   // Preload static campaign images
   useEffect(() => {
@@ -335,15 +335,17 @@ export default function Home() {
   ];
 
   const activeSections = (
-    pageConfig?.sections?.length
-      ? pageConfig.sections
-      : defaultSections
+    pageConfigLoading
+      ? []
+      : pageConfig?.sections?.length
+        ? pageConfig.sections
+        : defaultSections
   ).filter((s: any) => s.isVisible)
     .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
     .filter((section: any) => previewSectionId == null || Number(section.id) === previewSectionId);
   const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
-  const isLuxuryEditorialTemplate = isMaisonNocturne || isNikeshDesign;
+  const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
 
   useEffect(() => {
     if (!isLuxuryEditorialTemplate) return;
