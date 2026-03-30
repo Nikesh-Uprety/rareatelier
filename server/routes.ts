@@ -55,6 +55,7 @@ import {
     sendOTPEmail,
     sendStoreUserWelcomeEmail,
 } from "./email";
+import { getSmsChannelStatus, sendMarketingSMS } from "./sms";
 import { getQueryParam, handleApiError, sendError } from "./errorHandler";
 import { requireAdmin, requireAdminPageAccess } from "./middleware/requireAdmin";
 import { requireAuth } from "./middleware/requireAuth";
@@ -3042,6 +3043,33 @@ export async function registerRoutes(
     },
   );
 
+  // Lightweight customer phones for Marketing SMS targeting.
+  app.get(
+    "/api/admin/customers/phones",
+    requireAdminPageAccess("marketing"),
+    async (_req: Request, res: Response) => {
+      try {
+        const rows = await db
+          .select({
+            email: customers.email,
+            phoneNumber: customers.phoneNumber,
+            firstName: customers.firstName,
+            lastName: customers.lastName,
+          })
+          .from(customers)
+          .where(sql`${customers.phoneNumber} is not null and ${customers.phoneNumber} != ''`)
+          .orderBy(desc(customers.createdAt));
+
+        return res.json({ success: true, data: rows });
+      } catch (err) {
+        console.error("Error in GET /api/admin/customers/phones", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load customer phone numbers" });
+      }
+    },
+  );
+
   app.post(
     "/api/admin/customers",
     requireAdmin,
@@ -4055,6 +4083,193 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to send broadcast" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/marketing/channels/status",
+    requireAdminPageAccess("marketing"),
+    async (_req: Request, res: Response) => {
+      try {
+        const smtpMissing: string[] = [];
+        if (!process.env.SMTP_HOST) smtpMissing.push("SMTP_HOST");
+        if (!process.env.SMTP_USER) smtpMissing.push("SMTP_USER");
+        if (!process.env.SMTP_PASS) smtpMissing.push("SMTP_PASS");
+
+        const smtpConfigured = smtpMissing.length === 0;
+        const sms = getSmsChannelStatus();
+
+        return res.json({
+          success: true,
+          data: {
+            smtp: {
+              configured: smtpConfigured,
+              missing: smtpMissing,
+            },
+            sms,
+            notes: {
+              orderCheckoutEmails: smtpConfigured,
+              orderStatusEmails: smtpConfigured,
+            },
+          },
+        });
+      } catch (err) {
+        console.error("Error in GET /api/admin/marketing/channels/status", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load channel status" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/marketing/analytics",
+    requireAdminPageAccess("marketing"),
+    async (_req: Request, res: Response) => {
+      try {
+        const since = new Date();
+        since.setDate(since.getDate() - 30);
+
+        const [subscriberRows, customerRows, orderRows] = await Promise.all([
+          db
+            .select({ email: newsletterSubscribers.email })
+            .from(newsletterSubscribers)
+            .where(eq(newsletterSubscribers.status, "active")),
+          db
+            .select({
+              email: customers.email,
+              phoneNumber: customers.phoneNumber,
+            })
+            .from(customers)
+            .where(sql`${customers.email} is not null and ${customers.email} != ''`),
+          db
+            .select({
+              email: orders.email,
+              total: orders.total,
+              status: orders.status,
+            })
+            .from(orders)
+            .where(gte(orders.createdAt, since)),
+        ]);
+
+        const reachSet = new Set<string>();
+        for (const row of subscriberRows) {
+          const email = row.email?.trim().toLowerCase();
+          if (email) reachSet.add(email);
+        }
+        for (const row of customerRows) {
+          const email = row.email?.trim().toLowerCase();
+          if (email) reachSet.add(email);
+        }
+
+        const interactingCustomers = new Set<string>();
+        let revenue30d = 0;
+        let deliveryUpdates30d = 0;
+
+        for (const row of orderRows) {
+          const email = row.email?.trim().toLowerCase();
+          if (email) interactingCustomers.add(email);
+          revenue30d += Number(row.total ?? 0);
+
+          if (["processing", "completed", "cancelled"].includes((row.status || "").toLowerCase())) {
+            deliveryUpdates30d += 1;
+          }
+        }
+
+        const smsReachableCustomers = customerRows.filter(
+          (row) => typeof row.phoneNumber === "string" && row.phoneNumber.trim().length > 0,
+        ).length;
+
+        const totalReach = reachSet.size;
+        const interactions30d = interactingCustomers.size;
+        const interactionRatePct = totalReach > 0 ? Number(((interactions30d / totalReach) * 100).toFixed(2)) : 0;
+
+        return res.json({
+          success: true,
+          data: {
+            totalReach,
+            newsletterSubscribers: subscriberRows.length,
+            customerEmails: customerRows.length,
+            smsReachableCustomers,
+            interactions30d,
+            totalOrders30d: orderRows.length,
+            interactionRatePct,
+            revenue30d,
+            deliveryUpdates30d,
+          },
+        });
+      } catch (err) {
+        console.error("Error in GET /api/admin/marketing/analytics", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load marketing analytics" });
+      }
+    },
+  );
+
+  app.post(
+    "/api/admin/marketing/sms/send",
+    requireAdminPageAccess("marketing"),
+    async (req: Request, res: Response) => {
+      try {
+        const schema = z.object({
+          message: z.string().trim().min(1, "Message is required"),
+          selectedNumbers: z.array(z.string()).optional(),
+          sendToAll: z.boolean().optional(),
+        });
+
+        const parsed = schema.safeParse(req.body);
+        if (!parsed.success) {
+          return res.status(400).json({
+            success: false,
+            error: "Invalid SMS payload",
+            issues: parsed.error.issues,
+          });
+        }
+
+        let targetNumbers: string[] = [];
+        if (parsed.data.sendToAll) {
+          const rows = await db
+            .select({ phoneNumber: customers.phoneNumber })
+            .from(customers)
+            .where(sql`${customers.phoneNumber} is not null and ${customers.phoneNumber} != ''`);
+          targetNumbers = rows.map((row) => row.phoneNumber || "");
+        } else {
+          targetNumbers = parsed.data.selectedNumbers ?? [];
+        }
+
+        targetNumbers = Array.from(new Set(targetNumbers.map((value) => value.trim()).filter(Boolean)));
+        if (targetNumbers.length === 0) {
+          return res.status(400).json({
+            success: false,
+            error: "No SMS recipients selected",
+          });
+        }
+
+        const result = await sendMarketingSMS(targetNumbers, parsed.data.message);
+
+        if (result.failed > 0) {
+          return res.status(502).json({
+            success: false,
+            error: "SMS delivery failed for one or more recipients",
+            sent: result.sent,
+            failed: result.failed,
+            errors: result.errors,
+          });
+        }
+
+        return res.json({
+          success: true,
+          sent: result.sent,
+          failed: result.failed,
+        });
+      } catch (err) {
+        console.error("Error in POST /api/admin/marketing/sms/send", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to send SMS campaign",
+        });
       }
     },
   );

@@ -3,17 +3,28 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { 
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
   Search, 
   X, 
   Copy, 
   FileCode,
+  Heading2,
+  Link2,
+  List,
+  ListOrdered,
   Palette,
   Type,
+  Redo2,
+  RemoveFormatting,
+  Strikethrough,
+  TextCursorInput,
+  Undo2,
+  Unlink2,
   Maximize2,
   Minimize2,
-  Smartphone,
-  Monitor,
-  Send,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,7 +49,6 @@ interface AdvancedEmailEditorProps {
   onHtmlChange: (html: string) => void;
   showSplitView?: boolean;
   onSplitViewChange?: (show: boolean) => void;
-  onSendTest?: () => void;
 }
 
 export function AdvancedEmailEditor({
@@ -46,7 +56,6 @@ export function AdvancedEmailEditor({
   onHtmlChange,
   showSplitView: initialSplitView = true,
   onSplitViewChange,
-  onSendTest,
 }: AdvancedEmailEditorProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   
@@ -66,7 +75,6 @@ export function AdvancedEmailEditor({
   const [elementTree, setElementTree] = useState<any[]>([]);
   const [showSplitView, setShowSplitViewLocal] = useState(initialSplitView);
   const [editMode, setEditMode] = useState(false);
-  const [isPreviewMobile, setIsPreviewMobile] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSplitViewChange = (value: boolean) => {
@@ -86,7 +94,7 @@ export function AdvancedEmailEditor({
 
   // Enable interactive element selection in preview
   useEffect(() => {
-    if (iframeRef.current?.contentDocument && showSplitView) {
+    if (iframeRef.current?.contentDocument) {
       const doc = iframeRef.current.contentDocument;
       const allElements = doc.querySelectorAll("*");
 
@@ -107,11 +115,11 @@ export function AdvancedEmailEditor({
         });
       });
     }
-  }, [htmlContent, showSplitView, selectedElement]);
+  }, [htmlContent, selectedElement]);
 
   // Setup contenteditable for inline editing when in edit mode
   useEffect(() => {
-    if (iframeRef.current?.contentDocument && showSplitView) {
+    if (iframeRef.current?.contentDocument) {
       const doc = iframeRef.current.contentDocument;
       const editableSelectors = ["h1", "h2", "h3", "p", "a", "span", "div"];
       
@@ -159,7 +167,7 @@ export function AdvancedEmailEditor({
         });
       });
     }
-  }, [editMode, showSplitView, htmlContent, onHtmlChange]);
+  }, [editMode, htmlContent, onHtmlChange]);
 
   const buildElementTree = (el: Element, depth = 0): any[] => {
     const children: any[] = [];
@@ -283,32 +291,6 @@ export function AdvancedEmailEditor({
           )}
         </div>
         <div className="flex items-center gap-1">
-          {onSendTest && (
-            <Button size="sm" variant="outline" onClick={onSendTest} className="h-8 gap-2 border-primary/20 hover:bg-primary/5">
-              <Send className="h-3.5 w-3.5" />
-              <span className="text-xs">Send Test</span>
-            </Button>
-          )}
-          <div className="w-[1px] h-4 bg-border mx-1" />
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsPreviewMobile(false)}
-            className={`h-8 w-8 p-0 ${!isPreviewMobile ? "bg-primary/10 text-primary" : ""}`}
-            title="Desktop Preview"
-          >
-            <Monitor className="h-4 w-4" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setIsPreviewMobile(true)}
-            className={`h-8 w-8 p-0 ${isPreviewMobile ? "bg-primary/10 text-primary" : ""}`}
-            title="Mobile Preview"
-          >
-            <Smartphone className="h-4 w-4" />
-          </Button>
-          <div className="w-[1px] h-4 bg-border mx-1" />
           <Button size="sm" variant="ghost" onClick={copyHtmlToClipboard} title="Copy HTML" className="h-8 w-8 p-0">
             <Copy className="h-3.5 w-3.5" />
           </Button>
@@ -325,7 +307,7 @@ export function AdvancedEmailEditor({
             size="sm"
             variant="ghost"
             onClick={() => handleSplitViewChange(!showSplitView)}
-            title={showSplitView ? "Compact View" : "Split View"}
+            title={showSplitView ? "Hide HTML" : "Show HTML"}
             className="h-8 w-8 p-0"
           >
             {showSplitView ? (
@@ -337,59 +319,11 @@ export function AdvancedEmailEditor({
         </div>
       </div>
 
-      {showSplitView ? (
-        <div className="grid grid-cols-2 gap-4 h-[600px]">
-          {/* Editor Panel */}
-          <div className="flex flex-col space-y-2 border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden bg-[#282c34]">
-            <div className="flex items-center justify-between p-2 bg-[#1e1f26] border-b border-[#3e3f47]">
-              <span className="text-xs text-gray-400 font-mono">HTML</span>
-              <input
-                type="file"
-                accept=".html,.htm"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (evt) => onHtmlChange(evt.target?.result as string);
-                    reader.readAsText(file);
-                  }
-                }}
-                className="hidden"
-                id="htmlFileInputSplit"
-              />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => document.getElementById("htmlFileInputSplit")?.click()}
-                className="h-6 px-2 text-[10px]"
-              >
-                <FileCode className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="flex-1 overflow-auto">
-              <div className="flex">
-                {/* Line Numbers */}
-                <div className="bg-[#1e1f26] text-gray-500 text-right pr-4 py-3 font-mono text-xs leading-6 border-r border-[#3e3f47] select-none">
-                  {handleLineNumbers()?.split("\n").map((n) => (
-                    <div key={n}>{n}</div>
-                  ))}
-                </div>
-                <Textarea
-                  ref={textareaRef}
-                  value={htmlContent}
-                  onChange={(e) => onHtmlChange(e.target.value)}
-                  spellCheck={false}
-                  className="min-h-[560px] flex-1 resize-none rounded-none border-0 bg-transparent p-3 font-mono text-xs leading-6 text-white focus-visible:ring-0"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Preview Panel with Element Inspector */}
-          <div className="flex flex-col space-y-2 border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden">
+      <div className="space-y-4">
+        <div className="flex flex-col space-y-2 border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden">
             <div className="flex items-center justify-between p-2 bg-muted/30 border-b border-[#E5E5E0] dark:border-border">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-muted-foreground">Edit Template</span>
+                <span className="text-xs font-semibold text-muted-foreground">Preview</span>
                 <Button
                   size="sm"
                   variant={editMode ? "default" : "outline"}
@@ -401,13 +335,74 @@ export function AdvancedEmailEditor({
                 </Button>
                 {editMode && (
                   <div className="flex items-center gap-1 ml-4 border-l pl-4">
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("undo")} className="h-6 w-6 p-0" title="Undo">
+                      <Undo2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("redo")} className="h-6 w-6 p-0" title="Redo">
+                      <Redo2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <div className="w-[1px] h-3 bg-border mx-1" />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => execCommand("formatBlock", "<h2>")}
+                      className="h-6 w-6 p-0"
+                      title="Heading"
+                    >
+                      <Heading2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => execCommand("formatBlock", "<p>")}
+                      className="h-6 w-6 p-0"
+                      title="Paragraph"
+                    >
+                      <TextCursorInput className="h-3.5 w-3.5" />
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => execCommand("bold")} className="h-6 w-6 p-0 font-bold" title="Bold">B</Button>
                     <Button size="sm" variant="ghost" onClick={() => execCommand("italic")} className="h-6 w-6 p-0 italic" title="Italic">I</Button>
                     <Button size="sm" variant="ghost" onClick={() => execCommand("underline")} className="h-6 w-6 p-0 underline" title="Underline">U</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("strikeThrough")} className="h-6 w-6 p-0" title="Strikethrough">
+                      <Strikethrough className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("insertUnorderedList")} className="h-6 w-6 p-0" title="Bullet List">
+                      <List className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("insertOrderedList")} className="h-6 w-6 p-0" title="Numbered List">
+                      <ListOrdered className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        const url = window.prompt("Enter link URL");
+                        if (url) execCommand("createLink", url);
+                      }}
+                      className="h-6 w-6 p-0"
+                      title="Add Link"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("unlink")} className="h-6 w-6 p-0" title="Remove Link">
+                      <Unlink2 className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("removeFormat")} className="h-6 w-6 p-0" title="Clear Formatting">
+                      <RemoveFormatting className="h-3.5 w-3.5" />
+                    </Button>
                     <div className="w-[1px] h-3 bg-border mx-1" />
-                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyLeft")} className="h-6 w-6 p-0" title="Align Left">L</Button>
-                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyCenter")} className="h-6 w-6 p-0" title="Align Center">C</Button>
-                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyRight")} className="h-6 w-6 p-0" title="Align Right">R</Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyLeft")} className="h-6 w-6 p-0" title="Align Left">
+                      <AlignLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyCenter")} className="h-6 w-6 p-0" title="Align Center">
+                      <AlignCenter className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyRight")} className="h-6 w-6 p-0" title="Align Right">
+                      <AlignRight className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => execCommand("justifyFull")} className="h-6 w-6 p-0" title="Justify">
+                      <AlignJustify className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 )}
               </div>
@@ -417,12 +412,8 @@ export function AdvancedEmailEditor({
                 </span>
               )}
             </div>
-            <div className={`flex-1 overflow-auto bg-[#F7F7F5] dark:bg-muted/10 p-4 transition-all duration-300 flex items-center justify-center`}>
-              <div 
-                className={`bg-white shadow-xl transition-all duration-300 overflow-hidden rounded-lg ${
-                  isPreviewMobile ? "w-[375px] h-[667px]" : "w-full h-full"
-                }`}
-              >
+            <div className="min-h-[720px] overflow-auto bg-[#F7F7F5] dark:bg-muted/10 p-4 transition-all duration-300 flex items-stretch justify-center">
+              <div className="bg-white shadow-xl transition-all duration-300 overflow-hidden rounded-lg w-full min-h-[680px]">
                 <iframe
                   ref={iframeRef}
                   srcDoc={htmlContent}
@@ -432,11 +423,8 @@ export function AdvancedEmailEditor({
               </div>
             </div>
           </div>
-        </div>
-      ) : (
-        /* Compact View */
-        <div className="space-y-3">
-          {/* Compact Editor */}
+
+        {showSplitView && (
           <div className="border border-[#E5E5E0] dark:border-border rounded-lg overflow-hidden bg-[#282c34]">
             <div className="flex items-center justify-between p-2 bg-[#1e1f26] border-b border-[#3e3f47]">
               <span className="text-xs text-gray-400 font-mono">HTML</span>
@@ -464,7 +452,6 @@ export function AdvancedEmailEditor({
               </Button>
             </div>
             <div className="h-[400px] overflow-auto flex">
-              {/* Line Numbers */}
               <div className="bg-[#1e1f26] text-gray-500 text-right pr-4 py-3 font-mono text-xs leading-6 border-r border-[#3e3f47] select-none min-w-fit">
                 {handleLineNumbers()?.split("\n").map((n) => (
                   <div key={n}>{n}</div>
@@ -479,11 +466,11 @@ export function AdvancedEmailEditor({
               />
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Element Style Panel (appears when element is selected in split view) */}
-      {selectedElement && showSplitView && (
+      {selectedElement && (
         <div className="border border-[#E5E5E0] dark:border-border rounded-lg p-4 bg-muted/20 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="text-sm font-semibold">Style Inspector</h4>
