@@ -9,7 +9,7 @@ export interface Product {
   stock: number;
   category: string;
   images: string[];
-  variants: { size: string; color: string }[];
+  variants: { id?: number; size: string; color: string }[];
   description?: string;
 }
 

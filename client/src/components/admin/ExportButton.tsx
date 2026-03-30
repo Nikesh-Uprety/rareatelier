@@ -17,7 +17,7 @@ export function ExportButton({ onExport, label = 'Export CSV', className }: Expo
     try {
       await onExport();
       setState('done');
-      setTimeout(() => setState('idle'), 2000);
+      setTimeout(() => setState('idle'), 900);
     } catch {
       setState('idle');
     }

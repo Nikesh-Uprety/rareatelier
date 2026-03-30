@@ -314,6 +314,16 @@ export default function ProductDetail() {
 
   const effectiveColor = selectedColor ?? (colors[0] ?? null);
   const effectiveSize = selectedSize;
+  const selectedVariant = useMemo(() => {
+    if (!effectiveSize) return null;
+    return (
+      product?.variants?.find((variant) => {
+        if (variant.size !== effectiveSize) return false;
+        if (!effectiveColor) return true;
+        return (variant.color ?? "Default") === effectiveColor;
+      }) ?? null
+    );
+  }, [effectiveColor, effectiveSize, product?.variants]);
   const selectedVariantStock = selectedSize
     ? (stockBySize[selectedSize as keyof typeof stockBySize] ?? 0)
     : null;
@@ -387,11 +397,16 @@ export default function ProductDetail() {
         sku: "",
         images: allImages.filter(Boolean),
         variants: (product.variants ?? []).map((variant) => ({
+          id: variant.id,
           size: variant.size,
           color: variant.color ?? "Default",
         })),
       },
-      { size: effectiveSize ?? "One Size", color: effectiveColor ?? "Default" },
+      {
+        id: selectedVariant?.id,
+        size: effectiveSize ?? "One Size",
+        color: effectiveColor ?? "Default",
+      },
       quantity,
     );
     const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;

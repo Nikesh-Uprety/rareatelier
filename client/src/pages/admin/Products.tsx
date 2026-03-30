@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { useLocation } from "wouter";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,7 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  Loader2, Plus, Trash2, Palette, Ruler, Tags, Pipette, 
+  Loader2, Trash2, Palette, Ruler, Tags, Pipette, 
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
@@ -171,6 +171,7 @@ type PendingGalleryImage = {
 };
 
 export default function AdminProducts() {
+  const [location, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
@@ -331,6 +332,43 @@ export default function AdminProducts() {
     }
   }, [categories, addForm]);
 
+  const isAddProductRoute = location.split("?")[0] === "/admin/products/new";
+
+  const resetAddProductDraft = () => {
+    const firstSlug = categories[0]?.slug ?? "";
+    addForm.reset({
+      name: "",
+      shortDetails: "",
+      description: "",
+      category: firstSlug,
+      price: 0,
+      stockStatus: "in_stock",
+      stock: 0,
+      imageUrl: "",
+      galleryUrlsText: "",
+      colorOptions: [],
+      sizeOptions: [],
+      salePercentage: 0,
+      saleActive: false,
+    });
+    setAddPendingGalleryImages([]);
+    setGalleryUploadStatus(null);
+  };
+
+  const closeAddOverlay = () => {
+    setAddOpen(false);
+    resetAddProductDraft();
+    if (isAddProductRoute) {
+      setLocation("/admin/products");
+    }
+  };
+
+  useEffect(() => {
+    if (isAddProductRoute) {
+      setAddOpen(true);
+    }
+  }, [isAddProductRoute]);
+
   useEffect(() => {
     if (editProduct) {
       const galleryUrls = parseJsonArray(editProduct.galleryUrls);
@@ -442,23 +480,10 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       toast({ title: "Product added" });
       setAddOpen(false);
-      const firstSlug = categories[0]?.slug ?? "";
-      addForm.reset({
-        name: "",
-        shortDetails: "",
-        description: "",
-        category: firstSlug,
-        price: 0,
-        stockStatus: "in_stock",
-        stock: 0,
-        imageUrl: "",
-        galleryUrlsText: "",
-        colorOptions: [],
-        sizeOptions: [],
-        salePercentage: 0,
-        saleActive: false,
-      });
-      setAddPendingGalleryImages([]);
+      resetAddProductDraft();
+      if (isAddProductRoute) {
+        setLocation("/admin/products");
+      }
     },
     onError: () => {
       toast({ title: "Failed to add product" });
@@ -747,14 +772,14 @@ export default function AdminProducts() {
         <div className="hidden sm:flex items-center gap-2 w-full sm:w-auto justify-end">
           <Button 
             data-testid="admin-products-add-open"
-            className="rounded-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white shadow-sm flex-1 sm:flex-none"
+            className="rounded-2xl bg-gradient-to-r from-[#2C5234] to-[#3A6A45] hover:brightness-110 text-white shadow-[0_10px_24px_rgba(34,63,41,0.2)] hover:shadow-[0_14px_30px_rgba(34,63,41,0.25)] transition-all duration-300 flex-1 sm:flex-none"
             onClick={() => setAddOpen(true)}
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Product
+            Add Product
           </Button>
           <Button 
             variant="outline"
-            className="rounded-full border-[#E5E5E0] dark:border-border shadow-sm flex-1 sm:flex-none"
+            className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] dark:from-card dark:to-card/80 shadow-[0_8px_18px_rgba(34,63,41,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(34,63,41,0.16)] transition-all duration-300 flex-1 sm:flex-none"
             onClick={() => setAttrSheetOpen(true)}
           >
             Attributes
@@ -770,8 +795,8 @@ export default function AdminProducts() {
             <Button
               type="button"
               variant="ghost"
-              className="mb-6 -ml-2"
-              onClick={() => { setAddOpen(false); addForm.reset(); }}
+              className="mb-6 -ml-2 rounded-2xl hover:bg-[#EEF4EE]"
+              onClick={closeAddOverlay}
             >
               <ArrowLeft className="w-4 h-4 mr-2" /> Back to products
             </Button>
@@ -993,10 +1018,22 @@ export default function AdminProducts() {
                     <input type="hidden" {...addForm.register("galleryUrlsText")} />
                     
                     <div className="flex justify-end gap-3 pt-8 border-t">
-                      <Button type="button" variant="outline" onClick={() => { setAddOpen(false); addForm.reset(); }}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(34,63,41,0.15)] transition-all duration-300"
+                        onClick={closeAddOverlay}
+                      >
                         Cancel
                       </Button>
-                      <Button data-testid="admin-product-save" type="submit" form="add-product-form" loading={addMutation.isPending} loadingText="Saving...">
+                      <Button
+                        data-testid="admin-product-save"
+                        type="submit"
+                        form="add-product-form"
+                        loading={addMutation.isPending}
+                        loadingText="Saving..."
+                        className="rounded-2xl bg-gradient-to-r from-[#2C5234] to-[#3A6A45] text-white hover:brightness-110 shadow-[0_12px_24px_rgba(34,63,41,0.2)] transition-all duration-300"
+                      >
                         Save Product
                       </Button>
                     </div>
@@ -1104,7 +1141,7 @@ export default function AdminProducts() {
                           }}
                           disabled={uploadingImage}
                         >
-                          <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
+                          Add More Pictures
                         </Button>
                       </div>
 
@@ -1478,154 +1515,160 @@ export default function AdminProducts() {
         }}
       />
 
-      <div className="flex flex-col gap-6 px-2 pt-4 pb-2 border-b border-border/50">
-        <div className="flex flex-wrap items-center gap-2 min-w-0 pb-2 -mx-2 px-2 justify-start sm:justify-center">
-          {visibleCategoryTabs.map((cat) => (
-            <Button
-              key={cat.id}
-              variant={categoryFilter === cat.slug ? "default" : "outline"}
-              onClick={() => setCategoryFilter(cat.slug)}
-              className={cn(
-                "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
-                categoryFilter !== cat.slug && "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-              )}
-            >
-              {cat.name}
-            </Button>
-          ))}
-          {moreCategoryTabs.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0"
-                >
-                  More <ChevronDown className="h-3.5 w-3.5 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
-                {moreCategoryTabs.map((cat) => (
-                  <DropdownMenuItem
-                    key={cat.id}
-                    onClick={() => setCategoryFilter(cat.slug)}
-                    className={cn(
-                      "cursor-pointer",
-                      categoryFilter === cat.slug && "bg-muted font-semibold",
-                    )}
-                  >
-                    {cat.name}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </div>
+      <div className="sticky top-2 z-30 -mx-1 px-1 pb-2 backdrop-blur-[2px]">
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-[#F8FCF8] to-white dark:from-[#151E17] dark:to-[#111915] p-4 rounded-2xl border border-[#DCE8DB] dark:border-[#2E3B32] shadow-[0_8px_20px_rgba(34,63,41,0.08)] dark:shadow-[0_10px_22px_rgba(0,0,0,0.35)] overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
+              <div className="flex items-center gap-3 shrink-0">
+                <Checkbox 
+                  id="select-all"
+                  className="h-4 w-4 rounded-sm border-[#6D8A70] data-[state=unchecked]:bg-white dark:border-[#A4C2A8] dark:data-[state=unchecked]:bg-[#1A261E]"
+                  checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
+                    } else {
+                      setSelectedProductIds(new Set());
+                    }
+                  }}
+                />
+                <Label htmlFor="select-all" className="text-sm cursor-pointer font-bold whitespace-nowrap px-1 text-[#1E2F22] dark:text-[#E7F3E8]">
+                  {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'Select All'}
+                </Label>
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#F9FBF9] dark:bg-muted/10 p-4 rounded-xl border border-[#E9EFE9] dark:border-muted/20 shadow-sm overflow-hidden">
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 flex-1 w-full">
-          <div className="flex items-center gap-3 shrink-0">
-            <Checkbox 
-              id="select-all"
-              checked={filteredProducts.length > 0 && selectedProductIds.size === filteredProducts.length}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  setSelectedProductIds(new Set(filteredProducts.map(p => p.id)));
-                } else {
-                  setSelectedProductIds(new Set());
-                }
-              }}
-            />
-            <Label htmlFor="select-all" className="text-sm cursor-pointer font-bold whitespace-nowrap px-1">
-              {selectedProductIds.size > 0 ? `${selectedProductIds.size} selected` : 'Select All'}
-            </Label>
-
-            {/* Selection actions moved to the left after checkboxes */}
-            <AnimatePresence>
-              {selectedProductIds.size > 0 && (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.9 }}
-                  className="flex items-center gap-2 border-l border-border pl-3 ml-1"
-                >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedProductIds(new Set())}
-                    className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground px-4 shadow-sm"
-                  >
-                    Deselect
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button size="sm" variant="outline" className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest border-destructive/50 text-destructive dark:text-red-500 dark:border-red-500 hover:bg-destructive/10 px-4 shadow-sm">
-                        Actions
+                {/* Selection actions moved to the left after checkboxes */}
+                <AnimatePresence>
+                  {selectedProductIds.size > 0 && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      className="flex items-center gap-2 border-l border-[#D0DED0] pl-3 ml-1 dark:border-[#344237]"
+                    >
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSelectedProductIds(new Set())}
+                        className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground px-4 shadow-sm dark:bg-[#1B281F] dark:text-[#D6E7D8] dark:border-[#3A4A3D] dark:hover:bg-[#243428] dark:hover:text-white"
+                      >
+                        Deselect
                       </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="rounded-xl shadow-xl w-48">
-                      <DropdownMenuItem 
-                        className="text-destructive font-black text-[10px] uppercase tracking-widest p-2.5"
-                        onClick={() => {
-                          if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
-                            selectedProductIds.forEach(id => deleteMutation.mutate(id));
-                            setSelectedProductIds(new Set());
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete ({selectedProductIds.size})
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        className="font-black text-[10px] uppercase tracking-widest p-2.5 text-orange-600 dark:text-orange-400"
-                        onClick={async () => {
-                          try {
-                            await Promise.all(
-                              Array.from(selectedProductIds).map(id =>
-                                updateAdminProduct(id, { stock: 0 })
-                              )
-                            );
-                            queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-                            toast({ title: `Marked ${selectedProductIds.size} products as out of stock` });
-                            setSelectedProductIds(new Set());
-                          } catch {
-                            toast({ title: "Failed to update stock", variant: "destructive" });
-                          }
-                        }}
-                      >
-                        <Box className="w-3.5 h-3.5 mr-2" /> Mark Out of Stock
-                      </DropdownMenuItem>
-                      <DropdownMenuItem 
-                        className="font-black text-[10px] uppercase tracking-widest p-2.5 text-green-600 dark:text-green-400"
-                        onClick={async () => {
-                          try {
-                            await Promise.all(
-                              Array.from(selectedProductIds).map(id =>
-                                updateAdminProduct(id, { stock: 20 })
-                              )
-                            );
-                            queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-                            toast({ title: `Marked ${selectedProductIds.size} products as in stock (20)` });
-                            setSelectedProductIds(new Set());
-                          } catch {
-                            toast({ title: "Failed to update stock", variant: "destructive" });
-                          }
-                        }}
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Mark In Stock (20)
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="sm" variant="outline" className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest border-destructive/50 text-destructive dark:text-red-400 dark:border-red-400/70 hover:bg-destructive/10 px-4 shadow-sm">
+                            Actions
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="rounded-xl shadow-xl w-48">
+                          <DropdownMenuItem 
+                            className="text-destructive font-black text-[10px] uppercase tracking-widest p-2.5"
+                            onClick={() => {
+                              if (confirm(`Are you sure you want to delete ${selectedProductIds.size} products?`)) {
+                                selectedProductIds.forEach(id => deleteMutation.mutate(id));
+                                setSelectedProductIds(new Set());
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete ({selectedProductIds.size})
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="font-black text-[10px] uppercase tracking-widest p-2.5 text-orange-600 dark:text-orange-400"
+                            onClick={async () => {
+                              try {
+                                await Promise.all(
+                                  Array.from(selectedProductIds).map(id =>
+                                    updateAdminProduct(id, { stock: 0 })
+                                  )
+                                );
+                                queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                                toast({ title: `Marked ${selectedProductIds.size} products as out of stock` });
+                                setSelectedProductIds(new Set());
+                              } catch {
+                                toast({ title: "Failed to update stock", variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <Box className="w-3.5 h-3.5 mr-2" /> Mark Out of Stock
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            className="font-black text-[10px] uppercase tracking-widest p-2.5 text-green-600 dark:text-green-400"
+                            onClick={async () => {
+                              try {
+                                await Promise.all(
+                                  Array.from(selectedProductIds).map(id =>
+                                    updateAdminProduct(id, { stock: 20 })
+                                  )
+                                );
+                                queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+                                toast({ title: `Marked ${selectedProductIds.size} products as in stock (20)` });
+                                setSelectedProductIds(new Set());
+                              } catch {
+                                toast({ title: "Failed to update stock", variant: "destructive" });
+                              }
+                            }}
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Mark In Stock (20)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
+              <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap dark:text-[#CFE0D1]">
+                {filteredProducts.length} Items
+              </p>
+              <ViewToggle view={viewMode} onViewChange={setViewMode} />
+            </div>
           </div>
-        </div>
-        
-        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
-          <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap">
-            {filteredProducts.length} Items
-          </p>
-          <ViewToggle view={viewMode} onViewChange={setViewMode} />
+
+          <div className="rounded-2xl border border-[#DFE9DF] dark:border-[#2E3B32] bg-white/80 dark:bg-[#121A15]/80 p-3 shadow-[0_6px_16px_rgba(34,63,41,0.06)] dark:shadow-[0_10px_20px_rgba(0,0,0,0.25)]">
+            <div className="flex flex-wrap items-center gap-2 min-w-0 justify-start">
+              {visibleCategoryTabs.map((cat) => (
+                <Button
+                  key={cat.id}
+                  variant={categoryFilter === cat.slug ? "default" : "outline"}
+                  onClick={() => setCategoryFilter(cat.slug)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0",
+                    categoryFilter !== cat.slug &&
+                      "bg-background text-muted-foreground border-[#CAD9CA] hover:border-primary hover:text-foreground dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white",
+                  )}
+                >
+                  {cat.name}
+                </Button>
+              ))}
+              {moreCategoryTabs.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="px-4 py-1.5 rounded-full text-xs font-bold border transition-all shadow-sm h-auto flex-shrink-0 dark:bg-[#19241D] dark:text-[#D5E8D7] dark:border-[#334437] dark:hover:bg-[#223027] dark:hover:text-white"
+                    >
+                      More <ChevronDown className="h-3.5 w-3.5 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto w-56">
+                    {moreCategoryTabs.map((cat) => (
+                      <DropdownMenuItem
+                        key={cat.id}
+                        onClick={() => setCategoryFilter(cat.slug)}
+                        className={cn(
+                          "cursor-pointer",
+                          categoryFilter === cat.slug && "bg-muted font-semibold",
+                        )}
+                      >
+                        {cat.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2588,7 +2631,7 @@ export default function AdminProducts() {
                           }}
                           disabled={uploadingImage}
                         >
-                          <Plus className="w-3.5 h-3.5 mr-2" /> Add More Pictures
+                          Add More Pictures
                         </Button>
                       </div>
 
@@ -2941,7 +2984,7 @@ export default function AdminProducts() {
       
       {/* Attributes Manager Sheet */}
       <Sheet open={attrSheetOpen} onOpenChange={setAttrSheetOpen}>
-        <SheetContent side="right" className="w-full sm:max-w-[600px] p-0 overflow-hidden border-l border-border">
+        <SheetContent side="right" className="w-full sm:max-w-[680px] p-0 overflow-hidden border-l border-[#D4E0D2] shadow-[0_24px_48px_rgba(20,36,25,0.22)]">
           <AttributesManager onClose={() => setAttrSheetOpen(false)} />
         </SheetContent>
       </Sheet>

@@ -63,8 +63,9 @@ export interface CategoryApi {
 
 export interface OrderItemInput {
   productId: string;
-  variantId?: string;
+  variantId?: string | number;
   size?: string;
+  color?: string;
   quantity: number;
   priceAtTime: number;
 }
@@ -169,6 +170,8 @@ export interface OrderDetail {
     quantity: number;
     unitPrice: number | string;
     productId: string;
+    variantColor?: string | null;
+    color?: string | null;
     size?: string | null;
     product?: {
       id: string;

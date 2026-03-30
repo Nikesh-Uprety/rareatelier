@@ -60,8 +60,12 @@ import { requireAdmin, requireAdminPageAccess } from "./middleware/requireAdmin"
 import { requireAuth } from "./middleware/requireAuth";
 import { rateLimit } from "./middleware/security";
 import { generateBillFromOrder, generateBillNumber } from "./services/billService";
-import { uploadToCloudinary, deleteFromCloudinary } from "./lib/cloudinary";
-import { uploadMediaToCloudinary } from "./lib/cloudinary";
+import {
+  uploadToCloudinary,
+  deleteFromCloudinary,
+  uploadMediaToCloudinary,
+  uploadPaymentProofToCloudinary,
+} from "./lib/cloudinary";
 
 const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -1201,8 +1205,9 @@ export async function registerRoutes(
   // Orders (checkout)
   const orderItemSchema = z.object({
     productId: z.string(),
-    variantId: z.string().optional(),
+    variantId: z.union([z.string(), z.number()]).optional(),
     size: z.string().optional(),
+    color: z.string().optional(),
     selectedSize: z.string().optional(),
     quantity: z.number().int().positive(),
     priceAtTime: z.number().nonnegative(),
@@ -1316,6 +1321,59 @@ export async function registerRoutes(
         shipping.phone ?? null,
       );
 
+      const resolvedItems = await Promise.all(
+        items.map(async (item) => {
+          const normalizedSize = (item.size || item.selectedSize || "").trim();
+          const normalizedColor = item.color?.trim() || null;
+          const requestedVariantId = item.variantId === undefined ? NaN : Number(item.variantId);
+          let resolvedVariantId = Number.isFinite(requestedVariantId) ? requestedVariantId : null;
+
+          if (!resolvedVariantId && normalizedSize) {
+            let variant:
+              | {
+                  id: number;
+                }
+              | undefined;
+
+            if (normalizedColor) {
+              [variant] = await db
+                .select({ id: productVariants.id })
+                .from(productVariants)
+                .where(
+                  and(
+                    eq(productVariants.productId, item.productId),
+                    eq(productVariants.size, normalizedSize),
+                    eq(productVariants.color, normalizedColor),
+                  ),
+                )
+                .limit(1);
+            }
+
+            if (!variant) {
+              [variant] = await db
+                .select({ id: productVariants.id })
+                .from(productVariants)
+                .where(
+                  and(
+                    eq(productVariants.productId, item.productId),
+                    eq(productVariants.size, normalizedSize),
+                  ),
+                )
+                .limit(1);
+            }
+
+            resolvedVariantId = variant?.id ?? null;
+          }
+
+          return {
+            ...item,
+            normalizedSize,
+            normalizedColor,
+            resolvedVariantId,
+          };
+        }),
+      );
+
       const order = await storage.createOrder({
         userId: (req.user as Express.User | undefined)?.id ?? null,
         email: shipping.email,
@@ -1336,36 +1394,67 @@ export async function registerRoutes(
         deliveryAddress: deliveryAddress ?? null,
         promoCode,
         promoDiscountAmount,
-        items: items.map((item) => ({
+        items: resolvedItems.map((item) => ({
           productId: item.productId,
-          variantId: item.variantId ? Number(item.variantId) : null,
-          size: item.size || item.selectedSize || "",
+          variantId: item.resolvedVariantId,
+          size: item.normalizedSize,
           quantity: item.quantity,
           unitPrice: item.priceAtTime,
         })),
       });
 
-      for (const item of items) {
+      for (const item of resolvedItems) {
         const productId = item.productId;
-        const size = item.size || item.selectedSize || null;
+        const size = item.normalizedSize || null;
 
-        if (size) {
-          const variant = await db
-            .select()
+        let variantToUpdate:
+          | {
+              id: number;
+              stock: number;
+            }
+          | undefined;
+
+        if (item.resolvedVariantId) {
+          [variantToUpdate] = await db
+            .select({ id: productVariants.id, stock: productVariants.stock })
             .from(productVariants)
-            .where(and(
-              eq(productVariants.productId, productId),
-              eq(productVariants.size, size),
-            ))
+            .where(eq(productVariants.id, item.resolvedVariantId))
             .limit(1);
-
-          if (variant.length > 0) {
-            const newStock = Math.max(0, (variant[0].stock ?? 0) - item.quantity);
-            await db
-              .update(productVariants)
-              .set({ stock: newStock, updatedAt: new Date() })
-              .where(eq(productVariants.id, variant[0].id));
+        } else if (size) {
+          if (item.normalizedColor) {
+            [variantToUpdate] = await db
+              .select({ id: productVariants.id, stock: productVariants.stock })
+              .from(productVariants)
+              .where(
+                and(
+                  eq(productVariants.productId, productId),
+                  eq(productVariants.size, size),
+                  eq(productVariants.color, item.normalizedColor),
+                ),
+              )
+              .limit(1);
           }
+
+          if (!variantToUpdate) {
+            [variantToUpdate] = await db
+              .select({ id: productVariants.id, stock: productVariants.stock })
+              .from(productVariants)
+              .where(
+                and(
+                  eq(productVariants.productId, productId),
+                  eq(productVariants.size, size),
+                ),
+              )
+              .limit(1);
+          }
+        }
+
+        if (variantToUpdate) {
+          const newStock = Math.max(0, (variantToUpdate.stock ?? 0) - item.quantity);
+          await db
+            .update(productVariants)
+            .set({ stock: newStock, updatedAt: new Date() })
+            .where(eq(productVariants.id, variantToUpdate.id));
         }
 
         const allVariants = await db
@@ -1486,27 +1575,17 @@ export async function registerRoutes(
         await storage.getOrderById(orderId);
         const base64 = parsed.data.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
-        const mimeSubtype = (match?.[1] ?? "png").toLowerCase();
-        const normalizedExt =
-          mimeSubtype === "jpeg"
-            ? "jpg"
-            : mimeSubtype === "png" || mimeSubtype === "jpg" || mimeSubtype === "webp"
-              ? mimeSubtype
-              : "png";
         const buffer = Buffer.from(
           match ? match[2] : base64,
           "base64",
         );
-        ensurePaymentProofUploadsDir();
-        const filename = `${orderId}.${normalizedExt}`;
-        const filePath = path.join(PAYMENT_PROOFS_DIR, filename);
-
-        fs.writeFileSync(filePath, buffer);
-
-        const proofUrl = `/api/uploads/payment-proofs/${filename}`;
+        const { url: proofUrl } = await uploadPaymentProofToCloudinary(
+          buffer,
+          orderId,
+        );
 
         await storage.updateOrderPaymentProof(orderId, proofUrl);
-        return res.json({ success: true });
+        return res.json({ success: true, data: { paymentProofUrl: proofUrl } });
       } catch (err) {
         console.error("Error in POST /api/orders/:id/payment-proof", err);
         return res
@@ -2783,40 +2862,31 @@ export async function registerRoutes(
     requireAdmin,
     async (_req: Request, res: Response) => {
       try {
-        const orders = await storage.getOrders();
-        const customers = await storage.getCustomers();
-
-        const customerByEmail = new Map(
-          customers.map((c) => [c.email, `${c.firstName} ${c.lastName}`]),
-        );
+        const allOrders = await storage.getOrders();
 
         const rows: string[] = [];
         rows.push("Order,Customer,Email,Date,Items,Status,Amount");
 
-        for (const order of orders) {
-          let itemsCount = 0;
-          try {
-            const fullOrder = await storage.getOrderById(order.id);
-            itemsCount = fullOrder.items.length;
-          } catch {
-            itemsCount = 0;
-          }
+        const escapeCsv = (value: string | number | null | undefined) => {
+          const safe = value == null ? "" : String(value);
+          return `"${safe.replace(/"/g, '""')}"`;
+        };
 
-          const customerName =
-            customerByEmail.get(order.email) ?? order.fullName;
-
+        for (const order of allOrders) {
+          const items = (order as unknown as { items?: Array<unknown> }).items;
+          const itemsCount = Array.isArray(items) ? items.length : 0;
           const date = order.createdAt
             ? new Date(order.createdAt).toISOString()
             : "";
 
           rows.push(
             [
-              order.id,
-              `"${customerName}"`,
-              order.email,
-              date,
+              escapeCsv(order.id),
+              escapeCsv(order.fullName),
+              escapeCsv(order.email),
+              escapeCsv(date),
               itemsCount.toString(),
-              order.status,
+              escapeCsv(order.status),
               order.total.toString(),
             ].join(","),
           );

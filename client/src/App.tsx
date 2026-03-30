@@ -125,7 +125,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/marketing") return loadAdminMarketingPage();
   if (cleanPath === "/admin/logs") return loadAdminLogsPage();
   if (cleanPath === "/admin/promo-codes") return loadAdminPromoCodesPage();
-  if (cleanPath === "/admin/products") return loadAdminProductsPage();
+  if (cleanPath === "/admin/products" || cleanPath === "/admin/products/new") return loadAdminProductsPage();
   if (cleanPath === "/admin/inventory") return loadAdminInventoryPage();
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
   if (cleanPath === "/admin/customers") return loadAdminCustomersPage();
@@ -274,6 +274,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="promo-codes">
           <AdminLayout>
             <AdminPromoCodes />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/products/new">
+        <ProtectedRoute requiredAdminPage="products">
+          <AdminLayout>
+            <AdminProducts />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

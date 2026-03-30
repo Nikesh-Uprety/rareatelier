@@ -16,6 +16,7 @@ import {
   securityLogs,
   mediaAssets,
   siteAssets,
+  productVariants,
   type Category,
   type Customer,
   type Order,
@@ -40,8 +41,10 @@ import {
   type SiteAsset,
   type InsertSiteAsset,
 } from "@shared/schema";
-import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
 import { broadcastNotification } from "./websocket";
+
+const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 
 export interface CreateOrderItemInput {
   productId: string;
@@ -441,6 +444,13 @@ export class PgStorage implements IStorage {
 
     if (filters?.category) {
       conditions.push(eq(products.category, filters.category));
+    } else {
+      conditions.push(
+        or(
+          isNull(products.category),
+          ne(products.category, ARCHIVED_PRODUCT_CATEGORY),
+        )!,
+      );
     }
 
     if (filters?.search) {
@@ -662,7 +672,48 @@ export class PgStorage implements IStorage {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    await db.delete(products).where(eq(products.id, id));
+    try {
+      await db.delete(products).where(eq(products.id, id));
+      return;
+    } catch (err: any) {
+      const referencedByOrderItems =
+        err?.code === "23503" &&
+        err?.constraint === "order_items_product_id_products_id_fk";
+
+      if (!referencedByOrderItems) {
+        throw err;
+      }
+
+      const [existing] = await db
+        .select({
+          id: products.id,
+          name: products.name,
+          category: products.category,
+        })
+        .from(products)
+        .where(eq(products.id, id))
+        .limit(1);
+
+      if (!existing) return;
+
+      if (existing.category === ARCHIVED_PRODUCT_CATEGORY) {
+        return;
+      }
+
+      const suffix = `${id.slice(0, 8)}-${Date.now().toString(36)}`;
+
+      await db
+        .update(products)
+        .set({
+          name: `${existing.name} [archived-${suffix}]`,
+          category: ARCHIVED_PRODUCT_CATEGORY,
+          stock: 0,
+          saleActive: false,
+          homeFeatured: false,
+          updatedAt: new Date(),
+        })
+        .where(eq(products.id, id));
+    }
   }
 
   async getCategories(): Promise<Category[]> {
@@ -875,6 +926,7 @@ export class PgStorage implements IStorage {
         orderId: orderItems.orderId,
         productId: orderItems.productId,
         variantId: orderItems.variantId,
+        variantColor: productVariants.color,
         size: orderItems.size,
         quantity: orderItems.quantity,
         unitPrice: orderItems.unitPrice,
@@ -882,6 +934,7 @@ export class PgStorage implements IStorage {
       })
       .from(orderItems)
       .leftJoin(products, eq(orderItems.productId, products.id))
+      .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
       .where(eq(orderItems.orderId, id))
       .orderBy(asc(orderItems.id));
 
@@ -2557,7 +2610,10 @@ export class MemStorage implements IStorage {
     limit?: number;
     includeInactive?: boolean;
   }): Promise<Product[]> {
-    return this._products;
+    if (_filters?.category) {
+      return this._products.filter((p) => p.category === _filters.category);
+    }
+    return this._products.filter((p) => p.category !== ARCHIVED_PRODUCT_CATEGORY);
   }
 
   async getProductById(id: string): Promise<Product | null> {
@@ -2705,6 +2761,7 @@ export class MemStorage implements IStorage {
     
     const itemsWithProducts = order.items.map(item => ({
       ...item,
+      variantColor: null,
       product: this._products.find(p => p.id === item.productId)
     }));
 

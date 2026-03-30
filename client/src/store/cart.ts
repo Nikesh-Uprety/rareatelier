@@ -6,7 +6,7 @@ import { apiRequest } from '@/lib/queryClient';
 export interface CartItem {
   id: string;
   product: Product;
-  variant: { size: string; color: string };
+  variant: { id?: number; size: string; color: string };
   quantity: number;
 }
 
@@ -35,7 +35,7 @@ function getUnitOriginalPrice(product: Product): number {
 interface CartState {
   items: CartItem[];
   isCartSidebarOpen: boolean;
-  addItem: (product: Product, variant: { size: string; color: string }, quantity?: number) => void;
+  addItem: (product: Product, variant: { id?: number; size: string; color: string }, quantity?: number) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;

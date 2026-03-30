@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,7 @@ import {
   fetchAdminOrders,
   fetchAdminProducts,
   fetchAdminCustomers,
-  exportOrdersCSV,
+  exportOrdersCSVInstant,
   type AdminOrder,
   type AdminCustomer,
 } from "@/lib/adminApi";
@@ -51,6 +52,13 @@ function isSameDay(a: Date, b: Date) {
 
 export default function AdminDashboard() {
   const today = new Date();
+  const [, setLocation] = useLocation();
+  const quickActionBtnClass =
+    "group relative h-12 rounded-2xl border px-4 text-[#1C2E1E] dark:text-foreground shadow-[0_8px_22px_rgba(34,63,41,0.12)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(34,63,41,0.18)]";
+  const quickActionLightClass =
+    "border-[#D6DDCE] bg-gradient-to-br from-white to-[#F2F7F2] dark:from-card dark:to-card/80 hover:border-[#95B39B]";
+  const quickActionPrimaryClass =
+    "border-[#3C6A47] bg-gradient-to-r from-[#2C5234] to-[#396744] text-white hover:brightness-110";
 
   const {
     data: orders = [],
@@ -214,38 +222,38 @@ export default function AdminDashboard() {
       <section className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Button
           variant="outline"
-          className="flex items-center justify-between rounded-xl border-dashed border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"
+          className={`flex items-center justify-between ${quickActionBtnClass} ${quickActionPrimaryClass}`}
           onClick={() => {
-            window.location.href = "/admin/products?new=1";
+            setLocation("/admin/products/new");
           }}
         >
-          <span className="text-sm font-medium">+ Add Product</span>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold tracking-[0.01em]">Add Product</span>
+          <ArrowRight className="h-4 w-4 text-white transition-transform duration-300 group-hover:translate-x-1" />
         </Button>
         <Button
           variant="outline"
-          className="flex items-center justify-between rounded-xl border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"
+          className={`flex items-center justify-between ${quickActionBtnClass} ${quickActionLightClass}`}
           onClick={() => {
-            window.location.href = "/admin/orders";
+            setLocation("/admin/orders");
           }}
         >
-          <span className="text-sm font-medium">View All Orders</span>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">View All Orders</span>
+          <ArrowRight className="h-4 w-4 text-[#2C5234] transition-transform duration-300 group-hover:translate-x-1 dark:text-foreground" />
         </Button>
         <ExportButton
-          onExport={() => exportOrdersCSV()}
+          onExport={() => exportOrdersCSVInstant()}
           label="Export Report"
-          className="flex items-center justify-between rounded-xl border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"
+          className={`justify-between ${quickActionBtnClass} ${quickActionLightClass}`}
         />
         <Button
           variant="outline"
-          className="flex items-center justify-between rounded-xl border-[#D6D6CC] bg-white dark:bg-card h-12 px-4"
+          className={`flex items-center justify-between ${quickActionBtnClass} ${quickActionLightClass}`}
           onClick={() => {
-            window.location.href = "/admin/customers";
+            setLocation("/admin/customers");
           }}
         >
-          <span className="text-sm font-medium">Manage Customers</span>
-          <ArrowRight className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Manage Customers</span>
+          <ArrowRight className="h-4 w-4 text-[#2C5234] transition-transform duration-300 group-hover:translate-x-1 dark:text-foreground" />
         </Button>
       </section>
 

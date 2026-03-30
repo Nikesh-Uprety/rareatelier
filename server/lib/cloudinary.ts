@@ -143,6 +143,34 @@ export async function uploadMediaToCloudinary(
   });
 }
 
+export async function uploadPaymentProofToCloudinary(
+  buffer: Buffer,
+  orderId: string,
+): Promise<{ url: string; publicId: string }> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "rare-np/payment-proofs",
+        resource_type: "image",
+        public_id: `order-${orderId}-${Date.now()}`,
+        overwrite: false,
+      },
+      (error, result) => {
+        if (error || !result) {
+          return reject(
+            normalizeCloudinaryError(error, "Cloudinary upload failed for payment proof."),
+          );
+        }
+        resolve({
+          url: result.secure_url,
+          publicId: result.public_id,
+        });
+      },
+    );
+    uploadStream.end(buffer);
+  });
+}
+
 // Delete an image from Cloudinary
 export async function deleteFromCloudinary(publicId: string): Promise<void> {
   await cloudinary.uploader.destroy(publicId);

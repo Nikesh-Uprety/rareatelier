@@ -247,10 +247,10 @@ export default function Products() {
                         <button
                           type="button"
                           style={{ fontFamily: "Roboto, sans-serif" }}
-                          className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white shadow-[0_12px_28px_rgba(0,0,0,0.35)] transition-all hover:brightness-110 ${
+                          className={`inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3 text-[10px] font-semibold uppercase tracking-[0.18em] shadow-sm transition-colors ${
                             isOverflowSelected
-                              ? "border-zinc-700/80 bg-gradient-to-r from-zinc-950 via-black to-zinc-800 dark:border-zinc-500/80 dark:from-zinc-900 dark:via-black dark:to-zinc-700"
-                              : "border-zinc-700/60 bg-gradient-to-r from-zinc-900 via-black to-zinc-700 dark:border-zinc-500/60 dark:from-zinc-900 dark:via-black dark:to-zinc-700"
+                              ? "border-neutral-900 bg-neutral-900 text-white hover:bg-neutral-800 dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+                              : "border-neutral-300 bg-white text-neutral-900 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
                           }`}
                         >
                           <Sparkles className="h-3.5 w-3.5" />
@@ -261,7 +261,7 @@ export default function Products() {
                           <ChevronDown className="h-3.5 w-3.5" />
                         </button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="min-w-[12rem] rounded-xl border border-black/20 bg-white/95 p-2 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-white/20 dark:bg-neutral-900/95">
+                      <DropdownMenuContent align="start" className="min-w-[12rem] rounded-xl border border-black/10 bg-white/95 p-2 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-sm dark:border-white/15 dark:bg-neutral-900/95 dark:shadow-[0_10px_28px_rgba(0,0,0,0.35)]">
                         <DropdownMenuLabel className="px-1 text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-700 dark:text-neutral-200">
                           <span className="inline-flex items-center gap-1.5">
                             <Sparkles className="h-3.5 w-3.5 text-neutral-700 dark:text-neutral-200" />
@@ -303,7 +303,7 @@ export default function Products() {
                       <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isSortMenuOpen ? "rotate-180" : ""}`} />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-cyan-500/25 bg-white/95 p-3 shadow-[0_24px_70px_rgba(15,23,42,0.2)] backdrop-blur-md dark:border-cyan-300/20 dark:bg-neutral-900/95">
+                  <DropdownMenuContent align="end" className="w-[18rem] rounded-xl border border-cyan-500/20 bg-white/95 p-3 shadow-[0_12px_32px_rgba(15,23,42,0.14)] backdrop-blur-sm dark:border-cyan-300/15 dark:bg-neutral-900/95 dark:shadow-[0_12px_32px_rgba(0,0,0,0.35)]">
                     <DropdownMenuLabel className="px-0 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-700 dark:text-neutral-200">
                       <span className="inline-flex items-center gap-1.5">
                         <Sparkles className="h-3.5 w-3.5 text-cyan-500" />

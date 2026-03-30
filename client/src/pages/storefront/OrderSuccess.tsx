@@ -1,6 +1,6 @@
 import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Package, Truck, MapPin, Printer, LifeBuoy } from "lucide-react";
+import { Check, Package, Truck, MapPin, Printer, LifeBuoy } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { fetchOrderById, getCachedLatestOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,27 @@ function firstNameFromFull(fullName: string) {
   const t = fullName.trim();
   if (!t) return "";
   return t.split(/\s+/)[0] ?? t;
+}
+
+function parseJsonArray(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function selectedColorLabel(item: any): string {
+  const variantColor = String(item?.variantColor ?? "").trim();
+  if (variantColor) return variantColor;
+
+  const color = String(item?.color ?? "").trim();
+  if (color) return color;
+
+  const options = parseJsonArray(item?.product?.colorOptions);
+  return options.length === 1 ? options[0] : "-";
 }
 
 export default function OrderSuccess() {
@@ -86,24 +107,61 @@ export default function OrderSuccess() {
           content={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
         />
       </Helmet>
+      <style>
+        {`
+          @keyframes ocFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+          }
+          @keyframes ocTickBreathe {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(0.84); }
+          }
+          @keyframes ocGlowPulse {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.1; }
+          }
+          @keyframes ocParticleDrift {
+            0% { opacity: 0; transform: translateY(10px) scale(0.85); }
+            25% { opacity: 0.55; }
+            70% { opacity: 0.2; }
+            100% { opacity: 0; transform: translateY(-16px) scale(1.1); }
+          }
+          .order-confirm-icon-float { animation: ocFloat 3.2s ease-in-out infinite; }
+          .order-confirm-tick-breathe { animation: ocTickBreathe 1.8s ease-in-out infinite; }
+          .order-confirm-icon-glow { animation: ocGlowPulse 2.4s ease-in-out infinite; }
+          .order-confirm-particle {
+            animation: ocParticleDrift 2.6s ease-in-out infinite;
+          }
+        `}
+      </style>
 
       {/* Success hero — screen only */}
-      <div className="no-print mb-10 rounded-2xl border border-border/80 bg-card/50 p-6 md:p-8 backdrop-blur-sm">
-        <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left md:gap-8">
-          <div className="mb-4 flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 md:mb-0">
-            <CheckCircle2 className="h-9 w-9" strokeWidth={2} aria-hidden />
+      <div className="no-print relative mt-20 mb-10 overflow-visible rounded-3xl border border-emerald-500/25 bg-gradient-to-br from-emerald-500/8 via-background to-background px-6 pb-8 pt-24 md:px-10 md:pb-10 md:pt-28">
+        <div className="pointer-events-none absolute -top-12 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-emerald-500/12 blur-2xl" />
+        <div className="pointer-events-none absolute -top-20 left-1/2 z-20 -translate-x-1/2 text-center">
+          <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border border-emerald-300/70 bg-emerald-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)] md:h-32 md:w-32">
+            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-emerald-500/30 blur-md" />
+            <span className="order-confirm-particle absolute left-3 top-6 h-2 w-2 rounded-full bg-emerald-200/80" />
+            <span className="order-confirm-particle absolute right-5 top-4 h-1.5 w-1.5 rounded-full bg-emerald-100/80 [animation-delay:0.5s]" />
+            <span className="order-confirm-particle absolute right-3 top-12 h-2 w-2 rounded-full bg-emerald-100/70 [animation-delay:1.2s]" />
+            <span className="order-confirm-particle absolute left-4 bottom-5 h-1.5 w-1.5 rounded-full bg-emerald-100/75 [animation-delay:0.9s]" />
+            <span className="order-confirm-particle absolute right-8 bottom-3 h-2 w-2 rounded-full bg-emerald-200/75 [animation-delay:1.6s]" />
+            <Check className="order-confirm-tick-breathe relative z-10 h-12 w-12 md:h-14 md:w-14" strokeWidth={3} aria-hidden />
           </div>
-          <div className="min-w-0 flex-1 space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground">Order confirmed</p>
-            <h1 className="text-2xl font-black uppercase tracking-tight md:text-3xl">
+        </div>
+        <div className="relative flex flex-col items-center text-center">
+          <div className="min-w-0 space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground">Order Success</p>
+            <h1 className="text-2xl font-black uppercase tracking-tight md:text-4xl">
               {firstName ? `Thank you, ${firstName}` : "Thank you for your order"}
             </h1>
-            <p className="text-sm text-muted-foreground leading-relaxed max-w-xl mx-auto md:mx-0">
+            <p className="text-sm text-muted-foreground leading-relaxed max-w-2xl mx-auto">
               We&apos;ve received your payment details and your order is being processed. A confirmation has been sent to{" "}
               <span className="font-medium text-foreground">{order.email}</span>. Keep this page as your receipt or print
               it below.
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-3 pt-2 md:justify-start">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <span className="inline-flex items-center rounded-md border border-border bg-background/80 px-3 py-1.5 font-mono text-xs font-semibold">
                 Order ID · {order.id}
               </span>
@@ -154,101 +212,114 @@ export default function OrderSuccess() {
         </div>
       </div>
 
-      <div className="order-confirmation-bill bg-white text-black border border-zinc-200 shadow-sm p-6 md:p-10">
-        <div className="flex items-center justify-between border-b border-zinc-200 pb-6">
-          <div className="flex items-center gap-4">
-            <img src="/images/logo.webp" alt="RARE.NP" className="h-11 w-11 object-contain" />
+      <div className="order-confirmation-bill relative overflow-hidden rounded-2xl border border-zinc-200 bg-white text-black shadow-[0_30px_80px_-35px_rgba(0,0,0,0.45)]">
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600" />
+        <div className="p-6 md:p-10">
+          <div className="flex items-center justify-between border-b border-zinc-200 pb-6">
+            <div className="flex items-center gap-4">
+              <img src="/images/logo.webp" alt="RARE.NP" className="h-11 w-11 object-contain" />
+              <div>
+                <p className="text-xl font-black tracking-tight">RARE.NP</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Official Bill Preview</p>
+              </div>
+            </div>
+            <div className="text-right text-sm">
+              <p className="font-semibold">Order ID: {order.id}</p>
+              <p className="text-zinc-500">{orderDateLabel}</p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 py-6 border-b border-zinc-200 text-sm">
             <div>
-              <p className="text-xl font-black tracking-tight">RARE.NP</p>
-              <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">Official Bill Preview</p>
+              <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Customer</p>
+              <p className="font-semibold">{order.fullName}</p>
+              <p>{order.email}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Delivery Location</p>
+              <p className="font-semibold">{order.deliveryLocation || order.locationCoordinates || "-"}</p>
+              {order.deliveryAddress && <p>{order.deliveryAddress}</p>}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Delivery</p>
+              <p>
+                {order.deliveryRequired === false
+                  ? "Pickup / No delivery required"
+                  : order.deliveryProvider
+                    ? `Partner: ${order.deliveryProvider}`
+                    : "Partner: To be assigned"}
+              </p>
+              <p className="text-zinc-600">Estimated delivery: 3-5 business days</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Payment Method</p>
+              <p className="font-semibold">{paymentMethodLabel(order.paymentMethod)}</p>
             </div>
           </div>
-          <div className="text-right text-sm">
-            <p className="font-semibold">Order ID: {order.id}</p>
-            <p className="text-zinc-500">{orderDateLabel}</p>
-          </div>
-        </div>
 
-        <div className="grid gap-4 md:grid-cols-2 py-6 border-b border-zinc-200 text-sm">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Customer</p>
-            <p className="font-semibold">{order.fullName}</p>
-            <p>{order.email}</p>
+          <div className="py-6 border-b border-zinc-200">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-200">
+                  <th className="py-2 pr-2">Item</th>
+                  <th className="py-2 px-2">Size</th>
+                  <th className="py-2 px-2">Color</th>
+                  <th className="py-2 px-2 text-center">Qty</th>
+                  <th className="py-2 px-2 text-right">Unit Price</th>
+                  <th className="py-2 pl-2 text-right">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.items.map((item: any) => {
+                  const lineTotal = Number(item.unitPrice) * item.quantity;
+                  const sizeLabel = String(item.size ?? "").trim() || "-";
+                  const colorLabel = selectedColorLabel(item);
+                  return (
+                    <tr key={item.id} className="border-b border-zinc-100 align-top">
+                      <td className="py-3 pr-2">
+                        <p className="font-medium">{item.product?.name || "Product"}</p>
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
+                          {sizeLabel}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2">
+                        <span className="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">
+                          {colorLabel}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2 text-center">{item.quantity}</td>
+                      <td className="py-3 px-2 text-right">{formatPrice(item.unitPrice)}</td>
+                      <td className="py-3 pl-2 text-right">{formatPrice(lineTotal)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Delivery Location</p>
-            <p className="font-semibold">{order.deliveryLocation || order.locationCoordinates || "-"}</p>
-            {order.deliveryAddress && <p>{order.deliveryAddress}</p>}
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Delivery</p>
-            <p>
-              {order.deliveryRequired === false
-                ? "Pickup / No delivery required"
-                : order.deliveryProvider
-                  ? `Partner: ${order.deliveryProvider}`
-                  : "Partner: To be assigned"}
-            </p>
-            <p className="text-zinc-600">Estimated delivery: 3-5 business days</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wider text-zinc-500 mb-1">Payment Method</p>
-            <p className="font-semibold">{paymentMethodLabel(order.paymentMethod)}</p>
-          </div>
-        </div>
 
-        <div className="py-6 border-b border-zinc-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase tracking-wider text-zinc-500 border-b border-zinc-200">
-                <th className="py-2 pr-2">Item</th>
-                <th className="py-2 px-2">Size</th>
-                <th className="py-2 px-2">Color</th>
-                <th className="py-2 px-2 text-center">Qty</th>
-                <th className="py-2 px-2 text-right">Unit Price</th>
-                <th className="py-2 pl-2 text-right">Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              {order.items.map((item: any) => {
-                const lineTotal = Number(item.unitPrice) * item.quantity;
-                return (
-                  <tr key={item.id} className="border-b border-zinc-100 align-top">
-                    <td className="py-3 pr-2">
-                      <p className="font-medium">{item.product?.name || "Product"}</p>
-                    </td>
-                    <td className="py-3 px-2">{item.product?.sizeOptions || "-"}</td>
-                    <td className="py-3 px-2">{item.product?.colorOptions || "-"}</td>
-                    <td className="py-3 px-2 text-center">{item.quantity}</td>
-                    <td className="py-3 px-2 text-right">{formatPrice(item.unitPrice)}</td>
-                    <td className="py-3 pl-2 text-right">{formatPrice(lineTotal)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="py-6 space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-zinc-600">Subtotal</span>
-            <span>{formatPrice(itemsSubtotal)}</span>
-          </div>
-          {promoDiscountAmount > 0 && (
+          <div className="py-6 space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-zinc-600">
-                Discount {order.promoCode ? `(${order.promoCode})` : ""}
-              </span>
-              <span>-{formatPrice(promoDiscountAmount)}</span>
+              <span className="text-zinc-600">Subtotal</span>
+              <span>{formatPrice(itemsSubtotal)}</span>
             </div>
-          )}
-          <div className="flex justify-between">
-            <span className="text-zinc-600">Shipping</span>
-            <span>{formatPrice(shippingFee)}</span>
-          </div>
-          <div className="flex justify-between border-t border-zinc-200 mt-3 pt-3 text-lg font-black">
-            <span>Grand Total (NPR)</span>
-            <span>{formatPrice(order.total)}</span>
+            {promoDiscountAmount > 0 && (
+              <div className="flex justify-between">
+                <span className="text-zinc-600">
+                  Discount {order.promoCode ? `(${order.promoCode})` : ""}
+                </span>
+                <span>-{formatPrice(promoDiscountAmount)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-zinc-600">Shipping</span>
+              <span>{formatPrice(shippingFee)}</span>
+            </div>
+            <div className="flex justify-between border-t border-zinc-200 mt-3 pt-3 text-lg font-black">
+              <span>Grand Total (NPR)</span>
+              <span>{formatPrice(order.total)}</span>
+            </div>
           </div>
         </div>
       </div>

@@ -132,6 +132,17 @@ async function downloadAdminCsv(url: string, fallbackFilename: string): Promise<
   window.URL.revokeObjectURL(downloadUrl);
 }
 
+function triggerAdminCsvDownload(url: string): void {
+  if (typeof window === "undefined") return;
+  const anchor = document.createElement("a");
+  const separator = url.includes("?") ? "&" : "?";
+  anchor.href = `${url}${separator}dl=${Date.now()}`;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
 export async function fetchPlatforms(): Promise<AdminPlatform[]> {
   const res = await apiRequest("GET", "/api/admin/platforms");
   const json = (await res.json()) as { success: boolean; data: AdminPlatform[] };
@@ -428,6 +439,10 @@ export async function verifyOrderPayment(
 
 export function exportOrdersCSV(): Promise<void> {
   return downloadAdminCsv("/api/admin/orders/export", "orders.csv");
+}
+
+export function exportOrdersCSVInstant(): void {
+  triggerAdminCsvDownload("/api/admin/orders/export");
 }
 
 export function exportAnalyticsCSV(range: string): Promise<void> {

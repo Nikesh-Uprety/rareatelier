@@ -189,6 +189,9 @@ export default function AdminLayout({
   const displayName = user?.name || user?.email || "User";
   const isVisuallyExpanded =
     !sidebarCollapsed || collapsedSidebarWidth >= ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD;
+  const collapsedThemeSidebarClass = !isVisuallyExpanded
+    ? "[&_[data-sidebar=sidebar-inner]]:bg-[#101A22] [&_[data-sidebar=sidebar-inner]]:text-white [&_[data-sidebar=sidebar-container]]:border-[#2D3A45] dark:[&_[data-sidebar=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-sidebar=sidebar-inner]]:text-[#111827] dark:[&_[data-sidebar=sidebar-container]]:border-[#D7DEE7]"
+    : "";
   const roleLabel = getRoleLabel(user?.role);
   const adminNav = getAdminNavigation(user?.role);
 
@@ -301,7 +304,10 @@ export default function AdminLayout({
 
       <Sidebar
         collapsible="icon"
-        className="relative border-r border-sidebar-border/50 hidden lg:flex"
+        className={cn(
+          "relative border-r border-sidebar-border/50 hidden lg:flex",
+          collapsedThemeSidebarClass,
+        )}
       >
         <SidebarHeader
           className={cn(
@@ -322,7 +328,7 @@ export default function AdminLayout({
           </Link>
         </SidebarHeader>
 
-        <SidebarContent className="sidebar-scrollbar p-4">
+        <SidebarContent className="sidebar-scrollbar p-4 group-data-[collapsible=icon]:overflow-y-auto">
           {isVisuallyExpanded ? (
             <Link
               href="/admin/profile"
@@ -361,18 +367,30 @@ export default function AdminLayout({
                       className={cn(
                         "h-10 rounded-lg text-[10px] font-semibold tracking-[0.08em] transition-all duration-300 ease-out",
                         isVisuallyExpanded ? "px-3" : "justify-center px-2",
+                        !isVisuallyExpanded &&
+                          !isActive &&
+                          "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                       )}
                     >
                       <Link
                         href={item.href}
+                        className={cn(
+                          "flex w-full items-center",
+                          !isVisuallyExpanded && !isActive && "text-white dark:text-[#111827]",
+                        )}
                         onClick={() => {
                           if (count > 0) markTypeRead(item.type);
                         }}
                         data-testid={`link-admin-nav-${item.label.toLowerCase()}`}
                       >
-                        <item.icon className="h-4 w-4 shrink-0" />
+                        <item.icon
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            !isVisuallyExpanded && !isActive && "text-white dark:text-[#111827]",
+                          )}
+                        />
                         <span
                           className={cn(
                             "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",

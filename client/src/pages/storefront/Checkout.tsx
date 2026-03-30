@@ -186,8 +186,18 @@ export default function Checkout() {
     try {
       const result = await mutateAsync({
         items: items.map((item) => ({
+          variantId:
+            item.variant.id?.toString() ??
+            item.product.variants
+              ?.find(
+                (variant) =>
+                  variant.size === item.variant.size && variant.color === item.variant.color,
+              )
+              ?.id
+              ?.toString(),
           productId: item.product.id,
           size: item.variant.size,
+          color: item.variant.color,
           quantity: item.quantity,
           priceAtTime: item.product.price,
         })),

@@ -247,21 +247,21 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
   if (attrsLoading || catsLoading) return <div className="p-12 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <div className="flex flex-col h-full animate-in slide-in-from-right duration-300">
-      <SheetHeader className="p-6 border-b bg-white dark:bg-card">
+    <div className="flex h-full min-h-0 flex-col animate-in slide-in-from-right duration-300 bg-gradient-to-b from-[#FBFDFB] to-[#F2F7F2] dark:from-card dark:to-card/80">
+      <SheetHeader className="shrink-0 border-b border-[#DDE7DB] bg-white/90 p-6 backdrop-blur dark:border-border dark:bg-card/95">
         <SheetTitle className="text-2xl font-serif">Store Attributes</SheetTitle>
         <SheetDescription>Manage product variants, sizes, and categories in one place.</SheetDescription>
       </SheetHeader>
 
-      <div className="flex-1 p-6 space-y-8">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-5 sm:px-6">
         <Tabs defaultValue="color" onValueChange={setActiveTab} className="w-full">
-          <TabsList className="bg-muted/50 w-full mb-6">
-            <TabsTrigger value="color" className="flex-1"><Palette className="w-4 h-4 mr-2" /> Product Variants</TabsTrigger>
-            <TabsTrigger value="size" className="flex-1"><Ruler className="w-4 h-4 mr-2" /> Product Sizes</TabsTrigger>
-            <TabsTrigger value="category" className="flex-1"><Tags className="w-4 h-4 mr-2" /> Category</TabsTrigger>
+          <TabsList className="mb-6 w-full rounded-2xl border border-[#DDE7DB] bg-white/85 p-1 shadow-sm backdrop-blur dark:border-border dark:bg-muted/40">
+            <TabsTrigger value="color" className="flex-1 rounded-xl data-[state=active]:bg-[#2F5A39] data-[state=active]:text-white"><Palette className="w-4 h-4 mr-2" /> Product Variants</TabsTrigger>
+            <TabsTrigger value="size" className="flex-1 rounded-xl data-[state=active]:bg-[#2F5A39] data-[state=active]:text-white"><Ruler className="w-4 h-4 mr-2" /> Product Sizes</TabsTrigger>
+            <TabsTrigger value="category" className="flex-1 rounded-xl data-[state=active]:bg-[#2F5A39] data-[state=active]:text-white"><Tags className="w-4 h-4 mr-2" /> Category</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="color" className="space-y-6">
+          <TabsContent value="color" className="mt-0 space-y-6 pb-6">
             <Card className="border-none shadow-none bg-transparent">
                <CardContent className="p-0">
                   <div className="flex gap-3 items-end mb-8 bg-white dark:bg-muted/20 p-4 rounded-2xl border">
@@ -292,7 +292,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-4 pb-20">
+                  <div className="grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 gap-4 pb-6">
                     {attributes?.filter(a => a.type === 'color').map(attr => {
                       const [name, hex] = attr.value.split('|');
                       const contrast = getContrastColor(hex);
@@ -339,7 +339,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
             </Card>
           </TabsContent>
 
-          <TabsContent value="size" className="space-y-6">
+          <TabsContent value="size" className="mt-0 space-y-6 pb-6">
             <div className="flex gap-2">
               <Input placeholder="Size (e.g. m, xl, xxl)" value={newValue} onChange={(e) => setNewValue(e.target.value)} className="h-11 rounded-xl" />
               <Button className="h-11 rounded-xl" onClick={() => createAttrMutation.mutate({ type: "size", value: newValue })}><Plus className="w-4 h-4" /></Button>
@@ -408,13 +408,13 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
             </div>
           </TabsContent>
 
-          <TabsContent value="category" className="space-y-6">
+          <TabsContent value="category" className="mt-0 space-y-6 pb-6">
             <div className="flex gap-2">
               <Input placeholder="New Category Name" value={newValue} onChange={(e) => setNewValue(e.target.value)} className="h-11 rounded-xl" />
               <Button className="h-11 rounded-xl" onClick={() => catMutation.mutate({ name: newValue, slug: slugify(newValue) })}><Plus className="w-4 h-4" /></Button>
             </div>
 
-            <div className="space-y-3 pb-20 max-h-[60vh] overflow-y-auto pr-1">
+            <div className="space-y-3 pb-6">
                {categories?.map(cat => {
                  const Icon = CATEGORY_ICONS[cat.slug] || CATEGORY_ICONS.DEFAULT;
                  const categoryHref = `/admin/products?category=${encodeURIComponent(cat.slug)}`;
@@ -511,8 +511,8 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
         </Tabs>
       </div>
       
-      <div className="p-6 border-t bg-muted/20 flex justify-end">
-         <Button variant="ghost" className="rounded-xl" onClick={onClose}>Close Manager</Button>
+      <div className="shrink-0 border-t border-[#DDE7DB] bg-white/85 p-5 backdrop-blur dark:border-border dark:bg-card/80">
+         <Button variant="outline" className="w-full rounded-2xl border-[#CFE0CD] bg-gradient-to-r from-white to-[#F2F7F2] font-semibold hover:-translate-y-0.5 hover:shadow-[0_12px_22px_rgba(34,63,41,0.16)] transition-all duration-300" onClick={onClose}>Close Manager</Button>
       </div>
     </div>
   );
