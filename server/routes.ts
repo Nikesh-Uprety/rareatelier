@@ -321,7 +321,7 @@ export async function registerRoutes(
   app.use("/api/admin/users", requireAdminPageAccess("store-users"));
   app.use("/api/admin/store-users", requireAdminPageAccess("store-users"));
   app.use("/api/admin/notifications", requireAdminPageAccess("notifications"));
-  app.use("/api/admin/messages", requireAdminPageAccess("profile"));
+  app.use("/api/admin/messages", requireAdminPageAccess("messages"));
   app.use("/api/admin/marketing", requireAdminPageAccess("marketing"));
   app.use("/api/admin/newsletter", requireAdminPageAccess("marketing"));
   app.use("/api/admin/templates", requireAdminPageAccess("marketing"));
@@ -1024,11 +1024,11 @@ export async function registerRoutes(
       });
 
       // Create admin notification and broadcast via WebSocket
-      const notification = await storage.createAdminNotification({
+      await storage.createAdminNotification({
         title: "New Contact Message",
         message: `From: ${name} (${subject})`,
         type: "contact",
-        link: "/admin/profile?tab=messages",
+        link: "/admin/messages",
       });
 
       return res.status(201).json({ success: true, data: created });
@@ -3303,15 +3303,21 @@ export async function registerRoutes(
   );
 
   // Upload avatar image
+  const uploadAvatarSchema = z.object({
+    imageBase64: z.string().min(1),
+    provider: z.enum(["local", "cloudinary"]).optional(),
+  });
+
   app.post(
     "/api/admin/profile/upload-avatar",
     requireAuth,
     async (req: Request, res: Response) => {
       try {
-        const { imageBase64 } = req.body;
-        if (!imageBase64 || typeof imageBase64 !== "string") {
+        const parsed = uploadAvatarSchema.safeParse(req.body);
+        if (!parsed.success) {
           return res.status(400).json({ success: false, error: "Missing imageBase64" });
         }
+        const { imageBase64, provider = "local" } = parsed.data;
 
         const user = req.user as Express.User | undefined;
         if (!user) {
@@ -3334,19 +3340,21 @@ export async function registerRoutes(
           .webp({ quality: 96, effort: 6, smartSubsample: true })
           .toBuffer();
 
-        const fs = await import("fs");
-        const path = await import("path");
+        if (provider === "cloudinary") {
+          const uploaded = await uploadMediaToCloudinary(finalBuffer, "profile");
+          await storage.updateUserProfile(user.id, { profileImageUrl: uploaded.url });
+          return res.json({ success: true, url: uploaded.url, provider: "cloudinary" });
+        }
+
         const avatarDir = path.join(UPLOADS_DIR, "avatars");
         fs.mkdirSync(avatarDir, { recursive: true });
-
         const filename = `avatar-${user.id}-${Date.now()}.webp`;
         const filepath = path.join(avatarDir, filename);
         fs.writeFileSync(filepath, finalBuffer);
-
         const url = `/uploads/avatars/${filename}`;
         await storage.updateUserProfile(user.id, { profileImageUrl: url });
 
-        return res.json({ success: true, url });
+        return res.json({ success: true, url, provider: "local" });
       } catch (err) {
         console.error("Error in POST /api/admin/profile/upload-avatar", err);
         return res.status(500).json({ success: false, error: "Failed to upload avatar" });
@@ -3926,6 +3934,50 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to send reply" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/messages/read-all",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const messages = await storage.getContactMessages();
+        const unreadMessages = messages.filter((message) => message.status === "unread");
+
+        await Promise.all(
+          unreadMessages.map((message) =>
+            storage.updateContactMessageStatus(message.id, "read"),
+          ),
+        );
+
+        return res.json({ success: true, updatedCount: unreadMessages.length });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/messages/read-all", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to mark all messages as read" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/messages/:id/read",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const id = getQueryParam(req.params.id);
+        if (!id) {
+          return res.status(400).json({ success: false, error: "Message ID is required" });
+        }
+        const updated = await storage.updateContactMessageStatus(id, "read");
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/messages/:id/read", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to mark message as read" });
       }
     },
   );

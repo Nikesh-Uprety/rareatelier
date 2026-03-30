@@ -36,6 +36,7 @@ const loadAdminInventoryPage = () => import("@/pages/admin/Inventory");
 const loadAdminOrdersPage = () => import("@/pages/admin/Orders");
 const loadAdminBillsPage = () => import("@/pages/admin/Bills");
 const loadAdminCustomersPage = () => import("@/pages/admin/Customers");
+const loadAdminMessagesPage = () => import("@/pages/admin/Messages");
 const loadAdminStoreUsersPage = () => import("@/pages/admin/StoreUsers");
 const loadAdminPOSPage = () => import("@/pages/admin/POS");
 const loadAdminAnalyticsPage = () => import("@/pages/admin/Analytics");
@@ -65,6 +66,7 @@ const AdminInventory = lazy(loadAdminInventoryPage);
 const AdminOrders = lazy(loadAdminOrdersPage);
 const AdminBills = lazy(loadAdminBillsPage);
 const AdminCustomers = lazy(loadAdminCustomersPage);
+const AdminMessages = lazy(loadAdminMessagesPage);
 const AdminStoreUsers = lazy(loadAdminStoreUsersPage);
 const AdminPOS = lazy(loadAdminPOSPage);
 const AdminAnalytics = lazy(loadAdminAnalyticsPage);
@@ -129,6 +131,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/inventory") return loadAdminInventoryPage();
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
   if (cleanPath === "/admin/customers") return loadAdminCustomersPage();
+  if (cleanPath === "/admin/messages") return loadAdminMessagesPage();
   if (cleanPath === "/admin/store-users") return loadAdminStoreUsersPage();
   if (cleanPath === "/admin/bills") return loadAdminBillsPage();
   if (cleanPath === "/admin/pos") return loadAdminPOSPage();
@@ -309,6 +312,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="customers">
           <AdminLayout>
             <AdminCustomers />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/messages">
+        <ProtectedRoute requiredAdminPage="messages">
+          <AdminLayout>
+            <AdminMessages />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

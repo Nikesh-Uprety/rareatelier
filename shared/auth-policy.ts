@@ -3,6 +3,7 @@ const ADMIN_PANEL_ROLES = ["owner", "admin", "manager", "csr", "staff"] as const
 export const ADMIN_PAGE_KEYS = [
   "dashboard",
   "profile",
+  "messages",
   "notifications",
   "analytics",
   "marketing",
@@ -30,6 +31,7 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
   manager: [
     "dashboard",
     "profile",
+    "messages",
     "notifications",
     "marketing",
     "products",
@@ -42,6 +44,7 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
   staff: [
     "dashboard",
     "profile",
+    "messages",
     "notifications",
     "products",
     "orders",
@@ -53,6 +56,7 @@ const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
   csr: [
     "dashboard",
     "profile",
+    "messages",
     "notifications",
     "orders",
     "customers",

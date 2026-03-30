@@ -1707,8 +1707,8 @@ export class PgStorage implements IStorage {
     await this.createAdminNotification({
       title: "New Contact Message",
       message: `From ${row.name}: ${row.subject}`,
-      type: "system",
-      link: "/admin/profile?tab=messages",
+      type: "contact",
+      link: "/admin/messages",
     });
 
     return row;

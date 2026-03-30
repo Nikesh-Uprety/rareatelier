@@ -1,4 +1,4 @@
-import { useRef, useState, lazy, Suspense } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import {
   ADMIN_FONT_OPTIONS,
   DEFAULT_ADMIN_FONT_SETTINGS,
@@ -38,8 +37,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-
-const MessagesSection = lazy(() => import("@/components/admin/MessagesSection"));
 
 interface AdminUser {
   id: string;
@@ -73,6 +70,7 @@ export default function AdminProfilePage() {
   const [adminFontScale, setAdminFontScale] = useState<AdminFontScale>(() => readAdminFontSettings().scale);
 
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImageUrl || null);
+  const [avatarUploadProvider, setAvatarUploadProvider] = useState<"local" | "cloudinary">("cloudinary");
   const [editEmail, setEditEmail] = useState(user?.email ?? "");
   const [isEmailVerifyOpen, setIsEmailVerifyOpen] = useState(false);
   const [emailTempToken, setEmailTempToken] = useState("");
@@ -236,9 +234,14 @@ export default function AdminProfilePage() {
   });
 
   const avatarMutation = useMutation({
-    mutationFn: async (imageBase64: string) => {
-      const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", { imageBase64 });
-      return (await res.json()) as { success: boolean; url?: string; error?: string };
+    mutationFn: async (payload: { imageBase64: string; provider: "local" | "cloudinary" }) => {
+      const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", payload);
+      return (await res.json()) as {
+        success: boolean;
+        url?: string;
+        provider?: "local" | "cloudinary";
+        error?: string;
+      };
     },
     onSuccess: (result) => {
       if (!result.success || !result.url) {
@@ -249,7 +252,13 @@ export default function AdminProfilePage() {
       setSelectedAvatarUrl(result.url);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "profile", "avatar-history"] });
-      toast({ title: "Profile picture updated" });
+      toast({
+        title: "Profile picture updated",
+        description:
+          result.provider === "cloudinary"
+            ? "Uploaded via Cloudinary."
+            : "Uploaded to local storage.",
+      });
     },
     onError: (err: Error) => {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
@@ -261,7 +270,7 @@ export default function AdminProfilePage() {
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = reader.result as string;
-      avatarMutation.mutate(base64);
+      avatarMutation.mutate({ imageBase64: base64, provider: avatarUploadProvider });
     };
     reader.readAsDataURL(file);
   };
@@ -392,10 +401,9 @@ export default function AdminProfilePage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className={cn("grid w-full", canManageAdminUsers ? "grid-cols-3" : "grid-cols-2")}>
+        <TabsList className={cn("grid w-full", canManageAdminUsers ? "grid-cols-2" : "grid-cols-1")}>
           <TabsTrigger value="account">Account</TabsTrigger>
           {canManageAdminUsers && <TabsTrigger value="users">All Admin Users</TabsTrigger>}
-          <TabsTrigger value="messages">Messages</TabsTrigger>
         </TabsList>
 
         <TabsContent value="account" className="mt-4 space-y-6">
@@ -438,6 +446,23 @@ export default function AdminProfilePage() {
                 </div>
               </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
+                    {(["cloudinary", "local"] as const).map((providerOption) => (
+                      <button
+                        key={providerOption}
+                        type="button"
+                        onClick={() => setAvatarUploadProvider(providerOption)}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
+                          avatarUploadProvider === providerOption
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {providerOption === "cloudinary" ? "Cloudinary" : "Local"}
+                      </button>
+                    ))}
+                  </div>
                   <Button
                     type="button"
                     size="sm"
@@ -463,6 +488,9 @@ export default function AdminProfilePage() {
                     View Photo
                   </Button>
                 </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
+                </p>
                 <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
                   Portrait images now keep their original orientation and display without forced horizontal cropping.
                 </p>
@@ -761,11 +789,6 @@ export default function AdminProfilePage() {
           </TabsContent>
         )}
 
-        <TabsContent value="messages" className="mt-4">
-          <Suspense fallback={<div className="h-64 flex items-center justify-center"><BrandedLoader /></div>}>
-            <MessagesSection />
-          </Suspense>
-        </TabsContent>
       </Tabs>
 
       {/* Dialogs */}
@@ -840,6 +863,23 @@ export default function AdminProfilePage() {
               </DialogHeader>
 
               <div className="mt-5 flex flex-wrap gap-2">
+                <div className="inline-flex items-center gap-1 rounded-full bg-white/10 p-1">
+                  {(["cloudinary", "local"] as const).map((providerOption) => (
+                    <button
+                      key={`dialog-${providerOption}`}
+                      type="button"
+                      onClick={() => setAvatarUploadProvider(providerOption)}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-full transition-colors",
+                        avatarUploadProvider === providerOption
+                          ? "bg-white text-black shadow-sm"
+                          : "text-white/70 hover:text-white",
+                      )}
+                    >
+                      {providerOption === "cloudinary" ? "Cloudinary" : "Local"}
+                    </button>
+                  ))}
+                </div>
                 <Button
                   type="button"
                   size="sm"
@@ -882,6 +922,9 @@ export default function AdminProfilePage() {
                   </Button>
                 )}
               </div>
+              <p className="mt-2 text-xs text-white/60">
+                Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
+              </p>
 
               <div className="mt-6">
                 <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/55">

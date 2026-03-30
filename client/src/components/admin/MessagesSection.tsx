@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { Eye, Reply, Send, MessageSquare, X } from "lucide-react";
+import { Eye, Reply, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,8 @@ interface ContactMessage {
   createdAt: string;
 }
 
+type DateFilter = "1d" | "2d" | "7d" | "all";
+
 export default function MessagesSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -35,6 +37,7 @@ export default function MessagesSection() {
   const [isViewOpen, setIsViewOpen] = useState(false);
   const [isReplyOpen, setIsReplyOpen] = useState(false);
   const [replyText, setReplyText] = useState("");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
 
   const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
     queryKey: ["admin", "messages"],
@@ -45,6 +48,28 @@ export default function MessagesSection() {
   });
 
   const messages = messagesQuery.data?.data ?? [];
+
+  const filteredMessages = useMemo(() => {
+    if (dateFilter === "all") {
+      return messages;
+    }
+
+    const daysMap: Record<Exclude<DateFilter, "all">, number> = {
+      "1d": 1,
+      "2d": 2,
+      "7d": 7,
+    };
+
+    const threshold = Date.now() - daysMap[dateFilter] * 24 * 60 * 60 * 1000;
+    return messages.filter((msg) => {
+      const createdAtTime = new Date(msg.createdAt).getTime();
+      return Number.isFinite(createdAtTime) && createdAtTime >= threshold;
+    });
+  }, [messages, dateFilter]);
+
+  const unreadCount = filteredMessages.filter((msg) => msg.status === "unread").length;
+  const repliedCount = filteredMessages.filter((msg) => msg.status === "replied").length;
+  const unreadAllCount = messages.filter((msg) => msg.status === "unread").length;
 
   const replyMutation = useMutation({
     mutationFn: async (payload: { id: string; to: string; subject: string; html: string }) => {
@@ -70,6 +95,24 @@ export default function MessagesSection() {
     },
   });
 
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PATCH", "/api/admin/messages/read-all");
+      return res.json() as Promise<{ success: boolean; updatedCount: number }>;
+    },
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({
+          title:
+            result.updatedCount > 0
+              ? `Marked ${result.updatedCount} messages as read`
+              : "All messages are already marked as read",
+        });
+        queryClient.invalidateQueries({ queryKey: ["admin", "messages"] });
+      }
+    },
+  });
+
   const handleView = (msg: ContactMessage) => {
     setSelectedMessage(msg);
     setIsViewOpen(true);
@@ -88,14 +131,56 @@ export default function MessagesSection() {
     <div className="space-y-4">
       <div className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border overflow-hidden">
         <div className="p-4 border-b border-[#E5E5E0] dark:border-border bg-muted/30">
-          <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
-            Customer Inquiries
-          </h2>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold tracking-[0.18em] uppercase text-muted-foreground">
+                Customer Inquiries
+              </h2>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em]">
+                <Badge variant="default" className="bg-blue-600">{unreadCount} New</Badge>
+                <Badge variant="outline">{filteredMessages.length - unreadCount - repliedCount} Read</Badge>
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-300 dark:border-green-900/50">
+                  {repliedCount} Replied
+                </Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-3 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                  disabled={markAllReadMutation.isPending || unreadAllCount === 0}
+                  onClick={() => markAllReadMutation.mutate()}
+                >
+                  {markAllReadMutation.isPending ? "Marking..." : "Read All"}
+                </Button>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Sort by
+              </span>
+              {[
+                { key: "1d" as const, label: "1 day" },
+                { key: "2d" as const, label: "2 days" },
+                { key: "7d" as const, label: "7 days" },
+                { key: "all" as const, label: "All time" },
+              ].map((filterOption) => (
+                <Button
+                  key={filterOption.key}
+                  variant={dateFilter === filterOption.key ? "default" : "outline"}
+                  size="sm"
+                  className="h-7 px-3 text-[10px] font-semibold uppercase tracking-[0.1em]"
+                  onClick={() => setDateFilter(filterOption.key)}
+                >
+                  {filterOption.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
             <thead className="bg-muted/30 text-[11px] uppercase tracking-[0.18em] text-muted-foreground border-b border-[#E5E5E0] dark:border-border">
               <tr>
+                <th className="px-6 py-3 font-semibold">S.N.</th>
                 <th className="px-6 py-3 font-semibold">Status</th>
                 <th className="px-6 py-3 font-semibold">Sender</th>
                 <th className="px-6 py-3 font-semibold">Subject</th>
@@ -104,12 +189,34 @@ export default function MessagesSection() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#F0F0EB] dark:divide-border">
-              {messages.map((msg) => (
-                <tr key={msg.id} className={cn("hover:bg-muted/20 transition-colors", msg.status === 'unread' && "bg-blue-50/30 dark:bg-blue-900/10")}>
+              {messagesQuery.isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                    Loading messages...
+                  </td>
+                </tr>
+              )}
+              {!messagesQuery.isLoading && filteredMessages.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                    No customer messages yet.
+                  </td>
+                </tr>
+              )}
+              {!messagesQuery.isLoading && filteredMessages.map((msg, index) => (
+                <tr
+                  key={msg.id}
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/20 transition-colors",
+                    msg.status === "unread" && "bg-blue-50/30 dark:bg-blue-900/10",
+                  )}
+                  onClick={() => handleView(msg)}
+                >
+                  <td className="px-6 py-4 font-medium text-[12px]">{index + 1}</td>
                   <td className="px-6 py-4">
-                    {msg.status === 'replied' ? (
-                      <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200">Replied</Badge>
-                    ) : msg.status === 'unread' ? (
+                    {msg.status === "replied" ? (
+                      <Badge variant="outline" className="text-[10px] bg-green-50 text-green-700 border-green-200 dark:bg-green-950/20 dark:text-green-300 dark:border-green-900/50">Replied</Badge>
+                    ) : msg.status === "unread" ? (
                       <Badge variant="default" className="text-[10px] bg-blue-600">New</Badge>
                     ) : (
                       <Badge variant="outline" className="text-[10px]">Read</Badge>
@@ -126,13 +233,31 @@ export default function MessagesSection() {
                   <td className="px-6 py-4 text-muted-foreground">
                     {format(new Date(msg.createdAt), "MMM d, h:mm a")}
                   </td>
-                  <td className="px-6 py-4 text-right flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleView(msg)}>
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleReply(msg)}>
-                      <Reply className="h-4 w-4" />
-                    </Button>
+                  <td className="px-6 py-4 text-right">
+                    <div className="inline-flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleView(msg);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleReply(msg);
+                        }}
+                      >
+                        <Reply className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
