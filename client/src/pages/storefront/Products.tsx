@@ -291,7 +291,7 @@ export default function Products() {
                     <button
                       type="button"
                       style={{ fontFamily: "Roboto, sans-serif" }}
-                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[#1f3150]/45 bg-gradient-to-r from-[#1b2d49] via-[#223b5f] to-[#2a476f] px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f3f7ff] shadow-[0_10px_28px_rgba(22,40,73,0.34)] transition-all hover:brightness-105 dark:border-[#95afd9]/35 dark:from-[#18263e] dark:via-[#1f3455] dark:to-[#274264] dark:text-[#edf3ff]"
+                      className="inline-flex h-10 items-center gap-2 rounded-full border border-[#1f3150]/45 bg-gradient-to-r from-[#1b2d49] via-[#000000] to-[#2a476f] px-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#f3f7ff] shadow-[0_10px_28px_rgba(22,40,73,0.34)] transition-all hover:brightness-105 dark:border-[#95afd9]/35 dark:from-[#18263e] dark:via-[#000000] dark:to-[#274264] dark:text-[#edf3ff]"
                     >
                       <ArrowDownWideNarrow className="h-3.5 w-3.5" />
                       <span>{SORT_LABELS[sortBy] ? `Sort: ${SORT_LABELS[sortBy]}` : "Sort By"}</span>
