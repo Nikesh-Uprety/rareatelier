@@ -1,13 +1,20 @@
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
+import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "development",
     integrations: [
-      // Add any additional integrations here
+      // Enable HTTP tracing for metrics
+      nodeProfilingIntegration(),
     ],
+    // Enable metrics
+    _experiments: {
+      // Enable metrics (experimental flag)
+      metricsAggregator: true,
+    },
   });
 }
 
@@ -28,6 +35,7 @@ import { logger } from "./logger";
 import { corsHeaders, securityHeaders } from "./middleware/security";
 import { ensureDefaultProductAttributes } from "./productAttributeDefaults";
 import { registerRoutes } from "./routes";
+import { registerSentryTestRoutes } from "./sentry-test";
 import { serveStatic } from "./static";
 import { initWebSocketServer } from "./websocket";
 import os from "node:os";
@@ -363,6 +371,7 @@ async function ensureE2ETestState() {
   );
 
   await registerRoutes(httpServer, app);
+  registerSentryTestRoutes(app);
 
   // Sentry error handler must be after all controllers but before other error handlers
   if (process.env.SENTRY_DSN) {

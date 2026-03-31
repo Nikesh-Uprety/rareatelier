@@ -21,6 +21,7 @@ import CartSidebar from "@/components/layout/CartSidebar";
 import { fetchCategories, fetchProducts } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
+import SentryTest from "@/components/SentryTest";
 
 const loadProductsPage = () => import("@/pages/storefront/Products");
 const loadProductDetailPage = () => import("@/pages/storefront/ProductDetail");
@@ -431,6 +432,13 @@ function AppRoutes() {
       </Route>
       <Route path="/admin/login">
         <LoginRoute />
+      </Route>
+      
+      {/* Sentry Testing Route */}
+      <Route path="/sentry-test">
+        <StorefrontLayout>
+          <SentryTest />
+        </StorefrontLayout>
       </Route>
 
       {/* Legal Placeholders */}
