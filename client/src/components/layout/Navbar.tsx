@@ -59,9 +59,10 @@ export default function Navbar() {
   const isHomeRoute = location === "/";
   const isNewCollectionRoute = location === "/new-collection";
   const isAtelierRoute = location === "/atelier";
-  const isTransparentState = isHomeRoute || (isNewCollectionRoute && !isScrolled) || (isAtelierRoute && !isScrolled);
+  const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
+  const isTransparentState = !hasScrolledPastThreshold;
+  const shouldUseChrome = hasScrolledPastThreshold;
   const useHeroContrastState = isTransparentState;
-  const shouldUseChrome = !isTransparentState;
   const isDark = theme === "dark";
   const dashboardPath = user
     ? canAccessAdminPanel(user.role)
@@ -104,12 +105,18 @@ export default function Navbar() {
       const announceHeight = announceRef.current?.offsetHeight ?? 0;
       setHideAnnouncement(y > announceHeight);
 
+      const threshold = 80;
+      if (y > threshold && !hasScrolledPastThreshold) {
+        setHasScrolledPastThreshold(true);
+      }
+
       const previousY = lastScrollYRef.current;
       const delta = y - previousY;
       const nearTop = y <= 40;
 
       if (nearTop) {
         setIsNavHidden(false);
+        setHasScrolledPastThreshold(false);
       } else if (delta > 6) {
         setIsNavHidden(true);
       } else if (delta < -6) {
@@ -125,7 +132,7 @@ export default function Navbar() {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [isStorefront]);
+  }, [isStorefront, hasScrolledPastThreshold]);
 
   if (!isStorefront) return null;
 
@@ -156,17 +163,19 @@ export default function Navbar() {
     return mode === "light"
       ? {
           background:
-            "linear-gradient(135deg, rgba(255,255,255,0.76) 0%, rgba(255,255,255,0.56) 48%, rgba(248,248,248,0.46) 100%)",
-          backdropFilter: "blur(18px) saturate(165%)",
-          borderColor: "rgba(255,255,255,0.62)",
-          boxShadow: "0 18px 42px rgba(15,23,42,0.09), inset 0 1px 0 rgba(255,255,255,0.72)",
+            "linear-gradient(135deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.01) 48%, rgba(255,255,255,0.01) 100%)",
+          backdropFilter: "blur(1px)",
+          WebkitBackdropFilter: "blur(1px)",
+          borderColor: "rgba(255,255,255,0.08)",
+          boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
         }
       : {
           background:
-            "linear-gradient(135deg, rgba(10,10,12,0.72) 0%, rgba(16,16,20,0.52) 52%, rgba(12,12,14,0.42) 100%)",
-          backdropFilter: "blur(20px) saturate(175%)",
-          borderColor: "rgba(255,255,255,0.14)",
-          boxShadow: "0 22px 48px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)",
+            "linear-gradient(135deg, rgba(0,0,0,0.01) 0%, rgba(0,0,0,0.01) 52%, rgba(0,0,0,0.01) 100%)",
+          backdropFilter: "blur(1px)",
+          WebkitBackdropFilter: "blur(1px)",
+          borderColor: "rgba(255,255,255,0.06)",
+          boxShadow: "0 1px 0 rgba(255,255,255,0.04)",
         };
   };
 
@@ -176,19 +185,17 @@ export default function Navbar() {
     ? "rgba(255,255,255,0.98)"
     : isDark
       ? "#111111"
-      : "rgba(255,255,255,0.96)";
+      : "rgba(0,0,0,0.88)";
   const navChrome = getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const logoFilter = useHeroContrastState
     ? "brightness(0) invert(1)"
     : isDark
       ? "brightness(0)"
       : "brightness(0) invert(1)";
-  const navUnderlineColor = useHeroContrastState ? "#ffffff" : isDark ? "#111111" : "#ffffff";
+  const navUnderlineColor = useHeroContrastState ? "#ffffff" : isDark ? "#111111" : "#000000";
   const navTextShadow = useHeroContrastState
     ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
-    : isDark
-      ? "none"
-      : "0 0 14px rgba(255,255,255,0.3)";
+    : "none";
 
   return (
     <header
@@ -254,7 +261,7 @@ export default function Navbar() {
                 type="button"
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                 className="flex h-10 w-10 items-center justify-center"
-                style={{ color: useHeroContrastState ? "#ffffff" : isDark ? "#181411" : "#ffffff" }}
+                style={{ color: isDark ? "#ffffff" : "#ffffff" }}
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -288,12 +295,8 @@ export default function Navbar() {
                 onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: useHeroContrastState ? "#ffffff" : isDark ? "#181411" : "#ffffff",
-                  textShadow: useHeroContrastState
-                    ? "0 0 14px rgba(255,255,255,0.28)"
-                    : !isDark && shouldUseChrome
-                      ? "0 0 10px rgba(255,255,255,0.28)"
-                      : "none",
+                  color: "#ffffff",
+                  textShadow: "0 0 14px rgba(255,255,255,0.28)",
                 }}
                 iconClassName="h-4.5 w-4.5"
               />
@@ -302,12 +305,8 @@ export default function Navbar() {
                 onClick={() => openCartSidebar()}
                 className="relative flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: useHeroContrastState ? "#ffffff" : isDark ? "#181411" : "#ffffff",
-                  textShadow: useHeroContrastState
-                    ? "0 0 14px rgba(255,255,255,0.28)"
-                    : !isDark && shouldUseChrome
-                      ? "0 0 10px rgba(255,255,255,0.28)"
-                      : "none",
+                  color: "#ffffff",
+                  textShadow: "0 0 14px rgba(255,255,255,0.28)",
                 }}
               >
                 <ShoppingBag className="h-4.5 w-4.5" />
