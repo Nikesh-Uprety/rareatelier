@@ -163,19 +163,19 @@ export default function Navbar() {
     return mode === "light"
       ? {
           background:
-            "linear-gradient(135deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.01) 48%, rgba(255,255,255,0.01) 100%)",
-          backdropFilter: "blur(1px)",
-          WebkitBackdropFilter: "blur(1px)",
-          borderColor: "rgba(255,255,255,0.08)",
-          boxShadow: "0 1px 0 rgba(0,0,0,0.04)",
+            "linear-gradient(135deg, rgba(255,255,255,0.82) 0%, rgba(255,255,255,0.72) 48%, rgba(255,255,255,0.68) 100%)",
+          backdropFilter: "blur(16px) saturate(150%)",
+          WebkitBackdropFilter: "blur(16px) saturate(150%)",
+          borderColor: "rgba(255,255,255,0.50)",
+          boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
         }
       : {
           background:
-            "linear-gradient(135deg, rgba(0,0,0,0.01) 0%, rgba(0,0,0,0.01) 52%, rgba(0,0,0,0.01) 100%)",
-          backdropFilter: "blur(1px)",
-          WebkitBackdropFilter: "blur(1px)",
-          borderColor: "rgba(255,255,255,0.06)",
-          boxShadow: "0 1px 0 rgba(255,255,255,0.04)",
+            "linear-gradient(135deg, rgba(10,10,10,0.82) 0%, rgba(16,16,16,0.72) 52%, rgba(12,12,12,0.68) 100%)",
+          backdropFilter: "blur(16px) saturate(150%)",
+          WebkitBackdropFilter: "blur(16px) saturate(150%)",
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "0 1px 0 rgba(255,255,255,0.06)",
         };
   };
 
@@ -184,15 +184,15 @@ export default function Navbar() {
   const navLinkColor = useHeroContrastState
     ? "rgba(255,255,255,0.98)"
     : isDark
-      ? "#111111"
-      : "rgba(0,0,0,0.88)";
+      ? "#ffffff"
+      : "#111111";
   const navChrome = getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const logoFilter = useHeroContrastState
     ? "brightness(0) invert(1)"
     : isDark
-      ? "brightness(0)"
-      : "brightness(0) invert(1)";
-  const navUnderlineColor = useHeroContrastState ? "#ffffff" : isDark ? "#111111" : "#000000";
+      ? "brightness(0) invert(1)"
+      : "brightness(0)";
+  const navUnderlineColor = useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111";
   const navTextShadow = useHeroContrastState
     ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
     : "none";
@@ -261,7 +261,7 @@ export default function Navbar() {
                 type="button"
                 onClick={() => setIsMobileMenuOpen((prev) => !prev)}
                 className="flex h-10 w-10 items-center justify-center"
-                style={{ color: isDark ? "#ffffff" : "#ffffff" }}
+                style={{ color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111" }}
                 aria-label="Toggle menu"
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -295,8 +295,8 @@ export default function Navbar() {
                 onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
                 className="flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: "#ffffff",
-                  textShadow: "0 0 14px rgba(255,255,255,0.28)",
+                  color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111",
+                  textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
                 iconClassName="h-4.5 w-4.5"
               />
@@ -305,8 +305,8 @@ export default function Navbar() {
                 onClick={() => openCartSidebar()}
                 className="relative flex h-10 w-10 items-center justify-center"
                 style={{
-                  color: "#ffffff",
-                  textShadow: "0 0 14px rgba(255,255,255,0.28)",
+                  color: useHeroContrastState ? "#ffffff" : isDark ? "#ffffff" : "#111111",
+                  textShadow: useHeroContrastState ? "0 0 14px rgba(255,255,255,0.28)" : "none",
                 }}
               >
                 <ShoppingBag className="h-4.5 w-4.5" />
