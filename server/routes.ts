@@ -360,6 +360,15 @@ export async function registerRoutes(
         previewTemplateIdRaw && /^\d+$/.test(previewTemplateIdRaw)
           ? parseInt(previewTemplateIdRaw, 10)
           : null;
+      const applyPageConfigCacheHeaders = () => {
+        if (previewTemplateId !== null) {
+          res.set("Cache-Control", "private, no-store, max-age=0");
+          res.set("Vary", "Cookie");
+          return;
+        }
+
+        res.set("Cache-Control", "public, max-age=30");
+      };
 
       if (
         previewTemplateId !== null &&
@@ -374,13 +383,13 @@ export async function registerRoutes(
         .limit(1);
 
       if (!settings.length && previewTemplateId === null) {
-        res.set("Cache-Control", "public, max-age=30");
+        applyPageConfigCacheHeaders();
         return res.json({ template: null, sections: [] });
       }
 
       const activeId = previewTemplateId ?? settings[0]?.activeTemplateId ?? null;
       if (!activeId) {
-        res.set("Cache-Control", "public, max-age=30");
+        applyPageConfigCacheHeaders();
         return res.json({ template: null, sections: [] });
       }
 
@@ -398,7 +407,7 @@ export async function registerRoutes(
 
       const normalizedSections = ensureTemplateSections(template[0] ?? null, sections);
 
-      res.set("Cache-Control", "public, max-age=30");
+      applyPageConfigCacheHeaders();
       return res.json({
         fontPreset: settings[0]?.fontPreset ?? "inter",
         template: template[0] ?? null,

@@ -135,7 +135,9 @@ export async function fetchPageConfig(previewTemplateId?: string | null) {
   const url = params.toString()
     ? `/api/public/page-config?${params.toString()}`
     : "/api/public/page-config";
-  const res = await fetch(url, { cache: "force-cache" });
+  const res = await fetch(url, {
+    cache: previewTemplateId ? "no-store" : "force-cache",
+  });
   if (!res.ok) {
     throw new Error(`Failed to load page config: ${res.status}`);
   }
