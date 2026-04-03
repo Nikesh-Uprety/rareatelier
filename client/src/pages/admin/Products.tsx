@@ -115,6 +115,7 @@ import {
   parseStoredSizeOptions,
   syncStockBySizeToSizes,
 } from "./productStock";
+import { getErrorMessage } from "@/lib/queryClient";
 
 const AttributesManager = lazy(() =>
   import("./AttributesManager").then((module) => ({ default: module.AttributesManager })),
@@ -531,8 +532,12 @@ export default function AdminProducts() {
         setLocation("/admin/products");
       }
     },
-    onError: () => {
-      toast({ title: "Failed to add product" });
+    onError: (error) => {
+      toast({
+        title: "Failed to add product",
+        description: getErrorMessage(error, "Please choose a different product name."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -621,8 +626,12 @@ export default function AdminProducts() {
       setEditProduct(null);
       setEditPendingGalleryImages([]);
     },
-    onError: () => {
-      toast({ title: "Failed to update product" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update product",
+        description: getErrorMessage(error, "Please choose a different product name."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -638,7 +647,12 @@ export default function AdminProducts() {
       else if (pendingCategoryForm === "edit") editForm.setValue("category", data.slug);
       setPendingCategoryForm(null);
     },
-    onError: () => toast({ title: "Failed to create category", variant: "destructive" }),
+    onError: (error) =>
+      toast({
+        title: "Failed to create category",
+        description: getErrorMessage(error, "Please choose a different category name."),
+        variant: "destructive",
+      }),
   });
 
   const updateCategoryMutation = useMutation({
@@ -653,7 +667,12 @@ export default function AdminProducts() {
       setEditingCategoryId(null);
       setPendingCategoryForm(null);
     },
-    onError: () => toast({ title: "Failed to update category", variant: "destructive" }),
+    onError: (error) =>
+      toast({
+        title: "Failed to update category",
+        description: getErrorMessage(error, "Please choose a different category name."),
+        variant: "destructive",
+      }),
   });
 
   // Edit page color/size management handlers
@@ -704,7 +723,12 @@ export default function AdminProducts() {
       toast({ title: "Category deleted" });
       if (categoryFilter !== "all") setCategoryFilter("all");
     },
-    onError: () => toast({ title: "Failed to delete category", variant: "destructive" }),
+    onError: (error) =>
+      toast({
+        title: "Failed to delete category",
+        description: getErrorMessage(error, "This category could not be deleted."),
+        variant: "destructive",
+      }),
   });
 
   const deleteMutation = useMutation({
@@ -724,14 +748,18 @@ export default function AdminProducts() {
       }
       return { previous };
     },
-    onError: (_err, _id, context) => {
+    onError: (error, _id, context) => {
       if (context?.previous) {
         queryClient.setQueryData(
           ["admin", "products", filters],
           context.previous,
         );
       }
-      toast({ title: "Failed to delete product" });
+      toast({
+        title: "Failed to delete product",
+        description: getErrorMessage(error, "This product could not be deleted."),
+        variant: "destructive",
+      });
     },
     onSuccess: () => {
       toast({ title: "Product deleted" });
@@ -750,8 +778,12 @@ export default function AdminProducts() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
     },
-    onError: () => {
-      toast({ title: "Failed to update home featured product", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update home featured product",
+        description: getErrorMessage(error, "The featured product setting could not be updated."),
+        variant: "destructive",
+      });
     },
   });
 

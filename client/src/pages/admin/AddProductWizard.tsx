@@ -37,6 +37,7 @@ import { uploadProductImage, uploadAdminImage, fetchAdminAttributes, type Produc
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
 import type { CategoryApi } from "@/lib/api";
+import { apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { syncStockBySizeToSizes } from "./productStock";
 
 const productSchema = z.object({
@@ -199,13 +200,10 @@ export default function AddProductWizard({
     setCreatingCategory(true);
     try {
       const slug = newCategoryName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const res = await fetch("/api/admin/categories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ name: newCategoryName.trim(), slug }),
+      const res = await apiRequest("POST", "/api/admin/categories", {
+        name: newCategoryName.trim(),
+        slug,
       });
-      if (!res.ok) throw new Error("Failed to create category");
       const data = await res.json();
       const newCat = data.data || data;
       if (onCategoryCreated) onCategoryCreated(newCat);
@@ -213,8 +211,12 @@ export default function AddProductWizard({
       setNewCategoryName("");
       setShowNewCategoryInput(false);
       toast({ title: "Category created", description: `"${newCat.name}" added and selected` });
-    } catch {
-      toast({ title: "Failed to create category", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Failed to create category",
+        description: getErrorMessage(error, "Please choose a different category name."),
+        variant: "destructive",
+      });
     } finally {
       setCreatingCategory(false);
     }

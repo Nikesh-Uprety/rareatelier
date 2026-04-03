@@ -1711,6 +1711,12 @@ export async function registerRoutes(
         return res.status(201).json({ success: true, data: category });
       } catch (err) {
         console.error("Error in POST /api/admin/categories", err);
+        if (isDuplicateCategoryError(err)) {
+          return res.status(409).json({
+            success: false,
+            error: `A category with this name already exists.`,
+          });
+        }
         return res.status(500).json({ success: false, error: "Failed to create category" });
       }
     },
@@ -1730,6 +1736,12 @@ export async function registerRoutes(
         return res.json({ success: true, data: updated });
       } catch (err: any) {
         console.error("Error in PUT /api/admin/categories/:id", err);
+        if (isDuplicateCategoryError(err)) {
+          return res.status(409).json({
+            success: false,
+            error: `A category with this name already exists.`,
+          });
+        }
         return res.status(err.status || 500).json({ success: false, error: err.message || "Failed to update category" });
       }
     },
@@ -2256,6 +2268,26 @@ export async function registerRoutes(
     }, {});
   };
 
+  const isDuplicateProductNameError = (error: unknown): boolean => {
+    if (!error || typeof error !== "object") return false;
+
+    const candidate = error as { code?: string; constraint?: string };
+    return (
+      candidate.code === "23505" &&
+      candidate.constraint === "products_name_unique"
+    );
+  };
+
+  const isDuplicateCategoryError = (error: unknown): boolean => {
+    if (!error || typeof error !== "object") return false;
+
+    const candidate = error as { code?: string; constraint?: string };
+    return (
+      candidate.code === "23505" &&
+      candidate.constraint === "categories_slug_unique"
+    );
+  };
+
   const syncProductVariantStocks = async (input: {
     productId: string;
     sizeStocks: Record<string, number>;
@@ -2427,6 +2459,12 @@ export async function registerRoutes(
         return res.status(201).json({ success: true, data: product });
       } catch (err) {
         console.error("Error in POST /api/admin/products", err);
+        if (isDuplicateProductNameError(err)) {
+          return res.status(409).json({
+            success: false,
+            error: `A product named "${req.body.name}" already exists.`,
+          });
+        }
         return res
           .status(500)
           .json({ success: false, error: "Failed to create product" });
@@ -2506,6 +2544,12 @@ export async function registerRoutes(
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PUT /api/admin/products/:id", err);
+        if (isDuplicateProductNameError(err)) {
+          return res.status(409).json({
+            success: false,
+            error: `A product named "${req.body.name}" already exists.`,
+          });
+        }
         return res.status(500).json({ success: false, error: "Failed to update product" });
       }
     },

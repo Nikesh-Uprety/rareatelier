@@ -1,9 +1,28 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+export function getErrorMessage(error: unknown, fallback = "Something went wrong"): string {
+  if (!(error instanceof Error) || !error.message) return fallback;
+  return error.message || fallback;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let message = res.statusText || "Request failed";
+    const contentType = res.headers.get("content-type") || "";
+
+    try {
+      if (contentType.includes("application/json")) {
+        const body = (await res.json()) as { error?: string; message?: string };
+        message = body.error || body.message || message;
+      } else {
+        const text = (await res.text()).trim();
+        if (text) message = text;
+      }
+    } catch {
+      // Keep the default HTTP status text if the response body is unreadable.
+    }
+
+    throw new Error(message);
   }
 }
 
