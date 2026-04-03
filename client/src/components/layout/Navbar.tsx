@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, LayoutDashboard, Menu, X, Search } from "lucide-react";
+import { ShoppingBag, LayoutDashboard, Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "@/store/theme";
 import { useCartStore } from "@/store/cart";
@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchPageConfig } from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
@@ -208,47 +209,195 @@ export default function Navbar() {
   const navTextShadow = useHeroContrastState
     ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
     : "none";
-  const mobileMenuTheme = isDark ? "dark" : "light";
-  const mobileMenuSurface =
-    mobileMenuTheme === "dark"
-      ? {
-          background:
-            "linear-gradient(180deg, rgba(12,12,12,0.98) 0%, rgba(18,18,18,0.96) 100%)",
-          borderColor: "rgba(255,255,255,0.10)",
-          mutedBorder: "rgba(255,255,255,0.08)",
-          text: "#ffffff",
-          textMuted: "rgba(255,255,255,0.62)",
-          tile: "rgba(255,255,255,0.04)",
-          tileHover: "rgba(255,255,255,0.09)",
-          iconBg: "rgba(255,255,255,0.06)",
-        }
-      : {
-          background:
-            "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,248,248,0.96) 100%)",
-          borderColor: "rgba(17,17,17,0.12)",
-          mutedBorder: "rgba(17,17,17,0.08)",
-          text: "#111111",
-          textMuted: "rgba(17,17,17,0.56)",
-          tile: "rgba(17,17,17,0.03)",
-          tileHover: "rgba(17,17,17,0.06)",
-          iconBg: "rgba(17,17,17,0.05)",
-        };
+  const mobileMenuSurface = {
+    background: "#ffffff",
+    borderColor: "rgba(17,17,17,0.14)",
+    mutedBorder: "rgba(17,17,17,0.10)",
+    text: "#111111",
+    textMuted: "rgba(17,17,17,0.56)",
+    tile: "#ffffff",
+    iconBg: "rgba(17,17,17,0.04)",
+    accent: "#111111",
+    accentText: "#ffffff",
+  };
+
+  const mobileMenu =
+    typeof document === "undefined"
+      ? null
+      : createPortal(
+          <AnimatePresence>
+            {isMobileMenuOpen ? (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm lg:hidden"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                />
+                <motion.aside
+                  initial={{ x: "-100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                  className="fixed inset-y-0 left-0 z-[81] flex w-[min(82vw,340px)] max-w-[340px] flex-col border-r lg:hidden"
+                  style={{
+                    background: mobileMenuSurface.background,
+                    color: mobileMenuSurface.text,
+                    borderColor: mobileMenuSurface.borderColor,
+                    boxShadow: "0 24px 72px rgba(0,0,0,0.18)",
+                  }}
+                >
+                  <div
+                    className="grid grid-cols-[40px_1fr_40px] items-center border-b px-4 py-4 sm:px-5"
+                    style={{ borderColor: mobileMenuSurface.mutedBorder }}
+                  >
+                    <div />
+                    <Link
+                      href="/"
+                      className="inline-flex items-center justify-self-center"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <img
+                        src="/images/logo.webp"
+                        alt="Rare Atelier"
+                        className="h-8 w-auto object-contain"
+                        style={{ filter: "brightness(0)" }}
+                      />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full border"
+                      style={{
+                        borderColor: mobileMenuSurface.mutedBorder,
+                        background: mobileMenuSurface.iconBg,
+                        color: mobileMenuSurface.text,
+                      }}
+                      aria-label="Close menu"
+                    >
+                      <X className="h-4.5 w-4.5" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-6 py-4 sm:px-6">
+                    <nav className="flex flex-col">
+                      {navLinks.map((item, index) => {
+                        const isActive = location === item.href;
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="border-b py-5 text-[14px] font-semibold uppercase tracking-[0.16em] transition-opacity duration-200"
+                            style={{
+                              fontFamily: "var(--font-mono)",
+                              borderColor: mobileMenuSurface.mutedBorder,
+                              color: isActive ? mobileMenuSurface.accent : mobileMenuSurface.text,
+                              opacity: isActive ? 1 : 0.78,
+                            }}
+                          >
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </nav>
+
+                    {isAuthenticated && user ? (
+                      <div
+                        className="mt-8 border-t pt-6"
+                        style={{ borderColor: mobileMenuSurface.mutedBorder }}
+                      >
+                        <p className="text-sm font-semibold">{user.name || user.email}</p>
+                        <p
+                          className="mt-1 text-[10px] uppercase tracking-[0.22em]"
+                          style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                        >
+                          {user.role}
+                        </p>
+                      <div className="mt-4 flex gap-3">
+                        <button
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            setLocation(dashboardPath);
+                            }}
+                            className="text-[10px] uppercase tracking-[0.18em]"
+                            style={{
+                              color: mobileMenuSurface.text,
+                              fontFamily: "var(--font-mono)",
+                            }}
+                          >
+                          Dashboard
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            logout();
+                          }}
+                          className="rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em]"
+                          style={{
+                            background: "#1f8f4e",
+                            color: "#ffffff",
+                            fontFamily: "var(--font-mono)",
+                            boxShadow: "0 10px 24px rgba(31,143,78,0.24)",
+                          }}
+                        >
+                          Logout
+                        </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div
+                    className="border-t px-6 py-4"
+                    style={{ borderColor: mobileMenuSurface.mutedBorder }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        openCartSidebar();
+                      }}
+                      className="flex w-full items-center justify-between text-left"
+                      style={{ color: mobileMenuSurface.text }}
+                    >
+                      <div>
+                        <p
+                          className="text-[10px] uppercase tracking-[0.22em]"
+                          style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                        >
+                          Bag
+                        </p>
+                        <p className="mt-1 text-sm font-semibold">
+                          {cartItemsCount} item{cartItemsCount === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <ShoppingBag className="h-4.5 w-4.5" />
+                    </button>
+                  </div>
+                </motion.aside>
+              </>
+            ) : null}
+          </AnimatePresence>,
+          document.body,
+        );
 
   return (
-    <header
-      id="nav"
-      className="fixed inset-x-0 z-[60]"
-      style={{
-        top: 0,
-        transition:
-          "transform 0.42s cubic-bezier(.4,0,.2,1), background 0.55s var(--ease), backdrop-filter 0.55s var(--ease), border-color 0.55s var(--ease), box-shadow 0.55s var(--ease)",
-        transform: isNavHidden ? "translateY(-115%)" : "translateY(0)",
-        background: navChrome.background,
-        backdropFilter: navChrome.backdropFilter,
-        borderBottom: `1px solid ${navChrome.borderColor}`,
-        boxShadow: navChrome.boxShadow,
-      }}
-    >
+    <>
+      <header
+        id="nav"
+        className="fixed inset-x-0 z-[60]"
+        style={{
+          top: 0,
+          transition:
+            "transform 0.42s cubic-bezier(.4,0,.2,1), background 0.55s var(--ease), backdrop-filter 0.55s var(--ease), border-color 0.55s var(--ease), box-shadow 0.55s var(--ease)",
+          transform: isNavHidden ? "translateY(-115%)" : "translateY(0)",
+          background: navChrome.background,
+          backdropFilter: navChrome.backdropFilter,
+          borderBottom: `1px solid ${navChrome.borderColor}`,
+          boxShadow: navChrome.boxShadow,
+        }}
+      >
         <div className="mx-auto max-w-[1440px] px-4 sm:px-6 lg:px-8">
           <div
             className="grid items-center gap-4 py-4"
@@ -304,6 +453,7 @@ export default function Navbar() {
                 className="flex h-10 w-10 items-center justify-center"
                 style={{ color: navForegroundColor }}
                 aria-label="Toggle menu"
+                aria-expanded={isMobileMenuOpen}
               >
                 {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
               </button>
@@ -377,216 +527,8 @@ export default function Navbar() {
             </div>
           </div>
         </div>
-
-        <AnimatePresence>
-          {isMobileMenuOpen ? (
-            <>
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[65] bg-black/50 backdrop-blur-sm lg:hidden"
-                onClick={() => setIsMobileMenuOpen(false)}
-              />
-              <motion.aside
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
-                className="fixed inset-y-0 left-0 z-[70] flex w-[min(88vw,380px)] max-w-[380px] flex-col border-r lg:hidden"
-                style={{
-                  background: mobileMenuSurface.background,
-                  color: mobileMenuSurface.text,
-                  borderColor: mobileMenuSurface.borderColor,
-                  backdropFilter: "blur(22px) saturate(145%)",
-                  WebkitBackdropFilter: "blur(22px) saturate(145%)",
-                  boxShadow: "0 24px 80px rgba(0,0,0,0.24)",
-                }}
-              >
-                <div
-                  className="flex items-center justify-between border-b px-4 py-4 sm:px-5"
-                  style={{ borderColor: mobileMenuSurface.mutedBorder }}
-                >
-                  <div className="min-w-0">
-                    <p
-                      className="text-[10px] uppercase tracking-[0.3em]"
-                      style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
-                    >
-                      Navigation
-                    </p>
-                    <p className="mt-1 text-sm font-semibold">Explore RARE.NP</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="flex h-10 w-10 items-center justify-center rounded-full border"
-                    style={{
-                      borderColor: mobileMenuSurface.mutedBorder,
-                      background: mobileMenuSurface.iconBg,
-                      color: mobileMenuSurface.text,
-                    }}
-                    aria-label="Close menu"
-                  >
-                    <X className="h-4.5 w-4.5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsMobileMenuOpen(false);
-                      setLocation("/products");
-                    }}
-                    className="flex h-12 w-full items-center rounded-2xl border px-4 text-left text-[11px] uppercase"
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      letterSpacing: "0.2em",
-                      borderColor: mobileMenuSurface.mutedBorder,
-                      color: mobileMenuSurface.textMuted,
-                      background: mobileMenuSurface.tile,
-                    }}
-                  >
-                    <Search className="mr-3 h-4 w-4" />
-                    Search Products
-                  </button>
-
-                  <nav className="mt-5 flex flex-col gap-2">
-                    {navLinks.map((item, index) => {
-                      const isActive = location === item.href;
-                      return (
-                        <Link
-                          key={item.href}
-                          href={item.href}
-                          className="group rounded-2xl border px-4 py-4"
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            letterSpacing: "0.18em",
-                            borderColor: isActive ? "var(--gold)" : mobileMenuSurface.mutedBorder,
-                            background: isActive ? "var(--gold)" : mobileMenuSurface.tile,
-                            color: isActive ? "var(--bg)" : mobileMenuSurface.text,
-                          }}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div>
-                              <p
-                                className="text-[10px] uppercase"
-                                style={{
-                                  color: isActive ? "var(--bg)" : mobileMenuSurface.textMuted,
-                                }}
-                              >
-                                {String(index + 1).padStart(2, "0")}
-                              </p>
-                              <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.18em]">
-                                {item.name}
-                              </p>
-                            </div>
-                            <span
-                              className="flex h-9 w-9 items-center justify-center rounded-full border transition-transform duration-300 group-hover:translate-x-0.5"
-                              style={{
-                                borderColor: isActive ? "rgba(17,17,17,0.14)" : mobileMenuSurface.mutedBorder,
-                                background: isActive ? "rgba(17,17,17,0.06)" : mobileMenuSurface.iconBg,
-                              }}
-                            >
-                              <span className="text-base leading-none">+</span>
-                            </span>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </nav>
-
-                  {isAuthenticated && user ? (
-                    <div
-                      className="mt-5 rounded-[28px] border p-4"
-                      style={{
-                        borderColor: mobileMenuSurface.mutedBorder,
-                        background: mobileMenuSurface.tile,
-                      }}
-                    >
-                      <p className="text-sm font-semibold">{user.name || user.email}</p>
-                      <p
-                        className="mt-1 text-[10px] uppercase tracking-[0.22em]"
-                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
-                      >
-                        {user.role}
-                      </p>
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            setLocation(dashboardPath);
-                          }}
-                          className="rounded-2xl border px-3 py-3 text-[10px] uppercase"
-                          style={{
-                            borderColor: mobileMenuSurface.mutedBorder,
-                            color: mobileMenuSurface.text,
-                            fontFamily: "var(--font-mono)",
-                          }}
-                        >
-                          Dashboard
-                        </button>
-                        <button
-                          onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            logout();
-                          }}
-                          className="rounded-2xl px-3 py-3 text-[10px] uppercase"
-                          style={{
-                            background: "var(--gold)",
-                            color: "var(--bg)",
-                            fontFamily: "var(--font-mono)",
-                          }}
-                        >
-                          Logout
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                <div
-                  className="border-t px-4 py-4 sm:px-5"
-                  style={{ borderColor: mobileMenuSurface.mutedBorder }}
-                >
-                  <div
-                    className="flex items-center justify-between rounded-2xl border px-4 py-3"
-                    style={{
-                      borderColor: mobileMenuSurface.mutedBorder,
-                      background: mobileMenuSurface.tile,
-                    }}
-                  >
-                    <div>
-                      <p
-                        className="text-[10px] uppercase tracking-[0.22em]"
-                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
-                      >
-                        Bag
-                      </p>
-                      <p className="mt-1 text-sm font-semibold">
-                        {cartItemsCount} item{cartItemsCount === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsMobileMenuOpen(false);
-                        openCartSidebar();
-                      }}
-                      className="flex h-11 min-w-11 items-center justify-center rounded-full px-4"
-                      style={{
-                        background: mobileMenuTheme === "dark" ? "#ffffff" : "#111111",
-                        color: mobileMenuTheme === "dark" ? "#111111" : "#ffffff",
-                      }}
-                    >
-                      <ShoppingBag className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </motion.aside>
-            </>
-          ) : null}
-        </AnimatePresence>
       </header>
+      {mobileMenu}
+    </>
   );
 }
