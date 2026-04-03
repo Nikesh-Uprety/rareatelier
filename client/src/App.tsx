@@ -499,9 +499,11 @@ function AppRoutes() {
 function RouterShell({
   routeTransitioning,
   setRouteTransitioning,
+  isCanvasPreview,
 }: {
   routeTransitioning: boolean;
   setRouteTransitioning: React.Dispatch<React.SetStateAction<boolean>>;
+  isCanvasPreview: boolean;
 }) {
   const [location] = useLocation();
   const pathname = location.split("?")[0];
@@ -872,6 +874,7 @@ function App() {
             <RouterShell
               routeTransitioning={routeTransitioning}
               setRouteTransitioning={setRouteTransitioning}
+              isCanvasPreview={isCanvasPreview}
             />
           </WouterRouter>
         </TooltipProvider>
