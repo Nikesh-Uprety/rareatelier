@@ -216,7 +216,31 @@ export default function Navbar() {
   const navTextShadow = useHeroContrastState
     ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
     : "none";
-  const useLightMobileMenu = forceSolidLightNavbar || isDark;
+  const mobileMenuTheme = isDark ? "dark" : "light";
+  const mobileMenuSurface =
+    mobileMenuTheme === "dark"
+      ? {
+          background:
+            "linear-gradient(180deg, rgba(12,12,12,0.98) 0%, rgba(18,18,18,0.96) 100%)",
+          borderColor: "rgba(255,255,255,0.10)",
+          mutedBorder: "rgba(255,255,255,0.08)",
+          text: "#ffffff",
+          textMuted: "rgba(255,255,255,0.62)",
+          tile: "rgba(255,255,255,0.04)",
+          tileHover: "rgba(255,255,255,0.09)",
+          iconBg: "rgba(255,255,255,0.06)",
+        }
+      : {
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,248,248,0.96) 100%)",
+          borderColor: "rgba(17,17,17,0.12)",
+          mutedBorder: "rgba(17,17,17,0.08)",
+          text: "#111111",
+          textMuted: "rgba(17,17,17,0.56)",
+          tile: "rgba(17,17,17,0.03)",
+          tileHover: "rgba(17,17,17,0.06)",
+          iconBg: "rgba(17,17,17,0.05)",
+        };
 
   return (
     <header
@@ -364,77 +388,211 @@ export default function Navbar() {
 
         <AnimatePresence>
           {isMobileMenuOpen ? (
-            <motion.div
-              initial={{ opacity: 0, y: -12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              className="border-t px-5 py-5 lg:hidden"
-              style={{
-                background: useLightMobileMenu
-                  ? "linear-gradient(135deg, rgba(250,247,243,0.9) 0%, rgba(255,255,255,0.78) 100%)"
-                  : "linear-gradient(135deg, rgba(12,11,9,0.92) 0%, rgba(18,18,20,0.82) 100%)",
-                backdropFilter: useLightMobileMenu ? "blur(20px) saturate(150%)" : "blur(26px) saturate(185%)",
-                borderColor: useLightMobileMenu ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.08)",
-              }}
-            >
-              <div className="mb-4 sm:hidden">
-                <button
-                  type="button"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="flex h-11 w-full items-center rounded-full border px-4"
-                  style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)", color: useLightMobileMenu ? "rgba(24,20,17,0.6)" : "var(--fg-dim)" }}
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[65] bg-black/50 backdrop-blur-sm lg:hidden"
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
+              <motion.aside
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+                className="fixed inset-y-0 left-0 z-[70] flex w-[min(88vw,380px)] max-w-[380px] flex-col border-r lg:hidden"
+                style={{
+                  background: mobileMenuSurface.background,
+                  color: mobileMenuSurface.text,
+                  borderColor: mobileMenuSurface.borderColor,
+                  backdropFilter: "blur(22px) saturate(145%)",
+                  WebkitBackdropFilter: "blur(22px) saturate(145%)",
+                  boxShadow: "0 24px 80px rgba(0,0,0,0.24)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-between border-b px-4 py-4 sm:px-5"
+                  style={{ borderColor: mobileMenuSurface.mutedBorder }}
                 >
-                  <Search className="mr-3 h-4 w-4" />
-                  Search products
-                </button>
-              </div>
-              <nav className="flex flex-col gap-2">
-                {navLinks.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="rounded-full px-4 py-3 text-[11px] uppercase"
+                  <div className="min-w-0">
+                    <p
+                      className="text-[10px] uppercase tracking-[0.3em]"
+                      style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                    >
+                      Navigation
+                    </p>
+                    <p className="mt-1 text-sm font-semibold">Explore RARE.NP</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex h-10 w-10 items-center justify-center rounded-full border"
+                    style={{
+                      borderColor: mobileMenuSurface.mutedBorder,
+                      background: mobileMenuSurface.iconBg,
+                      color: mobileMenuSurface.text,
+                    }}
+                    aria-label="Close menu"
+                  >
+                    <X className="h-4.5 w-4.5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setLocation("/products");
+                    }}
+                    className="flex h-12 w-full items-center rounded-2xl border px-4 text-left text-[11px] uppercase"
                     style={{
                       fontFamily: "var(--font-mono)",
-                      letterSpacing: "0.18em",
-                      color: location === item.href ? "var(--bg)" : useLightMobileMenu ? "#181411" : "var(--fg)",
-                      background: location === item.href ? "var(--gold)" : "transparent",
-                      border: `1px solid ${location === item.href ? "var(--gold)" : (useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)")}`,
+                      letterSpacing: "0.2em",
+                      borderColor: mobileMenuSurface.mutedBorder,
+                      color: mobileMenuSurface.textMuted,
+                      background: mobileMenuSurface.tile,
                     }}
                   >
-                    {item.name}
-                  </Link>
-                ))}
-              </nav>
-              {isAuthenticated && user ? (
-                <div className="mt-4 flex items-center justify-between rounded-3xl border px-4 py-3" style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)" }}>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: useLightMobileMenu ? "#181411" : "var(--fg)" }}>
-                      {user.name || user.email}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-[0.2em]" style={{ color: useLightMobileMenu ? "rgba(24,20,17,0.6)" : "var(--fg-dim)", fontFamily: "var(--font-mono)" }}>
-                      {user.role}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setLocation(dashboardPath)}
-                      className="rounded-full border px-3 py-2 text-[10px] uppercase"
-                      style={{ borderColor: useLightMobileMenu ? "rgba(24,20,17,0.08)" : "var(--border)", color: useLightMobileMenu ? "#181411" : "var(--fg)", fontFamily: "var(--font-mono)" }}
+                    <Search className="mr-3 h-4 w-4" />
+                    Search Products
+                  </button>
+
+                  <nav className="mt-5 flex flex-col gap-2">
+                    {navLinks.map((item, index) => {
+                      const isActive = location === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className="group rounded-2xl border px-4 py-4"
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            letterSpacing: "0.18em",
+                            borderColor: isActive ? "var(--gold)" : mobileMenuSurface.mutedBorder,
+                            background: isActive ? "var(--gold)" : mobileMenuSurface.tile,
+                            color: isActive ? "var(--bg)" : mobileMenuSurface.text,
+                          }}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p
+                                className="text-[10px] uppercase"
+                                style={{
+                                  color: isActive ? "var(--bg)" : mobileMenuSurface.textMuted,
+                                }}
+                              >
+                                {String(index + 1).padStart(2, "0")}
+                              </p>
+                              <p className="mt-1 text-[12px] font-semibold uppercase tracking-[0.18em]">
+                                {item.name}
+                              </p>
+                            </div>
+                            <span
+                              className="flex h-9 w-9 items-center justify-center rounded-full border transition-transform duration-300 group-hover:translate-x-0.5"
+                              style={{
+                                borderColor: isActive ? "rgba(17,17,17,0.14)" : mobileMenuSurface.mutedBorder,
+                                background: isActive ? "rgba(17,17,17,0.06)" : mobileMenuSurface.iconBg,
+                              }}
+                            >
+                              <span className="text-base leading-none">+</span>
+                            </span>
+                          </div>
+                        </Link>
+                      );
+                    })}
+                  </nav>
+
+                  {isAuthenticated && user ? (
+                    <div
+                      className="mt-5 rounded-[28px] border p-4"
+                      style={{
+                        borderColor: mobileMenuSurface.mutedBorder,
+                        background: mobileMenuSurface.tile,
+                      }}
                     >
-                      Dashboard
-                    </button>
+                      <p className="text-sm font-semibold">{user.name || user.email}</p>
+                      <p
+                        className="mt-1 text-[10px] uppercase tracking-[0.22em]"
+                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                      >
+                        {user.role}
+                      </p>
+                      <div className="mt-4 grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            setLocation(dashboardPath);
+                          }}
+                          className="rounded-2xl border px-3 py-3 text-[10px] uppercase"
+                          style={{
+                            borderColor: mobileMenuSurface.mutedBorder,
+                            color: mobileMenuSurface.text,
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          Dashboard
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            logout();
+                          }}
+                          className="rounded-2xl px-3 py-3 text-[10px] uppercase"
+                          style={{
+                            background: "var(--gold)",
+                            color: "var(--bg)",
+                            fontFamily: "var(--font-mono)",
+                          }}
+                        >
+                          Logout
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div
+                  className="border-t px-4 py-4 sm:px-5"
+                  style={{ borderColor: mobileMenuSurface.mutedBorder }}
+                >
+                  <div
+                    className="flex items-center justify-between rounded-2xl border px-4 py-3"
+                    style={{
+                      borderColor: mobileMenuSurface.mutedBorder,
+                      background: mobileMenuSurface.tile,
+                    }}
+                  >
+                    <div>
+                      <p
+                        className="text-[10px] uppercase tracking-[0.22em]"
+                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                      >
+                        Bag
+                      </p>
+                      <p className="mt-1 text-sm font-semibold">
+                        {cartItemsCount} item{cartItemsCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
                     <button
-                      onClick={() => logout()}
-                      className="rounded-full px-3 py-2 text-[10px] uppercase"
-                      style={{ background: "var(--gold)", color: "var(--bg)", fontFamily: "var(--font-mono)" }}
+                      type="button"
+                      onClick={() => {
+                        setIsMobileMenuOpen(false);
+                        openCartSidebar();
+                      }}
+                      className="flex h-11 min-w-11 items-center justify-center rounded-full px-4"
+                      style={{
+                        background: mobileMenuTheme === "dark" ? "#ffffff" : "#111111",
+                        color: mobileMenuTheme === "dark" ? "#111111" : "#ffffff",
+                      }}
                     >
-                      Logout
+                      <ShoppingBag className="h-4 w-4" />
                     </button>
                   </div>
                 </div>
-              ) : null}
-            </motion.div>
+              </motion.aside>
+            </>
           ) : null}
         </AnimatePresence>
       </header>

@@ -1,7 +1,8 @@
-import { useState, useMemo, useEffect, useRef, type WheelEvent as ReactWheelEvent } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
+import { useThemeStore } from "@/store/theme";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -101,6 +102,7 @@ export default function ProductDetail() {
   const [, params] = useRoute<{ id: string }>("/product/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { theme } = useThemeStore();
   const addItem = useCartStore((state) => state.addItem);
   const openCartSidebar = useCartStore((state) => state.openCartSidebar);
 
@@ -139,14 +141,19 @@ export default function ProductDetail() {
   const [isTinyPreviewMode, setIsTinyPreviewMode] = useState(false);
   const [isPreviewRailExpanded, setIsPreviewRailExpanded] = useState(true);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
+  const [galleryJumpAnimation, setGalleryJumpAnimation] = useState<{
+    index: number;
+    tick: number;
+    direction: "down" | "up";
+  } | null>(null);
   const galleryCloseTimeoutRef = useRef<number | null>(null);
   const imageTransitionTimeoutRef = useRef<number | null>(null);
-  const modalRollTimeoutsRef = useRef<number[]>([]);
-  const modalRollingRef = useRef(false);
+  const galleryJumpTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
-  const galleryWheelLockRef = useRef(false);
   const pageWheelLockRef = useRef(false);
   const mainImageViewportRef = useRef<HTMLDivElement | null>(null);
+  const galleryScrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const gallerySectionRefs = useRef<Array<HTMLElement | null>>([]);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const stockBySize = product?.stockBySize ?? {};
@@ -241,6 +248,7 @@ export default function ProductDetail() {
   }, [allImages.length, isGalleryOpen, selectedImageIndex]);
 
   const shouldLockMainPageScroll = false;
+  const isDarkMode = theme === "dark";
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -285,12 +293,63 @@ export default function ProductDetail() {
       if (imageTransitionTimeoutRef.current) {
         window.clearTimeout(imageTransitionTimeoutRef.current);
       }
-      if (modalRollTimeoutsRef.current.length) {
-        modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
-        modalRollTimeoutsRef.current = [];
+      if (galleryJumpTimeoutRef.current) {
+        window.clearTimeout(galleryJumpTimeoutRef.current);
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isGalleryOpen) return;
+
+    const container = galleryScrollContainerRef.current;
+    const sections = gallerySectionRefs.current.filter(
+      (section): section is HTMLElement => Boolean(section),
+    );
+    if (!container || sections.length === 0) return;
+
+    const activeSection = sections[selectedImageIndex];
+    if (!activeSection) return;
+
+    const sectionTop = activeSection.offsetTop;
+    const centeredTop =
+      sectionTop - container.clientHeight / 2 + activeSection.clientHeight / 2;
+    container.scrollTo({
+      top: Math.max(0, centeredTop),
+      behavior: "auto",
+    });
+  }, [isGalleryOpen, selectedImageIndex]);
+
+  useEffect(() => {
+    if (!isGalleryOpen) return;
+
+    const sections = gallerySectionRefs.current.filter(
+      (section): section is HTMLElement => Boolean(section),
+    );
+    if (sections.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (!visible) return;
+        const nextIndex = Number((visible.target as HTMLElement).dataset.index ?? -1);
+        if (nextIndex >= 0 && nextIndex !== selectedImageIndex) {
+          setSelectedImageIndex(nextIndex);
+        }
+      },
+      {
+        root: galleryScrollContainerRef.current,
+        threshold: [0.3, 0.55, 0.75],
+        rootMargin: "-8% 0px -8% 0px",
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, [isGalleryOpen, selectedImageIndex]);
 
   useEffect(() => {
     if (isMobileOrTablet) return;
@@ -466,47 +525,38 @@ export default function ProductDetail() {
 
   const goToImageInModal = (targetIndex: number) => {
     if (!allImages.length) return;
-    if (modalRollingRef.current) return;
-
-    const currentIndex = selectedImageIndex;
     const next = (targetIndex + allImages.length) % allImages.length;
-    if (next === currentIndex) return;
+    const targetSection = gallerySectionRefs.current[next];
+    if (!targetSection) return;
 
-    const direction: "down" | "up" = next > currentIndex ? "down" : "up";
-    const distance = Math.abs(next - currentIndex);
+    const direction: "down" | "up" = next >= selectedImageIndex ? "down" : "up";
+    setSelectedImageIndex(next);
+    setGalleryJumpAnimation((previous) => ({
+      index: next,
+      tick: (previous?.tick ?? 0) + 1,
+      direction,
+    }));
 
-    // Instant switch for adjacent changes (no fade, no roll).
-    if (distance <= 1) {
-      setPreviousImageIndex(null);
-      setImageMotionDurationMs(0);
-      setSelectedImageIndex(next);
+    if (galleryJumpTimeoutRef.current) {
+      window.clearTimeout(galleryJumpTimeoutRef.current);
+    }
+    galleryJumpTimeoutRef.current = window.setTimeout(() => {
+      setGalleryJumpAnimation(null);
+    }, 240);
+
+    const container = galleryScrollContainerRef.current;
+    if (!container) {
+      targetSection.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
-    // Roulette roll for big jumps: quickly step through intermediate images.
-    modalRollingRef.current = true;
-    modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
-    modalRollTimeoutsRef.current = [];
-
-    const step = direction === "down" ? 1 : -1;
-    const totalSteps = distance;
-    const perStepMs = 85;
-
-    for (let k = 1; k <= totalSteps; k++) {
-      const t = window.setTimeout(() => {
-        const intermediate = (currentIndex + step * k + allImages.length) % allImages.length;
-        setPreviousImageIndex(null);
-        setImageMotionDirection(direction);
-        setImageMotionDurationMs(140);
-        setImageMotionTick((prev) => prev + 1);
-        setSelectedImageIndex(intermediate);
-
-        if (k === totalSteps) {
-          modalRollingRef.current = false;
-        }
-      }, perStepMs * k);
-      modalRollTimeoutsRef.current.push(t);
-    }
+    const sectionTop = targetSection.offsetTop;
+    const centeredTop =
+      sectionTop - container.clientHeight / 2 + targetSection.clientHeight / 2;
+    container.scrollTo({
+      top: Math.max(0, centeredTop),
+      behavior: "smooth",
+    });
   };
 
   const goToNextImage = () => {
@@ -523,40 +573,6 @@ export default function ProductDetail() {
 
   const closeGallery = () => {
     setIsGalleryVisible(false);
-  };
-
-  const handleGalleryWheel = (event: ReactWheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (galleryWheelLockRef.current) return;
-
-    const delta = getDominantWheelDelta(event.deltaY, event.deltaX);
-    const threshold = 12;
-    if (Math.abs(delta) < threshold) return;
-
-    galleryWheelLockRef.current = true;
-    window.setTimeout(() => {
-      galleryWheelLockRef.current = false;
-    }, 140);
-
-    const isScrollDown = delta > 0;
-    const isAtFirst = selectedImageIndex === 0;
-    const isAtLast = selectedImageIndex === allImages.length - 1;
-
-    if (isScrollDown) {
-      if (isAtLast) {
-        closeGallery();
-        return;
-      }
-      goToImage(selectedImageIndex + 1, { direction: "down" });
-      return;
-    }
-
-    if (isAtFirst) {
-      closeGallery();
-      return;
-    }
-    goToImage(selectedImageIndex - 1, { direction: "up" });
   };
 
   const structuredData = {
@@ -609,6 +625,14 @@ export default function ProductDetail() {
         @keyframes modal-image-enter-up {
           0% { transform: translateY(40px); }
           100% { transform: translateY(0); }
+        }
+        @keyframes gallery-jump-enter-down {
+          0% { transform: translateY(-28px); opacity: 0.92; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes gallery-jump-enter-up {
+          0% { transform: translateY(28px); opacity: 0.92; }
+          100% { transform: translateY(0); opacity: 1; }
         }
       `}</style>
       <Helmet>
@@ -1140,21 +1164,19 @@ export default function ProductDetail() {
 
       {isGalleryOpen && (
         <div
-          className={`fixed inset-0 z-[80] flex items-center justify-center bg-white transition-[opacity] duration-200 ${
+          className={`fixed inset-0 z-[80] transition-[opacity] duration-200 ${
             isGalleryVisible ? "opacity-100" : "opacity-0"
           }`}
-          onClick={() => {
-            // Cancel any queued roulette roll steps on close.
-            modalRollingRef.current = false;
-            modalRollTimeoutsRef.current.forEach((t) => window.clearTimeout(t));
-            modalRollTimeoutsRef.current = [];
-            closeGallery();
-          }}
-          onWheel={handleGalleryWheel}
+          style={{ background: isDarkMode ? "#050505" : "#ffffff" }}
         >
           <button
             type="button"
-            className="absolute right-5 top-5 z-50 flex h-11 w-11 items-center justify-center rounded-full border border-black/10 bg-white text-black shadow-sm transition-colors hover:bg-neutral-50"
+            className="absolute right-5 top-5 z-50 flex h-11 w-11 items-center justify-center rounded-full border shadow-sm backdrop-blur transition-colors"
+            style={{
+              borderColor: isDarkMode ? "rgba(255,255,255,0.14)" : "rgba(17,17,17,0.12)",
+              background: isDarkMode ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.92)",
+              color: isDarkMode ? "#ffffff" : "#111111",
+            }}
             onClick={(e) => {
               e.stopPropagation();
               closeGallery();
@@ -1165,46 +1187,25 @@ export default function ProductDetail() {
           </button>
 
           <div
-            className={`relative flex h-full w-full items-stretch justify-center px-4 py-6 transition-transform duration-200 lg:px-10 ${
+            className={`relative flex h-full w-full items-stretch justify-center transition-transform duration-200 ${
               isGalleryVisible ? "scale-100" : "scale-[0.985]"
             }`}
           >
-            <div className="absolute left-5 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em] text-black/70">
+            <div
+              className="pointer-events-none absolute left-5 top-5 z-40 text-[10px] font-bold uppercase tracking-[0.2em]"
+              style={{ color: isDarkMode ? "rgba(255,255,255,0.72)" : "rgba(17,17,17,0.68)" }}
+            >
               {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
             </div>
 
-            {allImages.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    goToPreviousImage();
-                  }}
-                  className="absolute left-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/90 text-black shadow-sm transition-colors hover:bg-white lg:left-6 lg:h-12 lg:w-12"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    goToNextImage();
-                  }}
-                  className="absolute right-3 top-1/2 z-20 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-black/10 bg-white/90 text-black shadow-sm transition-colors hover:bg-white lg:right-6 lg:h-12 lg:w-12"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </>
-            )}
-
-            <div className="flex h-full w-full max-w-[min(96vw,1800px)] items-stretch gap-4 lg:gap-6">
+            <div className="flex h-full w-full items-stretch gap-4 pl-2 pr-2 pt-20 pb-4 sm:pl-4 sm:pr-4 lg:gap-6 lg:pl-6 lg:pr-6">
               {allImages.length > 1 ? (
                 <div
-                  className="scrollbar-hide hidden w-[84px] shrink-0 overflow-y-auto rounded-md border border-black/10 bg-white/70 p-2 lg:block"
-                  onClick={(event) => event.stopPropagation()}
+                  className="hidden w-[92px] shrink-0 overflow-y-auto rounded-2xl border p-2 backdrop-blur lg:block"
+                  style={{
+                    borderColor: isDarkMode ? "rgba(255,255,255,0.10)" : "rgba(17,17,17,0.10)",
+                    background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(17,17,17,0.03)",
+                  }}
                 >
                   <div className="flex flex-col gap-2">
                     {allImages.map((url, i) => (
@@ -1214,11 +1215,18 @@ export default function ProductDetail() {
                         onClick={() => {
                           goToImageInModal(i);
                         }}
-                        className={`aspect-[4/5] w-full overflow-hidden rounded-sm border transition-all ${
-                          selectedImageIndex === i
-                            ? "border-black/50 opacity-100"
-                            : "border-black/10 opacity-70 hover:opacity-100"
-                        }`}
+                        className="aspect-[4/5] w-full overflow-hidden rounded-sm border transition-all"
+                        style={{
+                          borderColor:
+                            selectedImageIndex === i
+                              ? isDarkMode
+                                ? "rgba(255,255,255,0.70)"
+                                : "rgba(17,17,17,0.60)"
+                              : isDarkMode
+                                ? "rgba(255,255,255,0.12)"
+                                : "rgba(17,17,17,0.12)",
+                          opacity: selectedImageIndex === i ? 1 : 0.72,
+                        }}
                         aria-label={`Open image ${i + 1}`}
                       >
                         <img
@@ -1235,27 +1243,55 @@ export default function ProductDetail() {
               ) : null}
 
               <div
-                className="relative min-w-0 flex-1 overflow-hidden rounded-md border border-black/10 bg-white"
-                onClick={(event) => event.stopPropagation()}
+                ref={galleryScrollContainerRef}
+                className="scrollbar-hide min-w-0 flex-1 overflow-y-auto"
               >
-                <img
-                  key={`modal-current-${selectedImageIndex}-${imageMotionTick}`}
-                  src={allImages[selectedImageIndex] || ""}
-                  alt={`${product.name} fullscreen view ${selectedImageIndex + 1}`}
-                  loading="eager"
-                  decoding="async"
-                  className="absolute inset-0 h-full w-full object-contain"
-                  style={{
-                    // No fade. Instant preview, with optional roulette "roll" motion.
-                    animation:
-                      imageMotionDurationMs > 0
-                        ? imageMotionDirection === "down"
-                          ? `modal-image-enter-down ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                          : `modal-image-enter-up ${imageMotionDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`
-                        : "none",
-                    imageRendering: "auto",
-                  }}
-                />
+                <div className="mx-auto flex w-full max-w-[min(99vw,1880px)] flex-col">
+                  {allImages.map((url, index) => (
+                    <section
+                      key={`gallery-section-${index}`}
+                      ref={(element) => {
+                        gallerySectionRefs.current[index] = element;
+                      }}
+                      data-index={index}
+                      className="relative min-h-screen px-0 py-5 sm:py-6 lg:py-8"
+                    >
+                      <div className="sticky top-4 z-10 mb-4 flex justify-end px-3 sm:px-4 lg:px-6">
+                        <button
+                          type="button"
+                          onClick={() => closeGallery()}
+                          className="rounded-full border px-4 py-2 text-[10px] font-bold uppercase tracking-[0.18em] shadow-sm backdrop-blur"
+                          style={{
+                            borderColor: isDarkMode ? "rgba(255,255,255,0.12)" : "rgba(17,17,17,0.12)",
+                            background: isDarkMode ? "rgba(0,0,0,0.42)" : "rgba(255,255,255,0.92)",
+                            color: isDarkMode ? "#ffffff" : "#111111",
+                          }}
+                        >
+                          Close Viewer
+                        </button>
+                      </div>
+                      <div className="flex min-h-[calc(100vh-5.5rem)] items-start justify-center px-0">
+                        <img
+                          src={url || ""}
+                          alt={`${product.name} fullscreen view ${index + 1}`}
+                          loading={index === selectedImageIndex ? "eager" : "lazy"}
+                          decoding="async"
+                          className="h-auto w-full max-w-none object-contain"
+                          style={{
+                            imageRendering: "auto",
+                            animation:
+                              galleryJumpAnimation &&
+                              galleryJumpAnimation.index === index
+                                ? galleryJumpAnimation.direction === "down"
+                                  ? "gallery-jump-enter-down 220ms cubic-bezier(0.22, 1, 0.36, 1)"
+                                  : "gallery-jump-enter-up 220ms cubic-bezier(0.22, 1, 0.36, 1)"
+                                : "none",
+                          }}
+                        />
+                      </div>
+                    </section>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
