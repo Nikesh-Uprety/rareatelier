@@ -61,6 +61,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent } from "@/components/ui/card";
+import CustomerSpendingChart from "@/components/admin/CustomerSpendingChart";
 
 export default function AdminCustomers() {
   const [search, setSearch] = useState("");
@@ -255,6 +256,8 @@ export default function AdminCustomers() {
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
       </div>
+
+      <CustomerSpendingChart customers={list} />
 
       <AnimatePresence mode="wait">
         {viewMode === "list" ? (

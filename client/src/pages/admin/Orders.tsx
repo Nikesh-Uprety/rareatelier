@@ -34,6 +34,7 @@ import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import OrdersTrendChart from "@/components/admin/OrdersTrendChart";
 
 const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
@@ -340,6 +341,8 @@ export default function AdminOrders() {
         </div>
         <ExportButton onExport={() => exportOrdersCSV()} />
       </div>
+
+      <OrdersTrendChart orders={sortedOrders} timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"} />
 
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">

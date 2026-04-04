@@ -170,11 +170,19 @@ export default function AdminPOS() {
     queryFn: () => fetchAdminProducts({ limit: 1000 }),
   });
 
-  // Extract unique categories
+  // Extract unique categories sorted by product count descending
   const categories = useMemo(() => {
     if (!products) return [];
-    const cats = Array.from(new Set(products.map((p) => p.category || "General").filter(Boolean)));
-    return cats.sort();
+    const catCounts = new Map<string, number>();
+    for (const p of products) {
+      const cat = p.category || "General";
+      if (cat) {
+        catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
+      }
+    }
+    return Array.from(catCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([cat]) => cat);
   }, [products]);
   const visibleCategories = categories.slice(0, 8);
   const moreCategories = categories.slice(8);

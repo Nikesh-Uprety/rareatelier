@@ -41,7 +41,7 @@ import {
   type SiteAsset,
   type InsertSiteAsset,
 } from "@shared/schema";
-import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { broadcastNotification } from "./websocket";
 
@@ -415,7 +415,6 @@ export class PgStorage implements IStorage {
       .where(
         and(
           sql`${bills.status} != 'void'`,
-          isNull(bills.orderId),
           or(...billMatchClauses),
         ),
       );
@@ -740,7 +739,27 @@ export class PgStorage implements IStorage {
   }
 
   async getCategories(): Promise<Category[]> {
-    return db.select().from(categories).orderBy(asc(categories.name));
+    const cats = await db.select().from(categories);
+    const productCounts = await db
+      .select({
+        category: products.category,
+        count: sql<number>`count(*)`.mapWith(Number),
+      })
+      .from(products)
+      .where(isNotNull(products.category))
+      .groupBy(products.category);
+
+    const countMap = new Map<string, number>();
+    for (const pc of productCounts) {
+      if (pc.category) countMap.set(pc.category, pc.count);
+    }
+
+    return cats.sort((a, b) => {
+      const aCount = countMap.get(a.slug) ?? 0;
+      const bCount = countMap.get(b.slug) ?? 0;
+      if (bCount !== aCount) return bCount - aCount;
+      return a.name.localeCompare(b.name);
+    });
   }
 
   async createCategory(data: { name: string; slug: string }): Promise<Category> {

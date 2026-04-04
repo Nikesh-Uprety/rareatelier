@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import {
   ArrowLeft, ArrowRight, Check, Upload, X, Plus, Palette, Ruler,
   FolderInput, ImageIcon, FileText, Tag, Percent, Cloud, HardDrive,
 } from "lucide-react";
+import { Legend, Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,6 +109,10 @@ export default function AddProductWizard({
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const portalContainerRef = useRef<HTMLDivElement | null>(null);
+  if (!portalContainerRef.current && typeof document !== "undefined") {
+    portalContainerRef.current = document.createElement("div");
+  }
 
   // Image upload state
   const [uploadMode, setUploadMode] = useState<"cloud" | "local">("cloud");
@@ -155,9 +161,18 @@ export default function AddProductWizard({
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
 
+    const container = portalContainerRef.current;
+    if (container) {
+      container.className = "fixed inset-0 z-[100] overflow-hidden bg-[#eef4ea] dark:bg-[#0e1511]";
+      document.body.appendChild(container);
+    }
+
     return () => {
       document.body.style.overflow = previousOverflow;
       document.body.style.overscrollBehavior = previousOverscroll;
+      if (container && container.parentNode) {
+        container.parentNode.removeChild(container);
+      }
     };
   }, []);
 
@@ -308,6 +323,47 @@ export default function AddProductWizard({
     }
   };
 
+  const pieChartData = useMemo(() => {
+    const data: { name: string; value: number; fill: string }[] = [];
+    if (selectedColors.length > 0) {
+      const colorPalette = ["#81a074", "#b33a2f", "#223227", "#d4c5a9", "#6b7c62", "#a89f8f", "#4a5d4e", "#c9b99a"];
+      selectedColors.forEach((color: string, i: number) => {
+        const hexMatch = color.match(/\((#[0-9a-fA-F]{6})\)/);
+        data.push({
+          name: color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, ""),
+          value: 1,
+          fill: hexMatch ? hexMatch[1] : colorPalette[i % colorPalette.length],
+        });
+      });
+    }
+    if (selectedSizes.length > 0 && totalStock > 0) {
+      selectedSizes.forEach((size: string) => {
+        const stock = stockBySizeValues[size] ?? 0;
+        if (stock > 0) {
+          data.push({ name: `Size ${size}`, value: stock, fill: "#81a074" });
+        }
+      });
+    }
+    if (data.length === 0) {
+      data.push({ name: "No data yet", value: 1, fill: "#d1d5db" });
+    }
+    return data;
+  }, [selectedColors, selectedSizes, stockBySizeValues, totalStock]);
+
+  const CustomTooltipContent = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="rounded-xl border border-black/10 bg-white/95 px-3 py-2 shadow-lg dark:border-white/10 dark:bg-[#1a211c]">
+          <p className="text-xs font-semibold text-[#223227] dark:text-white">{payload[0].name}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {payload[0].payload.name.startsWith("Size") ? `${payload[0].value} units` : "Selected"}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   const renderLivePreview = (variant: "details" | "attributes" | "media") => (
     <div className="xl:sticky xl:top-[9.5rem] space-y-6">
       <div className="rounded-[32px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
@@ -316,119 +372,135 @@ export default function AddProductWizard({
             <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Live Preview</p>
             <h3 className="mt-2 text-lg font-semibold text-[#223227] dark:text-white">Product Storyboard</h3>
           </div>
-          <Badge variant="outline" className="rounded-full">{variant === "details" ? "Desktop" : variant === "attributes" ? "Merch" : "Media"}</Badge>
+          <Badge variant="outline" className="rounded-full">{variant === "details" ? "Analytics" : variant === "attributes" ? "Merch" : "Media"}</Badge>
         </div>
 
-        <div className="overflow-hidden rounded-[28px] border border-black/10 bg-[#f8f5ef] dark:border-white/10 dark:bg-[#171d18]">
-          <div className="relative aspect-[4/5] overflow-hidden bg-[linear-gradient(180deg,rgba(24,24,24,0.02),rgba(24,24,24,0.28))]">
+        <div className="relative overflow-hidden rounded-[28px] border border-black/10 bg-[#f8f5ef] dark:border-white/10 dark:bg-[#171d18]">
+          <div className="relative aspect-square overflow-hidden">
             {mainImageUrl ? (
-              <img src={mainImageUrl} alt={productName} className="h-full w-full object-cover" />
+              <img src={mainImageUrl} alt={productName} className="h-full w-full object-cover opacity-20 blur-[2px]" />
             ) : (
-              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.22),transparent_32%),linear-gradient(180deg,#efe9dd_0%,#ddd4c2_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.18),transparent_28%),linear-gradient(180deg,#1b211d_0%,#131814_100%)]">
-                <div className="text-center text-muted-foreground">
-                  <ImageIcon className="mx-auto h-10 w-10 opacity-40" />
-                  <p className="mt-3 text-sm font-medium">Upload a product image</p>
-                </div>
-              </div>
+              <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.22),transparent_32%),linear-gradient(180deg,#efe9dd_0%,#ddd4c2_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.18),transparent_28%),linear-gradient(180deg,#1b211d_0%,#131814_100%)]" />
             )}
 
-            <div className="absolute inset-x-0 top-0 flex items-start justify-between p-4">
-              <Badge className="rounded-full bg-black/65 text-white hover:bg-black/65">
-                {addForm.watch("category") || "Category"}
-              </Badge>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="relative flex h-[85%] w-[85%] items-center justify-center">
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart>
+                    <Pie
+                      isAnimationActive
+                      animationDuration={600}
+                      startAngle={90}
+                      endAngle={-270}
+                      stroke="none"
+                      data={pieChartData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius="55%"
+                      outerRadius="85%"
+                      paddingAngle={2}
+                    >
+                      {pieChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<CustomTooltipContent />} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  {mainImageUrl ? (
+                    <img src={mainImageUrl} alt={productName} className="h-16 w-16 rounded-full border-2 border-white/80 object-cover shadow-md dark:border-white/20" />
+                  ) : (
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-black/10 bg-white/60 dark:border-white/10 dark:bg-white/5">
+                      <ImageIcon className="h-6 w-6 opacity-40" />
+                    </div>
+                  )}
+                  <h4 className="mt-2 max-w-[12ch] truncate text-sm font-bold text-[#223227] dark:text-white">{productName}</h4>
+                  <p className="text-[10px] text-muted-foreground">{addForm.watch("category") || "Category"}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute inset-x-0 top-3 flex items-start justify-between px-4">
               {saleIsActive ? (
                 <Badge className="rounded-full bg-[#b33a2f] text-white hover:bg-[#b33a2f]">
                   {salePercentage}% OFF
                 </Badge>
-              ) : null}
-            </div>
-
-            <div className="absolute inset-x-0 bottom-0 bg-[linear-gradient(180deg,transparent_0%,rgba(10,10,10,0.78)_100%)] p-5 text-white">
-              <p className="text-[11px] uppercase tracking-[0.25em] text-white/70">
-                {selectedSizes.length ? selectedSizes.join(" · ") : "Ready to configure"}
-              </p>
-              <h4 className="mt-2 text-2xl font-semibold tracking-tight">{productName}</h4>
-              <p className="mt-2 max-w-[34ch] text-sm text-white/78">{productTagline}</p>
+              ) : <div />}
+              <div className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-black text-[#223227] backdrop-blur dark:bg-black/40 dark:text-white">
+                {productPrice ? formatPrice(discountedPrice) : "NPR —"}
+                {saleIsActive && productPrice > 0 && (
+                  <span className="ml-1 text-[10px] font-normal text-muted-foreground line-through">{formatPrice(productPrice)}</span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="space-y-4 p-5">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground">Pricing</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className="text-2xl font-black text-[#223227] dark:text-white">
-                    {productPrice ? formatPrice(discountedPrice) : "NPR —"}
-                  </span>
-                  {saleIsActive && productPrice > 0 ? (
-                    <span className="text-sm text-muted-foreground line-through">{formatPrice(productPrice)}</span>
-                  ) : null}
+          <div className="border-t border-black/5 bg-white/60 px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-[#81a074]" />
+                  <span className="text-[10px] font-medium text-muted-foreground">{selectedColors.length} colors</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-2 w-2 rounded-full bg-[#223227]" />
+                  <span className="text-[10px] font-medium text-muted-foreground">{selectedSizes.length} sizes</span>
                 </div>
               </div>
-              <div className="rounded-2xl bg-[#eff4eb] px-4 py-3 text-right dark:bg-white/[0.04]">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Stock</p>
-                <p className="mt-1 text-lg font-bold text-[#223227] dark:text-white">
-                  {addForm.watch("stockStatus") === "out_of_stock" ? "Out" : totalStock || "Set"}
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-4 dark:border-white/10 dark:bg-white/[0.02]">
-              <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Overview</p>
-              <p className="mt-2 text-sm leading-6 text-[#425246] dark:text-white/78">{productDescription}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-black/5 p-4 dark:border-white/10">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Colors</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {selectedColors.length ? selectedColors.slice(0, 4).map((color: string) => (
-                    <Badge key={color} variant="outline" className="rounded-full">{color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "")}</Badge>
-                  )) : <span className="text-sm text-muted-foreground">No colors yet</span>}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-black/5 p-4 dark:border-white/10">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Gallery</p>
-                <p className="mt-3 text-sm text-[#223227] dark:text-white">{galleryUrls.length} images selected</p>
-                <p className="mt-1 text-xs text-muted-foreground">Main image plus supporting angles and details.</p>
+              <div className="rounded-full bg-[#eff4eb] px-3 py-1 text-xs font-bold text-[#223227] dark:bg-white/[0.04] dark:text-white">
+                {addForm.watch("stockStatus") === "out_of_stock" ? "Out of Stock" : `${totalStock || "—"} stock`}
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="rounded-[28px] border border-black/5 bg-white/90 p-5 shadow-[0_20px_50px_rgba(34,63,41,0.07)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Preview Notes</p>
-        <div className="mt-4 space-y-3 text-sm text-[#425246] dark:text-white/74">
-          <p>Use the left side to edit content while this panel reflects the current product card presentation.</p>
-          <p>The preview is intentionally simplified so spacing, price, imagery, and merchandising decisions are easy to judge quickly.</p>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-3 dark:border-white/10 dark:bg-white/[0.02]">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Overview</p>
+            <p className="mt-1.5 text-xs leading-5 text-[#425246] dark:text-white/78 line-clamp-3">{productDescription}</p>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-3 dark:border-white/10 dark:bg-white/[0.02]">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Colors</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {selectedColors.length ? selectedColors.slice(0, 3).map((color: string) => (
+                  <Badge key={color} variant="outline" className="rounded-full text-[10px] px-2 py-0">{color.replace(/\s*\(#[0-9a-fA-F]{6}\)/, "")}</Badge>
+                )) : <span className="text-[10px] text-muted-foreground">None</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-black/5 bg-[#fbfaf7] p-3 dark:border-white/10 dark:bg-white/[0.02]">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">Gallery</p>
+              <p className="mt-1 text-xs font-bold text-[#223227] dark:text-white">{galleryUrls.length} images</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 
-  return (
-    <div className="fixed inset-0 z-[100] overflow-hidden bg-[#eef4ea] dark:bg-[#0e1511]">
-      <div className="absolute inset-0 h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef4ea] dark:bg-[#0e1511]">
-        <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.12),transparent_28%),linear-gradient(180deg,#f7faf4_0%,#eff4eb_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(81,111,73,0.18),transparent_26%),linear-gradient(180deg,#0f1411_0%,#111914_100%)]">
-          <div className="mx-auto flex min-h-[100dvh] max-w-7xl flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-            <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-black/5 bg-[#f7faf4] px-4 py-4 shadow-[0_8px_24px_rgba(34,63,41,0.05)] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 dark:border-white/10 dark:bg-[#101611] dark:shadow-none">
-              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="-ml-2 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5"
-                  onClick={onClose}
-                >
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back to products
-                </Button>
-                <div className="text-center">
-                  <h2 className="text-2xl font-serif font-medium text-[#223227] dark:text-white">Add New Product</h2>
-                  <p className="text-sm text-muted-foreground">Create a cleaner product page with organized attributes, pricing, and media.</p>
-                </div>
-                <div className="w-28" />
+  const wizardContent = (
+    <div className="absolute inset-0 h-[100dvh] overflow-y-auto overscroll-contain bg-[#eef4ea] dark:bg-[#0e1511]">
+      <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,rgba(129,160,116,0.12),transparent_28%),linear-gradient(180deg,#f7faf4_0%,#eff4eb_100%)] dark:bg-[radial-gradient(circle_at_top,rgba(81,111,73,0.18),transparent_26%),linear-gradient(180deg,#0f1411_0%,#111914_100%)]">
+        <div className="mx-auto flex min-h-[100dvh] max-w-7xl flex-col px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+          <div className="sticky top-0 z-20 -mx-4 mb-6 border-b border-black/5 bg-[#f7faf4] px-4 py-4 shadow-[0_8px_24px_rgba(34,63,41,0.05)] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 dark:border-white/10 dark:bg-[#101611] dark:shadow-none">
+            <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
+              <Button
+                type="button"
+                variant="ghost"
+                className="-ml-2 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5"
+                onClick={onClose}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to products
+              </Button>
+              <div className="text-center">
+                <h2 className="text-2xl font-serif font-medium text-[#223227] dark:text-white">Add New Product</h2>
+                <p className="text-sm text-muted-foreground">Create a cleaner product page with organized attributes, pricing, and media.</p>
               </div>
+              <div className="w-28" />
             </div>
+          </div>
 
             <div className="mb-8 flex items-center justify-center gap-0">
           {steps.map((s, i) => (
@@ -853,17 +925,16 @@ export default function AddProductWizard({
                                 {selectedSizes.map((size: string) => {
                                   const currentStock = stockBySizeValues[size] ?? undefined;
                                   return (
-                                    <div key={size} className="space-y-2 rounded-2xl border border-border/50 bg-background/70 p-3">
-                                      <div className="flex items-center justify-between">
-                                        <Label className="text-sm font-bold">{size}</Label>
-                                        {currentStock !== undefined && currentStock > 0 ? (
-                                          <span className="text-[10px] font-bold text-primary">{currentStock}</span>
-                                        ) : null}
-                                      </div>
+                                    <div
+                                      key={size}
+                                      className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 p-4 text-center"
+                                    >
+                                      <Label className="text-sm font-bold">{size}</Label>
                                       <QuantityInput
                                         min={0}
                                         step={1}
                                         value={currentStock}
+                                        className="h-11 w-full max-w-[120px] justify-center"
                                         onChange={(newValue) => {
                                           const current = addForm.getValues("stockBySize") || {};
                                           addForm.setValue(
@@ -1236,6 +1307,7 @@ export default function AddProductWizard({
           </div>
         </div>
       </div>
-    </div>
   );
+
+  return portalContainerRef.current ? createPortal(wizardContent, portalContainerRef.current) : null;
 }

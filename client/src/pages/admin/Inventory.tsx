@@ -333,7 +333,17 @@ export default function Inventory() {
   );
 
   const categoryOptions = useMemo(
-    () => Array.from(new Set(products.map((product) => product.category).filter(Boolean))).sort(),
+    () => {
+      const catCounts = new Map<string, number>();
+      for (const product of products) {
+        if (product.category) {
+          catCounts.set(product.category, (catCounts.get(product.category) ?? 0) + 1);
+        }
+      }
+      return Array.from(catCounts.entries())
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([cat]) => cat);
+    },
     [products],
   );
 

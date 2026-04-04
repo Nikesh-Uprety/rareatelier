@@ -30,6 +30,7 @@ import {
   SheetDescription,
 } from "@/components/ui/sheet";
 import { fetchAnalytics, type AdminAnalytics } from "@/lib/adminApi";
+import OrdersTrendChart from "@/components/admin/OrdersTrendChart";
 
 const DashboardCharts = lazy(() =>
   import("@/components/admin/DashboardCharts").then((module) => ({ default: module.DashboardCharts })),
@@ -249,6 +250,8 @@ export default function AdminDashboard() {
           <ArrowRight className="h-4 w-4 text-[#2C5234] transition-transform duration-300 group-hover:translate-x-1 dark:text-foreground" />
         </Button>
       </section>
+
+      <OrdersTrendChart orders={orders} timeRange="7d" />
 
       <Suspense
         fallback={
