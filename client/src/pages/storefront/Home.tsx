@@ -161,6 +161,7 @@ function DeferredSection({
 export default function Home() {
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
@@ -247,12 +248,14 @@ export default function Home() {
 
   // Device detection
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+    const checkViewport = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 1024);
+      setIsTablet(width >= 768 && width < 1024);
     };
-    checkMobile();
-    window.addEventListener("resize", checkMobile);
-    return () => window.removeEventListener("resize", checkMobile);
+    checkViewport();
+    window.addEventListener("resize", checkViewport);
+    return () => window.removeEventListener("resize", checkViewport);
   }, []);
 
   // Load admin overrides (if any) for Featured + Explore visuals.
@@ -473,7 +476,10 @@ export default function Home() {
     { id: -6, sectionType: "services", isVisible: true, config: {}, orderIndex: 6 },
   ];
 
-  const activeSections = (
+  const templateSlug = pageConfig?.template?.slug;
+  const isMaisonNocturne = templateSlug === "maison-nocturne";
+  const isNikeshDesign = templateSlug === "nikeshdesign";
+  const sortedSections = (
     pageConfigLoading
       ? []
       : pageConfig?.sections?.length
@@ -482,8 +488,22 @@ export default function Home() {
   ).filter((s: any) => s.isVisible)
     .sort((a: any, b: any) => a.orderIndex - b.orderIndex)
     .filter((section: any) => previewSectionId == null || Number(section.id) === previewSectionId);
-  const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
-  const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
+  const activeSections = (() => {
+    if (!isMaisonNocturne) return sortedSections;
+    const featured = sortedSections.filter((section: any) => section.sectionType === "featured");
+    if (!featured.length) return sortedSections;
+    const withoutFeatured = sortedSections.filter((section: any) => section.sectionType !== "featured");
+    let lastArrivalsIndex = -1;
+    withoutFeatured.forEach((section: any, index: number) => {
+      if (section.sectionType === "arrivals") lastArrivalsIndex = index;
+    });
+    if (lastArrivalsIndex === -1) return sortedSections;
+    return [
+      ...withoutFeatured.slice(0, lastArrivalsIndex + 1),
+      ...featured,
+      ...withoutFeatured.slice(lastArrivalsIndex + 1),
+    ];
+  })();
   const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
   const shouldRenderFallbackContact = !pageConfigLoading && !activeSections.some((s: any) => s.sectionType === "contact");
 
@@ -527,6 +547,7 @@ export default function Home() {
             heroLoading={heroLoadingState}
             videoFailed={videoFailed}
             isMobile={isMobile}
+            isTablet={isTablet}
             isTransitioning={isTransitioning}
             onVideoError={() => setVideoFailed(true)}
             heroVideoRef={heroVideoRef}
@@ -539,7 +560,10 @@ export default function Home() {
             <QuoteSection config={section.config} />
           </DeferredSection>
         );
-      case "featured":
+      case "featured": {
+        const featuredConfig = isMaisonNocturne
+          ? { ...(section.config ?? {}), variant: "editorial" }
+          : section.config;
         return (
           <DeferredSection key={section.id} minHeightClassName="min-h-[44rem]">
             <FeaturedCollection
@@ -558,10 +582,11 @@ export default function Home() {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseLeave}
-              config={section.config}
+              config={featuredConfig}
             />
           </DeferredSection>
         );
+      }
       case "ticker":
         return (
           <DeferredSection key={section.id} minHeightClassName="min-h-[10rem]">

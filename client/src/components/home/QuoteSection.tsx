@@ -81,9 +81,8 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
 
     return (
       <section
-        className="relative overflow-hidden px-6 py-28 sm:px-8 lg:px-10"
+        className="relative overflow-hidden bg-background px-6 py-28 sm:px-8 lg:px-10 dark:bg-neutral-950"
         style={{
-          background: "var(--bg)",
           borderTop: "1px solid var(--border)",
           borderBottom: "1px solid var(--border)",
         }}
@@ -96,7 +95,12 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
             color: isDarkTheme ? "rgba(232,228,219,0.025)" : "rgba(24,20,17,0.05)",
           }}
         >
-          RARE
+          <img
+            src="/images/logo.webp"
+            alt=""
+            className="h-24 w-auto opacity-[0.08] saturate-0 dark:opacity-[0.12] dark:brightness-0 dark:invert sm:h-32 md:h-40 lg:h-48"
+            aria-hidden
+          />
         </div>
         <div className="relative mx-auto max-w-4xl text-center">
           <motion.h2

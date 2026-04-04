@@ -18,7 +18,7 @@ const GRAIN_DATA_URI = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xml
 function SectionMountainSilhouette() {
   return (
     <svg
-      className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-[260px] w-full opacity-[0.18]"
+      className="pointer-events-none absolute bottom-0 left-0 right-0 z-[1] h-[260px] w-full opacity-[0.12] dark:opacity-[0.2]"
       viewBox="0 0 1200 260"
       preserveAspectRatio="none"
       aria-hidden
@@ -221,16 +221,13 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
   return (
     <section
       ref={sectionRef}
-      className="relative min-h-[680px] overflow-hidden px-6 sm:px-10 lg:px-16 py-[80px] pb-[96px]"
-      style={{
-        background: "linear-gradient(to bottom, #050505, #0b0b0b 45%, #111111)",
-      }}
+      className="relative min-h-[680px] overflow-hidden bg-[#f8f6f2] px-6 py-[88px] pb-[108px] text-[#181411] dark:bg-[#0b0b0d] dark:text-white sm:px-10 lg:px-16"
     >
       <SectionMountainSilhouette />
 
       {/* Grain */}
       <div
-        className="pointer-events-none absolute inset-0 z-[2] opacity-[0.04]"
+        className="pointer-events-none absolute inset-0 z-[2] opacity-[0.035] dark:opacity-[0.06]"
         style={{
           backgroundImage: GRAIN_DATA_URI,
           backgroundSize: "180px",
@@ -240,19 +237,19 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
       <div
         className="pointer-events-none absolute bottom-0 left-0 top-0 z-[3] w-[200px]"
         style={{
-          background: "linear-gradient(to right, rgba(255,255,255,.06), transparent)",
+          background: "linear-gradient(to right, rgba(24,20,17,0.06), transparent)",
         }}
       />
       <div
         className="pointer-events-none absolute bottom-0 right-0 top-0 z-[3] w-[180px]"
         style={{
-          background: "linear-gradient(to left, rgba(255,255,255,.05), transparent)",
+          background: "linear-gradient(to left, rgba(24,20,17,0.05), transparent)",
         }}
       />
 
       <div className="relative z-10 mx-auto max-w-[1400px]">
         <h2
-          className="our-services-heading mb-3 text-center font-extrabold text-white"
+          className="our-services-heading mb-3 text-center font-extrabold text-[#181411] dark:text-white"
           style={{
             fontSize: "clamp(36px, 5vw, 64px)",
           }}
@@ -260,7 +257,7 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
           {sectionTitle}
         </h2>
         <p
-          className="mb-14 text-center text-white/72"
+          className="mb-14 text-center text-[#5f564f] dark:text-white/72"
           style={{ fontSize: "clamp(16px, 1.8vw, 22px)" }}
         >
           {sectionText}
@@ -272,20 +269,25 @@ export default function OurServices({ config: _config = {} }: OurServicesProps) 
             return (
               <article
                 key={`${card.title}-${index}`}
-                className={`our-services-card flex flex-col overflow-hidden rounded-[20px] border border-white/10 bg-[#0b0b0b] shadow-[0_12px_38px_rgba(0,0,0,0.28)] transition-[transform,box-shadow] duration-300 ease-in-out ${
+                className={`our-services-card flex flex-col overflow-hidden rounded-[22px] border border-black/10 bg-white/90 shadow-[0_18px_42px_rgba(24,20,17,0.12)] transition-[transform,box-shadow] duration-300 ease-in-out dark:border-white/10 dark:bg-[#101114] dark:shadow-[0_18px_42px_rgba(0,0,0,0.5)] ${
                   cardsVisible ? "visible" : ""
                 }`}
               >
                 {art}
-                <div className="flex flex-1 flex-col items-center bg-[#0b0b0b] px-6 pb-8 pt-7 text-center">
-                  <h3 className="our-services-card-title mb-3 text-[22px] lg:text-[26px] font-bold text-white">{card.title}</h3>
-                  <p className="mb-6 flex-1 text-[14px] lg:text-[15px] leading-[1.75] text-white/72">
+                <div className="flex flex-1 flex-col items-center bg-white/95 px-6 pb-8 pt-7 text-center text-[#181411] dark:bg-[#101114] dark:text-white">
+                  <p className="mb-2 text-[10px] uppercase tracking-[0.28em] text-[#b08d4a] dark:text-[var(--gold)]">
+                    RARE.NP
+                  </p>
+                  <h3 className="our-services-card-title mb-3 text-[22px] font-bold lg:text-[26px]">
+                    {card.title}
+                  </h3>
+                  <p className="mb-6 flex-1 text-[14px] leading-[1.75] text-[#5f564f] dark:text-white/70 lg:text-[15px]">
                     {card.text}
                   </p>
                   <button
                     type="button"
                     onClick={() => handleTarget(card.target)}
-                    className="our-services-btn cursor-pointer rounded-md border border-white/14 bg-[#161616] px-10 py-[13px] text-[14px] font-medium tracking-[0.06em] text-white transition-[background,transform,border-color] duration-200 hover:scale-[1.02] hover:bg-[#202020] hover:border-white/22"
+                    className="our-services-btn cursor-pointer rounded-full border border-black/10 bg-black px-8 py-[12px] text-[13px] font-semibold tracking-[0.18em] text-white transition-[background,transform,border-color] duration-200 hover:scale-[1.02] hover:bg-black/90 dark:border-white/15 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
                   >
                     {card.buttonLabel || "Learn More"}
                   </button>

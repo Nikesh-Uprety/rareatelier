@@ -1227,11 +1227,108 @@ export default function Canvas() {
     });
   };
 
+  const buildDraftPreviewConfig = (section: CanvasSection) => {
+    const config: Record<string, unknown> = {};
+    const label = sectionDraft.label.trim();
+    const variant = sectionDraft.variant.trim();
+    const image = sectionDraft.image.trim();
+    const eyebrow = sectionDraft.eyebrow.trim();
+    const title = sectionDraft.title.trim();
+    const text = sectionDraft.text.trim();
+    const hint = sectionDraft.hint.trim();
+    const attribution = sectionDraft.attribution.trim();
+    const ctaLabel = sectionDraft.ctaLabel.trim();
+    const ctaHref = sectionDraft.ctaHref.trim();
+    const secondaryCtaLabel = sectionDraft.secondaryCtaLabel.trim();
+    const secondaryCtaHref = sectionDraft.secondaryCtaHref.trim();
+    const layoutPreset = sectionDraft.layoutPreset.trim();
+
+    if (label) config.label = label;
+    if (variant) config.variant = variant;
+    if (image) config.image = image;
+    if (eyebrow) config.eyebrow = eyebrow;
+    if (title) config.title = title;
+    if (text) config.text = text;
+    if (hint) config.hint = hint;
+    if (attribution) config.attribution = attribution;
+    if (ctaLabel) config.ctaLabel = ctaLabel;
+    if (ctaHref) config.ctaHref = ctaHref;
+    if (secondaryCtaLabel) config.secondaryCtaLabel = secondaryCtaLabel;
+    if (secondaryCtaHref) config.secondaryCtaHref = secondaryCtaHref;
+    if (layoutPreset) config.layoutPreset = layoutPreset;
+
+    if (section.sectionType === "hero") {
+      const slides = deserializeHeroSlides(sectionDraft.heroSlides);
+      if (slides.length) config.slides = slides;
+    }
+
+    if (section.sectionType === "ticker") {
+      const items = sectionDraft.items
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (items.length) config.items = items;
+    }
+
+    if (section.sectionType === "campaign") {
+      const images = sectionDraft.campaignImages
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [index = "", labelValue = "", imageValue = ""] = line
+            .split("|")
+            .map((part) => part.trim());
+          return { index, label: labelValue, image: imageValue };
+        })
+        .filter((item) => item.image || item.label || item.index);
+      if (images.length) config.images = images;
+    }
+
+    if (section.sectionType === "featured" || section.sectionType === "fresh-release") {
+      const productIds = sectionDraft.productIds
+        .split(/[,\n]/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (productIds.length) config.productIds = productIds;
+    }
+
+    if (section.sectionType === "fresh-release") {
+      const columns = Number(sectionDraft.columns);
+      if (Number.isFinite(columns)) config.columns = columns;
+    }
+
+    if (section.sectionType === "services") {
+      const cards = sectionDraft.serviceCards
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [cardTitle = "", cardText = "", buttonLabel = "", target = ""] = line
+            .split("|")
+            .map((part) => part.trim());
+          return {
+            title: cardTitle,
+            text: cardText,
+            buttonLabel,
+            target,
+          };
+        })
+        .filter((card) => card.title || card.text || card.buttonLabel || card.target);
+      if (cards.length) config.cards = cards;
+    }
+
+    return config;
+  };
+
   const renderSectionMiniPreview = (section: CanvasSection) => {
+    const isSelected = selectedSection?.id === section.id;
+    const draftConfig = isSelected ? buildDraftPreviewConfig(section) : null;
     const config =
-      section.config && typeof section.config === "object"
+      draftConfig ??
+      (section.config && typeof section.config === "object"
         ? (section.config as Record<string, unknown>)
-        : {};
+        : {});
     const previewImage = typeof config.image === "string" ? config.image : "";
     const heroSlides = Array.isArray(config.slides)
       ? config.slides.filter((slide): slide is Record<string, unknown> => !!slide && typeof slide === "object")
@@ -1600,6 +1697,16 @@ export default function Canvas() {
         ? `${prev.campaignImages}\n |  | `
         : " |  | ",
     }));
+  };
+
+  const addCampaignImageAndPick = () => {
+    const currentItems = sectionDraft.campaignImages
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const nextIndex = currentItems.length;
+    addCampaignImage();
+    setMediaPickerTarget({ type: "campaign", index: nextIndex });
   };
 
   const removeCampaignImage = (index: number) => {
@@ -2662,16 +2769,46 @@ export default function Canvas() {
               {selectedSection ? (
                 <>
                 <Card className={CANVAS_ELEVATED_CARD_CLASS}>
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
-                    <div>
-                      <CardTitle>{selectedSection.label ?? selectedSection.sectionType}</CardTitle>
-                      <CardDescription>
-                        Type: {selectedSection.sectionType} · Position #{selectedSection.orderIndex}
-                      </CardDescription>
+                  <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div className="space-y-3">
+                      <div>
+                        <CardTitle className="text-lg">
+                          {selectedSection.label ?? selectedSection.sectionType}
+                        </CardTitle>
+                        <CardDescription className="text-sm">
+                          Section details and controls for the live storefront layout.
+                        </CardDescription>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <Badge
+                          variant="outline"
+                          className="rounded-full border-[rgba(201,169,110,0.35)] bg-[rgba(201,169,110,0.12)] px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-[rgba(201,169,110,0.9)]"
+                        >
+                          {selectedSection.sectionType}
+                        </Badge>
+                        <Badge
+                          variant="outline"
+                          className="rounded-full border-border/60 bg-background/70 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-foreground/70"
+                        >
+                          Position #{selectedSection.orderIndex}
+                        </Badge>
+                        <Badge
+                          variant={selectedSection.isVisible ? "secondary" : "outline"}
+                          className={cn(
+                            "rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.2em]",
+                            selectedSection.isVisible
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+                              : "text-muted-foreground",
+                          )}
+                        >
+                          {selectedSection.isVisible ? "Live" : "Hidden"}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
                         className="rounded-xl"
                         onClick={() =>
                           sectionMutation.mutate({
@@ -2685,6 +2822,7 @@ export default function Canvas() {
                       </Button>
                       <Button
                         variant="outline"
+                        size="sm"
                         className="rounded-xl"
                         disabled={sortedSections[0]?.id === selectedSection.id}
                         onClick={() => handleMoveSection(selectedSection, -1)}
@@ -2694,6 +2832,7 @@ export default function Canvas() {
                       </Button>
                       <Button
                         variant="outline"
+                        size="sm"
                         className="rounded-xl"
                         disabled={sortedSections[sortedSections.length - 1]?.id === selectedSection.id}
                         onClick={() => handleMoveSection(selectedSection, 1)}
@@ -2703,6 +2842,7 @@ export default function Canvas() {
                       </Button>
                       <Button
                         variant="destructive"
+                        size="sm"
                         className="rounded-xl"
                         disabled={deleteSectionMutation.isPending}
                         onClick={() => deleteSectionMutation.mutate(selectedSection.id)}
@@ -2712,29 +2852,40 @@ export default function Canvas() {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
-                      <div className="mx-auto max-w-xl">
-                        {renderSectionMiniPreview(selectedSection)}
+                  <CardContent className="space-y-6">
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                      <div className={cn(CANVAS_ELEVATED_PANEL_CLASS, "p-4")}>
+                        <div className="mx-auto max-w-xl">
+                          {renderSectionMiniPreview(selectedSection)}
+                        </div>
                       </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
+                      <div className="grid gap-3">
+                        <div className="rounded-2xl border border-black/10 bg-background/60 p-4 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Visibility</p>
                           <p className="mt-2 text-sm font-semibold">{selectedSection.isVisible ? "Visible" : "Hidden"}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Toggles whether this section appears on the live homepage.
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
+                        <div className="rounded-2xl border border-black/10 bg-background/60 p-4 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Order</p>
                           <p className="mt-2 text-sm font-semibold">#{selectedSection.orderIndex}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Lower numbers render earlier in the page flow.
+                          </p>
                         </div>
-                        <div className="rounded-xl border border-black/10 bg-background/60 p-3 dark:border-white/[0.10]">
+                        <div className="rounded-2xl border border-black/10 bg-background/60 p-4 dark:border-white/[0.10]">
                           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Type</p>
                           <p className="mt-2 text-sm font-semibold">{selectedSection.sectionType}</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Determines which editor controls appear below.
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      This tab is for managing and editing sections. Full-page live preview remains only in the Templates tab.
-                    </p>
+                    <div className="rounded-2xl border border-border/60 bg-muted/10 p-4 text-xs text-muted-foreground">
+                      This panel updates section data. The Templates tab is still the full live preview.
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -3132,11 +3283,20 @@ export default function Canvas() {
                         <div className="space-y-3">
                           <div className="flex items-center justify-between">
                             <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Grid Images</label>
-                            <Button type="button" variant="outline" size="sm" className="rounded-xl" onClick={addCampaignImage}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={addCampaignImageAndPick}
+                            >
                               <Plus className="mr-2 h-4 w-4" />
                               Add Image
                             </Button>
                           </div>
+                          <p className="text-xs text-muted-foreground">
+                            Add an image and pick from the media library in one step. The preview updates instantly.
+                          </p>
                           {(parsedCampaignImages.length ? parsedCampaignImages : [{ index: "", label: "", image: "" }]).map((item, index) => (
                             <Card key={`campaign-image-${index}`} className="rounded-2xl border-border/60">
                               <CardContent

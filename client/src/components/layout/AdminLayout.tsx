@@ -193,6 +193,8 @@ export default function AdminLayout({
     ? "[&_[data-slot=sidebar-inner]]:bg-[#101A22] [&_[data-slot=sidebar-inner]]:text-white [&_[data-slot=sidebar-container]]:border-[#2D3A45] dark:[&_[data-slot=sidebar-inner]]:bg-[#F8FAFC] dark:[&_[data-slot=sidebar-inner]]:text-[#111827] dark:[&_[data-slot=sidebar-container]]:border-[#D7DEE7]"
     : "";
   const adminNav = getAdminNavigation(user?.role);
+  const accountNavItem = adminNav.find((item) => item.page === "profile");
+  const sidebarNavItems = adminNav.filter((item) => item.page !== "profile");
 
   return (
     <SidebarProvider
@@ -254,7 +256,7 @@ export default function AdminLayout({
 
         <div className="flex-1 overflow-y-auto p-4">
           <nav className="space-y-1">
-            {adminNav.map((item) => {
+            {sidebarNavItems.map((item) => {
               const isActive = pathname === item.href;
               return (
                 <Link
@@ -306,9 +308,10 @@ export default function AdminLayout({
         <SidebarContent className="sidebar-scrollbar p-4 group-data-[collapsible=icon]:overflow-y-auto">
           <SidebarGroup className="p-0">
             <SidebarMenu>
-              {adminNav.map((item) => {
+              {sidebarNavItems.map((item) => {
                 const isActive = pathname === item.href;
                 const count = getUnreadCountByType(item.type);
+                const isCollapsedActive = !isVisuallyExpanded && isActive;
                 return (
                   <SidebarMenuItem key={item.href}>
                     <SidebarMenuButton
@@ -322,6 +325,8 @@ export default function AdminLayout({
                           "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
                         isActive &&
                           "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
+                        isCollapsedActive &&
+                          "bg-white text-[#0f172a] shadow-[0_0_0_1px_rgba(15,23,42,0.18)] hover:bg-white/95 hover:text-[#0f172a] dark:bg-[#111827] dark:text-white dark:hover:bg-[#111827] dark:hover:text-white dark:shadow-[0_0_0_1px_rgba(17,24,39,0.45)]",
                       )}
                     >
                       <Link
@@ -329,6 +334,7 @@ export default function AdminLayout({
                         className={cn(
                           "flex w-full items-center",
                           !isVisuallyExpanded && "text-white dark:text-[#111827]",
+                          isCollapsedActive && "text-[#0f172a] dark:text-white",
                         )}
                         onClick={() => {
                           if (count > 0) markTypeRead(item.type);
@@ -339,6 +345,7 @@ export default function AdminLayout({
                           className={cn(
                             "h-4 w-4 shrink-0",
                             !isVisuallyExpanded && "text-white dark:text-[#111827]",
+                            isCollapsedActive && "text-[#0f172a] dark:text-white",
                           )}
                         />
                         <span
@@ -412,6 +419,18 @@ export default function AdminLayout({
             </Button>
           </div>
           <div className="flex items-center gap-2.5">
+            {accountNavItem ? (
+              <Link
+                href={accountNavItem.href}
+                className={cn(
+                  "hidden md:flex items-center gap-2 rounded-xl border border-border/70 bg-card/40 px-3 py-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase text-foreground transition-colors hover:bg-muted",
+                  pathname === accountNavItem.href && "bg-muted text-foreground",
+                )}
+              >
+                <accountNavItem.icon className="h-4 w-4" />
+                {accountNavItem.label}
+              </Link>
+            ) : null}
             <ThemeToggle />
             <NotificationBadge />
             <Button

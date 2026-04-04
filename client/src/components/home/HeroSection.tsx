@@ -13,6 +13,7 @@ interface HeroSectionProps {
   heroLoading: boolean;
   videoFailed: boolean;
   isMobile: boolean;
+  isTablet: boolean;
   isTransitioning: boolean;
   onVideoError: () => void;
   heroVideoRef?: RefObject<HTMLVideoElement | null>;
@@ -59,20 +60,10 @@ const DEFAULT_NIKESH_SLIDES = [
 ];
 
 function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; config?: Record<string, any> }) {
-  const slides = useMemo(() => {
-    const visualImageSet = DEFAULT_MAISON_HERO_IMAGES.length > 0 ? DEFAULT_MAISON_HERO_IMAGES : heroImages;
-    const sourceSlides = Array.isArray(config?.slides) && config.slides.length > 0
-      ? config.slides
-      : DEFAULT_MAISON_SLIDES;
-
-    return sourceSlides.map((slide: any, index: number) => ({
-      ...DEFAULT_MAISON_SLIDES[index % DEFAULT_MAISON_SLIDES.length],
-      ...slide,
-      image: typeof slide?.image === "string" && slide.image
-        ? slide.image
-        : visualImageSet[index % Math.max(visualImageSet.length, 1)] ?? visualImageSet[0],
-    }));
-  }, [config?.slides, heroImages]);
+  const slides = useMemo(
+    () => resolveMaisonSlides(heroImages, config),
+    [config?.slides, heroImages],
+  );
   const secondaryCtaLabel = config?.secondaryCtaLabel ?? "Discover Atelier";
   const secondaryCtaHref = config?.secondaryCtaHref ?? "/atelier";
 
@@ -394,12 +385,203 @@ function NikeshDesignHero({ heroImages, config }: { heroImages: string[]; config
   );
 }
 
+function resolveMaisonSlides(heroImages: string[], config?: Record<string, any>) {
+  const visualImageSet = DEFAULT_MAISON_HERO_IMAGES.length > 0 ? DEFAULT_MAISON_HERO_IMAGES : heroImages;
+  const sourceSlides = Array.isArray(config?.slides) && config.slides.length > 0
+    ? config.slides
+    : DEFAULT_MAISON_SLIDES;
+
+  return sourceSlides.map((slide: any, index: number) => ({
+    ...DEFAULT_MAISON_SLIDES[index % DEFAULT_MAISON_SLIDES.length],
+    ...slide,
+    image: typeof slide?.image === "string" && slide.image
+      ? slide.image
+      : visualImageSet[index % Math.max(visualImageSet.length, 1)] ?? visualImageSet[0],
+  }));
+}
+
+function DraftHeroOverlay({
+  tag = "[W'25/ARCHIVE]",
+  headline = "Beyond Trends.",
+  subline = "Beyond Time.",
+  ctaLabel = "Explore Shop",
+  ctaHref = "/products",
+  footnote = "Authenticity In Motion",
+}: {
+  tag?: string;
+  headline?: string;
+  subline?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  footnote?: string;
+}) {
+  return (
+    <>
+      <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
+        <div className="flex items-center gap-6 md:gap-12 pl-2">
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "clamp(120px, 20vh, 180px)", opacity: 0.4 }}
+            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+            className="w-px bg-white hidden md:block"
+          />
+
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+            className="text-white flex flex-col items-start w-full"
+          >
+            <span className="text-[9px] md:text-xs tracking-[0.4em] md:tracking-[0.5em] opacity-40 font-bold mb-4 md:mb-6 block uppercase">
+              {tag}
+            </span>
+
+            <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter shadow-black/20 text-shadow-sm">
+              {headline.split("\n").map((line, index) => (
+                <span key={`${line}-${index}`}>
+                  {index > 0 ? <br /> : null}
+                  {line}
+                </span>
+              ))}
+            </h1>
+
+            <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide text-shadow-sm">
+              {subline}
+            </p>
+          </motion.div>
+        </div>
+      </div>
+
+      <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-20 md:items-end pt-0 md:pt-0 pointer-events-none z-20">
+        <div className="flex flex-col items-center gap-4 md:gap-5 pointer-events-auto">
+          <motion.div
+            initial={{ scaleX: 0 }}
+            animate={{ scaleX: 1 }}
+            transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="w-12 md:w-16 h-px bg-white/50 origin-center hidden md:block"
+          />
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <Button
+              size="lg"
+              asChild
+              className="rounded-none bg-white text-black hover:bg-white/90 px-8 sm:px-12 md:px-16 h-12 sm:h-14 md:h-15 text-[9px] md:text-xs uppercase tracking-[0.3em] md:tracking-[0.4em] font-black transition-all duration-300 hover:scale-105 active:scale-95 shadow-2xl hero-btn-glow group"
+            >
+              <Link href={ctaHref} className="flex items-center gap-3">
+                {ctaLabel}
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
+              </Link>
+            </Button>
+          </motion.div>
+
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.6 }}
+            transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
+            className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold text-shadow-sm mt-1 md:mt-0"
+          >
+            {footnote}
+          </motion.p>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function OfficialCompactHero({
+  heroImages,
+  heroLoading,
+  showVideo,
+  heroVideoRef,
+  onVideoError,
+  overlay,
+}: {
+  heroImages: string[];
+  heroLoading: boolean;
+  showVideo: boolean;
+  heroVideoRef?: RefObject<HTMLVideoElement | null>;
+  onVideoError: () => void;
+  overlay?: {
+    tag?: string;
+    headline?: string;
+    subline?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+    footnote?: string;
+  };
+}) {
+  const poster = heroImages[0] || undefined;
+
+  return (
+    <section className="relative h-[90vh] min-h-[650px] md:min-h-[750px] lg:min-h-[850px] w-full overflow-hidden bg-neutral-900">
+      {showVideo ? (
+        <motion.div
+          key="hero-video"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1.5, ease: "easeInOut" }}
+          className="absolute inset-0 w-full h-full"
+        >
+          <video
+            ref={heroVideoRef}
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            poster={poster}
+            onError={onVideoError}
+            className="w-full h-full object-cover"
+          >
+            <source src="/videos/videorare.mp4" type="video/mp4" />
+          </video>
+        </motion.div>
+      ) : heroLoading ? (
+        <div
+          className="absolute inset-0 w-full h-full animate-pulse bg-muted"
+          style={{ aspectRatio: "1920/800" }}
+        />
+      ) : (
+        <AnimatePresence mode="popLayout">
+          <motion.div
+            key={`hero-image-compact-${poster ?? "fallback"}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.2, ease: "easeInOut" }}
+            className="absolute inset-0 w-full h-full"
+          >
+            {poster ? (
+              <OptimizedImage
+                src={poster}
+                alt="Rare Atelier campaign"
+                className="w-full h-full object-cover object-center"
+                priority
+                loading="eager"
+              />
+            ) : (
+              <div className="w-full h-full bg-neutral-900" />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
+      <div className="absolute inset-0 bg-black/24 pointer-events-none" />
+      <DraftHeroOverlay {...overlay} />
+    </section>
+  );
+}
+
 export default function HeroSection({
   heroImages,
   heroIndex,
   heroLoading,
   videoFailed,
   isMobile,
+  isTablet,
   isTransitioning,
   onVideoError,
   heroVideoRef,
@@ -414,6 +596,18 @@ export default function HeroSection({
   }
 
   if (config?.variant === "maison-nocturne") {
+    if (isMobile) {
+      return (
+        <OfficialCompactHero
+          heroImages={heroImages}
+          heroLoading={heroLoading}
+          showVideo={!videoFailed}
+          heroVideoRef={heroVideoRef}
+          onVideoError={onVideoError}
+        />
+      );
+    }
+
     return <MaisonNocturneHero heroImages={heroImages} config={config} />;
   }
 
@@ -472,74 +666,7 @@ export default function HeroSection({
       )}
       <div className="absolute inset-0 bg-black/24 pointer-events-none" />
 
-      <div className="absolute inset-0 flex items-start md:items-center container mx-auto px-6 sm:px-12 md:px-16 pt-32 sm:pt-40 md:pt-0 pointer-events-none z-10">
-        <div className="flex items-center gap-6 md:gap-12 pl-2">
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "clamp(120px, 20vh, 180px)", opacity: 0.4 }}
-            transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
-            className="w-px bg-white hidden md:block"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-            className="text-white flex flex-col items-start w-full"
-          >
-            <span className="text-[9px] md:text-xs tracking-[0.4em] md:tracking-[0.5em] opacity-40 font-bold mb-4 md:mb-6 block uppercase">
-              [W'25/ARCHIVE]
-            </span>
-
-            <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter shadow-black/20 text-shadow-sm">
-              Beyond
-              <br />
-              Trends.
-            </h1>
-
-            <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide text-shadow-sm">
-              Beyond Time.
-            </p>
-          </motion.div>
-        </div>
-      </div>
-
-      <div className="absolute inset-0 flex items-end justify-center pb-24 sm:pb-32 md:pb-20 md:items-end pt-0 md:pt-0 pointer-events-none z-20">
-        <div className="flex flex-col items-center gap-4 md:gap-5 pointer-events-auto">
-          <motion.div
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="w-12 md:w-16 h-px bg-white/50 origin-center hidden md:block"
-          />
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <Button
-              size="lg"
-              asChild
-              className="rounded-none bg-white text-black hover:bg-white/90 px-8 sm:px-12 md:px-16 h-12 sm:h-14 md:h-15 text-[9px] md:text-xs uppercase tracking-[0.3em] md:tracking-[0.4em] font-black transition-all duration-300 hover:scale-105 active:scale-95 shadow-2xl hero-btn-glow group"
-            >
-              <Link href="/products" className="flex items-center gap-3">
-                Explore Shop
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform duration-300" />
-              </Link>
-            </Button>
-          </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
-            className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold text-shadow-sm mt-1 md:mt-0"
-          >
-            Authenticity In Motion
-          </motion.p>
-        </div>
-      </div>
+      <DraftHeroOverlay />
     </section>
   );
 }
