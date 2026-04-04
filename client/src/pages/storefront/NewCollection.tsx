@@ -180,7 +180,7 @@ export default function NewCollection() {
   const isDark = theme === "dark";
   const { data: products, isLoading } = useQuery<ProductApi[]>({
     queryKey: ["products", "all-collection"],
-    queryFn: () => fetchProducts(),
+    queryFn: () => fetchProducts().then(r => r.products),
     staleTime: 1000 * 60 * 5, // 5 minutes stale time for better performance
   });
 

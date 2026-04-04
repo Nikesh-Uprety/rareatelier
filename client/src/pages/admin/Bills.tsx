@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useMemo } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
@@ -11,6 +11,7 @@ import type { AdminBill } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/admin/Pagination";
 
 const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
@@ -21,6 +22,8 @@ export default function AdminBills() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedBill, setSelectedBill] = useState<AdminBill | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [billPage, setBillPage] = useState(1);
+  const [billPageSize, setBillPageSize] = useState(20);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -63,6 +66,16 @@ export default function AdminBills() {
     });
   }, [bills, typeFilter, search]);
 
+  useEffect(() => {
+    setBillPage(1);
+  }, [typeFilter, search, billPageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / billPageSize));
+  const paginated = filtered.slice(
+    (billPage - 1) * billPageSize,
+    billPage * billPageSize,
+  );
+
   const handleDownloadPDF = async (bill: AdminBill) => {
     setSelectedBill(bill);
     // PDF download is handled inside BillViewer
@@ -82,7 +95,7 @@ export default function AdminBills() {
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
             Bills
           </h1>
-          <p className="text-muted-foreground mt-1">
+                  <p className="text-muted-foreground mt-1">
             {filtered.length} bills • {typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1)}
           </p>
         </div>
@@ -158,7 +171,7 @@ export default function AdminBills() {
                           ))}
                         </tr>
                       ))
-                    : filtered.map((bill) => {
+                    : paginated.map((bill) => {
                         const items = Array.isArray(bill.items) ? bill.items : [];
                         return (
                           <tr key={bill.id} className="hover:bg-muted/50 transition-colors">
@@ -276,7 +289,7 @@ export default function AdminBills() {
                     <div className="h-10 w-full bg-muted rounded" />
                   </div>
                 ))
-              : filtered.map((bill) => (
+              : paginated.map((bill) => (
                   <div key={bill.id} className="bg-white dark:bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-all">
                     <div className="flex justify-between items-start mb-4">
                       <div>
@@ -332,6 +345,17 @@ export default function AdminBills() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <Pagination
+          currentPage={billPage}
+          totalPages={totalPages}
+          onPageChange={setBillPage}
+          totalItems={filtered.length}
+          pageSize={billPageSize}
+          onPageSizeChange={setBillPageSize}
+        />
+      </div>
 
       {/* Bill Viewer Modal */}
       {selectedBill && (

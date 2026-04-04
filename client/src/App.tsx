@@ -170,7 +170,7 @@ function preloadRouteData(path: string): Promise<unknown> {
           "products",
           { category: undefined, search: undefined, sortBy: "newest", page: 1 },
         ],
-        queryFn: () => fetchProducts({ page: 1 }),
+        queryFn: () => fetchProducts({ page: 1 }).then(r => r.products),
       }),
     ]);
   }

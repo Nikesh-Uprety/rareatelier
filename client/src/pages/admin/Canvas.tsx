@@ -334,7 +334,7 @@ export default function Canvas() {
   });
   const { data: productOptions = [] } = useQuery<ProductApi[]>({
     queryKey: ["admin", "canvas", "product-options"],
-    queryFn: () => fetchProducts({ limit: 200 }),
+    queryFn: () => fetchProducts({ limit: 200 }).then(r => r.products),
     staleTime: 60 * 1000,
   });
   const { data: mediaOptions = [], isLoading: mediaLoading } = useQuery<AdminImageAsset[]>({

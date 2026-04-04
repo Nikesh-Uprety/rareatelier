@@ -1465,22 +1465,60 @@ export async function registerRoutes(
 
   app.get("/api/products", async (req: Request, res: Response) => {
     try {
-      const { category, search, page, limit } = req.query;
+      const { category, search, page, limit, newArrival, newCollection } = req.query;
       const products = await storage.getProducts({
         category: typeof category === "string" ? category : undefined,
         search: typeof search === "string" ? search : undefined,
         page: typeof page === "string" ? Number(page) || 1 : undefined,
         limit: typeof limit === "string" ? Number(limit) || 24 : undefined,
         includeInactive: false,
+        isNewArrival: newArrival === "true" ? true : undefined,
+        isNewCollection: newCollection === "true" ? true : undefined,
+      });
+
+      const total = await storage.getProductsCount({
+        category: typeof category === "string" ? category : undefined,
+        search: typeof search === "string" ? search : undefined,
+        includeInactive: false,
+        isNewArrival: newArrival === "true" ? true : undefined,
+        isNewCollection: newCollection === "true" ? true : undefined,
       });
 
       res.set("Cache-Control", "public, max-age=60");
-      return res.json({ success: true, data: products });
+      return res.json({ success: true, data: products, total });
     } catch (err) {
       console.error("Error in GET /api/products", err);
       return res
         .status(500)
         .json({ success: false, error: "Failed to load products" });
+    }
+  });
+
+  app.get("/api/products/new-arrivals", async (req: Request, res: Response) => {
+    try {
+      const products = await storage.getProducts({
+        isNewArrival: true,
+        includeInactive: false,
+        limit: 24,
+      });
+      return res.json({ success: true, data: products });
+    } catch (err) {
+      console.error("Error in GET /api/products/new-arrivals", err);
+      return res.status(500).json({ success: false, error: "Failed to load new arrivals" });
+    }
+  });
+
+  app.get("/api/products/new-collection", async (req: Request, res: Response) => {
+    try {
+      const products = await storage.getProducts({
+        isNewCollection: true,
+        includeInactive: false,
+        limit: 24,
+      });
+      return res.json({ success: true, data: products });
+    } catch (err) {
+      console.error("Error in GET /api/products/new-collection", err);
+      return res.status(500).json({ success: false, error: "Failed to load new collection" });
     }
   });
 

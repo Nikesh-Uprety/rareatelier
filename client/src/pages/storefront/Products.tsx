@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownWideNarrow, ExternalLink, Palette, Ruler, Sparkles, ChevronDown } from "lucide-react";
+import { ArrowDownWideNarrow, ExternalLink, Palette, Ruler, Sparkles, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
@@ -53,6 +53,8 @@ export default function Products() {
   const [sizeFilter, setSizeFilter] = useState("all");
   const [colorFilter, setColorFilter] = useState("all");
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
     if (!isSortMenuOpen) return;
@@ -83,21 +85,25 @@ export default function Products() {
   const filters = useMemo(
     () => ({
       category: category === "all" ? undefined : category,
-      page: 1,
+      page,
+      limit: PAGE_SIZE,
     }),
-    [category],
+    [category, page],
   );
 
   const {
-    data: products,
+    data: productsData,
     isLoading,
     isError,
     refetch,
-  } = useQuery<ProductApi[]>({
+  } = useQuery<{ products: ProductApi[]; total: number }>({
     queryKey: ["products", filters],
     queryFn: () => fetchProducts(filters),
-    staleTime: 1000 * 60 * 5, // 5 minutes cache for better performance
+    staleTime: 1000 * 60 * 5,
   });
+
+  const products = productsData?.products ?? [];
+  const totalProducts = productsData?.total ?? 0;
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -526,6 +532,47 @@ export default function Products() {
               ) : (
                 <div className="py-20 text-center uppercase text-[10px] tracking-widest font-bold text-neutral-400 dark:text-neutral-500">
                   No products found.
+                </div>
+              )}
+
+              {/* Pagination */}
+              {totalProducts > PAGE_SIZE && (
+                <div className="mt-12 flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page === 1}
+                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: Math.min(5, Math.ceil(totalProducts / PAGE_SIZE)) }, (_, i) => {
+                    const totalPages = Math.ceil(totalProducts / PAGE_SIZE);
+                    let pageNum: number;
+                    if (totalPages <= 5) pageNum = i + 1;
+                    else if (page <= 3) pageNum = i + 1;
+                    else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = page - 2 + i;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => { setPage(pageNum); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                        className={`h-10 w-10 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                          pageNum === page
+                            ? "bg-[#2C3E2D] text-white dark:bg-[#4ADE80] dark:text-[#1A251B]"
+                            : "border border-border/60 text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => { setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page >= Math.ceil(totalProducts / PAGE_SIZE)}
+                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
                 </div>
               )}
             </div>

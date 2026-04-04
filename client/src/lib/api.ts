@@ -100,19 +100,35 @@ export async function fetchProducts(filters?: {
   search?: string;
   page?: number;
   limit?: number;
-}): Promise<ProductApi[]> {
+  newArrival?: boolean;
+  newCollection?: boolean;
+}): Promise<{ products: ProductApi[]; total: number }> {
   const params = new URLSearchParams();
   if (filters?.category) params.set("category", filters.category);
   if (filters?.search) params.set("search", filters.search);
   if (filters?.page) params.set("page", String(filters.page));
   if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.newArrival) params.set("newArrival", "true");
+  if (filters?.newCollection) params.set("newCollection", "true");
 
   const url =
     "/api/products" + (params.toString() ? `?${params.toString()}` : "");
 
   const res = await apiRequest("GET", url);
+  const json = (await res.json()) as { success: boolean; data: ProductApi[]; total: number };
+  return { products: json.data ?? [], total: json.total ?? json.data?.length ?? 0 };
+}
+
+export async function fetchNewArrivals(): Promise<ProductApi[]> {
+  const res = await apiRequest("GET", "/api/products/new-arrivals");
   const json = (await res.json()) as { success: boolean; data: ProductApi[] };
-  return json.data;
+  return json.data ?? [];
+}
+
+export async function fetchNewCollection(): Promise<ProductApi[]> {
+  const res = await apiRequest("GET", "/api/products/new-collection");
+  const json = (await res.json()) as { success: boolean; data: ProductApi[] };
+  return json.data ?? [];
 }
 
 export async function fetchProductById(id: string): Promise<ProductApi | null> {

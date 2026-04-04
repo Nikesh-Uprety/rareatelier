@@ -117,7 +117,7 @@ export default function ProductDetail() {
 
   const { data: relatedProductsRaw = [] } = useQuery<ProductApi[]>({
     queryKey: ["products", { category: product?.category, limit: 5 }],
-    queryFn: () => fetchProducts({ category: product?.category || undefined, limit: 5 }),
+    queryFn: () => fetchProducts({ category: product?.category || undefined, limit: 5 }).then(r => r.products),
     enabled: !!product?.category,
     staleTime: 5 * 60 * 1000,
   });

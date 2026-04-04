@@ -51,6 +51,8 @@ type ProductFilterInput = {
   category?: string;
   search?: string;
   includeInactive?: boolean;
+  isNewArrival?: boolean;
+  isNewCollection?: boolean;
 };
 
 const buildProductConditions = (filters?: ProductFilterInput) => {
@@ -84,6 +86,14 @@ const buildProductConditions = (filters?: ProductFilterInput) => {
 
   if (!filters?.includeInactive && "isActive" in products) {
     conditions.push(eq(products.isActive, true));
+  }
+
+  if (filters?.isNewArrival) {
+    conditions.push(eq(products.isNewArrival, true));
+  }
+
+  if (filters?.isNewCollection) {
+    conditions.push(eq(products.isNewCollection, true));
   }
 
   return conditions;
@@ -226,11 +236,15 @@ export interface IStorage {
     page?: number;
     limit?: number;
     includeInactive?: boolean;
+    isNewArrival?: boolean;
+    isNewCollection?: boolean;
   }): Promise<Product[]>;
   getProductsCount(filters?: {
     category?: string;
     search?: string;
     includeInactive?: boolean;
+    isNewArrival?: boolean;
+    isNewCollection?: boolean;
   }): Promise<number>;
   getProductStats(): Promise<{
     total: number;
@@ -511,6 +525,8 @@ export class PgStorage implements IStorage {
     page?: number;
     limit?: number;
     includeInactive?: boolean;
+    isNewArrival?: boolean;
+    isNewCollection?: boolean;
   }): Promise<Product[]> {
     const page = filters?.page && filters.page > 0 ? filters.page : 1;
     const limit = filters?.limit && filters.limit > 0 ? filters.limit : 24;
@@ -562,6 +578,8 @@ export class PgStorage implements IStorage {
     category?: string;
     search?: string;
     includeInactive?: boolean;
+    isNewArrival?: boolean;
+    isNewCollection?: boolean;
   }): Promise<number> {
     if (filters?.search && meiliClient) {
       try {

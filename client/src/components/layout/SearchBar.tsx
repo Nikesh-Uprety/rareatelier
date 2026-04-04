@@ -33,7 +33,7 @@ export default function SearchBar({ iconColor }: SearchBarProps) {
         setIsLoading(true);
         try {
           const results = await fetchProducts({ search: query, limit: 5 });
-          setSuggestions(results);
+          setSuggestions(results.products);
         } catch (error) {
           console.error("Search error:", error);
         } finally {

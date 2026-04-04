@@ -81,7 +81,7 @@ export function Pagination({
       onPageChange={handlePageChange}
       rowsPerPage={rowsPerPage}
       onRowsPerPageChange={handleRowsPerPageChange}
-      rowsPerPageOptions={[10, 15, 25, 50, 100]}
+      rowsPerPageOptions={[10, 15, 20, 25, 50, 100]}
       labelRowsPerPage="Per page"
       labelDisplayedRows={({ from, to, count }) =>
         `${from}–${to} of ${count !== -1 ? count : `more than ${to}`}`

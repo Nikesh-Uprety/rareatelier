@@ -109,7 +109,7 @@ export default function AdminPromoCodes() {
 
   const { data: products = [] } = useQuery<ProductApi[]>({
     queryKey: ["products", "promo-codes"],
-    queryFn: () => fetchProducts({ limit: 2000 }),
+    queryFn: () => fetchProducts({ limit: 2000 }).then(r => r.products),
   });
 
   const form = useForm<PromoFormValues>({

@@ -198,7 +198,7 @@ export default function Home() {
 
   const { data: featuredProducts = [], isSuccess: isFeaturedSuccess } = useQuery({
     queryKey: ["products", "featured", { limit: 2 }],
-    queryFn: () => fetchProducts({ limit: 2 }),
+    queryFn: () => fetchProducts({ limit: 2 }).then(r => r.products),
     enabled: !isCanvasPreview,
   });
 
