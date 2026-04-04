@@ -232,10 +232,9 @@ const sourceLabels: Record<string, string> = {
               <tr key={i}>
                 <td>
                   <div>{item.productName}</div>
-                  {item.variantColor && (
+                  {(item.variantColor || item.size) && (
                     <div style={{ fontSize: "11px", color: "#666" }}>
-                      {item.variantColor}
-                      {item.size ? ` · ${item.size}` : ""}
+                      {item.variantColor}{item.variantColor && item.size ? ` · ${item.size}` : item.size || ""}
                     </div>
                   )}
                 </td>
