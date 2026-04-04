@@ -23,7 +23,7 @@ import {
 
 
 
-import { and, desc, eq, gte, sql, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
 
 import {
     bills,
@@ -5874,20 +5874,21 @@ export async function registerRoutes(
       const limit = Math.min(200, Math.max(1, Number(getQueryParam(req.query.limit) ?? "60") || 60));
       const offset = Math.max(0, Number(getQueryParam(req.query.offset) ?? "0") || 0);
 
-      const conditions = [
+      const conditions: Array<ReturnType<typeof sql>> = [
         category ? eq(mediaAssets.category, category) : sql`true`,
         provider ? eq(mediaAssets.provider, provider) : sql`true`,
       ];
 
       if (search) {
         const q = `%${search}%`;
-        conditions.push(
-          or(
-            ilike(mediaAssets.filename, q),
-            ilike(mediaAssets.url, q),
-            ilike(mediaAssets.publicId, q),
-          ),
+        const searchCondition = or(
+          ilike(mediaAssets.filename, q),
+          ilike(mediaAssets.url, q),
+          ilike(mediaAssets.publicId, q),
         );
+        if (searchCondition) {
+          conditions.push(searchCondition);
+        }
       }
 
       const where = and(...conditions);
