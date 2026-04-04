@@ -1333,7 +1333,7 @@ export default function AdminProducts() {
                   selectedProductIds.has(product.id)
                     ? "border-primary ring-2 ring-primary dark:bg-primary/10"
                     : "border-[#E5E5E0] dark:border-border",
-                  !product.isActive && "opacity-50 grayscale",
+                  product.isActive === false && "opacity-50 grayscale",
                 )}
               >
                 {/* Selection Checkbox */}
@@ -1394,7 +1394,7 @@ export default function AdminProducts() {
                     {product.name}
                   </h3>
                   
-                  {!product.isActive && (
+                  {product.isActive === false && (
                     <Badge className="absolute top-3 right-3 z-20 bg-gray-500 text-white text-[9px] uppercase tracking-wider">
                       Inactive
                     </Badge>
@@ -1445,7 +1445,7 @@ export default function AdminProducts() {
                     >
                       <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                     </Button>
-                    {product.isActive ? (
+                    {product.isActive !== false ? (
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -1531,7 +1531,7 @@ export default function AdminProducts() {
                       className={cn(
                         "border-b border-border hover:bg-muted/10 transition-colors group cursor-pointer",
                         selectedProductIds.has(product.id) && "bg-primary/5",
-                        !product.isActive && "opacity-50",
+                        product.isActive === false && "opacity-50",
                       )}
                     >
                       <td className="p-4 text-center">
@@ -1616,7 +1616,7 @@ export default function AdminProducts() {
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </Button>
-                          {product.isActive ? (
+                          {product.isActive !== false ? (
                             <Button 
                               variant="outline" 
                               size="icon" 
