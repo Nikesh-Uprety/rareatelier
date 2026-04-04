@@ -313,10 +313,8 @@ export default function ProductDetail() {
     if (!activeSection) return;
 
     const sectionTop = activeSection.offsetTop;
-    const centeredTop =
-      sectionTop - container.clientHeight / 2 + activeSection.clientHeight / 2;
     container.scrollTo({
-      top: Math.max(0, centeredTop),
+      top: Math.max(0, sectionTop),
       behavior: "auto",
     });
   }, [isGalleryOpen, selectedImageIndex]);
@@ -552,10 +550,8 @@ export default function ProductDetail() {
     }
 
     const sectionTop = targetSection.offsetTop;
-    const centeredTop =
-      sectionTop - container.clientHeight / 2 + targetSection.clientHeight / 2;
     container.scrollTo({
-      top: Math.max(0, centeredTop),
+      top: Math.max(0, sectionTop),
       behavior: "smooth",
     });
   };
@@ -568,7 +564,10 @@ export default function ProductDetail() {
     goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
   };
 
-  const openGallery = () => {
+  const openGallery = (index?: number) => {
+    if (typeof index === "number") {
+      setSelectedImageIndex(index);
+    }
     setIsGalleryOpen(true);
   };
 
@@ -776,7 +775,7 @@ export default function ProductDetail() {
                   didSwipeRef.current = false;
                   return;
                 }
-                openGallery();
+                openGallery(selectedImageIndex);
               }}
               onTouchStart={(event) => {
                 didSwipeRef.current = false;
@@ -854,10 +853,10 @@ export default function ProductDetail() {
                           <button
                             key={i}
                             type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              goToImage(i);
-                            }}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            openGallery(i);
+                          }}
                             className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
                               selectedImageIndex === i
                                 ? "border-white opacity-100"
@@ -915,7 +914,7 @@ export default function ProductDetail() {
                     <button
                       key={`thumb-${i}`}
                       type="button"
-                      onClick={() => goToImage(i)}
+                      onClick={() => openGallery(i)}
                       className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
                         selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
                       }`}

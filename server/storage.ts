@@ -652,6 +652,8 @@ export class PgStorage implements IStorage {
         saleActive: products.saleActive,
         homeFeatured: products.homeFeatured,
         homeFeaturedImageIndex: products.homeFeaturedImageIndex,
+        isNewArrival: products.isNewArrival,
+        isNewCollection: products.isNewCollection,
         isActive: products.isActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
@@ -687,6 +689,8 @@ export class PgStorage implements IStorage {
         saleActive: data.saleActive ?? false,
         homeFeatured: data.homeFeatured ?? false,
         homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
+        isNewArrival: false,
+        isNewCollection: false,
       })
       .returning({
         id: products.id,
@@ -708,6 +712,8 @@ export class PgStorage implements IStorage {
         saleActive: products.saleActive,
         homeFeatured: products.homeFeatured,
         homeFeaturedImageIndex: products.homeFeaturedImageIndex,
+        isNewArrival: products.isNewArrival,
+        isNewCollection: products.isNewCollection,
         isActive: products.isActive,
         createdAt: products.createdAt,
         updatedAt: products.updatedAt,
@@ -765,6 +771,8 @@ export class PgStorage implements IStorage {
         originalPrice: data.originalPrice,
         homeFeatured: data.homeFeatured,
         homeFeaturedImageIndex: data.homeFeaturedImageIndex,
+        isNewArrival: data.isNewArrival ?? false,
+        isNewCollection: data.isNewCollection ?? false,
         updatedAt: new Date(),
       })
       .where(eq(products.id, id))
@@ -3072,6 +3080,8 @@ export class MemStorage implements IStorage {
       saleActive: data.saleActive ?? false,
       homeFeatured: data.homeFeatured ?? false,
       homeFeaturedImageIndex: data.homeFeaturedImageIndex ?? 2,
+        isNewArrival: false,
+        isNewCollection: false,
       isActive: true,
       createdAt: new Date(),
       updatedAt: new Date(),

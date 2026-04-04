@@ -14,7 +14,7 @@ import {
   Share2, FileText, Download, Check, X, Pencil, Search, Table as TableIcon,
   ChevronRight, FileSpreadsheet, Eye, EyeOff, LayoutTemplate, Shirt, Footprints, Tag,
   MoreHorizontal, ImageIcon, ArrowLeft, Upload, ExternalLink, ShoppingCart, TrendingUp, Calendar, Percent,
-  FolderInput, Box, CheckCircle2, ChevronDown, Plus, Star, Power, PowerOff
+  FolderInput, Box, CheckCircle2, ChevronDown, Plus, Star, Sparkles, Power, PowerOff
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -181,6 +181,8 @@ const productSchema = z.object({
   saleActive: z.boolean().default(false),
   homeFeatured: z.boolean().default(false),
   homeFeaturedImageIndex: z.coerce.number().default(2),
+  isNewArrival: z.boolean().default(false),
+  isNewCollection: z.boolean().default(false),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -449,6 +451,8 @@ export default function AdminProducts() {
         saleActive: editProduct.saleActive ?? false,
         homeFeatured: editProduct.homeFeatured ?? false,
         homeFeaturedImageIndex: editProduct.homeFeaturedImageIndex ?? 2,
+        isNewArrival: editProduct.isNewArrival ?? false,
+        isNewCollection: editProduct.isNewCollection ?? false,
       });
     }
   }, [editProduct, editForm, categories]);
@@ -871,13 +875,22 @@ export default function AdminProducts() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      toast({ title: "Home feature updated" });
     },
-    onError: (error) => {
-      toast({
-        title: "Failed to update home featured product",
-        description: getErrorMessage(error, "The featured product setting could not be updated."),
-        variant: "destructive",
-      });
+    onError: () => {
+      toast({ title: "Failed to update home feature", variant: "destructive" });
+    },
+  });
+
+  const updateVisibilityMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { isNewArrival?: boolean; isNewCollection?: boolean } }) =>
+      updateAdminProduct(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      toast({ title: "Visibility updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update visibility", variant: "destructive" });
     },
   });
 
@@ -2263,6 +2276,49 @@ export default function AdminProducts() {
                             </Select>
                           </div>
                         )}
+                      </div>
+                    </div>
+
+                    {/* Storefront Visibility */}
+                    <div className="space-y-4">
+                      <h3 className="text-xs font-semibold tracking-widest uppercase text-muted-foreground">Storefront Visibility</h3>
+                      <div className="p-4 rounded-2xl bg-muted/30 border border-border space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-bold flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-blue-500" /> New Arrivals
+                            </Label>
+                            <p className="text-[10px] text-muted-foreground">Show in Fresh Releases section</p>
+                          </div>
+                          <Switch
+                            checked={Boolean(editForm.watch("isNewArrival"))}
+                            onCheckedChange={(checked) => {
+                              editForm.setValue("isNewArrival", checked, { shouldValidate: false });
+                              updateVisibilityMutation.mutate({
+                                id: editProduct.id,
+                                data: { isNewArrival: checked },
+                              });
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center justify-between pt-3 border-t border-border">
+                          <div className="space-y-0.5">
+                            <Label className="text-sm font-bold flex items-center gap-2">
+                              <Shirt className="w-4 h-4 text-purple-500" /> New Collection
+                            </Label>
+                            <p className="text-[10px] text-muted-foreground">Show in New Collection section</p>
+                          </div>
+                          <Switch
+                            checked={Boolean(editForm.watch("isNewCollection"))}
+                            onCheckedChange={(checked) => {
+                              editForm.setValue("isNewCollection", checked, { shouldValidate: false });
+                              updateVisibilityMutation.mutate({
+                                id: editProduct.id,
+                                data: { isNewCollection: checked },
+                              });
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
 

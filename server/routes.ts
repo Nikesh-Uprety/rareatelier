@@ -2542,6 +2542,8 @@ export async function registerRoutes(
     originalPrice: z.number().positive().optional().nullable(),
     homeFeatured: z.boolean().optional().default(false),
     homeFeaturedImageIndex: z.number().int().min(0).max(3).optional().default(2),
+    isNewArrival: z.boolean().optional().default(false),
+    isNewCollection: z.boolean().optional().default(false),
   });
 
   const parseSizeOptions = (value: unknown): string[] => {
@@ -2769,6 +2771,8 @@ export async function registerRoutes(
           originalPrice: req.body.originalPrice ? req.body.originalPrice.toString() : null,
           homeFeatured: req.body.homeFeatured || false,
           homeFeaturedImageIndex: req.body.homeFeaturedImageIndex ?? 2,
+          isNewArrival: req.body.isNewArrival || false,
+          isNewCollection: req.body.isNewCollection || false,
           isActive: true,
         };
         const product = await storage.createProduct(data);
