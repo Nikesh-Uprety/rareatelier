@@ -14,12 +14,13 @@ import {
 import { cn } from "@/lib/utils";
 import {
   deleteAdminImage,
-  fetchAdminImages,
+  fetchAdminImagesPage,
   uploadAdminImage,
   type AdminImageAsset,
 } from "@/lib/adminApi";
 import { Trash2, Upload, Images as ImagesIcon, Copy, Eye, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Pagination } from "@/components/admin/Pagination";
 
 type ImageCategory =
   | "product"
@@ -45,6 +46,8 @@ export default function AdminImagesPage() {
   const [provider, setProvider] = useState<"local" | "cloudinary">("local");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
+  const [imagePage, setImagePage] = useState(1);
+  const [imagePageSize, setImagePageSize] = useState(60);
   const bulkInputRef = useRef<HTMLInputElement | null>(null);
 
   type BulkFileStatus = "idle" | "uploading" | "success" | "error" | "skipped";
@@ -69,10 +72,23 @@ export default function AdminImagesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
-  const imagesQuery = useQuery<AdminImageAsset[]>({
-    queryKey: ["admin", "images", { provider, category }],
-    queryFn: () => fetchAdminImages({ provider, category, limit: 120 }),
+  const imagesQuery = useQuery<{ data: AdminImageAsset[]; total: number }>({
+    queryKey: ["admin", "images", { provider, category, page: imagePage, limit: imagePageSize }],
+    queryFn: () =>
+      fetchAdminImagesPage({
+        provider,
+        category,
+        limit: imagePageSize,
+        offset: (imagePage - 1) * imagePageSize,
+      }),
   });
+
+  const images = imagesQuery.data?.data ?? [];
+  const totalImages = imagesQuery.data?.total ?? 0;
+
+  useEffect(() => {
+    setImagePage(1);
+  }, [provider, category, imagePageSize]);
 
   const normalizeName = (value: string) =>
     (value.split("/").pop() || value)
@@ -136,14 +152,15 @@ export default function AdminImagesPage() {
 
   const filtered = useMemo(() => {
     const q = normalizeName(search.trim());
-    const data = imagesQuery.data ?? [];
+    const data = images ?? [];
     if (!q) return data;
     return data.filter((img) =>
       normalizeName(img.filename || img.url).includes(q),
     );
-  }, [imagesQuery.data, search]);
+  }, [images, search]);
 
   const previewAsset = previewIndex !== null ? filtered[previewIndex] ?? null : null;
+  const imageTotalPages = Math.max(1, Math.ceil(totalImages / imagePageSize));
 
   const goToPreview = (index: number) => {
     if (filtered.length === 0) return;
@@ -167,7 +184,7 @@ export default function AdminImagesPage() {
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [provider, category, search]);
+  }, [provider, category, search, imagePage]);
 
   useEffect(() => {
     if (previewIndex === null) return;
@@ -671,6 +688,20 @@ export default function AdminImagesPage() {
           </div>
         )}
       </section>
+
+      <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm">
+        <Pagination
+          currentPage={imagePage}
+          totalPages={imageTotalPages}
+          onPageChange={(page) => {
+            setImagePage(page);
+            setPreviewIndex(null);
+          }}
+          totalItems={totalImages}
+          pageSize={imagePageSize}
+          onPageSizeChange={setImagePageSize}
+        />
+      </div>
 
       <Dialog open={previewIndex !== null} onOpenChange={(open) => !open && setPreviewIndex(null)}>
         <DialogContent className="max-w-4xl overflow-hidden p-0">

@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/select";
 import {
   exportOrdersCSV,
-  fetchAdminOrders,
+  fetchAdminOrdersPage,
   updateOrderStatus,
   verifyOrderPayment,
   fetchBillByOrder,
@@ -106,20 +106,42 @@ export default function AdminOrders() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const filters = useMemo(
+  const listFilters = useMemo(
     () => ({
       status: statusFilter === "all" ? undefined : statusFilter,
+      search: search || undefined,
+      page: orderPage,
+      limit: orderPageSize,
+      timeRange: timeRange === "all" ? undefined : timeRange,
     }),
-    [statusFilter],
+    [orderPage, orderPageSize, search, statusFilter, timeRange],
   );
 
   const {
-    data: orders,
+    data: ordersPage,
     isLoading,
     isError,
-  } = useQuery<AdminOrder[]>({
-    queryKey: ["admin", "orders", filters],
-    queryFn: () => fetchAdminOrders(filters),
+  } = useQuery<{ data: AdminOrder[]; total: number }>({
+    queryKey: ["admin", "orders", "list", listFilters],
+    queryFn: () => fetchAdminOrdersPage(listFilters),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
+  });
+
+  const chartFilters = useMemo(
+    () => ({
+      status: statusFilter === "all" ? undefined : statusFilter,
+      search: search || undefined,
+      timeRange: timeRange === "all" ? undefined : timeRange,
+      page: 1,
+      limit: 500,
+    }),
+    [search, statusFilter, timeRange],
+  );
+
+  const { data: chartOrdersPage } = useQuery<{ data: AdminOrder[]; total: number }>({
+    queryKey: ["admin", "orders", "chart", chartFilters],
+    queryFn: () => fetchAdminOrdersPage(chartFilters),
     staleTime: 60_000,
     placeholderData: keepPreviousData,
   });
@@ -157,88 +179,19 @@ export default function AdminOrders() {
     },
   });
 
-  const sortedOrders = useMemo(() => {
-    if (!orders) return [];
-    const normalizedSearch = search.trim().toLowerCase();
-    const now = Date.now();
-    const cutoffMs =
-      timeRange === "1d"
-        ? now - 1 * 24 * 60 * 60 * 1000
-        : timeRange === "3d"
-          ? now - 3 * 24 * 60 * 60 * 1000
-          : timeRange === "7d"
-            ? now - 7 * 24 * 60 * 60 * 1000
-            : null;
+  const orders = ordersPage?.data ?? [];
+  const totalOrders = ordersPage?.total ?? 0;
+  const chartOrders = chartOrdersPage?.data ?? [];
 
-    const timeFiltered =
-      cutoffMs === null
-        ? orders
-        : orders.filter((o) => {
-            const t = new Date(o.createdAt).getTime();
-            return Number.isFinite(t) && t >= cutoffMs;
-          });
+  useEffect(() => {
+    setOrderPage(1);
+  }, [search, statusFilter, timeRange, orderPageSize]);
 
-    const filtered =
-      normalizedSearch.length === 0
-        ? timeFiltered
-        : timeFiltered.filter((order) => {
-            const haystacks = [
-              order.fullName,
-              order.email,
-              order.id,
-              order.phoneNumber ?? "",
-            ];
-            return haystacks.some((value) =>
-              value.toLowerCase().includes(normalizedSearch),
-            );
-          });
-
-    return [...filtered].sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      // Always latest first (ORDER BY created_at DESC)
-      return dateB - dateA;
-    });
-  }, [orders, search, timeRange]);
-
-  const orderTotalPages = Math.max(1, Math.ceil(sortedOrders.length / orderPageSize));
-  const paginatedOrders = sortedOrders.slice(
-    (orderPage - 1) * orderPageSize,
-    orderPage * orderPageSize,
-  );
-
-  // Display serial numbers based on creation order (oldest = 1),
-  // while still showing the list latest-first.
-  const orderSnById = useMemo(() => {
-    if (!orders) return new Map<string, number>();
-    const now = Date.now();
-    const cutoffMs =
-      timeRange === "1d"
-        ? now - 1 * 24 * 60 * 60 * 1000
-        : timeRange === "3d"
-          ? now - 3 * 24 * 60 * 60 * 1000
-          : timeRange === "7d"
-            ? now - 7 * 24 * 60 * 60 * 1000
-            : null;
-
-    const filtered =
-      cutoffMs === null
-        ? orders
-        : orders.filter((o) => {
-            const t = new Date(o.createdAt).getTime();
-            return Number.isFinite(t) && t >= cutoffMs;
-          });
-
-    const asc = [...filtered].sort((a, b) => {
-      const dateA = new Date(a.createdAt).getTime();
-      const dateB = new Date(b.createdAt).getTime();
-      return dateA - dateB;
-    });
-
-    const map = new Map<string, number>();
-    asc.forEach((o, i) => map.set(o.id, i + 1));
-    return map;
-  }, [orders, timeRange]);
+  const orderTotalPages = Math.max(1, Math.ceil(totalOrders / orderPageSize));
+  const paginatedOrders = orders;
+  const serialBase = totalOrders - (orderPage - 1) * orderPageSize;
+  const getOrderSerial = (idx: number) =>
+    totalOrders > 0 ? Math.max(1, serialBase - idx) : idx + 1;
 
   const orderTypeBadge = (order: AdminOrder) => {
     const isPos = order.source === "pos";
@@ -351,13 +304,13 @@ export default function AdminOrders() {
             Orders
           </h1>
           <p className="text-muted-foreground mt-1">
-            {orders?.length ?? 0} orders • {statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+            {totalOrders} orders • {statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
           </p>
         </div>
         <ExportButton onExport={() => exportOrdersCSV()} />
       </div>
 
-      <OrdersTrendChart orders={sortedOrders} timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"} />
+      <OrdersTrendChart orders={chartOrders} timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"} />
 
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div className="flex items-center gap-3 flex-wrap">
@@ -488,10 +441,10 @@ export default function AdminOrders() {
                         )}
                         onClick={() => {
                           setSelectedOrder(order);
-                          setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                          setSelectedOrderSn(getOrderSerial(idx));
                         }}
                       >
-                        <td className="px-4 py-3 font-medium text-xs">{orderSnById.get(order.id) ?? idx + 1}</td>
+                        <td className="px-4 py-3 font-medium text-xs">{getOrderSerial(idx)}</td>
                         <td className="px-4 py-3">
                           <div className="font-medium text-[#2C3E2D] dark:text-foreground">
                             {order.fullName}
@@ -607,13 +560,13 @@ export default function AdminOrders() {
                   className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card cursor-pointer"
                   onClick={() => {
                     setSelectedOrder(order);
-                    setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                    setSelectedOrderSn(getOrderSerial(idx));
                   }}
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        S.N {orderSnById.get(order.id) ?? idx + 1}
+                        S.N {getOrderSerial(idx)}
                       </p>
                       <h3 className="font-serif font-medium text-base mt-1">{order.fullName}</h3>
                     </div>
@@ -651,7 +604,7 @@ export default function AdminOrders() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedOrder(order);
-                        setSelectedOrderSn(orderSnById.get(order.id) ?? idx + 1);
+                        setSelectedOrderSn(getOrderSerial(idx));
                       }}
                     >
                       Manage Order <ChevronRight className="w-4 h-4 ml-1" />
@@ -673,7 +626,7 @@ export default function AdminOrders() {
         setOrderPage(page);
         setSelectedOrder(null);
       }}
-      totalItems={sortedOrders.length}
+      totalItems={totalOrders}
       pageSize={orderPageSize}
       onPageSizeChange={setOrderPageSize}
     />

@@ -41,7 +41,7 @@ import {
   type SiteAsset,
   type InsertSiteAsset,
 } from "@shared/schema";
-import { and, or, asc, desc, eq, gte, ilike, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
+import { and, or, asc, desc, eq, gt, gte, ilike, inArray, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { broadcastNotification } from "./websocket";
 
@@ -253,7 +253,14 @@ export interface IStorage {
     status?: string;
     search?: string;
     page?: number;
+    limit?: number;
+    timeRange?: string;
   }): Promise<Order[]>;
+  getOrdersCount(filters?: {
+    status?: string;
+    search?: string;
+    timeRange?: string;
+  }): Promise<number>;
   getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }>;
   createOrder(data: CreateOrderInput): Promise<Order>;
   updateOrderStatus(id: string, status: string): Promise<Order>;
@@ -267,7 +274,17 @@ export interface IStorage {
   getBills(): Promise<Bill[]>;
 
   // Customers
-  getCustomers(search?: string, timeRange?: string): Promise<Customer[]>;
+  getCustomers(filters?: {
+    search?: string;
+    timeRange?: string;
+    page?: number;
+    limit?: number;
+    includeZeroOrders?: boolean;
+  }): Promise<Customer[]>;
+  getCustomersCount(filters?: {
+    search?: string;
+    includeZeroOrders?: boolean;
+  }): Promise<number>;
   getCustomerById(
     id: string,
   ): Promise<
@@ -917,11 +934,16 @@ export class PgStorage implements IStorage {
     status?: string;
     search?: string;
     page?: number;
+    limit?: number;
+    timeRange?: string;
   }): Promise<Order[]> {
     const page = filters?.page && filters.page > 0 ? filters.page : 1;
-    const limit = 25;
-    const offset = (page - 1) * limit;
-
+    const limit = typeof filters?.limit === "number"
+      ? Math.max(1, filters.limit)
+      : filters?.page
+        ? 25
+        : undefined;
+    const offset = limit ? (page - 1) * limit : 0;
     const conditions = [];
 
     if (filters?.status) {
@@ -939,10 +961,27 @@ export class PgStorage implements IStorage {
       );
     }
 
+    if (filters?.timeRange && filters.timeRange !== "all") {
+      const now = Date.now();
+      const since =
+        filters.timeRange === "1d"
+          ? new Date(now - 1 * 24 * 60 * 60 * 1000)
+          : filters.timeRange === "3d"
+            ? new Date(now - 3 * 24 * 60 * 60 * 1000)
+            : filters.timeRange === "7d"
+              ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+              : filters.timeRange === "30d"
+                ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+                : undefined;
+      if (since) {
+        conditions.push(gte(orders.createdAt, since));
+      }
+    }
+
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    const rows = await db
+    const baseQuery = db
       .select({
         id: orders.id,
         userId: orders.userId,
@@ -976,9 +1015,9 @@ export class PgStorage implements IStorage {
       .from(orders)
       .leftJoin(customers, sql`lower(${orders.email}) = lower(${customers.email})`)
       .where(whereClause)
-      .orderBy(desc(orders.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .orderBy(desc(orders.createdAt));
+
+    const rows = await (limit ? baseQuery.limit(limit).offset(offset) : baseQuery);
 
     if (rows.length === 0) {
       return rows;
@@ -1020,6 +1059,56 @@ export class PgStorage implements IStorage {
       ...row,
       items: itemsByOrderId.get(row.id) ?? [],
     }));
+  }
+
+  async getOrdersCount(filters?: {
+    status?: string;
+    search?: string;
+    timeRange?: string;
+  }): Promise<number> {
+    const conditions = [];
+
+    if (filters?.status) {
+      conditions.push(eq(orders.status, filters.status));
+    }
+
+    if (filters?.search) {
+      const q = `%${filters.search}%`;
+      conditions.push(
+        or(
+          ilike(orders.fullName, q),
+          ilike(orders.email, q),
+          ilike(orders.id, q),
+        ),
+      );
+    }
+
+    if (filters?.timeRange && filters.timeRange !== "all") {
+      const now = Date.now();
+      const since =
+        filters.timeRange === "1d"
+          ? new Date(now - 1 * 24 * 60 * 60 * 1000)
+          : filters.timeRange === "3d"
+            ? new Date(now - 3 * 24 * 60 * 60 * 1000)
+            : filters.timeRange === "7d"
+              ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+              : filters.timeRange === "30d"
+                ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+                : undefined;
+      if (since) {
+        conditions.push(gte(orders.createdAt, since));
+      }
+    }
+
+    const whereClause =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(whereClause);
+
+    return Number(row?.count ?? 0);
   }
 
   async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
@@ -1304,11 +1393,17 @@ export class PgStorage implements IStorage {
     return row;
   }
 
-  async getCustomers(search?: string, timeRange?: string): Promise<Customer[]> {
+  async getCustomers(filters?: {
+    search?: string;
+    timeRange?: string;
+    page?: number;
+    limit?: number;
+    includeZeroOrders?: boolean;
+  }): Promise<Customer[]> {
     const conditions = [];
 
-    if (search) {
-      const q = `%${search}%`;
+    if (filters?.search) {
+      const q = `%${filters.search}%`;
       conditions.push(
         or(
           ilike(customers.firstName, q),
@@ -1319,10 +1414,25 @@ export class PgStorage implements IStorage {
       );
     }
 
+    const includeZeroOrders = filters?.includeZeroOrders ?? true;
+    const timeRange = filters?.timeRange;
+
+    if (!includeZeroOrders && !timeRange) {
+      conditions.push(gt(customers.orderCount, 0));
+    }
+
     const whereClause =
       conditions.length > 0 ? and(...conditions) : undefined;
 
-    const rows = await db
+    const page = filters?.page && filters.page > 0 ? filters.page : 1;
+    const limit = typeof filters?.limit === "number"
+      ? Math.max(1, filters.limit)
+      : filters?.page
+        ? 25
+        : undefined;
+    const offset = limit ? (page - 1) * limit : 0;
+
+    const baseQuery = db
       .select({
         id: customers.id,
         firstName: customers.firstName,
@@ -1339,6 +1449,8 @@ export class PgStorage implements IStorage {
       .leftJoin(users, eq(sql`lower(${customers.email})`, sql`lower(${users.username})`))
       .where(whereClause)
       .orderBy(desc(customers.createdAt));
+
+    const rows = await (limit ? baseQuery.limit(limit).offset(offset) : baseQuery);
 
     const since = timeRange === "1w"
       ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
@@ -1365,7 +1477,45 @@ export class PgStorage implements IStorage {
       }),
     );
 
-    return rowsWithLiveStats;
+    if (includeZeroOrders) {
+      return rowsWithLiveStats;
+    }
+
+    return rowsWithLiveStats.filter((row) => row.orderCount > 0);
+  }
+
+  async getCustomersCount(filters?: {
+    search?: string;
+    includeZeroOrders?: boolean;
+  }): Promise<number> {
+    const conditions = [];
+
+    if (filters?.search) {
+      const q = `%${filters.search}%`;
+      conditions.push(
+        or(
+          ilike(customers.firstName, q),
+          ilike(customers.lastName, q),
+          ilike(customers.phoneNumber, q),
+          ilike(customers.email, q)
+        )
+      );
+    }
+
+    const includeZeroOrders = filters?.includeZeroOrders ?? true;
+    if (!includeZeroOrders) {
+      conditions.push(gt(customers.orderCount, 0));
+    }
+
+    const whereClause =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [row] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(customers)
+      .where(whereClause);
+
+    return Number(row?.count ?? 0);
   }
 
   async getCustomerById(
@@ -3019,8 +3169,65 @@ export class MemStorage implements IStorage {
     this._productAttributes = this._productAttributes.filter((a: ProductAttribute) => a.id !== id);
   }
 
-  async getOrders(): Promise<Order[]> {
-    return this._orders.map(({ items, ...order }) => ({
+  async getOrders(filters?: {
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+    timeRange?: string;
+  }): Promise<Order[]> {
+    const now = Date.now();
+    const since =
+      filters?.timeRange === "1d"
+        ? new Date(now - 1 * 24 * 60 * 60 * 1000)
+        : filters?.timeRange === "3d"
+          ? new Date(now - 3 * 24 * 60 * 60 * 1000)
+          : filters?.timeRange === "7d"
+            ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+            : filters?.timeRange === "30d"
+              ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+              : undefined;
+
+    let filtered = [...this._orders];
+    if (filters?.status) {
+      filtered = filtered.filter((order) => order.status === filters.status);
+    }
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter((order) =>
+        [order.fullName, order.email, order.id]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(q)),
+      );
+    }
+
+    if (since) {
+      filtered = filtered.filter((order) => {
+        const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+        return createdAt ? createdAt >= since : false;
+      });
+    }
+
+    filtered.sort((a, b) => {
+      const dateA = new Date(a.createdAt).getTime();
+      const dateB = new Date(b.createdAt).getTime();
+      return dateB - dateA;
+    });
+
+    const page = filters?.page && filters.page > 0 ? filters.page : 1;
+    const limit = typeof filters?.limit === "number"
+      ? Math.max(1, filters.limit)
+      : filters?.page
+        ? 25
+        : undefined;
+
+    if (limit) {
+      const offset = (page - 1) * limit;
+      filtered = filtered.slice(offset, offset + limit);
+    }
+
+    return filtered.map(({ items, ...order }) => ({
       ...order,
       items: items.map((item) => ({
         productId: item.productId,
@@ -3029,6 +3236,44 @@ export class MemStorage implements IStorage {
         name: this._products.find((product) => product.id === item.productId)?.name ?? "Unknown Product",
       })),
     }));
+  }
+
+  async getOrdersCount(filters?: {
+    status?: string;
+    search?: string;
+    timeRange?: string;
+  }): Promise<number> {
+    const now = Date.now();
+    const since =
+      filters?.timeRange === "1d"
+        ? new Date(now - 1 * 24 * 60 * 60 * 1000)
+        : filters?.timeRange === "3d"
+          ? new Date(now - 3 * 24 * 60 * 60 * 1000)
+          : filters?.timeRange === "7d"
+            ? new Date(now - 7 * 24 * 60 * 60 * 1000)
+            : filters?.timeRange === "30d"
+              ? new Date(now - 30 * 24 * 60 * 60 * 1000)
+              : undefined;
+
+    let filtered = [...this._orders];
+    if (filters?.status) {
+      filtered = filtered.filter((order) => order.status === filters.status);
+    }
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter((order) =>
+        [order.fullName, order.email, order.id]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(q)),
+      );
+    }
+    if (since) {
+      filtered = filtered.filter((order) => {
+        const createdAt = order.createdAt ? new Date(order.createdAt) : null;
+        return createdAt ? createdAt >= since : false;
+      });
+    }
+    return filtered.length;
   }
 
   async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
@@ -3115,8 +3360,73 @@ export class MemStorage implements IStorage {
     return rest;
   }
 
-  async getCustomers(): Promise<Customer[]> {
-    return this._customers;
+  async getCustomers(filters?: {
+    search?: string;
+    timeRange?: string;
+    page?: number;
+    limit?: number;
+    includeZeroOrders?: boolean;
+  }): Promise<Customer[]> {
+    let filtered = [...this._customers];
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter((customer) =>
+        [
+          customer.firstName,
+          customer.lastName,
+          customer.email,
+          customer.phoneNumber ?? "",
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(q)),
+      );
+    }
+
+    const includeZeroOrders = filters?.includeZeroOrders ?? true;
+    if (!includeZeroOrders) {
+      filtered = filtered.filter((customer) => customer.orderCount > 0);
+    }
+
+    const page = filters?.page && filters.page > 0 ? filters.page : 1;
+    const limit = typeof filters?.limit === "number"
+      ? Math.max(1, filters.limit)
+      : filters?.page
+        ? 25
+        : undefined;
+
+    if (limit) {
+      const offset = (page - 1) * limit;
+      filtered = filtered.slice(offset, offset + limit);
+    }
+
+    return filtered;
+  }
+
+  async getCustomersCount(filters?: {
+    search?: string;
+    includeZeroOrders?: boolean;
+  }): Promise<number> {
+    let filtered = [...this._customers];
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      filtered = filtered.filter((customer) =>
+        [
+          customer.firstName,
+          customer.lastName,
+          customer.email,
+          customer.phoneNumber ?? "",
+        ]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(q)),
+      );
+    }
+
+    const includeZeroOrders = filters?.includeZeroOrders ?? true;
+    if (!includeZeroOrders) {
+      filtered = filtered.filter((customer) => customer.orderCount > 0);
+    }
+    return filtered.length;
   }
 
   async getCustomerById(

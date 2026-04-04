@@ -199,6 +199,26 @@ export async function fetchAdminImages(params?: {
   return json.data ?? [];
 }
 
+export async function fetchAdminImagesPage(params?: {
+  category?: string;
+  provider?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ data: AdminImageAsset[]; total: number }> {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set("category", params.category);
+  if (params?.provider) qs.set("provider", params.provider);
+  if (params?.limit) qs.set("limit", String(params.limit));
+  if (params?.offset) qs.set("offset", String(params.offset));
+  const res = await apiRequest("GET", `/api/admin/images?${qs.toString()}`);
+  const json = (await res.json()) as {
+    success: boolean;
+    data: AdminImageAsset[];
+    total?: number;
+  };
+  return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
 export async function fetchAdminStorefrontImageLibrary(): Promise<AdminStorefrontImageEntry[]> {
   const res = await apiRequest("GET", "/api/admin/storefront-image-library");
   const json = (await res.json()) as {
@@ -461,15 +481,19 @@ export async function uploadProductImageFile(
   return json.url;
 }
 
-export async function fetchAdminOrders(filters?: {
+export async function fetchAdminOrdersPage(filters?: {
   status?: string;
   search?: string;
   page?: number;
-}): Promise<AdminOrder[]> {
+  limit?: number;
+  timeRange?: string;
+}): Promise<{ data: AdminOrder[]; total: number }> {
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
   if (filters?.search) params.set("search", filters.search);
   if (filters?.page) params.set("page", String(filters.page));
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.timeRange) params.set("timeRange", filters.timeRange);
 
   const url =
     "/api/admin/orders" + (params.toString() ? `?${params.toString()}` : "");
@@ -478,8 +502,9 @@ export async function fetchAdminOrders(filters?: {
   const json = (await res.json()) as {
     success: boolean;
     data: AdminOrder[];
+    total?: number;
   };
-  return (json.data ?? []).map((order) => ({
+  const data = (json.data ?? []).map((order) => ({
     ...order,
     discountAmount:
       typeof order.discountAmount === "number"
@@ -488,6 +513,18 @@ export async function fetchAdminOrders(filters?: {
           ? order.promoDiscountAmount
           : 0,
   }));
+  return { data, total: json.total ?? data.length };
+}
+
+export async function fetchAdminOrders(filters?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+  timeRange?: string;
+}): Promise<AdminOrder[]> {
+  const { data } = await fetchAdminOrdersPage(filters);
+  return data;
 }
 
 export async function updateOrderStatus(
@@ -539,13 +576,19 @@ export function exportCustomersCSV(): Promise<void> {
   return downloadAdminCsv("/api/admin/customers/export", "customers.csv");
 }
 
-export async function fetchAdminCustomers(
-  search?: string,
-  timeRange?: string,
-): Promise<AdminCustomer[]> {
+export async function fetchAdminCustomersPage(filters?: {
+  search?: string;
+  timeRange?: string;
+  page?: number;
+  limit?: number;
+  includeZeroOrders?: boolean;
+}): Promise<{ data: AdminCustomer[]; total: number }> {
   const params = new URLSearchParams();
-  if (search) params.set("search", search);
-  if (timeRange) params.set("timeRange", timeRange);
+  if (filters?.search) params.set("search", filters.search);
+  if (filters?.timeRange) params.set("timeRange", filters.timeRange);
+  if (filters?.page) params.set("page", String(filters.page));
+  if (filters?.limit) params.set("limit", String(filters.limit));
+  if (filters?.includeZeroOrders === false) params.set("includeZeroOrders", "false");
 
   const url =
     "/api/admin/customers" +
@@ -555,8 +598,17 @@ export async function fetchAdminCustomers(
   const json = (await res.json()) as {
     success: boolean;
     data: AdminCustomer[];
+    total?: number;
   };
-  return json.data;
+  return { data: json.data ?? [], total: json.total ?? 0 };
+}
+
+export async function fetchAdminCustomers(
+  search?: string,
+  timeRange?: string,
+): Promise<AdminCustomer[]> {
+  const { data } = await fetchAdminCustomersPage({ search, timeRange });
+  return data;
 }
 
 export async function createAdminCustomer(data: {

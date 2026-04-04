@@ -3288,12 +3288,25 @@ export async function registerRoutes(
         const status = getQueryParam(req.query.status);
         const search = getQueryParam(req.query.search);
         const page = getQueryParam(req.query.page);
-        const orders = await storage.getOrders({
-          status: status as any,
-          search,
-          page: page ? parseInt(page) : undefined,
-        });
-        return res.json({ success: true, data: orders });
+        const limit = getQueryParam(req.query.limit);
+        const timeRange = getQueryParam(req.query.timeRange);
+
+        const [orders, total] = await Promise.all([
+          storage.getOrders({
+            status: status as any,
+            search,
+            page: page ? parseInt(page) : undefined,
+            limit: limit ? parseInt(limit) : undefined,
+            timeRange: timeRange ?? undefined,
+          }),
+          storage.getOrdersCount({
+            status: status as any,
+            search,
+            timeRange: timeRange ?? undefined,
+          }),
+        ]);
+
+        return res.json({ success: true, data: orders, total });
       } catch (err) {
         console.error("Error in GET /api/admin/orders", err);
         return res
@@ -3521,7 +3534,7 @@ export async function registerRoutes(
     requireAdmin,
     async (_req: Request, res: Response) => {
       try {
-        const customers = await storage.getCustomers();
+        const customers = await storage.getCustomers({ includeZeroOrders: true });
 
         const rows: string[] = [];
         rows.push("Name,Email,Phone,Orders,Total Spent,Status,Created");
@@ -3561,11 +3574,30 @@ export async function registerRoutes(
       try {
         const search = getQueryParam(req.query.search);
         const timeRange = getQueryParam(req.query.timeRange);
-        const customers = await storage.getCustomers(
-          search,
-          timeRange,
-        );
-        return res.json({ success: true, data: customers });
+        const page = getQueryParam(req.query.page);
+        const limit = getQueryParam(req.query.limit);
+        const includeZeroOrders = getQueryParam(req.query.includeZeroOrders);
+
+        const includeZero =
+          includeZeroOrders === null || includeZeroOrders === undefined
+            ? true
+            : !(includeZeroOrders === "false" || includeZeroOrders === "0");
+
+        const [customers, total] = await Promise.all([
+          storage.getCustomers({
+            search: search ?? undefined,
+            timeRange: timeRange ?? undefined,
+            page: page ? parseInt(page) : undefined,
+            limit: limit ? parseInt(limit) : undefined,
+            includeZeroOrders: includeZero,
+          }),
+          storage.getCustomersCount({
+            search: search ?? undefined,
+            includeZeroOrders: includeZero,
+          }),
+        ]);
+
+        return res.json({ success: true, data: customers, total });
       } catch (err) {
         console.error("Error in GET /api/admin/customers", err);
         return res
@@ -5715,6 +5747,11 @@ export async function registerRoutes(
         provider ? eq(mediaAssets.provider, provider) : sql`true`,
       );
 
+      const [countRow] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(mediaAssets)
+        .where(where);
+
       const rows = await db
         .select()
         .from(mediaAssets)
@@ -5723,7 +5760,7 @@ export async function registerRoutes(
         .limit(limit)
         .offset(offset);
 
-      return res.json({ success: true, data: rows });
+      return res.json({ success: true, data: rows, total: Number(countRow?.count ?? 0) });
     } catch (err) {
       handleApiError(res, err, "GET /api/admin/images");
     }

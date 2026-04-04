@@ -308,6 +308,14 @@ export default function AdminProducts() {
     queryFn: () => fetchAdminProductsPage(filters),
   });
 
+  const quickSearch = search.trim();
+  const { data: quickSearchData, isFetching: quickSearchLoading } = useQuery<{ data: ProductApi[]; total: number }>({
+    queryKey: ["admin", "products", "quick-search", quickSearch],
+    queryFn: () => fetchAdminProductsPage({ search: quickSearch, page: 1, limit: 5 }),
+    enabled: quickSearch.length > 1,
+    staleTime: 30_000,
+  });
+
   const { data: productStats } = useQuery({
     queryKey: ["admin", "products", "stats"],
     queryFn: () => fetchAdminProductStats(),
@@ -323,6 +331,7 @@ export default function AdminProducts() {
 
   const products = productPageData?.data ?? [];
   const totalProducts = productPageData?.total ?? 0;
+  const quickResults = quickSearchData?.data ?? [];
 
   const addForm = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -1174,24 +1183,30 @@ export default function AdminProducts() {
                     <div className="px-3 py-1.5 text-[9px] uppercase font-bold tracking-[0.2em] text-muted-foreground/60 border-b border-muted/30 mb-2">
                       Quick Results
                     </div>
-                    {filteredProducts.slice(0, 5).map(p => (
-                       <div 
-                        key={p.id} 
-                        className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={() => {
-                          openEditOverlay(p);
-                        }}
-                      >
-                        <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold truncate">{p.name}</p>
-                          <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
+                    {quickSearchLoading ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
+                    ) : quickResults.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">No matching products.</div>
+                    ) : (
+                      quickResults.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            openEditOverlay(p);
+                          }}
+                        >
+                          <img src={p.imageUrl || "/placeholder.png"} className="w-8 h-8 rounded-lg object-cover" alt="" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold truncate">{p.name}</p>
+                            <p className="text-[9px] text-muted-foreground uppercase">{p.category}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
+                          </div>
                         </div>
-                        <div className="text-right shrink-0">
-                           <p className="text-[10px] font-bold">{formatPrice(p.price)}</p>
-                        </div>
-                       </div>
-                    ))}
+                      ))
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>

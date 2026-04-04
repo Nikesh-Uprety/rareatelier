@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Mail, Phone, MapPin, ShoppingBag, Calendar, User as UserIcon, MoreVertical, ExternalLink, Download, Loader2, ChevronRight } from "lucide-react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import {
-  fetchAdminCustomers,
+  fetchAdminCustomersPage,
   fetchCustomerById,
   fetchCustomerOrders,
   createAdminCustomer,
@@ -80,12 +80,33 @@ export default function AdminCustomers() {
   const queryClient = useQueryClient();
 
   const {
-    data: customers,
+    data: customerPageData,
     isLoading,
     isError,
-  } = useQuery<AdminCustomer[]>({
-    queryKey: ["admin", "customers", search, chartTimeRange],
-    queryFn: () => fetchAdminCustomers(search || undefined, chartTimeRange === "all" ? undefined : chartTimeRange),
+  } = useQuery<{ data: AdminCustomer[]; total: number }>({
+    queryKey: ["admin", "customers", "list", { search, page: customerPage, limit: customerPageSize }],
+    queryFn: () =>
+      fetchAdminCustomersPage({
+        search: search || undefined,
+        page: customerPage,
+        limit: customerPageSize,
+        includeZeroOrders: false,
+      }),
+    placeholderData: keepPreviousData,
+  });
+
+  const { data: chartCustomersData } = useQuery<{ data: AdminCustomer[]; total: number }>({
+    queryKey: ["admin", "customers", "chart", search, chartTimeRange],
+    queryFn: () =>
+      fetchAdminCustomersPage({
+        search: search || undefined,
+        timeRange: chartTimeRange === "all" ? undefined : chartTimeRange,
+        page: 1,
+        limit: 100,
+        includeZeroOrders: false,
+      }),
+    staleTime: 60_000,
+    placeholderData: keepPreviousData,
   });
 
   const {
@@ -108,51 +129,16 @@ export default function AdminCustomers() {
     enabled: !!expandedId,
   });
 
-  const list = customers ?? [];
-  const displayCustomers = React.useMemo(() => {
-    const normalized = new Map<string, AdminCustomer>();
-    list.forEach((customer) => {
-      const first = (customer.firstName ?? "").trim();
-      const last = (customer.lastName ?? "").trim();
-      const nameKey = `${first} ${last}`.trim().toLowerCase();
-      const emailKey = (customer.email ?? "").trim().toLowerCase();
-      const phoneKey = (customer.phoneNumber ?? "").trim().replace(/\s+/g, "");
-      const key = nameKey || emailKey || phoneKey || customer.id;
+  useEffect(() => {
+    setCustomerPage(1);
+  }, [search, customerPageSize]);
 
-      if ((customer.orderCount ?? 0) <= 0) return;
+  const listCustomers = customerPageData?.data ?? [];
+  const totalCustomers = customerPageData?.total ?? 0;
+  const chartCustomers = chartCustomersData?.data ?? [];
 
-      const existing = normalized.get(key);
-      if (!existing) {
-        normalized.set(key, customer);
-        return;
-      }
-
-      const existingOrders = existing.orderCount ?? 0;
-      const candidateOrders = customer.orderCount ?? 0;
-      const existingRevenue = Number(existing.totalSpent ?? 0);
-      const candidateRevenue = Number(customer.totalSpent ?? 0);
-
-      if (
-        candidateOrders > existingOrders ||
-        (candidateOrders === existingOrders && candidateRevenue > existingRevenue)
-      ) {
-        normalized.set(key, customer);
-      }
-    });
-
-    return Array.from(normalized.values())
-      .sort((a, b) => {
-        const orderDiff = (b.orderCount ?? 0) - (a.orderCount ?? 0);
-        if (orderDiff !== 0) return orderDiff;
-        return Number(b.totalSpent ?? 0) - Number(a.totalSpent ?? 0);
-      });
-  }, [list]);
-
-  const customerTotalPages = Math.max(1, Math.ceil(displayCustomers.length / customerPageSize));
-  const paginatedCustomers = displayCustomers.slice(
-    (customerPage - 1) * customerPageSize,
-    customerPage * customerPageSize,
-  );
+  const customerTotalPages = Math.max(1, Math.ceil(totalCustomers / customerPageSize));
+  const paginatedCustomers = listCustomers;
 
   const handleToggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
@@ -300,14 +286,14 @@ export default function AdminCustomers() {
         </div>
         <div className="flex items-center gap-4 w-full md:w-auto justify-end">
           <div className="text-sm text-muted-foreground hidden sm:block">
-            Showing {paginatedCustomers.length} of {displayCustomers.length} customers
+            Showing {paginatedCustomers.length} of {totalCustomers} customers
           </div>
           <ViewToggle view={viewMode} onViewChange={setViewMode} />
         </div>
       </div>
 
       <CustomerSpendingChart
-        customers={displayCustomers}
+        customers={chartCustomers}
         timeRange={chartTimeRange}
         onTimeRangeChange={setChartTimeRange}
       />
@@ -780,7 +766,7 @@ export default function AdminCustomers() {
             setCustomerPage(page);
             setExpandedId(null);
           }}
-          totalItems={displayCustomers.length}
+          totalItems={totalCustomers}
           pageSize={customerPageSize}
           onPageSizeChange={setCustomerPageSize}
         />
