@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  BarChart,
+  BarChart as RechartsBarChart,
   Bar,
   XAxis,
   YAxis,
@@ -8,13 +8,15 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  ComposedChart,
   Area,
-  ReferenceLine,
 } from "recharts";
+import { BarChart as MuiBarChart } from "@mui/x-charts/BarChart";
+import Stack from "@mui/material/Stack";
+import Typography from "@mui/material/Typography";
 import type { AdminCustomer } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useThemeStore } from "@/store/theme";
 
 type ViewMode = "orders" | "revenue";
 type TimeRange = "1w" | "1m" | "all";
@@ -134,88 +136,114 @@ const CustomTooltip = ({ active, payload, viewMode }: any) => {
   );
 };
 
-function RangeBarChart({ data }: { data: any[] }) {
-  const maxOrders = Math.max(...data.map((d) => d.orders), 1);
+function OrdersRangeBarChart({ data, height }: { data: any[]; height: number }) {
+  const theme = useThemeStore((state) => state.theme);
+  const isDark = theme === "dark";
+
+  const tierColors = {
+    top: isDark ? "#d4a843" : "#2C5234",
+    mid: isDark ? "#7fbf8a" : "#4A8456",
+    rest: isDark ? "#9fc5a6" : "#77CF89",
+  };
+
+  const dataset = data.map((item, index) => {
+    const rank = data.length - index;
+    const tier = rank <= 5 ? "top" : rank <= 10 ? "mid" : "rest";
+    const displayName = item.phoneNumber
+      ? `${item.name} (${item.phoneNumber})`
+      : item.name;
+
+    return {
+      id: item.id,
+      name: item.name,
+      label: displayName,
+      ordersTop: tier === "top" ? item.orders : 0,
+      ordersMid: tier === "mid" ? item.orders : 0,
+      ordersRest: tier === "rest" ? item.orders : 0,
+      orders: item.orders,
+      revenue: item.revenue,
+    };
+  });
+
+  const series = [
+    { dataKey: "ordersTop", label: "Top 5 customers", stack: "orders", color: tierColors.top },
+    { dataKey: "ordersMid", label: "6-10 customers", stack: "orders", color: tierColors.mid },
+    { dataKey: "ordersRest", label: "11-15 customers", stack: "orders", color: tierColors.rest },
+  ];
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <ComposedChart
-        data={data}
-        layout="vertical"
-        margin={{ top: 10, right: 40, left: 240, bottom: 10 }}
-      >
-        <defs>
-          {data.map((_, i) => (
-            <linearGradient key={`grad-${i}`} id={`barGrad-${i}`} x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].from} stopOpacity={0.25} />
-              <stop offset="100%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].to} stopOpacity={1} />
-            </linearGradient>
-          ))}
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" vertical={false} className="[&_line]:stroke-border" />
-        <XAxis
-          type="number"
-          axisLine={false}
-          tickLine={false}
-          tick={{ fontSize: 10 }}
-          tickFormatter={(v: number) => `${v}`}
-          className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
-        />
-        <YAxis
-          type="category"
-          dataKey="id"
-          axisLine={false}
-          tickLine={false}
-          tick={(props) => <CustomerAvatarTick {...props} customers={data} />}
-          width={240}
-        />
-        <Tooltip
-          content={<CustomTooltip viewMode="orders" />}
-          cursor={{ fill: "rgba(128,128,128,0.08)" }}
-        />
-        {/* Background track bar (full range) */}
-        <Bar
-          dataKey="orders"
-          radius={[0, 8, 8, 0]}
-          barSize={22}
-        >
-          {data.map((_, index) => (
-            <Cell key={`track-${index}`} fill="hsl(var(--muted))" opacity={0.3} />
-          ))}
-        </Bar>
-        {/* Value bar with gradient (range bar style) */}
-        <Bar
-          dataKey="orders"
-          radius={[0, 8, 8, 0]}
-          barSize={22}
-        >
-          {data.map((d, index) => (
-            <Cell
-              key={`bar-${index}`}
-              fill={`url(#barGrad-${index})`}
-              width={(d.orders / maxOrders) * 100 + "%"}
-            />
-          ))}
-        </Bar>
-        {/* Revenue sparkline overlay */}
-        <Area
-          type="monotone"
-          dataKey="revenue"
-          stroke="#d4a843"
-          strokeWidth={2}
-          fill="rgba(212,168,67,0.06)"
-          yAxisId="right"
-          dot={{ r: 3, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 1.5 }}
-          activeDot={{ r: 5, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 2 }}
-        />
-        <YAxis
-          yAxisId="right"
-          orientation="right"
-          type="number"
-          hide
-        />
-      </ComposedChart>
-    </ResponsiveContainer>
+    <div className="flex flex-col gap-3">
+      <MuiBarChart
+        dataset={dataset}
+        layout="horizontal"
+        height={height}
+        margin={{ left: 240, right: 36, top: 10, bottom: 18 }}
+        xAxis={[
+          {
+            label: "Orders",
+            valueFormatter: (value: number | null) =>
+              value === null ? "" : value.toLocaleString("en-NP"),
+          },
+        ]}
+        yAxis={[
+          {
+            scaleType: "band",
+            dataKey: "label",
+          },
+        ]}
+        series={series}
+        grid={{ horizontal: true, vertical: false }}
+        sx={{
+          backgroundColor: "transparent",
+          "& .MuiChartsAxis-tickLabel": {
+            fill: isDark ? "rgba(255,255,255,0.78)" : "rgba(24,24,24,0.7)",
+            fontSize: 11,
+          },
+          "& .MuiChartsAxis-line": {
+            stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
+          },
+          "& .MuiChartsAxis-tick": {
+            stroke: isDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.12)",
+          },
+          "& .MuiChartsGrid-line": {
+            stroke: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
+          },
+        }}
+        slotProps={{
+          tooltip: {
+            trigger: "item",
+          },
+        }}
+      />
+      <Legend
+        series={[
+          { label: "Top 5 customers", color: tierColors.top },
+          { label: "6-10 customers", color: tierColors.mid },
+          { label: "11-15 customers", color: tierColors.rest },
+        ]}
+      />
+    </div>
+  );
+}
+
+function Legend({ series }: { series: { label: string; color: string }[] }) {
+  return (
+    <Stack direction="row" flexWrap="wrap" columnGap={2} justifyContent="center">
+      {series.map((aSeries, index) => (
+        <Stack key={index} alignItems="center" direction="row" marginBottom={0.5}>
+          <div
+            style={{
+              width: 14,
+              height: 14,
+              backgroundColor: aSeries.color,
+              marginRight: 8,
+              borderRadius: 4,
+            }}
+          />
+          <Typography variant="caption">{aSeries.label}</Typography>
+        </Stack>
+      ))}
+    </Stack>
   );
 }
 
@@ -349,10 +377,10 @@ export default function CustomerSpendingChart({ customers }: CustomerSpendingCha
 
       <div className="w-full" style={{ height: chartHeight }}>
         {viewMode === "orders" ? (
-          <RangeBarChart data={chartData} />
+          <OrdersRangeBarChart data={chartData} height={chartHeight} />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart
+            <RechartsBarChart
               data={chartData}
               layout="vertical"
               margin={{ top: 10, right: 40, left: 240, bottom: 10 }}
@@ -411,7 +439,7 @@ export default function CustomerSpendingChart({ customers }: CustomerSpendingCha
                 type="number"
                 hide
               />
-            </BarChart>
+            </RechartsBarChart>
           </ResponsiveContainer>
         )}
       </div>
