@@ -95,6 +95,104 @@ const memoryUpload = multer({
   },
 });
 
+type SiteSettingsCompatRow = {
+  id: number;
+  activeTemplateId: number | null;
+  fontPreset: string | null;
+  publishedAt: Date | null;
+  publishedBy: string | null;
+  updatedAt: Date | null;
+};
+
+const CANVAS_TEMPLATE_OVERRIDES = {
+  "maison-nocturne": {
+    name: "Rare Atelier Official",
+    description: "A cinematic luxury editorial homepage for Rare Atelier.",
+  },
+  "editorial-grid": {
+    name: "Rare Atelier Draft",
+    description: "Magazine-style draft layout with bold typography.",
+  },
+} as const;
+
+let siteSettingsHasFontPresetColumnCache: boolean | null = null;
+
+async function siteSettingsHasFontPresetColumn() {
+  if (siteSettingsHasFontPresetColumnCache !== null) {
+    return siteSettingsHasFontPresetColumnCache;
+  }
+
+  const result = await db.execute(sql`
+    select exists (
+      select 1
+      from information_schema.columns
+      where table_schema = current_schema()
+        and table_name = 'site_settings'
+        and column_name = 'font_preset'
+    ) as has_column
+  `);
+
+  const row = result.rows[0] as { has_column?: boolean | string | number } | undefined;
+  siteSettingsHasFontPresetColumnCache =
+    row?.has_column === true ||
+    row?.has_column === "t" ||
+    row?.has_column === "true" ||
+    row?.has_column === 1;
+
+  if (!siteSettingsHasFontPresetColumnCache) {
+    try {
+      await db.execute(sql`
+        alter table site_settings
+        add column if not exists font_preset varchar(50) default 'inter'
+      `);
+      await db.execute(sql`
+        update site_settings
+        set font_preset = 'inter'
+        where font_preset is null
+      `);
+      siteSettingsHasFontPresetColumnCache = true;
+    } catch (error) {
+      console.warn("Unable to auto-apply site_settings.font_preset migration", error);
+    }
+  }
+
+  return siteSettingsHasFontPresetColumnCache;
+}
+
+async function getSiteSettingsCompat(): Promise<SiteSettingsCompatRow[]> {
+  const hasFontPresetColumn = await siteSettingsHasFontPresetColumn();
+
+  if (hasFontPresetColumn) {
+    return db.select().from(siteSettings).limit(1);
+  }
+
+  return db
+    .select({
+      id: siteSettings.id,
+      activeTemplateId: siteSettings.activeTemplateId,
+      fontPreset: sql<string>`'inter'`,
+      publishedAt: siteSettings.publishedAt,
+      publishedBy: siteSettings.publishedBy,
+      updatedAt: siteSettings.updatedAt,
+    })
+    .from(siteSettings)
+    .limit(1);
+}
+
+function normalizeCanvasTemplate<T extends { slug?: string | null; name?: string | null; description?: string | null }>(
+  template: T | null | undefined,
+): T | null | undefined {
+  if (!template?.slug) return template;
+  const override =
+    CANVAS_TEMPLATE_OVERRIDES[template.slug as keyof typeof CANVAS_TEMPLATE_OVERRIDES];
+  if (!override) return template;
+  return {
+    ...template,
+    name: override.name,
+    description: override.description,
+  };
+}
+
 function listImagesInUploadsDir(options: { maxDepth?: number; maxFiles?: number } = {}) {
   const maxDepth = options.maxDepth ?? 3;
   const maxFiles = options.maxFiles ?? 200;
@@ -176,6 +274,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  const sectionVariant = (section: { config?: unknown }) => {
+    if (!section?.config || typeof section.config !== "object") return null;
+    const variant = (section.config as Record<string, unknown>).variant;
+    return typeof variant === "string" ? variant : null;
+  };
+
   const ensureTemplateSections = <
     T extends {
       sectionType: string;
@@ -190,23 +294,110 @@ export async function registerRoutes(
     template: { id?: number; slug?: string | null } | null | undefined,
     sections: T[],
   ): T[] => {
-    if (template?.slug !== "rare-dark-luxury") return sections;
-    if (sections.some((section) => section.sectionType === "hero")) return sections;
+    if (template?.slug === "rare-dark-luxury") {
+      if (sections.some((section) => section.sectionType === "hero")) return sections;
 
-    const fallbackHero = {
-      templateId: template.id ?? 0,
-      id: -1,
-      sectionType: "hero",
-      label: "Hero",
-      orderIndex: 1,
-      isVisible: true,
-      config: { variant: "dark-cinematic" },
-    } as T;
+      const fallbackHero = {
+        templateId: template.id ?? 0,
+        id: -1,
+        sectionType: "hero",
+        label: "Hero",
+        orderIndex: 1,
+        isVisible: true,
+        config: { variant: "dark-cinematic" },
+      } as T;
 
-    return [fallbackHero, ...sections.map((section) => ({
-      ...section,
-      orderIndex: Math.max(2, section.orderIndex + 1),
-    }))];
+      return [fallbackHero, ...sections.map((section) => ({
+        ...section,
+        orderIndex: Math.max(2, section.orderIndex + 1),
+      }))];
+    }
+
+    type CuratedSectionBlueprint = {
+      sectionType: string;
+      variant?: string;
+    };
+
+    const curatedTemplates = {
+      "maison-nocturne": [
+        { sectionType: "hero", variant: "maison-nocturne" },
+        { sectionType: "ticker" },
+        { sectionType: "featured", variant: "maison-nocturne" },
+        { sectionType: "campaign", variant: "maison-nocturne-lookbook" },
+        { sectionType: "quote", variant: "maison-nocturne-statement" },
+      ] satisfies CuratedSectionBlueprint[],
+      nikeshdesign: [
+        { sectionType: "hero", variant: "nikeshdesign" },
+        { sectionType: "ticker" },
+        { sectionType: "featured", variant: "nikeshdesign-featured" },
+        { sectionType: "campaign", variant: "nikeshdesign-lookbook" },
+        { sectionType: "quote", variant: "nikeshdesign-statement" },
+      ] satisfies CuratedSectionBlueprint[],
+    } as const;
+
+    const sectionBlueprints =
+      template?.slug
+        ? curatedTemplates[template.slug as keyof typeof curatedTemplates]
+        : undefined;
+
+    if (!sectionBlueprints) return sections;
+
+    const usedSectionIds = new Set<number>();
+    const normalizedSections: T[] = [];
+
+    for (let index = 0; index < sectionBlueprints.length; index += 1) {
+      const blueprint = sectionBlueprints[index];
+      const sameTypeSections = sections.filter((section) => section.sectionType === blueprint.sectionType);
+      if (!sameTypeSections.length) continue;
+
+      const preferred =
+        (blueprint.variant
+          ? sameTypeSections.find((section) => sectionVariant(section) === blueprint.variant)
+          : undefined) ??
+        sameTypeSections[0];
+
+      const visibleFallback = sameTypeSections.find((section) => section.isVisible);
+
+      const mergedSection = {
+        ...preferred,
+        orderIndex: preferred.orderIndex ?? index + 1,
+        isVisible: preferred.isVisible ?? true,
+      } as T;
+
+      if (blueprint.variant) {
+        mergedSection.config = {
+          ...(visibleFallback?.config && typeof visibleFallback.config === "object"
+            ? visibleFallback.config as Record<string, unknown>
+            : {}),
+          ...(preferred.config && typeof preferred.config === "object"
+            ? preferred.config as Record<string, unknown>
+            : {}),
+          variant: blueprint.variant,
+        } as T["config"];
+      }
+
+      if (!mergedSection.isVisible && visibleFallback) {
+        mergedSection.isVisible = true;
+      }
+
+      if (typeof preferred.id === "number") {
+        usedSectionIds.add(preferred.id);
+      }
+      if (visibleFallback && typeof visibleFallback.id === "number") {
+        usedSectionIds.add(visibleFallback.id);
+      }
+
+      normalizedSections.push(mergedSection);
+    }
+
+    const extraSections = sections.filter((section) => {
+      if (typeof section.id === "number" && usedSectionIds.has(section.id)) {
+        return false;
+      }
+      return !sectionBlueprints.some((blueprint) => blueprint.sectionType === section.sectionType);
+    });
+
+    return [...normalizedSections, ...extraSections].sort((a, b) => a.orderIndex - b.orderIndex);
   };
 
   // Security Logging Middleware
@@ -377,10 +568,7 @@ export async function registerRoutes(
         return res.status(403).json({ success: false, error: "Forbidden" });
       }
 
-      const settings = await db
-        .select()
-        .from(siteSettings)
-        .limit(1);
+      const settings = await getSiteSettingsCompat();
 
       if (!settings.length && previewTemplateId === null) {
         applyPageConfigCacheHeaders();
@@ -410,7 +598,7 @@ export async function registerRoutes(
       applyPageConfigCacheHeaders();
       return res.json({
         fontPreset: settings[0]?.fontPreset ?? "inter",
-        template: template[0] ?? null,
+        template: normalizeCanvasTemplate(template[0] ?? null) ?? null,
         sections: normalizedSections.filter((s) => s.isVisible),
       });
     } catch (err) {
@@ -423,7 +611,7 @@ export async function registerRoutes(
     try {
       const existingTemplates = await db.select().from(pageTemplates);
       const maisonTemplateValues = {
-        name: "Maison Nocturne",
+        name: "Rare Atelier Official",
         slug: "maison-nocturne",
         tier: "premium",
         priceNpr: 0,
@@ -656,12 +844,12 @@ export async function registerRoutes(
       const [editorialGrid] = await db
         .insert(pageTemplates)
         .values({
-          name: "Editorial Grid",
+          name: "Rare Atelier Draft",
           slug: "editorial-grid",
           tier: "free",
           priceNpr: 0,
           isPurchased: true,
-          description: "Magazine-style grid layout with bold typography.",
+          description: "Magazine-style draft layout with bold typography.",
         })
         .returning();
 
@@ -720,7 +908,7 @@ export async function registerRoutes(
         .select()
         .from(pageTemplates)
         .orderBy(pageTemplates.tier, pageTemplates.name);
-      return res.json(templates);
+      return res.json(templates.map((template) => normalizeCanvasTemplate(template)));
     } catch (err) {
       console.error("Error in GET /api/admin/canvas/templates", err);
       return res.status(500).json({ error: "Failed to load templates" });
@@ -753,10 +941,7 @@ export async function registerRoutes(
       const rawId = req.params.id;
       const id = Array.isArray(rawId) ? rawId[0] : rawId;
       const publishedBy = (req.user as Express.User | undefined)?.id ?? null;
-      const existing = await db
-        .select()
-        .from(siteSettings)
-        .limit(1);
+      const existing = await getSiteSettingsCompat();
 
       if (existing.length > 0) {
         await db
@@ -935,10 +1120,7 @@ export async function registerRoutes(
 
   app.get("/api/admin/canvas/settings", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
     try {
-      const settings = await db
-        .select()
-        .from(siteSettings)
-        .limit(1);
+      const settings = await getSiteSettingsCompat();
 
       const activeTemplate = settings[0]?.activeTemplateId
         ? await db
@@ -950,7 +1132,7 @@ export async function registerRoutes(
 
       return res.json({
         ...settings[0],
-        activeTemplate: activeTemplate[0] ?? null,
+        activeTemplate: normalizeCanvasTemplate(activeTemplate[0] ?? null) ?? null,
       });
     } catch (err) {
       console.error("Error in GET /api/admin/canvas/settings", err);
@@ -965,30 +1147,39 @@ export async function registerRoutes(
           ? req.body.fontPreset.trim()
           : "inter";
       const updatedAt = new Date();
-      const existing = await db.select().from(siteSettings).limit(1);
+      const existing = await getSiteSettingsCompat();
+      const hasFontPresetColumn = await siteSettingsHasFontPresetColumn();
 
       if (existing.length > 0) {
-        const [updated] = await db
+        await db
           .update(siteSettings)
           .set({
-            fontPreset,
             updatedAt,
+            ...(hasFontPresetColumn ? { fontPreset } : {}),
           })
           .where(eq(siteSettings.id, existing[0].id))
-          .returning();
+          .returning({ id: siteSettings.id });
 
-        return res.json(updated);
+        const [updated] = await getSiteSettingsCompat();
+        return res.json({
+          ...updated,
+          fontPreset: hasFontPresetColumn ? updated?.fontPreset ?? "inter" : fontPreset,
+        });
       }
 
-      const [created] = await db
+      await db
         .insert(siteSettings)
         .values({
-          fontPreset,
           updatedAt,
+          ...(hasFontPresetColumn ? { fontPreset } : {}),
         })
-        .returning();
+        .returning({ id: siteSettings.id });
 
-      return res.json(created);
+      const [created] = await getSiteSettingsCompat();
+      return res.json({
+        ...created,
+        fontPreset: hasFontPresetColumn ? created?.fontPreset ?? "inter" : fontPreset,
+      });
     } catch (err) {
       console.error("Error in PATCH /api/admin/canvas/settings", err);
       return res.status(500).json({ error: "Failed to update canvas settings" });

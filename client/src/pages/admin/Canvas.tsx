@@ -1830,7 +1830,7 @@ export default function Canvas() {
               New Luxury
             </p>
             <h4 className="mt-2 font-serif text-lg text-[rgba(232,228,219,0.96)]">
-              Maison Nocturne
+              Rare Atelier Official
             </h4>
             <p className="mt-1 text-[9px] uppercase tracking-[0.22em] text-[rgba(232,228,219,0.48)]">
               Editorial Story Layout
