@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, CheckCircle2, ShoppingBag, Wallet, Banknote, Building2, Smartphone, BadgePercent, Sparkles } from "lucide-react";
+import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles } from "lucide-react";
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -11,11 +11,38 @@ import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 
 const PAYMENT_OPTIONS = [
-  { id: "esewa", label: "eSewa", logoUrl: "/images/esewa.webp" },
-  { id: "khalti", label: "Khalti", logoUrl: "/images/khalti.webp", logoColor: "bg-white" },
-  { id: "fonepay", label: "Fonepay", icon: Smartphone, logoColor: "bg-slate-700" },
-  { id: "card", label: "Card", icon: Wallet, logoColor: "bg-slate-700" },
-  { id: "bank_transfer", label: "Bank Transfer", icon: Building2, logoColor: "bg-slate-700" },
+  {
+    id: "esewa",
+    label: "eSewa",
+    logoUrl: "/images/esewa-logo.webp",
+    logoWrapClass: "px-0",
+    logoImageClass: "h-11 w-auto",
+  },
+  {
+    id: "khalti",
+    label: "Khalti",
+    logoUrl: "/images/khalti-logo.png",
+    logoWrapClass: "px-0",
+    logoImageClass: "h-10 w-auto",
+  },
+  {
+    id: "fonepay",
+    label: "Fonepay",
+    logoUrl: "/images/fonepay-logo.png",
+    logoWrapClass: "px-0",
+    logoImageClass: "h-10 w-auto",
+  },
+] as const;
+
+const NEPAL_DISTRICTS = [
+  "Achham", "Arghakhanchi", "Baglung", "Baitadi", "Bajhang", "Bajura", "Banke", "Bara", "Bardiya", "Bhaktapur",
+  "Bhojpur", "Chitwan", "Dadeldhura", "Dailekh", "Dang", "Darchula", "Dhading", "Dhankuta", "Dhanusha", "Dolakha",
+  "Dolpa", "Doti", "Gorkha", "Gulmi", "Humla", "Ilam", "Jajarkot", "Jhapa", "Jumla", "Kailali",
+  "Kalikot", "Kanchanpur", "Kapilvastu", "Kaski", "Kathmandu", "Kavrepalanchok", "Khotang", "Lalitpur", "Lamjung", "Mahottari",
+  "Makwanpur", "Manang", "Morang", "Mugu", "Mustang", "Myagdi", "Nawalpur", "Nuwakot", "Okhaldhunga", "Palpa",
+  "Panchthar", "Parasi", "Parbat", "Parsa", "Pyuthan", "Ramechhap", "Rasuwa", "Rautahat", "Rolpa", "Rukum East",
+  "Rukum West", "Rupandehi", "Salyan", "Sankhuwasabha", "Saptari", "Sarlahi", "Sindhuli", "Sindhupalchok", "Siraha", "Solukhumbu",
+  "Sunsari", "Surkhet", "Syangja", "Tanahun", "Taplejung", "Tehrathum", "Udayapur",
 ] as const;
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
@@ -137,7 +164,7 @@ export default function Checkout() {
     firstName: useRef<HTMLInputElement>(null),
     lastName: useRef<HTMLInputElement>(null),
     address: useRef<HTMLInputElement>(null),
-    city: useRef<HTMLInputElement>(null),
+    city: useRef<HTMLSelectElement>(null),
     phone: useRef<HTMLInputElement>(null),
     location: useRef<HTMLDivElement>(null),
   };
@@ -233,9 +260,7 @@ export default function Checkout() {
       const needsPaymentPage =
         paymentMethod === "esewa" ||
         paymentMethod === "khalti" ||
-        paymentMethod === "bank_transfer" ||
-        paymentMethod === "fonepay" ||
-        paymentMethod === "card";
+        paymentMethod === "fonepay";
 
       if (needsPaymentPage) {
         setStep(3);
@@ -268,6 +293,9 @@ export default function Checkout() {
           <div>
             <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Contact</h2>
             <div className="space-y-4">
+              <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                Email Address <span className="text-red-500">*</span>
+              </label>
               <Input
                 ref={fieldRefs.email}
                 name="email"
@@ -288,6 +316,9 @@ export default function Checkout() {
             <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Shipping Address</h2>
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                  First Name <span className="text-red-500">*</span>
+                </label>
                 <Input
                   ref={fieldRefs.firstName}
                   name="firstName"
@@ -302,6 +333,9 @@ export default function Checkout() {
                 {errors.firstName && <p className="text-[10px] text-red-500 uppercase font-bold">Required</p>}
               </div>
               <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                  Last Name <span className="text-red-500">*</span>
+                </label>
                 <Input
                   ref={fieldRefs.lastName}
                   name="lastName"
@@ -318,6 +352,9 @@ export default function Checkout() {
             </div>
             <div className="space-y-4">
               <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                  Address <span className="text-red-500">*</span>
+                </label>
                 <Input
                   ref={fieldRefs.address}
                   name="address"
@@ -333,21 +370,36 @@ export default function Checkout() {
               </div>
               <div className="grid gap-4">
                 <div className="space-y-1">
-                  <Input
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    District <span className="text-red-500">*</span>
+                  </label>
+                  <select
                     ref={fieldRefs.city}
                     name="city"
-                    placeholder="City"
                     data-testid="checkout-city"
-                    className={`h-14 rounded-none transition-colors ${errors.city ? "border-red-500 border-2" : "border-gray-200"}`}
+                    className={`h-14 w-full rounded-none border-2 bg-background px-4 text-sm transition-colors ${errors.city ? "border-red-500" : "border-gray-200"}`}
                     onFocus={() => clearError("city")}
                     onChange={(e) => {
                       if (e.target.value) clearError("city");
                     }}
-                  />
+                    defaultValue=""
+                  >
+                    <option value="" disabled>
+                      Select District
+                    </option>
+                    {NEPAL_DISTRICTS.map((district) => (
+                      <option key={district} value={district}>
+                        {district}
+                      </option>
+                    ))}
+                  </select>
                   {errors.city && <p className="text-[10px] text-red-500 uppercase font-bold">City is required</p>}
                 </div>
               </div>
               <div className="space-y-1">
+                <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                  Phone <span className="text-red-500">*</span>
+                </label>
                 <Input
                   ref={fieldRefs.phone}
                   name="phone"
@@ -364,7 +416,7 @@ export default function Checkout() {
               
               <div className="pt-2 scroll-mt-20" ref={fieldRefs.location}>
                 <p className="text-sm font-semibold uppercase tracking-wide mb-2">
-                  Delivery Location
+                  Delivery Location <span className="text-red-500">*</span>
                 </p>
 
                 <DeliveryLocationSelect
@@ -431,7 +483,7 @@ export default function Checkout() {
 
           <div>
             <h2 className="text-xl font-black uppercase tracking-tighter mb-6">
-              Payment Option
+              Payment Option <span className="text-red-500">*</span>
             </h2>
             <div className="space-y-3">
               {PAYMENT_OPTIONS.map((opt) => {
@@ -449,20 +501,18 @@ export default function Checkout() {
                     }`}
                   >
                     <span
-                      className={`w-12 h-12 flex items-center justify-center shrink-0 overflow-hidden ${
-                        opt.id === "esewa" ? "rounded-full" : "rounded-none"
-                      } ${"logoColor" in opt ? opt.logoColor : ""}`}
+                      className={`h-12 min-w-[140px] flex items-center justify-center shrink-0 overflow-hidden ${
+                        "logoWrapClass" in opt ? opt.logoWrapClass : ""
+                      }`}
                     >
                       {"logoUrl" in opt ? (
                         <img 
                           src={opt.logoUrl} 
                           alt={opt.label} 
-                          className={`w-full h-full object-contain ${
-                            opt.id === "esewa" ? "scale-150" : "p-1"
-                          }`} 
+                          className={`max-w-full object-contain ${
+                            "logoImageClass" in opt ? opt.logoImageClass : "h-8 w-auto"
+                          }`}
                         />
-                      ) : opt.icon ? (
-                        <opt.icon className="w-6 h-6" />
                       ) : null}
                     </span>
                     <span className="font-semibold uppercase tracking-wide text-sm text-zinc-900 dark:text-zinc-100">
@@ -490,7 +540,7 @@ export default function Checkout() {
                     <Banknote className="w-6 h-6" />
                   </span>
                   <span className="font-semibold uppercase tracking-wide text-sm text-black dark:text-white">
-                    Cash on Delivery
+                    Cash on Delivery <span className="text-red-500">*</span>
                   </span>
                   {paymentMethod === "cash_on_delivery" && (
                     <CheckCircle2 className="w-5 h-5 text-amber-600 ml-auto shrink-0" />
