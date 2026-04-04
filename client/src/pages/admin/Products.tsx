@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { 
-  fetchAdminProducts, 
   fetchAdminProductsPage,
   fetchAdminProductStats,
   createAdminProduct, 
@@ -1200,7 +1199,7 @@ export default function AdminProducts() {
             
             <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end shrink-0">
               <p className="text-[11px] font-black text-muted-foreground uppercase tracking-widest whitespace-nowrap dark:text-[#CFE0D1]">
-                {filteredProducts.length} Items
+                {totalProducts} Items
               </p>
               <ViewToggle view={viewMode} onViewChange={setViewMode} />
             </div>

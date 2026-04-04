@@ -1008,6 +1008,31 @@ export async function registerRoutes(
     }
   });
 
+  app.patch(
+    "/api/admin/canvas/sections/reorder",
+    requireAdminPageAccess("landing-page"),
+    validateRequest(z.object({ orderedIds: z.array(z.number()).min(1) })),
+    async (req: Request, res: Response) => {
+      try {
+        const { orderedIds } = req.body as { orderedIds: number[] };
+        await db.transaction(async (tx) => {
+          await Promise.all(
+            orderedIds.map((id, index) =>
+              tx
+                .update(pageSections)
+                .set({ orderIndex: index + 1, updatedAt: new Date() })
+                .where(eq(pageSections.id, id)),
+            ),
+          );
+        });
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/canvas/sections/reorder", err);
+        return res.status(500).json({ error: "Failed to reorder sections" });
+      }
+    },
+  );
+
   app.post("/api/admin/canvas/templates/:id/sections", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
     try {
       const rawId = req.params.id;
