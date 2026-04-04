@@ -208,7 +208,7 @@ export default function AdminProducts() {
   const [moveExistingSlug, setMoveExistingSlug] = useState<string>("");
   const [moveNewCategoryName, setMoveNewCategoryName] = useState<string>("");
   const [productPage, setProductPage] = useState(1);
-  const PRODUCT_PAGE_SIZE = 15;
+  const [productPageSize, setProductPageSize] = useState(15);
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -841,10 +841,10 @@ export default function AdminProducts() {
       return matchesCategory;
     });
   }, [products, categoryFilter]);
-  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCT_PAGE_SIZE));
+  const productTotalPages = Math.max(1, Math.ceil(filteredProducts.length / productPageSize));
   const paginatedProducts = filteredProducts.slice(
-    (productPage - 1) * PRODUCT_PAGE_SIZE,
-    productPage * PRODUCT_PAGE_SIZE,
+    (productPage - 1) * productPageSize,
+    productPage * productPageSize,
   );
   const featuredCount = useMemo(
     () => allAdminProducts.filter((p) => p.homeFeatured).length,
@@ -942,6 +942,7 @@ export default function AdminProducts() {
           setPendingGalleryImages={setAddPendingGalleryImages}
           setUploadingImage={setUploadingImage}
           toast={toast}
+          galleryUploadStatus={galleryUploadStatus}
           onMediaLibraryOpen={(target) => {
             setMediaLibraryTarget(target as any);
             setMediaLibraryOpen(true);
@@ -1618,7 +1619,8 @@ export default function AdminProducts() {
             setSelectedProductIds(new Set());
           }}
           totalItems={filteredProducts.length}
-          pageSize={PRODUCT_PAGE_SIZE}
+          pageSize={productPageSize}
+          onPageSizeChange={setProductPageSize}
         />
       </div>
 

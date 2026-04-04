@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   GripVertical,
   Image as ImageIcon,
@@ -102,6 +103,8 @@ function SectionManager({ section }: { section: SectionKey }) {
     altText: "",
     deviceTarget: "all",
   });
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const {
@@ -255,6 +258,8 @@ function SectionManager({ section }: { section: SectionKey }) {
       if (!uploadState.file) {
         throw new Error("No file selected");
       }
+      setShowUploadProgress(true);
+      setUploadProgress(0);
       const formData = new FormData();
       formData.append("image", uploadState.file);
       formData.append("section", section);
@@ -263,29 +268,48 @@ function SectionManager({ section }: { section: SectionKey }) {
         formData.append("altText", uploadState.altText);
       }
 
-      const res = await fetch("/api/admin/site-assets/upload", {
-        method: "POST",
-        body: formData,
-        credentials: "include",
+      const json = await new Promise<any>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/admin/site-assets/upload", true);
+        xhr.withCredentials = true;
+        if (xhr.upload) {
+          xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.round((event.loaded / event.total) * 100);
+            setUploadProgress(percent);
+          };
+        }
+        xhr.onerror = () => reject(new Error("Failed to upload image"));
+        xhr.onload = () => {
+          const ok = xhr.status >= 200 && xhr.status < 300;
+          if (!ok) {
+            reject(new Error(xhr.responseText || "Failed to upload image"));
+            return;
+          }
+          try {
+            resolve(xhr.responseText ? JSON.parse(xhr.responseText) : {});
+          } catch {
+            resolve({});
+          }
+        };
+        xhr.send(formData);
       });
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to upload image");
-      }
-
-      return res.json();
+      return json;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "siteAssets", section] });
       setAssetsOrder(null); // Fix: Clear local order state to ensure fresh data is fetched
       setUploadState({ file: null, previewUrl: null, altText: "", deviceTarget: "all" });
+      setUploadProgress(100);
+      setTimeout(() => setShowUploadProgress(false), 700);
       toast({
         title: "Uploaded",
         description: "Image optimized and saved locally as WebP.",
       });
     },
     onError: (err: Error) => {
+      setShowUploadProgress(false);
       toast({
         title: "Upload failed",
         description: err.message,
@@ -617,6 +641,11 @@ function SectionManager({ section }: { section: SectionKey }) {
             {isAtMax ? "Section is full" : "Upload"}
           </Button>
         </div>
+        {showUploadProgress && (
+          <div className="mt-3">
+            <UploadProgress value={uploadProgress} label="Upload progress" className="max-w-none" />
+          </div>
+        )}
       </div>
 
       {/* Video upload zone (Hero only) */}

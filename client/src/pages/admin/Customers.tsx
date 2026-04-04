@@ -74,7 +74,7 @@ export default function AdminCustomers() {
   const [isExportingCustomers, setIsExportingCustomers] = useState(false);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [customerPage, setCustomerPage] = useState(1);
-  const CUSTOMER_PAGE_SIZE = 15;
+  const [customerPageSize, setCustomerPageSize] = useState(15);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -147,10 +147,10 @@ export default function AdminCustomers() {
       });
   }, [list]);
 
-  const customerTotalPages = Math.max(1, Math.ceil(displayCustomers.length / CUSTOMER_PAGE_SIZE));
+  const customerTotalPages = Math.max(1, Math.ceil(displayCustomers.length / customerPageSize));
   const paginatedCustomers = displayCustomers.slice(
-    (customerPage - 1) * CUSTOMER_PAGE_SIZE,
-    customerPage * CUSTOMER_PAGE_SIZE,
+    (customerPage - 1) * customerPageSize,
+    customerPage * customerPageSize,
   );
 
   const handleToggleExpand = (id: string) => {
@@ -776,7 +776,8 @@ export default function AdminCustomers() {
             setExpandedId(null);
           }}
           totalItems={displayCustomers.length}
-          pageSize={CUSTOMER_PAGE_SIZE}
+          pageSize={customerPageSize}
+          onPageSizeChange={setCustomerPageSize}
         />
       </div>
 

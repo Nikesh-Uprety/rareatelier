@@ -11,18 +11,18 @@ import { useMemo, useState } from "react";
 export default function NotificationsPage() {
   const { notifications, unreadCount, markAllRead, markRead, isLoading } = useNotifications();
   const [notifPage, setNotifPage] = useState(1);
-  const NOTIF_PAGE_SIZE = 15;
+  const [notifPageSize, setNotifPageSize] = useState(15);
 
   const notifTotalPages = useMemo(
-    () => Math.max(1, Math.ceil(notifications.length / NOTIF_PAGE_SIZE)),
-    [notifications],
+    () => Math.max(1, Math.ceil(notifications.length / notifPageSize)),
+    [notifications, notifPageSize],
   );
   const paginatedNotifications = useMemo(
     () => notifications.slice(
-      (notifPage - 1) * NOTIF_PAGE_SIZE,
-      notifPage * NOTIF_PAGE_SIZE,
+      (notifPage - 1) * notifPageSize,
+      notifPage * notifPageSize,
     ),
-    [notifications, notifPage],
+    [notifications, notifPage, notifPageSize],
   );
 
   const getIcon = (type: string) => {
@@ -144,7 +144,8 @@ export default function NotificationsPage() {
           totalPages={notifTotalPages}
           onPageChange={setNotifPage}
           totalItems={notifications.length}
-          pageSize={NOTIF_PAGE_SIZE}
+          pageSize={notifPageSize}
+          onPageSizeChange={setNotifPageSize}
         />
       </div>
       

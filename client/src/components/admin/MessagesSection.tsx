@@ -40,7 +40,7 @@ export default function MessagesSection() {
   const [replyText, setReplyText] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [messagePage, setMessagePage] = useState(1);
-  const MESSAGE_PAGE_SIZE = 15;
+  const [messagePageSize, setMessagePageSize] = useState(15);
 
   const messagesQuery = useQuery<{ success: boolean; data: ContactMessage[] }>({
     queryKey: ["admin", "messages"],
@@ -70,10 +70,10 @@ export default function MessagesSection() {
     });
   }, [messages, dateFilter]);
 
-  const messageTotalPages = Math.max(1, Math.ceil(filteredMessages.length / MESSAGE_PAGE_SIZE));
+  const messageTotalPages = Math.max(1, Math.ceil(filteredMessages.length / messagePageSize));
   const paginatedMessages = filteredMessages.slice(
-    (messagePage - 1) * MESSAGE_PAGE_SIZE,
-    messagePage * MESSAGE_PAGE_SIZE,
+    (messagePage - 1) * messagePageSize,
+    messagePage * messagePageSize,
   );
 
   const unreadCount = filteredMessages.filter((msg) => msg.status === "unread").length;
@@ -282,7 +282,8 @@ export default function MessagesSection() {
           totalPages={messageTotalPages}
           onPageChange={setMessagePage}
           totalItems={filteredMessages.length}
-          pageSize={MESSAGE_PAGE_SIZE}
+          pageSize={messagePageSize}
+          onPageSizeChange={setMessagePageSize}
         />
       </div>
 

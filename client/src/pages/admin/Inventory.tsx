@@ -212,7 +212,7 @@ export default function Inventory() {
   const [newColorHex, setNewColorHex] = useState("");
   const [newSize, setNewSize] = useState("");
   const [inventoryPage, setInventoryPage] = useState(1);
-  const INVENTORY_PAGE_SIZE = 15;
+  const [inventoryPageSize, setInventoryPageSize] = useState(15);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput), 300);
@@ -248,10 +248,10 @@ export default function Inventory() {
     });
   }, [products]);
 
-  const inventoryTotalPages = Math.max(1, Math.ceil(sortedProducts.length / INVENTORY_PAGE_SIZE));
+  const inventoryTotalPages = Math.max(1, Math.ceil(sortedProducts.length / inventoryPageSize));
   const paginatedInventory = sortedProducts.slice(
-    (inventoryPage - 1) * INVENTORY_PAGE_SIZE,
-    inventoryPage * INVENTORY_PAGE_SIZE,
+    (inventoryPage - 1) * inventoryPageSize,
+    inventoryPage * inventoryPageSize,
   );
 
   const selectedProduct = useMemo(
@@ -673,7 +673,8 @@ export default function Inventory() {
           totalPages={inventoryTotalPages}
           onPageChange={setInventoryPage}
           totalItems={sortedProducts.length}
-          pageSize={INVENTORY_PAGE_SIZE}
+          pageSize={inventoryPageSize}
+          onPageSizeChange={setInventoryPageSize}
         />
       </div>
 

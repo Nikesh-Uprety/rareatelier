@@ -85,6 +85,12 @@ interface AddProductWizardProps {
   setUploadingImage: (v: boolean) => void;
   toast: any;
   onMediaLibraryOpen: (target: string) => void;
+  galleryUploadStatus?: {
+    mode: "add" | "edit";
+    completed: number;
+    total: number;
+    progress: number;
+  } | null;
 }
 
 export default function AddProductWizard({
@@ -100,6 +106,7 @@ export default function AddProductWizard({
   setUploadingImage,
   toast,
   onMediaLibraryOpen,
+  galleryUploadStatus,
 }: AddProductWizardProps) {
   const [step, setStep] = useState(1);
   const [customColors, setCustomColors] = useState<string[]>([]);
@@ -1335,6 +1342,14 @@ export default function AddProductWizard({
                         </div>
                         ))}
                     </div>
+                    {galleryUploadStatus && galleryUploadStatus.mode === "add" && (
+                      <div className="mt-4 flex justify-center">
+                        <UploadProgress
+                          value={galleryUploadStatus.progress}
+                          label={`Uploading ${galleryUploadStatus.completed}/${galleryUploadStatus.total}`}
+                        />
+                      </div>
+                    )}
                         </div>
                       </div>
 

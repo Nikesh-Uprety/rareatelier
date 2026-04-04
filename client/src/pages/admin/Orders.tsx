@@ -34,6 +34,7 @@ import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Pagination } from "@/components/admin/Pagination";
 import OrdersTrendChart from "@/components/admin/OrdersTrendChart";
 
 const BillViewer = lazy(() =>
@@ -100,6 +101,8 @@ export default function AdminOrders() {
     }>
   >([]);
   const [selectedOrderItemsLoading, setSelectedOrderItemsLoading] = useState(false);
+  const [orderPage, setOrderPage] = useState(1);
+  const [orderPageSize, setOrderPageSize] = useState(15);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -197,6 +200,12 @@ export default function AdminOrders() {
       return dateB - dateA;
     });
   }, [orders, search, timeRange]);
+
+  const orderTotalPages = Math.max(1, Math.ceil(sortedOrders.length / orderPageSize));
+  const paginatedOrders = sortedOrders.slice(
+    (orderPage - 1) * orderPageSize,
+    orderPage * orderPageSize,
+  );
 
   // Display serial numbers based on creation order (oldest = 1),
   // while still showing the list latest-first.
@@ -457,7 +466,7 @@ export default function AdminOrders() {
                       </td>
                     </tr>
                   ))
-                : sortedOrders.map((order, idx) => {
+                : paginatedOrders.map((order, idx) => {
                     const statusMap: Record<string, string> = {
                       pending: 'Pending',
                       processing: 'Processing',
@@ -590,7 +599,7 @@ export default function AdminOrders() {
                 <div className="h-10 w-full bg-muted rounded" />
               </div>
             ))
-          : sortedOrders.map((order, idx) => {
+          : paginatedOrders.map((order, idx) => {
               const status = order.status.charAt(0).toUpperCase() + order.status.slice(1);
               return (
                 <div 
@@ -655,7 +664,22 @@ export default function AdminOrders() {
     )}
   </AnimatePresence>
 
-      {/* Sliding Drawer for Order Details */}
+  {/* Pagination */}
+  <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+    <Pagination
+      currentPage={orderPage}
+      totalPages={orderTotalPages}
+      onPageChange={(page) => {
+        setOrderPage(page);
+        setSelectedOrder(null);
+      }}
+      totalItems={sortedOrders.length}
+      pageSize={orderPageSize}
+      onPageSizeChange={setOrderPageSize}
+    />
+  </div>
+
+  {/* Sliding Drawer for Order Details */}
       <Sheet
         open={!!selectedOrder}
         onOpenChange={(open) => {
