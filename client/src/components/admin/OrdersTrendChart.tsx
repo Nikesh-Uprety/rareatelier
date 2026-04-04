@@ -145,22 +145,6 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
             {timeRange === "all" ? "All time" : `Last ${timeRange}`} • {chartData.length} days
           </p>
         </div>
-        <div className="flex items-center gap-4 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-6 h-[2px]" style={{ background: isDark ? "#d4a843" : "#2C5234" }} />
-            <span className="text-muted-foreground">Revenue</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div
-              className="w-6 h-[2px]"
-              style={{
-                background: isDark ? "#7fbf8a" : "#81a074",
-                borderTop: `1px dashed ${isDark ? "#7fbf8a" : "#81a074"}`,
-              }}
-            />
-            <span className="text-muted-foreground">Orders</span>
-          </div>
-        </div>
       </div>
       <LineChart {...settings} />
     </div>

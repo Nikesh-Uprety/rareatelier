@@ -8,8 +8,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  Line,
   ComposedChart,
+  Area,
+  ReferenceLine,
 } from "recharts";
 import type { AdminCustomer } from "@/lib/adminApi";
 import { formatPrice } from "@/lib/format";
@@ -28,16 +29,22 @@ const TIME_RANGE_LABELS: Record<TimeRange, string> = {
   all: "All Time",
 };
 
-const BAR_COLORS = [
-  "#2C5234", "#3B6B45", "#4A8456", "#599D67", "#68B678",
-  "#77CF89", "#86E89A", "#2C5234", "#3B6B45", "#4A8456",
-  "#599D67", "#68B678", "#77CF89", "#86E89A", "#2C5234",
-];
-
-const LINE_COLORS = [
-  "#d4a843", "#c49535", "#b48328", "#a4711b", "#94600e",
-  "#d4a843", "#c49535", "#b48328", "#a4711b", "#94600e",
-  "#d4a843", "#c49535", "#b48328", "#a4711b", "#94600e",
+const BAR_GRADIENTS = [
+  { from: "#2C5234", to: "#4ADE80" },
+  { from: "#3B6B45", to: "#5CDB95" },
+  { from: "#4A8456", to: "#6EE7A7" },
+  { from: "#599D67", to: "#80F0B8" },
+  { from: "#68B678", to: "#92F5C4" },
+  { from: "#77CF89", to: "#A5FAD0" },
+  { from: "#86E89A", to: "#B8FEDC" },
+  { from: "#2C5234", to: "#4ADE80" },
+  { from: "#3B6B45", to: "#5CDB95" },
+  { from: "#4A8456", to: "#6EE7A7" },
+  { from: "#599D67", to: "#80F0B8" },
+  { from: "#68B678", to: "#92F5C4" },
+  { from: "#77CF89", to: "#A5FAD0" },
+  { from: "#86E89A", to: "#B8FEDC" },
+  { from: "#2C5234", to: "#4ADE80" },
 ];
 
 function CustomerAvatarTick({ x, y, payload, customers }: any) {
@@ -126,6 +133,91 @@ const CustomTooltip = ({ active, payload, viewMode }: any) => {
     </div>
   );
 };
+
+function RangeBarChart({ data }: { data: any[] }) {
+  const maxOrders = Math.max(...data.map((d) => d.orders), 1);
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <ComposedChart
+        data={data}
+        layout="vertical"
+        margin={{ top: 10, right: 40, left: 240, bottom: 10 }}
+      >
+        <defs>
+          {data.map((_, i) => (
+            <linearGradient key={`grad-${i}`} id={`barGrad-${i}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].from} stopOpacity={0.25} />
+              <stop offset="100%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].to} stopOpacity={1} />
+            </linearGradient>
+          ))}
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" vertical={false} className="[&_line]:stroke-border" />
+        <XAxis
+          type="number"
+          axisLine={false}
+          tickLine={false}
+          tick={{ fontSize: 10 }}
+          tickFormatter={(v: number) => `${v}`}
+          className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
+        />
+        <YAxis
+          type="category"
+          dataKey="id"
+          axisLine={false}
+          tickLine={false}
+          tick={(props) => <CustomerAvatarTick {...props} customers={data} />}
+          width={240}
+        />
+        <Tooltip
+          content={<CustomTooltip viewMode="orders" />}
+          cursor={{ fill: "rgba(128,128,128,0.08)" }}
+        />
+        {/* Background track bar (full range) */}
+        <Bar
+          dataKey="orders"
+          radius={[0, 8, 8, 0]}
+          barSize={22}
+        >
+          {data.map((_, index) => (
+            <Cell key={`track-${index}`} fill="hsl(var(--muted))" opacity={0.3} />
+          ))}
+        </Bar>
+        {/* Value bar with gradient (range bar style) */}
+        <Bar
+          dataKey="orders"
+          radius={[0, 8, 8, 0]}
+          barSize={22}
+        >
+          {data.map((d, index) => (
+            <Cell
+              key={`bar-${index}`}
+              fill={`url(#barGrad-${index})`}
+              width={(d.orders / maxOrders) * 100 + "%"}
+            />
+          ))}
+        </Bar>
+        {/* Revenue sparkline overlay */}
+        <Area
+          type="monotone"
+          dataKey="revenue"
+          stroke="#d4a843"
+          strokeWidth={2}
+          fill="rgba(212,168,67,0.06)"
+          yAxisId="right"
+          dot={{ r: 3, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 1.5 }}
+          activeDot={{ r: 5, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 2 }}
+        />
+        <YAxis
+          yAxisId="right"
+          orientation="right"
+          type="number"
+          hide
+        />
+      </ComposedChart>
+    </ResponsiveContainer>
+  );
+}
 
 export default function CustomerSpendingChart({ customers }: CustomerSpendingChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue");
@@ -256,70 +348,72 @@ export default function CustomerSpendingChart({ customers }: CustomerSpendingCha
       </div>
 
       <div className="w-full" style={{ height: chartHeight }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart
-            data={chartData}
-            layout="vertical"
-            margin={{ top: 10, right: 40, left: 240, bottom: 10 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="[&_line]:stroke-border" />
-            <XAxis
-              type="number"
-              axisLine={false}
-              tickLine={false}
-              tick={{ fontSize: 10 }}
-              tickFormatter={valueFormatter}
-              className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
-            />
-            <YAxis
-              type="category"
-              dataKey="id"
-              axisLine={false}
-              tickLine={false}
-              tick={(props) => <CustomerAvatarTick {...props} customers={chartData} />}
-              width={240}
-            />
-            <Tooltip
-              content={<CustomTooltip viewMode={viewMode} />}
-              cursor={{ fill: "rgba(128,128,128,0.08)" }}
-            />
-            <Bar
-              dataKey={viewMode === "revenue" ? "revenue" : "orders"}
-              radius={[0, 4, 4, 0]}
-              barSize={20}
+        {viewMode === "orders" ? (
+          <RangeBarChart data={chartData} />
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              data={chartData}
+              layout="vertical"
+              margin={{ top: 10, right: 40, left: 240, bottom: 10 }}
             >
-              {chartData.map((_, index) => (
-                <Cell key={`bar-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
-              ))}
-            </Bar>
-            {viewMode === "orders" && (
-              <Line
-                type="monotone"
-                dataKey="revenue"
-                stroke="#d4a843"
-                strokeWidth={2}
-                dot={{ r: 3, fill: "#d4a843" }}
-                yAxisId="right"
+              <defs>
+                {chartData.map((_, i) => (
+                  <linearGradient key={`revGrad-${i}`} id={`revGrad-${i}`} x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].from} stopOpacity={0.25} />
+                    <stop offset="100%" stopColor={BAR_GRADIENTS[i % BAR_GRADIENTS.length].to} stopOpacity={1} />
+                  </linearGradient>
+                ))}
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} className="[&_line]:stroke-border" />
+              <XAxis
+                type="number"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: 10 }}
+                tickFormatter={valueFormatter}
+                className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
               />
-            )}
-            {viewMode === "revenue" && (
-              <Line
+              <YAxis
+                type="category"
+                dataKey="id"
+                axisLine={false}
+                tickLine={false}
+                tick={(props) => <CustomerAvatarTick {...props} customers={chartData} />}
+                width={240}
+              />
+              <Tooltip
+                content={<CustomTooltip viewMode="revenue" />}
+                cursor={{ fill: "rgba(128,128,128,0.08)" }}
+              />
+              <Bar
+                dataKey="revenue"
+                radius={[0, 8, 8, 0]}
+                barSize={22}
+              >
+                {chartData.map((_, index) => (
+                  <Cell key={`bar-${index}`} fill={`url(#revGrad-${index})`} />
+                ))}
+              </Bar>
+              <Area
                 type="monotone"
                 dataKey="orders"
                 stroke="#d4a843"
                 strokeWidth={2}
-                dot={{ r: 3, fill: "#d4a843" }}
+                fill="rgba(212,168,67,0.06)"
                 yAxisId="right"
+                dot={{ r: 3, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 1.5 }}
+                activeDot={{ r: 5, fill: "#d4a843", stroke: "hsl(var(--card))", strokeWidth: 2 }}
               />
-            )}
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              type="number"
-              hide
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
+              <YAxis
+                yAxisId="right"
+                orientation="right"
+                type="number"
+                hide
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
