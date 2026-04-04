@@ -264,3 +264,40 @@ export async function validatePromoCode(
     };
   };
 }
+
+export interface PublicBill {
+  id: string;
+  billNumber: string;
+  orderId: string | null;
+  customerId: string | null;
+  customerName: string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  source?: string;
+  items: any[];
+  subtotal: string;
+  taxRate: string;
+  taxAmount: string;
+  discountAmount: string;
+  totalAmount: string;
+  paymentMethod: string;
+  isPaid?: boolean;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryAddress?: string | null;
+  cashReceived: string | null;
+  changeGiven: string | null;
+  processedBy: string;
+  processedById: string | null;
+  notes: string | null;
+  billType: string;
+  status: string;
+  createdAt: string;
+}
+
+export async function fetchPublicBill(billNumber: string): Promise<PublicBill | null> {
+  const res = await fetch(`/api/public/bills/${billNumber}`);
+  if (!res.ok) return null;
+  const json = await res.json();
+  return json.data ?? null;
+}

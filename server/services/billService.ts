@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { bills, orders, orderItems, products } from "../../shared/schema";
+import { bills, orders, orderItems, products, productVariants, customers } from "../../shared/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Bill } from "../../shared/schema";
 
@@ -18,7 +18,7 @@ export async function generateBillFromOrder(
   processedById: string,
   processedByName: string
 ): Promise<Bill> {
-  // Fetch order with all items
+  // Fetch order with all fields needed
   const [order] = await db
     .select({
       id: orders.id,
@@ -27,12 +27,26 @@ export async function generateBillFromOrder(
       fullName: orders.fullName,
       total: orders.total,
       paymentMethod: orders.paymentMethod,
+      source: orders.source,
     })
     .from(orders)
     .where(eq(orders.id, orderId))
     .limit(1);
 
   if (!order) throw new Error(`Order ${orderId} not found`);
+
+  // Look up customer phone by email
+  let customerPhone: string | null = null;
+  if (order.email) {
+    const [customer] = await db
+      .select({ phoneNumber: customers.phoneNumber })
+      .from(customers)
+      .where(eq(customers.email, order.email))
+      .limit(1);
+    if (customer) {
+      customerPhone = customer.phoneNumber;
+    }
+  }
 
   // Check if bill already exists for this order
   const [existing] = await db
@@ -49,7 +63,7 @@ export async function generateBillFromOrder(
     .from(orderItems)
     .where(eq(orderItems.orderId, orderId));
 
-  // Build bill items from order items
+  // Build bill items from order items with color, size, sku from productVariants
   const billItems = await Promise.all(
     items.map(async (item) => {
       const [product] = await db
@@ -58,12 +72,29 @@ export async function generateBillFromOrder(
         .where(eq(products.id, item.productId))
         .limit(1);
 
+      let variantColor = "";
+      let size = item.size || "";
+      let sku = "";
+
+      if (item.variantId) {
+        const [variant] = await db
+          .select()
+          .from(productVariants)
+          .where(eq(productVariants.id, item.variantId))
+          .limit(1);
+        if (variant) {
+          variantColor = variant.color || "";
+          size = variant.size || size;
+          sku = variant.sku || "";
+        }
+      }
+
       return {
         productId: item.productId,
         productName: product?.name ?? "Unknown Product",
-        variantColor: "",
-        size: "",
-        sku: "",
+        variantColor,
+        size,
+        sku,
         quantity: item.quantity,
         unitPrice: Number(item.unitPrice),
         lineTotal: item.quantity * Number(item.unitPrice),
@@ -88,7 +119,7 @@ export async function generateBillFromOrder(
     customerId: order.userId ?? null,
     customerName,
     customerEmail: order.email ?? null,
-    customerPhone: null,
+    customerPhone: customerPhone ?? null,
     items: billItems,
     subtotal: String(subtotal),
     taxRate: String(taxRate),
@@ -96,6 +127,7 @@ export async function generateBillFromOrder(
     discountAmount: String(discountAmount),
     totalAmount: String(totalAmount),
     paymentMethod: order.paymentMethod ?? "card",
+    source: order.source ?? "website",
     processedBy: processedByName,
     processedById,
     billType: "sale",

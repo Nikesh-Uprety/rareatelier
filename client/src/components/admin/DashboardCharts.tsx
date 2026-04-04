@@ -39,8 +39,9 @@ export function DashboardCharts({ analytics }: { analytics?: AdminAnalytics }) {
                   return date.toLocaleDateString('en-NP', { month: 'short', day: 'numeric' });
                 }}
               />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground" />
+              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} tickFormatter={(v) => v.toLocaleString("en-NP")} className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground" />
               <Tooltip
+                formatter={(value: number) => value.toLocaleString("en-NP")}
                 cursor={{ fill: 'rgba(128,128,128,0.1)' }}
                 contentStyle={{
                   borderRadius: '12px',
@@ -89,6 +90,7 @@ export function DashboardCharts({ analytics }: { analytics?: AdminAnalytics }) {
                 className="[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground"
               />
               <Tooltip
+                formatter={(value: number) => value.toLocaleString("en-NP")}
                 cursor={{ fill: 'rgba(128,128,128,0.1)' }}
                 contentStyle={{
                   borderRadius: '12px',

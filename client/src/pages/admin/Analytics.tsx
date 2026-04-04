@@ -532,6 +532,9 @@ export default function AdminAnalytics() {
         {/* Top Products — 2 cols */}
         <TopProductsSection analytics={data} isLoading={isLoading} className="lg:col-span-2" />
 
+        {/* Revenue Distribution — 2 cols */}
+        <RevenueDistributionSection analytics={data} isLoading={isLoading} className="lg:col-span-2" />
+
         {/* Orders by weekday */}
         <div className={cardStyles}>
           <div className={sectionTitleStyles}>Orders by Day</div>
@@ -857,8 +860,6 @@ export default function AdminAnalytics() {
 
 function TopProductsSection({ analytics, isLoading, className }: { analytics: AdminAnalytics | undefined; isLoading: boolean; className?: string }) {
   const products = analytics?.topProducts ?? [];
-  const top3 = useMemo(() => products.slice(0, 3).map(p=>({...p, revenue: toSafeNum(p.revenue)})), [products]);
-  const pieColors = [COLOR_TOKENS.emerald, COLOR_TOKENS.blue, COLOR_TOKENS.purple, COLOR_TOKENS.amber, COLOR_TOKENS.red];
 
   const totalRevenue = useMemo(() => products.reduce((sum, pr) => sum + toSafeNum(pr.revenue), 0), [products]);
 
@@ -870,87 +871,96 @@ function TopProductsSection({ analytics, isLoading, className }: { analytics: Ad
           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest -mt-3">Best performing items</p>
         </div>
       </div>
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-10">
-        <div className="xl:col-span-3">
-          {isLoading ? (
-            <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skel key={i} h={48} />)}</div>
-          ) : products.length === 0 ? (
-            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest py-10 text-center bg-muted/20 rounded-2xl ring-1 ring-black/10 dark:ring-white/10">No sales records found.</p>
-          ) : (
-            <div className="divide-y divide-black/5 dark:divide-white/10">
-              {products.slice(0, 10).map((p, idx) => {
-                const calcPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100) : 0;
-                return (
-                  <div key={`${p.name}-${idx}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-                    <div className="w-12 h-12 rounded-xl bg-muted/50 ring-1 ring-black/10 dark:ring-white/10 flex-shrink-0 overflow-hidden shadow-sm">
-                      {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : null}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex justify-between items-end mb-1.5">
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-0.5 flex items-center gap-2">
-                             <span className="text-emerald-500">#{idx + 1}</span>
-                             <span>·</span>
-                             <span>{p.units || 0} units</span>
-                          </div>
-                          <div className="text-sm font-black text-foreground truncate uppercase tracking-wider">{p.name}</div>
-                        </div>
-                        <div className="text-[13px] font-black text-emerald-500 tabular-nums ml-4">{formatPrice(p.revenue)}</div>
-                      </div>
-                      <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(calcPct, 100)}%` }}
-                          transition={{ duration: 1, ease: "easeOut" }}
-                          className="h-full bg-emerald-500 rounded-full shadow-sm" 
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-        <div className={cn("xl:col-span-2 p-6 flex flex-col items-center justify-center", elevatedPanelStyles)}>
-          <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-8">Revenue Distribution</div>
-          <div className="w-full aspect-square max-w-[200px] mb-8">
-            {top3.length > 0 && (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={top3}
-                    dataKey="revenue"
-                    isAnimationActive={false}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={6}
-                    stroke="none"
-                  >
-                    {top3.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} className="hover:opacity-80 transition-opacity" />)}
-                  </Pie>
-                  <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.payload?.name}: ${formatPrice(p.value)}`} />} />
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-          <div className="w-full space-y-3">
-            {top3.map((p, i) => {
-              const displayPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100).toFixed(1) : "0.0";
-              return (
-                <div key={p.name} className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest">
-                  <span className="flex items-center gap-3 min-w-0">
-                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: pieColors[i] }} />
-                    <span className="text-muted-foreground truncate">{p.name}</span>
-                  </span>
-                  <span className="text-foreground shrink-0">{displayPct}%</span>
+      {isLoading ? (
+        <div className="space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skel key={i} h={48} />)}</div>
+      ) : products.length === 0 ? (
+        <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest py-10 text-center bg-muted/20 rounded-2xl ring-1 ring-black/10 dark:ring-white/10">No sales records found.</p>
+      ) : (
+        <div className="divide-y divide-black/5 dark:divide-white/10">
+          {products.slice(0, 10).map((p, idx) => {
+            const calcPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100) : 0;
+            return (
+              <div key={`${p.name}-${idx}`} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+                <div className="w-12 h-12 rounded-xl bg-muted/50 ring-1 ring-black/10 dark:ring-white/10 flex-shrink-0 overflow-hidden shadow-sm">
+                  {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" loading="lazy" /> : null}
                 </div>
-              );
-            })}
-          </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex justify-between items-end mb-1.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[9px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-0.5 flex items-center gap-2">
+                         <span className="text-emerald-500">#{idx + 1}</span>
+                         <span>·</span>
+                         <span>{p.units || 0} units</span>
+                      </div>
+                      <div className="text-sm font-black text-foreground truncate uppercase tracking-wider">{p.name}</div>
+                    </div>
+                    <div className="text-[13px] font-black text-emerald-500 tabular-nums ml-4">{formatPrice(p.revenue)}</div>
+                  </div>
+                  <div className="h-1.5 bg-muted/30 rounded-full overflow-hidden">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(calcPct, 100)}%` }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                      className="h-full bg-emerald-500 rounded-full shadow-sm" 
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Revenue Distribution Section ─────────────────────────────────────────────
+
+function RevenueDistributionSection({ analytics, isLoading, className }: { analytics: AdminAnalytics | undefined; isLoading: boolean; className?: string }) {
+  const products = analytics?.topProducts ?? [];
+  const top3 = useMemo(() => products.slice(0, 3).map(p=>({...p, revenue: toSafeNum(p.revenue)})), [products]);
+  const pieColors = [COLOR_TOKENS.emerald, COLOR_TOKENS.blue, COLOR_TOKENS.purple, COLOR_TOKENS.amber, COLOR_TOKENS.red];
+  const totalRevenue = useMemo(() => products.reduce((sum, pr) => sum + toSafeNum(pr.revenue), 0), [products]);
+
+  return (
+    <div className={cn(cardStyles, className)}>
+      <div className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground mb-8 text-center">Revenue Distribution</div>
+      <div className="flex justify-center items-center h-56 mb-6">
+        {top3.length > 0 && !isLoading && (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={top3}
+                dataKey="revenue"
+                isAnimationActive={false}
+                cx="50%"
+                cy="50%"
+                innerRadius={55}
+                outerRadius={85}
+                paddingAngle={6}
+                stroke="none"
+              >
+                {top3.map((_, i) => <Cell key={i} fill={pieColors[i % pieColors.length]} className="hover:opacity-80 transition-opacity" />)}
+              </Pie>
+              <RechartsTooltip contentStyle={TOOLTIP_CONTENT_STYLE} content={<AgTooltip formatter={(p: any) => `${p.payload?.name}: ${formatPrice(p.value)}`} />} />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+        {isLoading && <Skel w={200} h={200} />}
+      </div>
+      <div className="w-full space-y-3">
+        {top3.map((p, i) => {
+          const displayPct = totalRevenue > 0 ? (toSafeNum(p.revenue) / totalRevenue * 100).toFixed(1) : "0.0";
+          return (
+            <div key={p.name} className="flex items-center justify-between text-[11px] font-bold uppercase tracking-widest">
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: pieColors[i] }} />
+                <span className="text-muted-foreground truncate">{p.name}</span>
+              </span>
+              <span className="text-foreground shrink-0">{displayPct}%</span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

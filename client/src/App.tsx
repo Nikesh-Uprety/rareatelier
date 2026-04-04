@@ -56,6 +56,7 @@ const loadAdminStorefrontImagesPage = () => import("@/pages/admin/StorefrontImag
 const loadLoginPage = () => import("@/pages/auth/Login");
 const loadNotFoundPage = () => import("@/pages/not-found");
 const loadLegalPlaceholderPage = () => import("@/pages/storefront/LegalPlaceholder");
+const loadViewBillPage = () => import("@/pages/storefront/ViewBill");
 
 const Home = lazy(loadHomePage);
 const Products = lazy(loadProductsPage);
@@ -88,6 +89,7 @@ const Canvas = lazy(() => import("@/pages/admin/Canvas"));
 const LoginPage = lazy(loadLoginPage);
 const NotFound = lazy(loadNotFoundPage);
 const LegalPlaceholder = lazy(loadLegalPlaceholderPage);
+const ViewBill = lazy(loadViewBillPage);
 
 function RouteSwitchSkeleton() {
   return (
@@ -146,6 +148,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/notifications") return loadAdminNotificationsPage();
   if (cleanPath === "/admin/landing-page") return loadAdminLandingPageManagerPage();
   if (cleanPath === "/admin/login") return loadLoginPage();
+  if (cleanPath.startsWith("/bill/")) return loadViewBillPage();
   if (cleanPath === "/shipping" || cleanPath === "/refund" || cleanPath === "/privacy" || cleanPath === "/terms") {
     return loadLegalPlaceholderPage();
   }
@@ -491,6 +494,11 @@ function AppRoutes() {
         <StorefrontLayout>
           <LegalPlaceholder />
         </StorefrontLayout>
+      </Route>
+
+      {/* Public Bill View */}
+      <Route path="/bill/:billNumber">
+        <ViewBill />
       </Route>
       
       <Route component={NotFound} />

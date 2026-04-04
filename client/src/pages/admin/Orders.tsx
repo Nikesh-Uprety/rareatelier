@@ -59,7 +59,7 @@ function BillButton({ orderId }: { orderId: string }) {
   return (
     <>
       <button
-        onClick={() => setShowBill(true)}
+        onClick={(e) => { e.stopPropagation(); setShowBill(true); }}
         className="view-bill-btn"
       >
         <Receipt size={14} />

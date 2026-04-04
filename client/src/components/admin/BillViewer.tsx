@@ -51,7 +51,7 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
   const changeGiven = bill.changeGiven ? Number(bill.changeGiven) : null;
 
   const sharePayload = useMemo(() => {
-    const url = `${window.location.origin}/admin/bills?search=${encodeURIComponent(bill.billNumber)}`;
+    const url = `${window.location.origin}/bill/${bill.billNumber}`;
     const text = `Order #${bill.billNumber} — NPR ${computedTotalAmount.toFixed(2)} — RARE.NP`;
     return {
       title: `Bill ${bill.billNumber}`,
@@ -105,15 +105,21 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
     setShowShareFallback(true);
   };
 
-  const paymentLabels: Record<string, string> = {
-    cash: "Cash",
-    esewa: "eSewa",
-    card: "Card",
-    khalti: "Khalti",
-    "bank-transfer": "Bank Transfer",
-    "cash_on_delivery": "Cash on Delivery",
-    "pos-cash": "POS Cash",
-  };
+const paymentLabels: Record<string, string> = {
+  cash: "Cash",
+  esewa: "eSewa",
+  card: "Card",
+  khalti: "Khalti",
+  cash_on_delivery: "Cash on Delivery",
+};
+
+const sourceLabels: Record<string, string> = {
+  pos: "POS",
+  website: "Website",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  store: "Store",
+};
 
   // Parse items — handle both array and string
   const items: BillItem[] = Array.isArray(bill.items)
@@ -183,6 +189,12 @@ export function BillViewer({ bill, onClose }: BillViewerProps) {
             <span>Payment</span>
             <span>{paymentLabels[bill.paymentMethod] ?? bill.paymentMethod}</span>
           </div>
+          {bill.source && (
+            <div className="bill-meta-row">
+              <span>Source</span>
+              <span>{sourceLabels[bill.source] ?? bill.source}</span>
+            </div>
+          )}
         </div>
 
         {/* Customer */}

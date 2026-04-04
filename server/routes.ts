@@ -543,6 +543,26 @@ export async function registerRoutes(
   app.use("/api/admin/media", requireAdminPageAccess("images"));
   app.use("/api/admin/storefront-image-library", requireAdminPageAccess("storefront-images"));
 
+  // GET /api/public/bills/:billNumber — public bill view (no auth required)
+  app.get("/api/public/bills/:billNumber", async (req: Request, res: Response) => {
+    try {
+      const [bill] = await db
+        .select()
+        .from(bills)
+        .where(eq(bills.billNumber, req.params.billNumber as string))
+        .limit(1);
+
+      if (!bill) {
+        return res.status(404).json({ success: false, error: "Bill not found" });
+      }
+
+      res.json({ success: true, data: bill });
+    } catch (err) {
+      console.error("Error in GET /api/public/bills/:billNumber", err);
+      res.status(500).json({ success: false, error: "Failed to load bill" });
+    }
+  });
+
   app.get("/api/public/page-config", async (req: Request, res: Response) => {
     try {
       const previewTemplateIdRaw =

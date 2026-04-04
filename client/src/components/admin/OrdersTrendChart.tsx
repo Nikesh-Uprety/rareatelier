@@ -11,7 +11,6 @@ import {
   labelMarkClasses,
 } from "@mui/x-charts/ChartsLabel";
 import type { AdminOrder } from "@/lib/adminApi";
-import { formatPrice } from "@/lib/format";
 import { format, subDays, eachDayOfInterval, startOfDay } from "date-fns";
 
 function Line({ className, color }: ChartsLabelCustomMarkProps) {
@@ -99,15 +98,15 @@ export default function OrdersTrendChart({ orders, timeRange = "7d" }: OrdersTre
     ],
     yAxis: [
       {
-        width: 60,
+        width: 90,
         valueFormatter: (value: number | null) => {
           if (value === null) return "";
-          return value > 1000 ? formatPrice(value) : value.toString();
+          return value.toLocaleString("en-NP");
         },
       },
     ],
     height: 300,
-    margin: { left: 60, right: 24, top: 10, bottom: 10 },
+    margin: { left: 90, right: 24, top: 10, bottom: 10 },
     slotProps: {
       legend: {
         direction: "horizontal",
