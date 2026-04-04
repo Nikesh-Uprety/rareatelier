@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -234,6 +235,10 @@ export default function AdminMarketingPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<string>("template5");
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isBroadcastConfirmOpen, setIsBroadcastConfirmOpen] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [isTemplateUploading, setIsTemplateUploading] = useState(false);
+  const [templateUploadProgress, setTemplateUploadProgress] = useState(0);
   const [smsMessage, setSmsMessage] = useState("");
   const [isIncludeAllSmsTargets, setIsIncludeAllSmsTargets] = useState(true);
 
@@ -553,6 +558,13 @@ export default function AdminMarketingPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
+    setIsImporting(true);
+    setImportProgress(0);
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round((event.loaded / event.total) * 100);
+      setImportProgress(percent);
+    };
     reader.onload = async (event) => {
       try {
         const text = String(event.target?.result ?? "");
@@ -581,7 +593,48 @@ export default function AdminMarketingPage() {
           description: err?.message || "Unable to import emails from the file.",
           variant: "destructive",
         });
+      } finally {
+        setImportProgress(100);
+        setTimeout(() => setIsImporting(false), 600);
       }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Import failed",
+        description: "Unable to read the file.",
+        variant: "destructive",
+      });
+      setIsImporting(false);
+      setImportProgress(0);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleTemplateUpload = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    setIsTemplateUploading(true);
+    setTemplateUploadProgress(0);
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round((event.loaded / event.total) * 100);
+      setTemplateUploadProgress(percent);
+    };
+    reader.onload = (evt) => {
+      const content = evt.target?.result as string;
+      setMarketingBody(content);
+      setTemplateUploadProgress(100);
+      setTimeout(() => setIsTemplateUploading(false), 600);
+      toast({ title: "Template uploaded" });
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Template upload failed",
+        description: "Unable to read the HTML file.",
+        variant: "destructive",
+      });
+      setIsTemplateUploading(false);
+      setTemplateUploadProgress(0);
     };
     reader.readAsText(file);
   };
@@ -828,15 +881,7 @@ export default function AdminMarketingPage() {
                   accept=".html,.htm"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const content = evt.target?.result as string;
-                        setMarketingBody(content);
-                        toast({ title: "Template uploaded" });
-                      };
-                      reader.readAsText(file);
-                    }
+                    handleTemplateUpload(file);
                   }}
                   className="hidden"
                   id="template-upload"
@@ -852,6 +897,15 @@ export default function AdminMarketingPage() {
                 </Button>
               </div>
             </div>
+            {isTemplateUploading && (
+              <div className="mt-3">
+                <UploadProgress
+                  value={templateUploadProgress}
+                  label="Upload progress"
+                  className="max-w-none"
+                />
+              </div>
+            )}
 
             <Input 
               placeholder="Subject Line" 
@@ -1091,6 +1145,15 @@ export default function AdminMarketingPage() {
           </DialogHeader>
           <div className="py-4">
             <Input type="file" accept=".txt,.csv" onChange={handleImportFile} />
+            {isImporting && (
+              <div className="mt-4">
+                <UploadProgress
+                  value={importProgress}
+                  label="Upload progress"
+                  className="max-w-none"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsImportDialogOpen(false)}>Cancel</Button>

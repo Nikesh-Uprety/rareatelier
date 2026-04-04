@@ -522,9 +522,11 @@ export function exportCustomersCSV(): Promise<void> {
 
 export async function fetchAdminCustomers(
   search?: string,
+  timeRange?: string,
 ): Promise<AdminCustomer[]> {
   const params = new URLSearchParams();
   if (search) params.set("search", search);
+  if (timeRange) params.set("timeRange", timeRange);
 
   const url =
     "/api/admin/customers" +

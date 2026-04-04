@@ -38,6 +38,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   Dialog,
   DialogContent,
@@ -271,6 +272,8 @@ export default function Canvas() {
   });
   const [mediaPickerTarget, setMediaPickerTarget] = useState<MediaPickerTarget | null>(null);
   const [mediaProvider, setMediaProvider] = useState<"local" | "cloudinary">("local");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showUploadProgress, setShowUploadProgress] = useState(false);
   const [savingSectionId, setSavingSectionId] = useState<number | null>(null);
   const [bootedPreviewViewports, setBootedPreviewViewports] = useState({
     desktop: false,
@@ -528,17 +531,25 @@ export default function Canvas() {
         file,
         category: "landing_page",
         provider: mediaProvider,
+        onProgress: (value) => {
+          setShowUploadProgress(true);
+          setUploadProgress(value);
+        },
       });
     },
     onSuccess: async (asset) => {
       await queryClient.invalidateQueries({ queryKey: ["admin", "canvas", "media-library"] });
       applyPickedImage(asset.url);
+      setUploadProgress(100);
+      setTimeout(() => setShowUploadProgress(false), 700);
       toast({
         title: "Image uploaded",
         variant: "success",
       });
     },
     onError: (error: Error) => {
+      setShowUploadProgress(false);
+      setUploadProgress(0);
       toast({
         title: "Upload failed",
         description: error.message,
@@ -3718,6 +3729,9 @@ export default function Canvas() {
                 </label>
               </div>
             </div>
+            {showUploadProgress && (
+              <UploadProgress value={uploadProgress} label="Upload progress" className="max-w-none" />
+            )}
 
             {mediaLoading ? (
               <div className="rounded-2xl border border-border/60 bg-muted/10 p-8 text-sm text-muted-foreground">

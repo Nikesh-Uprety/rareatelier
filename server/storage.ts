@@ -214,7 +214,7 @@ export interface IStorage {
   getBills(): Promise<Bill[]>;
 
   // Customers
-  getCustomers(search?: string): Promise<Customer[]>;
+  getCustomers(search?: string, timeRange?: string): Promise<Customer[]>;
   getCustomerById(
     id: string,
   ): Promise<
@@ -380,9 +380,18 @@ export class PgStorage implements IStorage {
     firstName: string;
     lastName: string;
     phoneNumber: string | null;
+    since?: Date;
   }): Promise<{ totalSpent: number; orderCount: number }> {
     const normalizedEmail = customer.email.toLowerCase();
     const fullName = `${customer.firstName} ${customer.lastName}`;
+
+    const onlineConditions: any[] = [
+      eq(sql`lower(${orders.email})`, normalizedEmail),
+      sql`${orders.status} != 'cancelled'`,
+    ];
+    if (customer.since) {
+      onlineConditions.push(sql`${orders.createdAt} >= ${customer.since}`);
+    }
 
     const [onlineSummary] = await db
       .select({
@@ -390,12 +399,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(
-        and(
-          eq(sql`lower(${orders.email})`, normalizedEmail),
-          sql`${orders.status} != 'cancelled'`,
-        ),
-      );
+      .where(and(...onlineConditions));
 
     const billMatchClauses = [eq(bills.customerId, customer.id)];
     if (customer.email) {
@@ -405,6 +409,9 @@ export class PgStorage implements IStorage {
       billMatchClauses.push(eq(bills.customerPhone, customer.phoneNumber));
     }
     billMatchClauses.push(eq(bills.customerName, fullName));
+    if (customer.since) {
+      billMatchClauses.push(sql`${bills.createdAt} >= ${customer.since}`);
+    }
 
     const [posSummary] = await db
       .select({
@@ -1203,7 +1210,7 @@ export class PgStorage implements IStorage {
     return row;
   }
 
-  async getCustomers(search?: string): Promise<Customer[]> {
+  async getCustomers(search?: string, timeRange?: string): Promise<Customer[]> {
     const conditions = [];
 
     if (search) {
@@ -1239,6 +1246,12 @@ export class PgStorage implements IStorage {
       .where(whereClause)
       .orderBy(desc(customers.createdAt));
 
+    const since = timeRange === "1w"
+      ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      : timeRange === "1m"
+        ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+        : undefined;
+
     const rowsWithLiveStats = await Promise.all(
       rows.map(async (row) => {
         const stats = await this.getCustomerFinancialStats({
@@ -1247,6 +1260,7 @@ export class PgStorage implements IStorage {
           firstName: row.firstName,
           lastName: row.lastName,
           phoneNumber: row.phoneNumber ?? null,
+          since,
         });
 
         return {

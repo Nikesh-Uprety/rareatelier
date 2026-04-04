@@ -3489,8 +3489,10 @@ export async function registerRoutes(
     async (req: Request, res: Response) => {
       try {
         const search = getQueryParam(req.query.search);
+        const timeRange = getQueryParam(req.query.timeRange);
         const customers = await storage.getCustomers(
           search,
+          timeRange,
         );
         return res.json({ success: true, data: customers });
       } catch (err) {

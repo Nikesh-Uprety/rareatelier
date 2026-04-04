@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -71,6 +72,8 @@ export default function AdminProfilePage() {
 
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImageUrl || null);
   const [avatarUploadProvider, setAvatarUploadProvider] = useState<"local" | "cloudinary">("cloudinary");
+  const [avatarUploadProgress, setAvatarUploadProgress] = useState(0);
+  const [showAvatarUploadProgress, setShowAvatarUploadProgress] = useState(false);
   const [editEmail, setEditEmail] = useState(user?.email ?? "");
   const [isEmailVerifyOpen, setIsEmailVerifyOpen] = useState(false);
   const [emailTempToken, setEmailTempToken] = useState("");
@@ -234,14 +237,48 @@ export default function AdminProfilePage() {
   });
 
   const avatarMutation = useMutation({
-    mutationFn: async (payload: { imageBase64: string; provider: "local" | "cloudinary" }) => {
-      const res = await apiRequest("POST", "/api/admin/profile/upload-avatar", payload);
-      return (await res.json()) as {
+    mutationFn: async (payload: {
+      imageBase64: string;
+      provider: "local" | "cloudinary";
+      onProgress?: (value: number) => void;
+    }) => {
+      const json = await new Promise<{
         success: boolean;
         url?: string;
         provider?: "local" | "cloudinary";
         error?: string;
-      };
+      }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/admin/profile/upload-avatar", true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader("Content-Type", "application/json");
+
+        if (xhr.upload && payload.onProgress) {
+          xhr.upload.onprogress = (event) => {
+            if (!event.lengthComputable) return;
+            const percent = Math.round((event.loaded / event.total) * 100);
+            payload.onProgress?.(percent);
+          };
+        }
+
+        xhr.onerror = () => reject(new Error("Upload failed"));
+        xhr.onload = () => {
+          const ok = xhr.status >= 200 && xhr.status < 300;
+          if (!ok) {
+            reject(new Error(xhr.responseText || "Upload failed"));
+            return;
+          }
+          try {
+            resolve(xhr.responseText ? JSON.parse(xhr.responseText) : { success: false });
+          } catch {
+            resolve({ success: false, error: "Upload failed" });
+          }
+        };
+
+        xhr.send(JSON.stringify({ imageBase64: payload.imageBase64, provider: payload.provider }));
+      });
+
+      return json;
     },
     onSuccess: (result) => {
       if (!result.success || !result.url) {
@@ -259,18 +296,41 @@ export default function AdminProfilePage() {
             ? "Uploaded via Cloudinary."
             : "Uploaded to local storage.",
       });
+      setAvatarUploadProgress(100);
+      setTimeout(() => setShowAvatarUploadProgress(false), 700);
     },
     onError: (err: Error) => {
       toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      setShowAvatarUploadProgress(false);
+      setAvatarUploadProgress(0);
     },
   });
 
   const handleAvatarSelect = (file?: File) => {
     if (!file) return;
     const reader = new FileReader();
+    setShowAvatarUploadProgress(true);
+    setAvatarUploadProgress(0);
+    reader.onprogress = (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round((event.loaded / event.total) * 25);
+      setAvatarUploadProgress(percent);
+    };
     reader.onload = () => {
       const base64 = reader.result as string;
-      avatarMutation.mutate({ imageBase64: base64, provider: avatarUploadProvider });
+      avatarMutation.mutate({
+        imageBase64: base64,
+        provider: avatarUploadProvider,
+        onProgress: (value) => {
+          const scaled = 25 + Math.round(value * 0.75);
+          setAvatarUploadProgress(scaled);
+        },
+      });
+    };
+    reader.onerror = () => {
+      toast({ title: "Upload failed", description: "Unable to read the file.", variant: "destructive" });
+      setShowAvatarUploadProgress(false);
+      setAvatarUploadProgress(0);
     };
     reader.readAsDataURL(file);
   };
@@ -488,6 +548,11 @@ export default function AdminProfilePage() {
                     View Photo
                   </Button>
                 </div>
+                {showAvatarUploadProgress && (
+                  <div className="mt-3">
+                    <UploadProgress value={avatarUploadProgress} label="Upload progress" className="max-w-none" />
+                  </div>
+                )}
                 <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                   Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
                 </p>
@@ -922,6 +987,11 @@ export default function AdminProfilePage() {
                   </Button>
                 )}
               </div>
+              {showAvatarUploadProgress && (
+                <div className="mt-3">
+                  <UploadProgress value={avatarUploadProgress} label="Upload progress" className="max-w-none" />
+                </div>
+              )}
               <p className="mt-2 text-xs text-white/60">
                 Upload target: {avatarUploadProvider === "cloudinary" ? "Cloudinary CDN" : "Local server storage"}.
               </p>

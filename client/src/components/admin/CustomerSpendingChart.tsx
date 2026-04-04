@@ -21,10 +21,6 @@ import { useThemeStore } from "@/store/theme";
 type ViewMode = "orders" | "revenue";
 type TimeRange = "1w" | "1m" | "all";
 
-interface CustomerSpendingChartProps {
-  customers: AdminCustomer[];
-}
-
 const TIME_RANGE_LABELS: Record<TimeRange, string> = {
   "1w": "1 Week",
   "1m": "1 Month",
@@ -251,9 +247,25 @@ function Legend({ series }: { series: { label: string; color: string }[] }) {
   );
 }
 
-export default function CustomerSpendingChart({ customers }: CustomerSpendingChartProps) {
+interface CustomerSpendingChartProps {
+  customers: AdminCustomer[];
+  timeRange?: TimeRange;
+  onTimeRangeChange?: (range: TimeRange) => void;
+}
+
+export default function CustomerSpendingChart({
+  customers,
+  timeRange: externalTimeRange,
+  onTimeRangeChange,
+}: CustomerSpendingChartProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("revenue");
-  const [timeRange, setTimeRange] = useState<TimeRange>("1w");
+  const [internalTimeRange, setInternalTimeRange] = useState<TimeRange>("1w");
+
+  const timeRange = externalTimeRange ?? internalTimeRange;
+  const setTimeRange = (range: TimeRange) => {
+    setInternalTimeRange(range);
+    onTimeRangeChange?.(range);
+  };
 
   const chartData = useMemo(() => {
     const normalized = new Map<string, AdminCustomer>();

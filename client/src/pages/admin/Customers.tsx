@@ -75,6 +75,7 @@ export default function AdminCustomers() {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [customerPage, setCustomerPage] = useState(1);
   const [customerPageSize, setCustomerPageSize] = useState(15);
+  const [chartTimeRange, setChartTimeRange] = useState<"1w" | "1m" | "all">("1w");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -83,8 +84,8 @@ export default function AdminCustomers() {
     isLoading,
     isError,
   } = useQuery<AdminCustomer[]>({
-    queryKey: ["admin", "customers", search],
-    queryFn: () => fetchAdminCustomers(search || undefined),
+    queryKey: ["admin", "customers", search, chartTimeRange],
+    queryFn: () => fetchAdminCustomers(search || undefined, chartTimeRange === "all" ? undefined : chartTimeRange),
   });
 
   const {
@@ -305,7 +306,11 @@ export default function AdminCustomers() {
         </div>
       </div>
 
-      <CustomerSpendingChart customers={displayCustomers} />
+      <CustomerSpendingChart
+        customers={displayCustomers}
+        timeRange={chartTimeRange}
+        onTimeRangeChange={setChartTimeRange}
+      />
 
       <AnimatePresence mode="wait">
         {viewMode === "list" ? (

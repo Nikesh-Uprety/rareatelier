@@ -309,6 +309,7 @@ function SectionManager({ section }: { section: SectionKey }) {
       });
     },
     onError: (err: Error) => {
+      setUploadProgress(0);
       setShowUploadProgress(false);
       toast({
         title: "Upload failed",
