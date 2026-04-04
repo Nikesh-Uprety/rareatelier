@@ -18,6 +18,7 @@ import {
   readAdminFontSettings,
 } from "@/lib/adminFont";
 import { getAdminNavigation } from "@/lib/adminAccess";
+import { AdminBreadcrumbs } from "@/components/admin/AdminBreadcrumbs";
 import {
   SidebarProvider,
   Sidebar,
@@ -396,10 +397,10 @@ export default function AdminLayout({
 
       <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900">
         <header className="sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
-          <div className="flex items-center gap-2.5">
-            <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex" />
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex shrink-0" />
             {!isVisuallyExpanded ? (
-              <Link href="/" className="hidden lg:flex items-center" title="Open Home Page">
+              <Link href="/" className="hidden lg:flex items-center shrink-0" title="Open Home Page">
                 <img
                   src="/images/logo.webp"
                   alt="RARE.NP"
@@ -411,12 +412,15 @@ export default function AdminLayout({
               variant="ghost"
               size="icon"
               onClick={() => setMobileMenuOpen(true)}
-              className="text-foreground lg:hidden"
+              className="text-foreground lg:hidden shrink-0"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
               </svg>
             </Button>
+            <div className="hidden sm:flex items-center min-w-0">
+              <AdminBreadcrumbs />
+            </div>
           </div>
           <div className="flex items-center gap-2.5">
             {accountNavItem ? (

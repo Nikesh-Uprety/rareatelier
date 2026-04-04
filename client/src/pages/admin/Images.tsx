@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +55,7 @@ export default function AdminImagesPage() {
     tooLarge: boolean;
     status: BulkFileStatus;
     error?: string;
+    progress: number;
   };
 
   const [bulkFiles, setBulkFiles] = useState<BulkFile[]>([]);
@@ -238,6 +240,7 @@ export default function AdminImagesPage() {
         tooLarge,
         status: tooLarge ? "skipped" : "idle",
         error: tooLarge ? `File exceeds ${MAX_IMAGE_SIZE_LABEL} limit` : undefined,
+        progress: 0,
       });
     });
     if (next.length === 0) return;
@@ -275,13 +278,26 @@ export default function AdminImagesPage() {
       await Promise.allSettled(
         batch.map(async (bf) => {
           setBulkFiles((prev) =>
-            prev.map((f) => (f.id === bf.id ? { ...f, status: "uploading", error: undefined } : f)),
+            prev.map((f) =>
+              f.id === bf.id
+                ? { ...f, status: "uploading", error: undefined, progress: 0 }
+                : f,
+            ),
           );
           try {
-            await uploadAdminImage({ file: bf.file, category, provider });
+            await uploadAdminImage({
+              file: bf.file,
+              category,
+              provider,
+              onProgress: (value) => {
+                setBulkFiles((prev) =>
+                  prev.map((f) => (f.id === bf.id ? { ...f, progress: value } : f)),
+                );
+              },
+            });
             successCount += 1;
             setBulkFiles((prev) =>
-              prev.map((f) => (f.id === bf.id ? { ...f, status: "success" } : f)),
+              prev.map((f) => (f.id === bf.id ? { ...f, status: "success", progress: 100 } : f)),
             );
           } catch (err: any) {
             const message =
@@ -290,7 +306,7 @@ export default function AdminImagesPage() {
             failedNames.push(bf.file.name);
             setBulkFiles((prev) =>
               prev.map((f) =>
-                f.id === bf.id ? { ...f, status: "error", error: message } : f,
+                f.id === bf.id ? { ...f, status: "error", error: message, progress: 0 } : f,
               ),
             );
           } finally {
@@ -509,6 +525,13 @@ export default function AdminImagesPage() {
                       <p className="text-[10px] text-muted-foreground">
                         {(bf.file.size / 1024 / 1024).toFixed(2)} MB
                       </p>
+                      {(bf.status === "uploading" || bf.status === "success") && (
+                        <UploadProgress
+                          value={bf.progress}
+                          label="Upload progress"
+                          className="max-w-none"
+                        />
+                      )}
                       {bf.tooLarge && (
                         <p className="text-[10px] text-red-500">
                           Exceeds {MAX_IMAGE_SIZE_LABEL} — will be skipped

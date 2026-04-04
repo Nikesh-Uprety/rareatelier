@@ -46,6 +46,7 @@ import { formatPrice } from "@/lib/format";
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { UploadProgress } from "@/components/ui/upload-progress";
 import { MediaLibrary } from "@/components/admin/MediaLibrary";
 import {
   Form,
@@ -255,6 +256,8 @@ export default function AdminProducts() {
   const [pendingCategoryForm, setPendingCategoryForm] = useState<"add" | "edit" | null>(null);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [editUploadProgress, setEditUploadProgress] = useState(0);
+  const [showEditUploadProgress, setShowEditUploadProgress] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [galleryTarget, setGalleryTarget] = useState<"add" | "edit" | null>(null);
@@ -264,6 +267,7 @@ export default function AdminProducts() {
     mode: "add" | "edit";
     completed: number;
     total: number;
+    progress: number;
   } | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -472,15 +476,34 @@ export default function AdminProducts() {
         const files = addPendingGalleryImages.map((p) => p.file);
         const total = files.length;
         let completed = 0;
+        const progressMap = new Map<number, number>();
 
-        setGalleryUploadStatus({ mode: "add", completed, total });
+        const updateGalleryProgress = () => {
+          const totalProgress = Array.from(progressMap.values()).reduce((sum, value) => sum + value, 0);
+          const progress = total === 0 ? 0 : Math.round(totalProgress / total);
+          setGalleryUploadStatus({ mode: "add", completed, total, progress });
+        };
+
+        setGalleryUploadStatus({ mode: "add", completed, total, progress: 0 });
 
         for (let i = 0; i < files.length; i += 3) {
           const batch = files.slice(i, i + 3);
           const results = await Promise.allSettled(
-            batch.map(async (file) => {
-              const dataUrl = await compressImage(file);
-              return uploadProductImage(dataUrl);
+            batch.map(async (file, batchIndex) => {
+              const fileIndex = i + batchIndex;
+              progressMap.set(fileIndex, 0);
+              updateGalleryProgress();
+              try {
+                const dataUrl = await compressImage(file);
+                const url = await uploadProductImage(dataUrl, (value) => {
+                  progressMap.set(fileIndex, value);
+                  updateGalleryProgress();
+                });
+                return url;
+              } finally {
+                progressMap.set(fileIndex, 100);
+                updateGalleryProgress();
+              }
             }),
           );
 
@@ -491,7 +514,7 @@ export default function AdminProducts() {
             } else {
               failedCount += 1;
             }
-            setGalleryUploadStatus({ mode: "add", completed, total });
+            updateGalleryProgress();
           });
         }
 
@@ -559,15 +582,34 @@ export default function AdminProducts() {
         const files = editPendingGalleryImages.map((p) => p.file);
         const total = files.length;
         let completed = 0;
+        const progressMap = new Map<number, number>();
 
-        setGalleryUploadStatus({ mode: "edit", completed, total });
+        const updateGalleryProgress = () => {
+          const totalProgress = Array.from(progressMap.values()).reduce((sum, value) => sum + value, 0);
+          const progress = total === 0 ? 0 : Math.round(totalProgress / total);
+          setGalleryUploadStatus({ mode: "edit", completed, total, progress });
+        };
+
+        setGalleryUploadStatus({ mode: "edit", completed, total, progress: 0 });
 
         for (let i = 0; i < files.length; i += 3) {
           const batch = files.slice(i, i + 3);
           const results = await Promise.allSettled(
-            batch.map(async (file) => {
-              const dataUrl = await compressImage(file);
-              return uploadProductImage(dataUrl);
+            batch.map(async (file, batchIndex) => {
+              const fileIndex = i + batchIndex;
+              progressMap.set(fileIndex, 0);
+              updateGalleryProgress();
+              try {
+                const dataUrl = await compressImage(file);
+                const url = await uploadProductImage(dataUrl, (value) => {
+                  progressMap.set(fileIndex, value);
+                  updateGalleryProgress();
+                });
+                return url;
+              } finally {
+                progressMap.set(fileIndex, 100);
+                updateGalleryProgress();
+              }
             }),
           );
 
@@ -578,7 +620,7 @@ export default function AdminProducts() {
             } else {
               failedCount += 1;
             }
-            setGalleryUploadStatus({ mode: "edit", completed, total });
+            updateGalleryProgress();
           });
         }
 
@@ -2153,20 +2195,31 @@ export default function AdminProducts() {
                         const file = e.target.files?.[0];
                         if (!file) return;
                         setUploadingImage(true);
+                        setShowEditUploadProgress(true);
+                        setEditUploadProgress(0);
                         toast({ title: "Uploading main image..." });
                         try {
                           const dataUrl = await compressImage(file);
-                          const url = await uploadProductImage(dataUrl);
+                          const url = await uploadProductImage(dataUrl, (value) => {
+                            setEditUploadProgress(value);
+                          });
                           editForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
                           toast({ title: "Image uploaded successfully" });
                         } catch {
                           toast({ title: "Upload failed", variant: "destructive" });
                         } finally {
+                          setEditUploadProgress(100);
+                          setTimeout(() => setShowEditUploadProgress(false), 700);
                           setUploadingImage(false);
                           e.target.value = "";
                         }
                       }}
                     />
+                    {showEditUploadProgress && (
+                      <div className="pt-2">
+                        <UploadProgress value={editUploadProgress} label="Upload progress" />
+                      </div>
+                    )}
 
                     {/* Gallery Preview & Upload */}
                     <div className="space-y-2 pt-2">
@@ -2232,9 +2285,12 @@ export default function AdminProducts() {
                         </div>
                       )}
                       {galleryUploadStatus && galleryUploadStatus.mode === "edit" && (
-                        <p className="text-[11px] text-muted-foreground pt-1">
-                          Uploading {galleryUploadStatus.completed}/{galleryUploadStatus.total}...
-                        </p>
+                        <div className="pt-3">
+                          <UploadProgress
+                            value={galleryUploadStatus.progress}
+                            label={`Uploading ${galleryUploadStatus.completed}/${galleryUploadStatus.total}`}
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
