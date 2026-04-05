@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -8,9 +8,11 @@ import {
   fetchPaymentQrConfig,
   getCachedLatestOrder,
   uploadPaymentProof,
+  createCheckoutSession,
+  simulateStripePaymentSuccess,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useSearchQuery() {
@@ -28,13 +30,17 @@ const FALLBACK_PAYMENT_QR = {
 
 export default function PaymentProcess() {
   const query = useSearchQuery();
+  const [, setLocation] = useLocation();
   const orderId = query.get("orderId") ?? "";
   const method = query.get("method") ?? "esewa";
+  const stripeStatus = query.get("stripe_status");
   const { toast } = useToast();
   const [order, setOrder] = useState<Awaited<ReturnType<typeof fetchOrderById>>>(() => getCachedLatestOrder(orderId));
   const [isResolved, setIsResolved] = useState(() => !!getCachedLatestOrder(orderId));
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
+  const [redirectingToStripe, setRedirectingToStripe] = useState(false);
+  const [simulatingPayment, setSimulatingPayment] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paymentQrQuery = useQuery({
     queryKey: ["storefront", "payment-qr"],
@@ -44,6 +50,19 @@ export default function PaymentProcess() {
 
   useEffect(() => {
     if (!orderId) return;
+
+    if (stripeStatus === "success") {
+      toast({ title: "Payment confirmed! Redirecting to your order..." });
+      setTimeout(() => {
+        setLocation(`/order-confirmation/${orderId}`);
+      }, 1500);
+      return;
+    }
+
+    if (stripeStatus === "cancelled") {
+      toast({ title: "Payment was cancelled. You can try again below.", variant: "destructive" });
+    }
+
     const cached = getCachedLatestOrder(orderId);
     if (cached) {
       setOrder(cached);
@@ -66,7 +85,7 @@ export default function PaymentProcess() {
     return () => {
       cancelled = true;
     };
-  }, [orderId]);
+  }, [orderId, stripeStatus, toast, setLocation]);
 
   const MAX_FILE_SIZE_MB = 5;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
@@ -98,6 +117,9 @@ export default function PaymentProcess() {
       if (result.success) {
         setUploaded(true);
         toast({ title: "Payment screenshot uploaded. We will verify shortly." });
+        setTimeout(() => {
+          setLocation(`/order-confirmation/${orderId}`);
+        }, 2000);
       } else {
         toast({ title: result.error || "Upload failed", variant: "destructive" });
       }
@@ -113,6 +135,43 @@ export default function PaymentProcess() {
     } finally {
       setUploading(false);
       e.target.value = "";
+    }
+  };
+
+  const handleStripeCheckout = async () => {
+    if (!orderId) return;
+    setRedirectingToStripe(true);
+    try {
+      const result = await createCheckoutSession(orderId);
+      if (result.success && result.data?.checkoutUrl) {
+        window.location.href = result.data.checkoutUrl;
+      } else {
+        toast({ title: result.error || "Failed to start checkout", variant: "destructive" });
+        setRedirectingToStripe(false);
+      }
+    } catch (err) {
+      toast({ title: "Failed to connect to Stripe. Please try again.", variant: "destructive" });
+      setRedirectingToStripe(false);
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!orderId) return;
+    setSimulatingPayment(true);
+    try {
+      const result = await simulateStripePaymentSuccess(orderId);
+      if (result.success) {
+        toast({ title: "Payment simulated! Redirecting to order confirmation..." });
+        setTimeout(() => {
+          setLocation(`/order-confirmation/${orderId}`);
+        }, 1500);
+      } else {
+        toast({ title: result.error || "Simulation failed", variant: "destructive" });
+        setSimulatingPayment(false);
+      }
+    } catch (err) {
+      toast({ title: "Failed to simulate payment", variant: "destructive" });
+      setSimulatingPayment(false);
     }
   };
 
@@ -142,6 +201,107 @@ export default function PaymentProcess() {
         <Button asChild className="mt-6 rounded-none">
           <Link href="/cart">Back to Cart</Link>
         </Button>
+      </div>
+    );
+  }
+
+  if (method === "stripe") {
+    return (
+      <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
+        <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
+          Pay by Card
+        </h1>
+        <p className="text-muted-foreground text-sm mb-8">
+          Order total: {formatPrice(Number(order.total))}
+        </p>
+
+        <div className="bg-gradient-to-br from-slate-50 to-gray-50 border border-gray-200 p-8 mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-14 h-9 flex items-center justify-center overflow-hidden">
+              <img
+                src="/images/stripe-logo.svg"
+                alt="Stripe"
+                className="w-full h-full object-contain"
+              />
+            </div>
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-gray-900">Secure Card Payment</p>
+              <p className="text-xs text-muted-foreground">Powered by Stripe</p>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 p-6 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs uppercase tracking-widest text-muted-foreground font-bold">Amount</span>
+              <span className="text-lg font-black">{formatPrice(Number(order.total))}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You will be charged in USD at the current exchange rate.
+            </p>
+          </div>
+
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200">
+            <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-700">
+              You will be redirected to Stripe&apos;s secure checkout page to enter your card details. After payment, you will be redirected back here.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleStripeCheckout}
+          disabled={redirectingToStripe}
+          className="w-full h-14 bg-[#635bff] text-white rounded-none uppercase tracking-widest text-xs font-bold hover:bg-[#4b45c6] transition-colors"
+        >
+          {redirectingToStripe ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Redirecting to Stripe...
+            </>
+          ) : (
+            <>
+              <CreditCard className="w-5 h-5 mr-2" />
+              Proceed to Secure Checkout
+              <ExternalLink className="w-4 h-4 ml-2" />
+            </>
+          )}
+        </Button>
+
+        {process.env.NODE_ENV !== "production" && (
+          <div className="mt-4 p-4 border-2 border-dashed border-amber-300 bg-amber-50">
+            <p className="text-xs font-bold uppercase tracking-wider text-amber-800 mb-2">
+              🔧 Dev Mode — Simulate Payment
+            </p>
+            <p className="text-xs text-amber-700 mb-3">
+              Skip the Stripe redirect and simulate a successful payment for local testing.
+            </p>
+            <Button
+              type="button"
+              onClick={handleSimulatePayment}
+              disabled={simulatingPayment}
+              className="w-full h-12 bg-amber-600 text-white rounded-none uppercase tracking-widest text-xs font-bold hover:bg-amber-700 transition-colors"
+            >
+              {simulatingPayment ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Simulating...
+                </>
+              ) : (
+                "Simulate Successful Payment"
+              )}
+            </Button>
+          </div>
+        )}
+
+        <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
+          <Button asChild variant="outline" className="rounded-none text-xs">
+            <Link href="/">Back to Home</Link>
+          </Button>
+          <Button asChild variant="ghost" className="rounded-none text-xs text-muted-foreground">
+            <Link href="/checkout">← Back to Checkout</Link>
+          </Button>
+        </div>
       </div>
     );
   }

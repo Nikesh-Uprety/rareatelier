@@ -149,6 +149,11 @@ export const orders = pgTable("orders", {
   // Selected delivery location name from the Nepal locations list.
   deliveryLocation: varchar("delivery_location"),
   deliveryAddress: text("delivery_address"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
+  stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+  stripePaymentStatus: text("stripe_payment_status"),
+    // "pending" | "succeeded" | "failed" | "refunded"
+  stripeAmountUsdCents: integer("stripe_amount_usd_cents"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -32,6 +32,13 @@ const PAYMENT_OPTIONS = [
     logoWrapClass: "px-0",
     logoImageClass: "h-10 w-auto",
   },
+  {
+    id: "stripe",
+    label: "Pay by Card",
+    logoUrl: "/images/stripe-logo.svg",
+    logoWrapClass: "px-0",
+    logoImageClass: "h-8 w-auto",
+  },
 ] as const;
 
 const NEPAL_DISTRICTS = [
@@ -260,7 +267,8 @@ export default function Checkout() {
       const needsPaymentPage =
         paymentMethod === "esewa" ||
         paymentMethod === "khalti" ||
-        paymentMethod === "fonepay";
+        paymentMethod === "fonepay" ||
+        paymentMethod === "stripe";
 
       if (needsPaymentPage) {
         setStep(3);
@@ -560,7 +568,7 @@ export default function Checkout() {
             className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
             disabled={isPending}
           >
-            {isPending ? "Processing..." : paymentMethod === "cash_on_delivery" ? "Confirm Order" : "Pay Now"}
+            {isPending ? "Processing..." : "Confirm Order"}
           </Button>
         </form>
 

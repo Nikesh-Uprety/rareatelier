@@ -292,6 +292,38 @@ export async function uploadPaymentProof(
   return json;
 }
 
+export async function createCheckoutSession(orderId: string): Promise<{
+  success: boolean;
+  data?: { sessionId: string; checkoutUrl: string; amountCents: number; rate: number };
+  error?: string;
+}> {
+  const res = await apiRequest("POST", "/api/payments/create-checkout-session", {
+    orderId,
+  });
+  const json = (await res.json()) as {
+    success: boolean;
+    data?: { sessionId: string; checkoutUrl: string; amountCents: number; rate: number };
+    error?: string;
+  };
+  return json;
+}
+
+export async function simulateStripePaymentSuccess(orderId: string): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  const res = await apiRequest("POST", "/api/payments/dev-simulate-success", {
+    orderId,
+  });
+  const json = (await res.json()) as {
+    success: boolean;
+    message?: string;
+    error?: string;
+  };
+  return json;
+}
+
 export async function validatePromoCode(
   code: string,
   itemProductIds: Array<string | number>,

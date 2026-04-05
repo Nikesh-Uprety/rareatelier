@@ -2004,6 +2004,168 @@ export async function registerRoutes(
     });
   });
 
+  // Stripe: Create checkout session
+  app.post("/api/payments/create-checkout-session", async (req: Request, res: Response) => {
+    try {
+      const { orderId } = z.object({ orderId: z.string().min(1) }).parse(req.body);
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      if (order.paymentMethod !== "stripe") {
+        return res.status(400).json({ success: false, error: "Order is not a Stripe payment" });
+      }
+
+      const { getUsdToNprRate, convertNprToUsdCents } = await import("./lib/exchangeRate");
+      const { createCheckoutSession } = await import("./lib/stripe");
+
+      const rate = await getUsdToNprRate();
+      const totalNpr = Number(order.total);
+      const amountCents = convertNprToUsdCents(totalNpr, rate);
+
+      if (amountCents <= 0) {
+        return res.status(400).json({ success: false, error: "Invalid order total" });
+      }
+
+      const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+      const host = process.env.NODE_ENV === "production"
+        ? process.env.APP_URL || "https://rare-np-production.up.railway.app"
+        : `http://localhost:${process.env.PORT || 5000}`;
+
+      const { sessionId, checkoutUrl } = await createCheckoutSession({
+        orderId,
+        amountCents,
+        currency: "usd",
+        customerEmail: order.email,
+        successUrl: `${host}/order-confirmation/${orderId}?stripe_status=success`,
+        cancelUrl: `${host}/order-confirmation/${orderId}?stripe_status=cancelled`,
+      });
+
+      await storage.updateOrderStripeCheckoutSession(orderId, sessionId);
+      await storage.updateOrderStripePaymentIntent(orderId, sessionId);
+
+      return res.json({ success: true, data: { sessionId, checkoutUrl, amountCents, rate } });
+    } catch (err) {
+      console.error("Error in POST /api/payments/create-checkout-session", err);
+      return res.status(500).json({ success: false, error: "Failed to create checkout session" });
+    }
+  });
+
+  // Stripe: Webhook handler (raw body needed for signature verification)
+  app.post("/api/payments/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+    const sig = req.headers["stripe-signature"] as string;
+
+    let event: import("stripe").Stripe.Event;
+
+    try {
+      const { constructWebhookEvent } = await import("./lib/stripe");
+      event = constructWebhookEvent(req.body, sig);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return res.status(400).send(`Webhook Error: ${err instanceof Error ? err.message : "Unknown error"}`);
+    }
+
+    try {
+      const { convertNprToUsdCents, getUsdToNprRate } = await import("./lib/exchangeRate");
+
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object as import("stripe").Stripe.Checkout.Session;
+          const orderId = session.metadata?.orderId;
+
+          if (!orderId) {
+            console.error("Stripe webhook: missing orderId in session metadata");
+            break;
+          }
+
+          const order = await storage.getOrderById(orderId);
+          if (!order) {
+            console.error(`Stripe webhook: order ${orderId} not found`);
+            break;
+          }
+
+          if (order.stripePaymentStatus === "succeeded") {
+            console.log(`Stripe webhook: order ${orderId} already verified, skipping`);
+            break;
+          }
+
+          await storage.updateOrderStripePaymentStatus(orderId, "succeeded");
+          await storage.updateOrderPaymentVerified(orderId, "verified");
+
+          if (order.status === "pending") {
+            await storage.updateOrderStatus(orderId, "processing");
+          }
+
+          logger.info(`Stripe payment verified for order ${orderId}`);
+          break;
+        }
+
+        case "checkout.session.expired": {
+          const session = event.data.object as import("stripe").Stripe.Checkout.Session;
+          const orderId = session.metadata?.orderId;
+          if (orderId) {
+            await storage.updateOrderStripePaymentStatus(orderId, "failed");
+            logger.info(`Stripe checkout session expired for order ${orderId}`);
+          }
+          break;
+        }
+
+        case "payment_intent.payment_failed": {
+          const paymentIntent = event.data.object as import("stripe").Stripe.PaymentIntent;
+          const orderId = paymentIntent.metadata?.orderId;
+          if (orderId) {
+            await storage.updateOrderStripePaymentStatus(orderId, "failed");
+            logger.error(`Stripe payment failed for order ${orderId}`);
+          }
+          break;
+        }
+
+        default:
+          console.log(`Unhandled Stripe event type: ${event.type}`);
+      }
+
+      res.json({ received: true });
+    } catch (err) {
+      console.error("Error processing Stripe webhook:", err);
+      res.status(500).json({ error: "Webhook handler failed" });
+    }
+  });
+
+  // Dev-only: Simulate Stripe payment success (local testing without Stripe CLI)
+  if (process.env.NODE_ENV !== "production") {
+    app.post("/api/payments/dev-simulate-success", async (req: Request, res: Response) => {
+      try {
+        const { orderId } = z.object({ orderId: z.string().min(1) }).parse(req.body);
+
+        const order = await storage.getOrderById(orderId);
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (order.paymentMethod !== "stripe") {
+          return res.status(400).json({ success: false, error: "Order is not a Stripe payment" });
+        }
+
+        await storage.updateOrderStripePaymentStatus(orderId, "succeeded");
+        await storage.updateOrderStripePaymentIntent(orderId, `dev_pi_${orderId}`);
+        await storage.updateOrderStripeCheckoutSession(orderId, `dev_cs_${orderId}`);
+        await storage.updateOrderPaymentVerified(orderId, "verified");
+
+        if (order.status === "pending") {
+          await storage.updateOrderStatus(orderId, "processing");
+        }
+
+        logger.info(`[DEV] Simulated Stripe payment success for order ${orderId}`);
+        return res.json({ success: true, message: "Payment simulated successfully" });
+      } catch (err) {
+        console.error("Error in dev simulate success:", err);
+        return res.status(500).json({ success: false, error: "Simulation failed" });
+      }
+    });
+  }
+
   // Categories (public read, admin create)
   const DEFAULT_CATEGORIES = [
     { name: "Hoodies", slug: "HOODIE" },
@@ -3477,13 +3639,31 @@ export async function registerRoutes(
           });
         }
 
-        const series = rows.map((row) => ({
-          day: row.day.toISOString().split("T")[0],
-          revenue: Number(row.revenue ?? 0),
-          total: Number(row.total ?? 0),
-          completed: Number(row.completed ?? 0),
-          pending: Number(row.pending ?? 0),
-        }));
+        const series = rows
+          .map((row) => {
+            const parsedDay =
+              row.day instanceof Date
+                ? row.day
+                : new Date(typeof row.day === "string" ? row.day : String(row.day));
+            if (Number.isNaN(parsedDay.getTime())) {
+              return null;
+            }
+
+            return {
+              day: parsedDay.toISOString().split("T")[0],
+              revenue: Number(row.revenue ?? 0),
+              total: Number(row.total ?? 0),
+              completed: Number(row.completed ?? 0),
+              pending: Number(row.pending ?? 0),
+            };
+          })
+          .filter((entry): entry is {
+            day: string;
+            revenue: number;
+            total: number;
+            completed: number;
+            pending: number;
+          } => Boolean(entry));
 
         return res.json({
           success: true,

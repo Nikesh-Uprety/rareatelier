@@ -282,6 +282,9 @@ export interface IStorage {
     id: string,
     paymentVerified: "verified" | "rejected",
   ): Promise<Order>;
+  updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order>;
+  updateOrderStripeCheckoutSession(id: string, sessionId: string): Promise<Order>;
+  updateOrderStripePaymentStatus(id: string, status: string): Promise<Order>;
 
   // Bills (POS / invoices)
   getBills(): Promise<Bill[]>;
@@ -1413,6 +1416,126 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+    if (!row) throw new Error("Order not found");
+    return row;
+  }
+
+  async updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ stripePaymentIntentId: paymentIntentId })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
+        source: orders.source,
+        deliveryRequired: orders.deliveryRequired,
+        deliveryProvider: orders.deliveryProvider,
+        deliveryLocation: orders.deliveryLocation,
+        deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+    if (!row) throw new Error("Order not found");
+    return row;
+  }
+
+  async updateOrderStripeCheckoutSession(id: string, sessionId: string): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ stripeCheckoutSessionId: sessionId })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
+        source: orders.source,
+        deliveryRequired: orders.deliveryRequired,
+        deliveryProvider: orders.deliveryProvider,
+        deliveryLocation: orders.deliveryLocation,
+        deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+    if (!row) throw new Error("Order not found");
+    return row;
+  }
+
+  async updateOrderStripePaymentStatus(id: string, status: string): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ stripePaymentStatus: status })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
+        source: orders.source,
+        deliveryRequired: orders.deliveryRequired,
+        deliveryProvider: orders.deliveryProvider,
+        deliveryLocation: orders.deliveryLocation,
+        deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -3377,6 +3500,30 @@ export class MemStorage implements IStorage {
     order.paymentVerified = status;
     const { items: _, ...rest } = order;
     return rest;
+  }
+
+  async updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    (order as any).stripePaymentIntentId = paymentIntentId;
+    const { items: _, ...rest } = order;
+    return rest as Order;
+  }
+
+  async updateOrderStripeCheckoutSession(id: string, sessionId: string): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    (order as any).stripeCheckoutSessionId = sessionId;
+    const { items: _, ...rest } = order;
+    return rest as Order;
+  }
+
+  async updateOrderStripePaymentStatus(id: string, status: string): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    (order as any).stripePaymentStatus = status;
+    const { items: _, ...rest } = order;
+    return rest as Order;
   }
 
   async updateOrderStatus(id: string, status: string): Promise<Order> {

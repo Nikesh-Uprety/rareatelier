@@ -15,6 +15,7 @@ function paymentMethodLabel(method: string) {
     esewa: "eSewa",
     khalti: "Khalti",
     fonepay: "Fonepay",
+    stripe: "Pay by Card",
   };
   return labels[method] ?? method.replace(/_/g, " ");
 }
@@ -213,6 +214,19 @@ export default function OrderSuccess() {
       </div>
 
       <div className="order-confirmation-bill relative overflow-hidden rounded-2xl border border-zinc-200 bg-white text-black shadow-[0_30px_80px_-35px_rgba(0,0,0,0.45)]">
+        {(order.paymentMethod === "esewa" || order.paymentMethod === "khalti" || order.paymentMethod === "fonepay") && order.paymentVerified !== "verified" && (
+          <div className="no-print rounded-none border-b border-amber-200 bg-amber-50 px-6 py-5">
+            <div className="flex gap-3">
+              <Check className="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">Payment Proof Under Review</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Thank you for uploading your payment proof. Our team will review it and contact you very soon. Your order is being processed in the meantime.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-600 via-emerald-400 to-emerald-600" />
         <div className="p-6 md:p-10">
           <div className="flex items-center justify-between border-b border-zinc-200 pb-6">
