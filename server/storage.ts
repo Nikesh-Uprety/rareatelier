@@ -1041,6 +1041,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -1172,6 +1176,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -1331,6 +1339,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -1382,6 +1394,10 @@ export class PgStorage implements IStorage {
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -1424,6 +1440,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -1465,6 +1485,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       });
@@ -1778,6 +1802,10 @@ export class PgStorage implements IStorage {
         // Checkout already stores the selected delivery location inside `location_coordinates`.
         deliveryLocation: orders.locationCoordinates,
         deliveryAddress: orders.deliveryAddress,
+        stripePaymentIntentId: orders.stripePaymentIntentId,
+        stripeCheckoutSessionId: orders.stripeCheckoutSessionId,
+        stripePaymentStatus: orders.stripePaymentStatus,
+        stripeAmountUsdCents: orders.stripeAmountUsdCents,
         createdAt: orders.createdAt,
         updatedAt: orders.updatedAt,
       })
@@ -3524,6 +3552,10 @@ export class MemStorage implements IStorage {
       deliveryProvider: null,
       deliveryLocation: data.deliveryLocation ?? null,
       deliveryAddress: null,
+      stripePaymentIntentId: null,
+      stripeCheckoutSessionId: null,
+      stripePaymentStatus: null,
+      stripeAmountUsdCents: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       items: data.items.map((item) => ({

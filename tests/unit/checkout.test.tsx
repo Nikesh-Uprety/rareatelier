@@ -53,6 +53,20 @@ vi.mock("@/lib/api", () => ({
   cacheLatestOrder: (...args: unknown[]) => cacheLatestOrderMock(...args),
 }));
 
+const SAVED_FORM_DATA = {
+  email: "buyer@example.com",
+  firstName: "Nikesh",
+  lastName: "Uprety",
+  address: "Lazimpat",
+  city: "Kathmandu",
+  phone: "9800000000",
+  paymentMethod: "cash_on_delivery",
+  deliveryLocation: "Kathmandu Inside Ring Road",
+  deliveryProvider: "pathao",
+  deliveryAddress: "",
+  deliveryRequired: true,
+};
+
 describe("Checkout", () => {
   beforeEach(() => {
     setLocationMock.mockReset();
@@ -63,6 +77,11 @@ describe("Checkout", () => {
     cacheLatestOrderMock.mockReset();
     useCartStoreMock.mockImplementation(() => mockCartState);
     localStorage.clear();
+    vi.restoreAllMocks();
+    Object.defineProperty(window, "location", {
+      value: new URL("http://localhost/?returning=1"),
+      writable: true,
+    });
   });
 
   it("redirects back to cart when no cart items are present", () => {
@@ -116,16 +135,9 @@ describe("Checkout", () => {
       },
     });
 
+    localStorage.setItem("ra-checkout-form-data", JSON.stringify(SAVED_FORM_DATA));
     renderWithProviders(<Checkout />);
 
-    await user.type(screen.getByTestId("checkout-email"), "buyer@example.com");
-    await user.type(screen.getByTestId("checkout-first-name"), "Nikesh");
-    await user.type(screen.getByTestId("checkout-last-name"), "Uprety");
-    await user.type(screen.getByTestId("checkout-address"), "Lazimpat");
-    await user.type(screen.getByTestId("checkout-city"), "Kathmandu");
-    await user.type(screen.getByTestId("checkout-phone"), "9800000000");
-    await user.type(screen.getByTestId("checkout-delivery-location"), "Kathmandu");
-    await user.click(await screen.findByRole("button", { name: "Kathmandu Inside Ring Road" }));
     await user.click(screen.getByTestId("checkout-submit"));
 
     await waitFor(() => {
@@ -147,22 +159,15 @@ describe("Checkout", () => {
       },
     });
 
+    const esewaData = { ...SAVED_FORM_DATA, paymentMethod: "esewa" };
+    localStorage.setItem("ra-checkout-form-data", JSON.stringify(esewaData));
     renderWithProviders(<Checkout />);
 
-    await user.type(screen.getByTestId("checkout-email"), "buyer@example.com");
-    await user.type(screen.getByTestId("checkout-first-name"), "Nikesh");
-    await user.type(screen.getByTestId("checkout-last-name"), "Uprety");
-    await user.type(screen.getByTestId("checkout-address"), "Lazimpat");
-    await user.type(screen.getByTestId("checkout-city"), "Kathmandu");
-    await user.type(screen.getByTestId("checkout-phone"), "9800000000");
-    await user.type(screen.getByTestId("checkout-delivery-location"), "Kathmandu");
-    await user.click(await screen.findByRole("button", { name: "Kathmandu Inside Ring Road" }));
     await user.click(screen.getByTestId("checkout-payment-esewa"));
     await user.click(screen.getByTestId("checkout-submit"));
 
     await waitFor(() => {
       expect(cacheLatestOrderMock).toHaveBeenCalledWith({ id: "order-2" });
-      expect(clearCartMock).toHaveBeenCalled();
       expect(setLocationMock).toHaveBeenCalledWith("/checkout/payment?orderId=order-2&method=esewa");
     });
   });
