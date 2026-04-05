@@ -292,6 +292,17 @@ export async function uploadPaymentProof(
   return json;
 }
 
+export async function updateOrderPaymentMethod(
+  orderId: string,
+  paymentMethod: "esewa" | "khalti" | "fonepay" | "stripe" | "bank" | "bank_transfer" | "cash_on_delivery",
+): Promise<{ success: boolean; error?: string }> {
+  const res = await apiRequest("PATCH", `/api/orders/${orderId}/payment-method`, {
+    paymentMethod,
+  });
+  const json = (await res.json()) as { success: boolean; error?: string };
+  return json;
+}
+
 export async function createCheckoutSession(orderId: string): Promise<{
   success: boolean;
   data?: { sessionId: string; checkoutUrl: string; amountCents: number; rate: number };

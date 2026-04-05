@@ -9,11 +9,12 @@ import {
   fetchPaymentQrConfig,
   getCachedLatestOrder,
   uploadPaymentProof,
+  updateOrderPaymentMethod,
   createCheckoutSession,
   simulateStripePaymentSuccess,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn, ArrowLeft } from "lucide-react";
+import { Upload, CheckCircle2, Loader2, CreditCard, ExternalLink, AlertCircle, X, ZoomIn } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 
 function useSearchQuery() {
@@ -29,6 +30,13 @@ const FALLBACK_PAYMENT_QR = {
     "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
 } as const;
 
+const PAYMENT_METHOD_SWITCH_OPTIONS = [
+  { id: "esewa", label: "eSewa" },
+  { id: "khalti", label: "Khalti" },
+  { id: "fonepay", label: "Fonepay" },
+  { id: "stripe", label: "Card" },
+] as const;
+
 export default function PaymentProcess() {
   const query = useSearchQuery();
   const [, setLocation] = useLocation();
@@ -42,6 +50,7 @@ export default function PaymentProcess() {
   const [uploaded, setUploaded] = useState(false);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
   const [simulatingPayment, setSimulatingPayment] = useState(false);
+  const [switchingPaymentMethod, setSwitchingPaymentMethod] = useState<string | null>(null);
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const paymentQrQuery = useQuery({
@@ -177,8 +186,29 @@ export default function PaymentProcess() {
     }
   };
 
-  const handleBackToCheckout = () => {
-    setLocation("/checkout");
+  const handleChangePaymentMethod = async (
+    nextMethod: "esewa" | "khalti" | "fonepay" | "stripe",
+  ) => {
+    if (!orderId || nextMethod === method) return;
+
+    setSwitchingPaymentMethod(nextMethod);
+    try {
+      const result = await updateOrderPaymentMethod(orderId, nextMethod);
+      if (!result.success) {
+        toast({ title: result.error || "Failed to change payment method", variant: "destructive" });
+        return;
+      }
+
+      const nextLabel =
+        PAYMENT_METHOD_SWITCH_OPTIONS.find((option) => option.id === nextMethod)?.label ??
+        nextMethod;
+      toast({ title: `Payment method changed to ${nextLabel}` });
+      setLocation(`/checkout/payment?orderId=${orderId}&method=${nextMethod}`);
+    } catch {
+      toast({ title: "Failed to change payment method", variant: "destructive" });
+    } finally {
+      setSwitchingPaymentMethod(null);
+    }
   };
 
   if (!orderId) {
@@ -214,13 +244,25 @@ export default function PaymentProcess() {
   if (method === "stripe") {
     return (
       <div className="container mx-auto px-4 py-32 max-w-xl mt-10">
-        <button
-          onClick={handleBackToCheckout}
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Change Payment Method
-        </button>
+        <div className="mb-6 space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+            Change Payment Method
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== "stripe").map((option) => (
+              <Button
+                key={option.id}
+                type="button"
+                variant="outline"
+                className="rounded-none text-xs uppercase tracking-widest"
+                disabled={switchingPaymentMethod !== null}
+                onClick={() => handleChangePaymentMethod(option.id)}
+              >
+                {switchingPaymentMethod === option.id ? "Switching..." : option.label}
+              </Button>
+            ))}
+          </div>
+        </div>
         <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
           Pay by Card
         </h1>
@@ -312,7 +354,7 @@ export default function PaymentProcess() {
             <Link href="/">Back to Home</Link>
           </Button>
           <Button asChild variant="ghost" className="rounded-none text-xs text-muted-foreground">
-            <Link href="/checkout">← Back to Checkout</Link>
+            <Link href={`/order-confirmation/${orderId}`}>← Back to Order</Link>
           </Button>
         </div>
       </div>
@@ -471,10 +513,20 @@ export default function PaymentProcess() {
       </div>
 
       <div className="mt-12 pt-8 border-t border-gray-100 flex gap-3">
-        <Button variant="outline" className="rounded-none flex-1" onClick={handleBackToCheckout}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Change Payment Method
-        </Button>
+        <div className="flex-1 grid grid-cols-2 gap-2">
+          {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== method).map((option) => (
+            <Button
+              key={option.id}
+              type="button"
+              variant="outline"
+              className="rounded-none text-xs uppercase tracking-widest"
+              disabled={switchingPaymentMethod !== null}
+              onClick={() => handleChangePaymentMethod(option.id)}
+            >
+              {switchingPaymentMethod === option.id ? "Switching..." : option.label}
+            </Button>
+          ))}
+        </div>
         <Button asChild variant="outline" className="rounded-none">
           <Link href="/">Back to Home</Link>
         </Button>
