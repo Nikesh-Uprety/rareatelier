@@ -118,6 +118,8 @@ export function getDefaultAdminPath(role: string | null | undefined): string {
 export function getRoleLabel(role: string | null | undefined): string {
   const normalizedRole = normalizeAdminRole(role);
   switch (normalizedRole) {
+    case "superadmin":
+      return "Super Admin";
     case "owner":
       return "Owner";
     case "admin":

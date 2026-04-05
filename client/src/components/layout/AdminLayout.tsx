@@ -274,14 +274,12 @@ export default function AdminLayout({
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  <span className="flex flex-col leading-tight">
-                    {isCanvasItem ? (
-                      <span className="mb-0.5 inline-flex w-fit rounded-full border border-red-300/70 bg-red-50 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-200">
-                        BETA
-                      </span>
-                    ) : null}
-                    <span>{item.label}</span>
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {isCanvasItem ? (
+                    <span className="ml-auto inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
+                      BETA
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}
@@ -366,15 +364,13 @@ export default function AdminLayout({
                             isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
                           )}
                         >
-                          <span className="flex flex-col leading-tight">
-                            {isCanvasItem ? (
-                              <span className="mb-0.5 inline-flex w-fit rounded-full border border-red-300/70 bg-red-50 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-200">
-                                BETA
-                              </span>
-                            ) : null}
-                            <span>{item.label}</span>
-                          </span>
+                          <span>{item.label}</span>
                         </span>
+                        {isCanvasItem && isVisuallyExpanded ? (
+                          <span className="ml-auto inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
+                            BETA
+                          </span>
+                        ) : null}
                         {count > 0 && (
                           <span
                             className={cn(

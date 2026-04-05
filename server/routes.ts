@@ -4298,7 +4298,9 @@ export async function registerRoutes(
     createStoreUserHandler({ storage, sendStoreUserWelcomeEmail }),
   );
 
-  const updateStoreUserRoleEnum = z.enum(["owner", "manager", "csr", "admin", "staff"]);
+  const updateStoreUserRoleEnum = z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]);
+  const privilegedAdminRoles = new Set(["superadmin", "owner", "admin"]);
+  const isSuperAdmin = (role: string | null | undefined) => role?.toLowerCase() === "superadmin";
 
   const updateStoreUserSchema = z
     .object({
@@ -4321,6 +4323,32 @@ export async function registerRoutes(
 
       try {
         const { role, email_notifications } = req.body;
+        const actor = req.user as Express.User | undefined;
+        const actorRole = actor?.role?.toLowerCase() ?? "";
+        const target = await storage.getUserById(id);
+        if (!target) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        const targetRole = target.role?.toLowerCase() ?? "";
+        if (!isSuperAdmin(actorRole) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can manage owner/admin/superadmin users",
+          });
+        }
+
+        if (
+          role !== undefined &&
+          !isSuperAdmin(actorRole) &&
+          privilegedAdminRoles.has(role.toLowerCase())
+        ) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can assign owner/admin/superadmin roles",
+          });
+        }
+
         const updated = await storage.updateStoreUser(id, {
           role,
           emailNotifications: email_notifications,
@@ -4349,6 +4377,19 @@ export async function registerRoutes(
       }
 
       try {
+        const target = await storage.getUserById(id);
+        if (!target) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+
+        const targetRole = target.role?.toLowerCase() ?? "";
+        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can delete owner/admin/superadmin users",
+          });
+        }
+
         await storage.deleteUser(id);
         return res.json({ success: true });
       } catch (err) {
@@ -4699,6 +4740,18 @@ export async function registerRoutes(
       const { id } = req.params;
       if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
+        const actor = req.user as Express.User | undefined;
+        const target = await storage.getUserById(id);
+        if (!target) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+        const targetRole = target.role?.toLowerCase() ?? "";
+        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can manage owner/admin/superadmin users",
+          });
+        }
         await storage.updateUserTwoFactor(id, req.body.enabled);
         return res.json({ success: true });
       } catch (err) {
@@ -4717,6 +4770,21 @@ export async function registerRoutes(
       const { id } = req.params;
       if (typeof id !== "string") return res.status(400).json({ success: false, error: "Invalid ID" });
       try {
+        const actor = req.user as Express.User | undefined;
+        if (actor?.id === id) {
+          return res.status(400).json({ success: false, error: "Cannot delete yourself" });
+        }
+        const target = await storage.getUserById(id);
+        if (!target) {
+          return res.status(404).json({ success: false, error: "User not found" });
+        }
+        const targetRole = target.role?.toLowerCase() ?? "";
+        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(targetRole)) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can delete owner/admin/superadmin users",
+          });
+        }
         await storage.deleteUser(id);
         return res.json({ success: true });
       } catch (err) {
@@ -4731,7 +4799,7 @@ export async function registerRoutes(
   const inviteUserSchema = z.object({
     name: z.string().min(1),
     email: z.string().email(),
-    role: z.enum(["owner", "manager", "csr", "admin", "staff"]),
+    role: z.enum(["superadmin", "owner", "manager", "csr", "admin", "staff"]),
   });
 
   app.post(
@@ -4742,6 +4810,13 @@ export async function registerRoutes(
 
       try {
         const { name, email, role } = req.body;
+        const actor = req.user as Express.User | undefined;
+        if (!isSuperAdmin(actor?.role) && privilegedAdminRoles.has(role.toLowerCase())) {
+          return res.status(403).json({
+            success: false,
+            error: "Only superadmin can invite owner/admin/superadmin users",
+          });
+        }
         const code = Math.floor(100000 + Math.random() * 900000)
           .toString()
           .slice(0, 6);

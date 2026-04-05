@@ -53,12 +53,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-const ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+const SUPERADMIN_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "superadmin", label: "Super Admin" },
   { value: "owner", label: "Owner" },
+  { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
   { value: "csr", label: "CSR" },
   { value: "staff", label: "Staff" },
 ];
+
+const STANDARD_ROLE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "manager", label: "Manager" },
+  { value: "csr", label: "CSR" },
+  { value: "staff", label: "Staff" },
+];
+
+const PRIVILEGED_ROLE_VALUES = new Set(["superadmin", "owner", "admin"]);
 
 type StoreUser = {
   id: string;
@@ -84,6 +94,12 @@ function getInitials(nameOrEmail: string) {
 
 function roleBadge(role: string) {
   switch (role) {
+    case "superadmin":
+      return {
+        label: "Super Admin",
+        className:
+          "bg-rose-100 text-rose-800 border-0 dark:bg-rose-900/30 dark:text-rose-300",
+      };
     case "owner":
     case "admin":
       return {
@@ -115,6 +131,7 @@ function roleBadge(role: string) {
 
 export default function StoreUsers() {
   const { user: currentUser } = useCurrentUser();
+  const isCurrentUserSuperAdmin = currentUser?.role?.toLowerCase() === "superadmin";
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -138,15 +155,23 @@ export default function StoreUsers() {
     name: "",
     email: "",
     password: "",
-    role: "staff",
+    role: "manager",
   });
 
   const [editingRoleUser, setEditingRoleUser] = useState<StoreUser | null>(null);
-  const [editingRole, setEditingRole] = useState("staff");
+  const [editingRole, setEditingRole] = useState("manager");
 
   const [deletingUser, setDeletingUser] = useState<StoreUser | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey });
+  const roleOptions = useMemo(
+    () => (isCurrentUserSuperAdmin ? SUPERADMIN_ROLE_OPTIONS : STANDARD_ROLE_OPTIONS),
+    [isCurrentUserSuperAdmin],
+  );
+  const normalizeEditableRole = (role: string) => {
+    const lowered = role.toLowerCase();
+    return roleOptions.some((option) => option.value === lowered) ? lowered : roleOptions[0]?.value ?? "manager";
+  };
 
   const createMutation = useMutation({
     mutationFn: async (payload: {
@@ -165,7 +190,7 @@ export default function StoreUsers() {
       }
       toast({ title: "User added", description: "Setup email sent (SMTP may be delayed)." });
       setIsAddOpen(false);
-      setAddForm({ name: "", email: "", password: "", role: "staff" });
+      setAddForm({ name: "", email: "", password: "", role: roleOptions[0]?.value ?? "manager" });
       invalidate();
     },
     onError: (err: any) => {
@@ -288,6 +313,9 @@ export default function StoreUsers() {
                     const initials = getInitials(u.name || u.email);
                     const rb = roleBadge(u.role);
                     const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
+                    const targetRole = u.role?.toLowerCase() ?? "";
+                    const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+                    const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
 
                     return (
                       <TableRow key={u.id} className="border-b border-[#E5E5E0] dark:border-border">
@@ -322,6 +350,7 @@ export default function StoreUsers() {
                           <div className="flex items-center gap-3">
                             <Switch
                               checked={u.emailNotifications}
+                              disabled={!canManagePrivilegedTarget}
                               onCheckedChange={(checked) => {
                                 patchMutation.mutate({
                                   id: u.id,
@@ -349,17 +378,18 @@ export default function StoreUsers() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-44 rounded-xl overflow-hidden border-border shadow-lg">
                                 <DropdownMenuItem
+                                  disabled={!canManagePrivilegedTarget}
                                   className="cursor-pointer flex items-center gap-2 py-2"
                                   onClick={() => {
                                     setEditingRoleUser(u);
-                                    setEditingRole(u.role === "admin" ? "owner" : u.role);
+                                    setEditingRole(normalizeEditableRole(u.role));
                                   }}
                                 >
                                   <ShieldCheck className="w-4 h-4 text-primary" />
                                   Edit Role
                                 </DropdownMenuItem>
 
-                                {!isSelf(u) && (
+                                {canDeleteTarget && (
                                   <DropdownMenuItem
                                     className="cursor-pointer flex items-center gap-2 py-2 text-destructive focus:text-destructive"
                                     onClick={() => setDeletingUser(u)}
@@ -385,6 +415,9 @@ export default function StoreUsers() {
               const rb = roleBadge(u.role);
               const initials = getInitials(u.name || u.email);
               const addedAt = u.createdAt ? format(new Date(u.createdAt), "dd MMM yyyy") : "";
+              const targetRole = u.role?.toLowerCase() ?? "";
+              const canManagePrivilegedTarget = isCurrentUserSuperAdmin || !PRIVILEGED_ROLE_VALUES.has(targetRole);
+              const canDeleteTarget = !isSelf(u) && canManagePrivilegedTarget;
               return (
                 <div key={u.id} className="bg-white dark:bg-card rounded-xl border border-border shadow-sm p-4">
                   <div className="flex items-start gap-3">
@@ -415,16 +448,17 @@ export default function StoreUsers() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44 rounded-xl overflow-hidden border-border shadow-lg">
                             <DropdownMenuItem
+                              disabled={!canManagePrivilegedTarget}
                               className="cursor-pointer flex items-center gap-2 py-2"
                               onClick={() => {
                                 setEditingRoleUser(u);
-                                setEditingRole(u.role === "admin" ? "owner" : u.role);
+                                setEditingRole(normalizeEditableRole(u.role));
                               }}
                             >
                               <ShieldCheck className="w-4 h-4 text-primary" />
                               Edit Role
                             </DropdownMenuItem>
-                            {!isSelf(u) && (
+                            {canDeleteTarget && (
                               <DropdownMenuItem
                                 className="cursor-pointer flex items-center gap-2 py-2 text-destructive focus:text-destructive"
                                 onClick={() => setDeletingUser(u)}
@@ -441,6 +475,7 @@ export default function StoreUsers() {
                         <div className="flex items-center gap-2">
                           <Switch
                             checked={u.emailNotifications}
+                            disabled={!canManagePrivilegedTarget}
                             onCheckedChange={(checked) => {
                               patchMutation.mutate({
                                 id: u.id,
@@ -468,7 +503,9 @@ export default function StoreUsers() {
         open={isAddOpen}
         onOpenChange={(open) => {
           setIsAddOpen(open);
-          if (!open) setAddForm({ name: "", email: "", password: "", role: "staff" });
+          if (!open) {
+            setAddForm({ name: "", email: "", password: "", role: roleOptions[0]?.value ?? "manager" });
+          }
         }}
       >
         <DialogContent className="sm:max-w-[520px] rounded-3xl">
@@ -547,7 +584,7 @@ export default function StoreUsers() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((opt) => (
+                  {roleOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
@@ -612,7 +649,7 @@ export default function StoreUsers() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLE_OPTIONS.map((opt) => (
+                  {roleOptions.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>

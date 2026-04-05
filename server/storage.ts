@@ -2470,7 +2470,7 @@ export class PgStorage implements IStorage {
         profileImageUrl: users.profileImageUrl,
       })
       .from(users)
-      .where(sql`${users.role} IN ('admin', 'staff')`);
+      .where(sql`${users.role} != 'customer'`);
 
     return rows.map((row) => ({
       ...row,

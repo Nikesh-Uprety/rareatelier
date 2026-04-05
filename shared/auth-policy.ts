@@ -1,4 +1,4 @@
-const ADMIN_PANEL_ROLES = ["owner", "admin", "manager", "csr", "staff"] as const;
+const ADMIN_PANEL_ROLES = ["superadmin", "owner", "admin", "manager", "csr", "staff"] as const;
 
 export const ADMIN_PAGE_KEYS = [
   "dashboard",
@@ -26,6 +26,7 @@ export type AdminPageKey = (typeof ADMIN_PAGE_KEYS)[number];
 const FULL_ACCESS_ADMIN_PAGES: readonly AdminPageKey[] = ADMIN_PAGE_KEYS;
 
 const ADMIN_PAGE_ACCESS: Record<AdminPanelRole, readonly AdminPageKey[]> = {
+  superadmin: FULL_ACCESS_ADMIN_PAGES,
   owner: FULL_ACCESS_ADMIN_PAGES,
   admin: FULL_ACCESS_ADMIN_PAGES,
   manager: [
