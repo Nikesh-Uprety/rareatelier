@@ -2053,14 +2053,20 @@ export async function registerRoutes(
     }
   });
 
-  // Stripe: Webhook handler (raw body needed for signature verification)
-  app.post("/api/payments/webhook", express.raw({ type: "application/json" }), async (req: Request, res: Response) => {
+  // Stripe: Webhook handler (uses req.rawBody captured by global json middleware)
+  app.post("/api/payments/webhook", async (req: Request, res: Response) => {
     const sig = req.headers["stripe-signature"] as string;
+    const rawBody = (req as any).rawBody;
+
+    if (!rawBody) {
+      console.error("Stripe webhook: rawBody not available");
+      return res.status(400).send("Webhook raw body not available");
+    }
 
     let event: Stripe.Event;
 
     try {
-      event = constructWebhookEvent(req.body, sig);
+      event = constructWebhookEvent(rawBody, sig);
     } catch (err) {
       console.error("Webhook signature verification failed:", err);
       return res.status(400).send(`Webhook Error: ${err instanceof Error ? err.message : "Unknown error"}`);
