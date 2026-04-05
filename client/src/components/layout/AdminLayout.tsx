@@ -196,6 +196,8 @@ export default function AdminLayout({
   const adminNav = getAdminNavigation(user?.role);
   const accountNavItem = adminNav.find((item) => item.page === "profile");
   const sidebarNavItems = adminNav.filter((item) => item.page !== "profile");
+  const canvasHref = "/admin/canvas";
+  const isCanvasRoute = pathname === canvasHref;
 
   return (
     <SidebarProvider
@@ -259,6 +261,7 @@ export default function AdminLayout({
           <nav className="space-y-1">
             {sidebarNavItems.map((item) => {
               const isActive = pathname === item.href;
+              const isCanvasItem = item.href === canvasHref;
               return (
                 <Link
                   key={item.href}
@@ -271,7 +274,14 @@ export default function AdminLayout({
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  {item.label}
+                  <span className="flex flex-col leading-tight">
+                    {isCanvasItem ? (
+                      <span className="mb-0.5 inline-flex w-fit rounded-full border border-amber-300/70 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-amber-800">
+                        BETA
+                      </span>
+                    ) : null}
+                    <span>{item.label}</span>
+                  </span>
                 </Link>
               );
             })}
@@ -311,6 +321,7 @@ export default function AdminLayout({
             <SidebarMenu>
               {sidebarNavItems.map((item) => {
                 const isActive = pathname === item.href;
+                const isCanvasItem = item.href === canvasHref;
                 const count = getUnreadCountByType(item.type);
                 const isCollapsedActive = !isVisuallyExpanded && isActive;
                 return (
@@ -355,7 +366,14 @@ export default function AdminLayout({
                             isVisuallyExpanded ? "min-w-0 flex-1 opacity-100" : "max-w-0 opacity-0",
                           )}
                         >
-                          {item.label}
+                          <span className="flex flex-col leading-tight">
+                            {isCanvasItem ? (
+                              <span className="mb-0.5 inline-flex w-fit rounded-full border border-amber-300/70 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-amber-800">
+                                BETA
+                              </span>
+                            ) : null}
+                            <span>{item.label}</span>
+                          </span>
                         </span>
                         {count > 0 && (
                           <span
@@ -421,6 +439,20 @@ export default function AdminLayout({
             <div className="hidden sm:flex items-center min-w-0">
               <AdminBreadcrumbs />
             </div>
+            <Link
+              href={canvasHref}
+              className={cn(
+                "hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] transition-colors",
+                isCanvasRoute
+                  ? "border-amber-400/80 bg-amber-100 text-amber-900"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-amber-400/60 hover:text-foreground",
+              )}
+            >
+              <span>Canvas</span>
+              <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white">
+                BETA
+              </span>
+            </Link>
           </div>
           <div className="flex items-center gap-2.5">
             {accountNavItem ? (

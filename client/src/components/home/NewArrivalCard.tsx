@@ -25,17 +25,29 @@ function NewArrivalCard({
     const rest = all.filter((_, idx) => idx !== clamped);
     return [preferred, ...rest];
   }, [preferredIndex, product]);
+  const primaryImage = images[0] ?? "/placeholder.svg";
+  const hoverImage = images[1] ?? primaryImage;
+
   return (
     <Link href={`/product/${product.id}`} className="group block cursor-pointer">
       <div
         className={`relative overflow-hidden rounded-xl border border-zinc-200/70 bg-zinc-100/70 dark:border-zinc-800/80 dark:bg-zinc-900/40 ${imageAspectClass} mb-4 shadow-[0_12px_40px_-30px_rgba(0,0,0,0.85)] transition-all duration-500 group-hover:-translate-y-1 group-hover:shadow-[0_24px_60px_-30px_rgba(0,0,0,0.9)]`}
       >
         <div className="absolute inset-0">
-          <OptimizedImage
-            src={images[0] ?? "/placeholder.svg"}
-            alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
-          />
+          <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">
+            <OptimizedImage
+              src={primaryImage}
+              alt={product.name}
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+            />
+          </div>
+          <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+            <OptimizedImage
+              src={hoverImage}
+              alt={`${product.name} alternate`}
+              className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+            />
+          </div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-60 z-[2]" />
           <div className="absolute inset-0 z-[3] border border-white/30 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
         </div>
