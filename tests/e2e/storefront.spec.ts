@@ -1,6 +1,43 @@
 import { test, expect } from "@playwright/test";
 import { fillCheckoutForm, openFirstProduct } from "./helpers";
 
+async function getSampleProduct(request: import("@playwright/test").APIRequestContext) {
+  const res = await request.get("/api/products?limit=24");
+  expect(res.ok(), await res.text()).toBeTruthy();
+  const json = (await res.json()) as { data?: Array<{ id: string; price: number }> };
+  const product = json?.data?.[0];
+  expect(product?.id).toBeTruthy();
+  expect(Number(product?.price ?? 0) > 0).toBeTruthy();
+  return { productId: String(product!.id), priceAtTime: Number(product!.price) };
+}
+
+function buildOrderPayload(email: string, quantity: number, productId: string, priceAtTime: number) {
+  return {
+    items: [
+      {
+        productId,
+        quantity,
+        priceAtTime,
+      },
+    ],
+    shipping: {
+      firstName: "Limit",
+      lastName: "Tester",
+      email,
+      phone: "9800000000",
+      address: "Lazimpat",
+      city: "Kathmandu",
+      zip: "44600",
+      country: "Nepal",
+      deliveryLocation: "Kathmandu Inside Ring Road",
+      locationCoordinates: "Kathmandu Inside Ring Road",
+    },
+    paymentMethod: "esewa",
+    source: "website",
+    deliveryRequired: true,
+  };
+}
+
 test("home page loads and core storefront checkout path works", async ({ page }) => {
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => {
@@ -80,4 +117,48 @@ test("home page loads and core storefront checkout path works", async ({ page })
 
   await expect(page).toHaveURL(/\/order-confirmation\//);
   await expect(pageErrors, pageErrors.join("\n")).toEqual([]);
+});
+
+test("new customer is blocked above 5 items", async ({ request }) => {
+  const { productId, priceAtTime } = await getSampleProduct(request);
+  const email = `new-limit-${Date.now()}@example.com`;
+
+  const res = await request.post("/api/orders", {
+    data: buildOrderPayload(email, 6, productId, priceAtTime),
+  });
+
+  expect(res.status()).toBe(400);
+  const body = (await res.json()) as {
+    success?: boolean;
+    code?: string;
+    limit?: number;
+    orderCount?: number;
+    error?: string;
+  };
+  expect(body.success).toBe(false);
+  expect(body.code).toBe("NEW_CUSTOMER_LIMIT_EXCEEDED");
+  expect(body.limit).toBe(5);
+  expect(body.orderCount).toBe(0);
+  expect(String(body.error ?? "").toLowerCase()).toContain("new customers can order up to 5");
+});
+
+test("customer with at least 5 prior orders can place order above 5 items", async ({ request }) => {
+  const { productId, priceAtTime } = await getSampleProduct(request);
+  const email = `trusted-limit-${Date.now()}@example.com`;
+
+  for (let i = 0; i < 5; i++) {
+    const seedRes = await request.post("/api/orders", {
+      data: buildOrderPayload(email, 1, productId, priceAtTime),
+    });
+    expect(seedRes.ok(), await seedRes.text()).toBeTruthy();
+  }
+
+  const largeRes = await request.post("/api/orders", {
+    data: buildOrderPayload(email, 6, productId, priceAtTime),
+  });
+
+  expect(largeRes.ok(), await largeRes.text()).toBeTruthy();
+  const body = (await largeRes.json()) as { success?: boolean; data?: { order?: { id?: string } } };
+  expect(body.success).toBe(true);
+  expect(body.data?.order?.id).toBeTruthy();
 });

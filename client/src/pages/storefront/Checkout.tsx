@@ -1,14 +1,16 @@
-import { useMemo, useState, useRef } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles } from "lucide-react";
+import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+
+const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 
 const PAYMENT_OPTIONS = [
   {
@@ -88,6 +90,61 @@ export default function Checkout() {
   const [deliveryProvider, setDeliveryProvider] = useState<string>("pathao");
   const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const [deliveryLocation, setDeliveryLocation] = useState<string>("");
+
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [phone, setPhone] = useState("");
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("returning") !== "1") return;
+      const saved = localStorage.getItem(CHECKOUT_FORM_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.email) setEmail(data.email);
+        if (data.firstName) setFirstName(data.firstName);
+        if (data.lastName) setLastName(data.lastName);
+        if (data.address) setAddress(data.address);
+        if (data.city) setCity(data.city);
+        if (data.phone) setPhone(data.phone);
+        if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
+        if (data.deliveryLocation) setDeliveryLocation(data.deliveryLocation);
+        if (data.deliveryAddress !== undefined) setDeliveryAddress(data.deliveryAddress);
+        if (data.deliveryProvider) setDeliveryProvider(data.deliveryProvider);
+        if (typeof data.deliveryRequired === "boolean") setDeliveryRequired(data.deliveryRequired);
+      }
+    } catch { /* ignore */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [window.location.search]);
+
+  const saveFormData = (formData: Record<string, string>) => {
+    try {
+      localStorage.setItem(CHECKOUT_FORM_KEY, JSON.stringify({
+        ...formData,
+        email,
+        firstName,
+        lastName,
+        address,
+        city,
+        phone,
+        paymentMethod,
+        deliveryLocation,
+        deliveryAddress,
+        deliveryProvider,
+        deliveryRequired,
+      }));
+    } catch { /* ignore */ }
+  };
+
+  const clearSavedFormData = () => {
+    try {
+      localStorage.removeItem(CHECKOUT_FORM_KEY);
+    } catch { /* ignore */ }
+  };
 
   const shipping = 100;
   // Promo code state
@@ -193,12 +250,19 @@ export default function Checkout() {
 
     const formData = new FormData(event.currentTarget);
 
-    const email = String(formData.get("email") || "").trim();
-    const firstName = String(formData.get("firstName") || "").trim();
-    const lastName = String(formData.get("lastName") || "").trim();
-    const address = String(formData.get("address") || "").trim();
-    const city = String(formData.get("city") || "").trim();
-    const phone = String(formData.get("phone") || "").trim();
+    const emailVal = email || String(formData.get("email") || "").trim();
+    const firstNameVal = firstName || String(formData.get("firstName") || "").trim();
+    const lastNameVal = lastName || String(formData.get("lastName") || "").trim();
+    const addressVal = address || String(formData.get("address") || "").trim();
+    const cityVal = city || String(formData.get("city") || "").trim();
+    const phoneVal = phone || String(formData.get("phone") || "").trim();
+
+    if (!emailVal) newErrors.email = true;
+    if (!firstNameVal) newErrors.firstName = true;
+    if (!lastNameVal) newErrors.lastName = true;
+    if (!addressVal) newErrors.address = true;
+    if (!cityVal) newErrors.city = true;
+    if (!phoneVal) newErrors.phone = true;
 
     if (!email) newErrors.email = true;
     if (!firstName) newErrors.firstName = true;
@@ -242,12 +306,12 @@ export default function Checkout() {
           priceAtTime: item.product.price,
         })),
         shipping: {
-          firstName,
-          lastName,
-          email,
-          phone,
-          address,
-          city,
+          firstName: firstNameVal,
+          lastName: lastNameVal,
+          email: emailVal,
+          phone: phoneVal,
+          address: addressVal,
+          city: cityVal,
           zip: "00000",
           country: "Nepal",
           locationCoordinates: deliveryLocation,
@@ -307,12 +371,20 @@ export default function Checkout() {
       }
 
       if (needsPaymentPage) {
+        saveFormData({
+          email: emailVal,
+          firstName: firstNameVal,
+          lastName: lastNameVal,
+          address: addressVal,
+          city: cityVal,
+          phone: phoneVal,
+        });
         setStep(3);
         cacheLatestOrder(result.data.order);
         setLocation(
           `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
         );
-        clearCart();
+        // Don't clear cart - user might come back to change payment method
         return;
       }
 
@@ -320,6 +392,7 @@ export default function Checkout() {
       cacheLatestOrder(result.data.order);
       setLocation(`/order-confirmation/${result.data.order.id}`);
       clearCart();
+      clearSavedFormData();
       toast({ title: "Order Placed" });
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");
@@ -346,11 +419,9 @@ export default function Checkout() {
                 type="email"
                 placeholder="Email Address"
                 data-testid="checkout-email"
+                defaultValue={email}
+                onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
                 className={`h-14 rounded-none transition-colors ${errors.email ? "border-red-500 border-2" : "border-gray-200"}`}
-                onFocus={() => clearError("email")}
-                onChange={(e) => {
-                  if (e.target.value) clearError("email");
-                }}
               />
               {errors.email && <p className="text-[10px] text-red-500 uppercase font-bold">Email is required</p>}
             </div>
@@ -368,11 +439,9 @@ export default function Checkout() {
                   name="firstName"
                   placeholder="First name"
                   data-testid="checkout-first-name"
+                  defaultValue={firstName}
+                  onChange={(e) => { setFirstName(e.target.value); clearError("firstName"); }}
                   className={`h-14 rounded-none transition-colors ${errors.firstName ? "border-red-500 border-2" : "border-gray-200"}`}
-                  onFocus={() => clearError("firstName")}
-                  onChange={(e) => {
-                    if (e.target.value) clearError("firstName");
-                  }}
                 />
                 {errors.firstName && <p className="text-[10px] text-red-500 uppercase font-bold">Required</p>}
               </div>
@@ -385,11 +454,9 @@ export default function Checkout() {
                   name="lastName"
                   placeholder="Last name"
                   data-testid="checkout-last-name"
+                  defaultValue={lastName}
+                  onChange={(e) => { setLastName(e.target.value); clearError("lastName"); }}
                   className={`h-14 rounded-none transition-colors ${errors.lastName ? "border-red-500 border-2" : "border-gray-200"}`}
-                  onFocus={() => clearError("lastName")}
-                  onChange={(e) => {
-                    if (e.target.value) clearError("lastName");
-                  }}
                 />
                 {errors.lastName && <p className="text-[10px] text-red-500 uppercase font-bold">Required</p>}
               </div>
@@ -404,11 +471,9 @@ export default function Checkout() {
                   name="address"
                   placeholder="Address"
                   data-testid="checkout-address"
+                  defaultValue={address}
+                  onChange={(e) => { setAddress(e.target.value); clearError("address"); }}
                   className={`h-14 rounded-none transition-colors ${errors.address ? "border-red-500 border-2" : "border-gray-200"}`}
-                  onFocus={() => clearError("address")}
-                  onChange={(e) => {
-                    if (e.target.value) clearError("address");
-                  }}
                 />
                 {errors.address && <p className="text-[10px] text-red-500 uppercase font-bold">Address is required</p>}
               </div>
@@ -421,12 +486,9 @@ export default function Checkout() {
                     ref={fieldRefs.city}
                     name="city"
                     data-testid="checkout-city"
+                    defaultValue={city}
+                    onChange={(e) => { setCity(e.target.value); clearError("city"); }}
                     className={`h-14 w-full rounded-none border-2 bg-background px-4 text-sm transition-colors ${errors.city ? "border-red-500" : "border-gray-200"}`}
-                    onFocus={() => clearError("city")}
-                    onChange={(e) => {
-                      if (e.target.value) clearError("city");
-                    }}
-                    defaultValue=""
                   >
                     <option value="" disabled>
                       Select District
@@ -449,11 +511,9 @@ export default function Checkout() {
                   name="phone"
                   placeholder="Phone"
                   data-testid="checkout-phone"
+                  defaultValue={phone}
+                  onChange={(e) => { setPhone(e.target.value); clearError("phone"); }}
                   className={`h-14 rounded-none transition-colors ${errors.phone ? "border-red-500 border-2" : "border-gray-200"}`}
-                  onFocus={() => clearError("phone")}
-                  onChange={(e) => {
-                    if (e.target.value) clearError("phone");
-                  }}
                 />
                 {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">Phone is required</p>}
               </div>

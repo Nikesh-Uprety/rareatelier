@@ -351,7 +351,7 @@ export default function PaymentProcess() {
 
         <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
           <Button asChild variant="outline" className="rounded-none text-xs">
-            <Link href="/">Back to Home</Link>
+            <Link href="/checkout?returning=1">← Back to Checkout</Link>
           </Button>
           <Button asChild variant="ghost" className="rounded-none text-xs text-muted-foreground">
             <Link href={`/order-confirmation/${orderId}`}>← Back to Order</Link>
@@ -512,7 +512,7 @@ export default function PaymentProcess() {
         )}
       </div>
 
-      <div className="mt-12 pt-8 border-t border-gray-100 flex gap-3">
+        <div className="mt-12 pt-8 border-t border-gray-100 flex gap-3">
         <div className="flex-1 grid grid-cols-2 gap-2">
           {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== method).map((option) => (
             <Button
@@ -528,7 +528,7 @@ export default function PaymentProcess() {
           ))}
         </div>
         <Button asChild variant="outline" className="rounded-none">
-          <Link href="/">Back to Home</Link>
+          <Link href="/checkout?returning=1">← Back to Checkout</Link>
         </Button>
       </div>
 
