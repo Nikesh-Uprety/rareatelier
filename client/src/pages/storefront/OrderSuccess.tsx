@@ -1,6 +1,6 @@
 import { useRoute, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles } from "lucide-react";
+import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles, Shield, Mail, MessageSquare } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 import { fetchOrderById, getCachedLatestOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -145,7 +145,7 @@ export default function OrderSuccess() {
       </style>
 
       {/* Success hero — screen only */}
-      <div className="no-print relative mb-10 overflow-visible rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-500/5 via-background to-blue-500/5 dark:from-emerald-500/5 dark:via-background dark:to-blue-500/5 px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14">
+      <div className="no-print relative mb-8 overflow-visible rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-500/5 via-background to-blue-500/5 dark:from-emerald-500/5 dark:via-background dark:to-blue-500/5 px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14">
         <div className="relative flex flex-col items-center text-center">
           <div className="min-w-0 space-y-3">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground">Order Success</p>
@@ -166,6 +166,70 @@ export default function OrderSuccess() {
           </div>
         </div>
       </div>
+
+      {/* Brand logo circle between hero and steps */}
+      <div className="relative z-10 -mt-6 mb-6 flex justify-center">
+        <div className="order-confirm-icon-float relative flex h-24 w-24 items-center justify-center rounded-full border-4 border-white dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_0_30px_rgba(0,0,0,0.2),0_6px_24px_rgba(0,0,0,0.1)] md:h-28 md:w-28 overflow-hidden">
+          <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-black/10 blur-lg" />
+          <img
+            src="/images/order-success-icon.webp"
+            alt="RARE.NP"
+            className="relative z-10 h-full w-full object-cover rounded-full"
+          />
+        </div>
+      </div>
+
+      {/* Large Order Verification Notice */}
+      {order.items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0) > 10 && (
+        <div className="no-print mb-8 rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 p-6 md:p-8">
+          <div className="flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/25">
+              <Shield className="h-6 w-6" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-base font-black uppercase tracking-tight text-amber-900 dark:text-amber-200 mb-2">
+                Large Order Verification Required
+              </h3>
+              <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed mb-4">
+                Your order contains <strong className="font-bold">{order.items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0)} items</strong>. For orders with more than 10 items, we require a quick two-step verification to ensure order authenticity and prevent fraud.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 bg-white/60 dark:bg-zinc-900/40 rounded-xl">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">1</div>
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    <strong className="font-semibold">Contact us</strong> via email at{" "}
+                    <a href="mailto:upretynikesh123@gmail.com" className="underline font-semibold hover:no-underline">upretynikesh123@gmail.com</a> or through our{" "}
+                    <Link href="/atelier#contact" className="underline font-semibold hover:no-underline">contact page</Link>
+                    {" "}with your order ID.
+                  </p>
+                </div>
+                <div className="flex items-start gap-3 p-3 bg-white/60 dark:bg-zinc-900/40 rounded-xl">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">2</div>
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    <strong className="font-semibold">Our team will verify</strong> your order and contact you within 24 hours to confirm details. Once verified, your order will be processed immediately.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a
+                  href="mailto:upretynikesh123@gmail.com?subject=Large Order Verification - {order.id.slice(0, 8)}"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-lg transition-colors"
+                >
+                  <Mail className="h-4 w-4" />
+                  Email Us Now
+                </a>
+                <Link
+                  href="/atelier#contact"
+                  className="inline-flex items-center gap-2 px-4 py-2 border-2 border-amber-600 text-amber-700 dark:text-amber-300 dark:border-amber-500 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-sm font-semibold rounded-lg transition-colors"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                  Contact Page
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* What happens next — screen only */}
       <div className="no-print mb-10">
