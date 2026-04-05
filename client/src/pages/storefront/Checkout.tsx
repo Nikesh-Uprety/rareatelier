@@ -222,6 +222,8 @@ export default function Checkout() {
     }
 
     try {
+      const totalQuantity = items.reduce((acc, item) => acc + Number(item.quantity), 0);
+
       const result = await mutateAsync({
         items: items.map((item) => ({
           variantId:
@@ -260,7 +262,19 @@ export default function Checkout() {
       });
 
       if (!result.success || !result.data) {
-        setFormError(result.error || "Failed to place order.");
+        const errorCode = (result as any).code;
+        if (errorCode === "NEW_CUSTOMER_LIMIT_EXCEEDED") {
+          setFormError(
+            `New customers can order up to ${(result as any).limit || 5} items at a time. You have ${totalQuantity} items. Please reduce your quantity or contact us for large orders.`
+          );
+        } else if (errorCode === "ABUSE_TIMEOUT") {
+          const mins = (result as any).retryAfter || 5;
+          setFormError(
+            `Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`
+          );
+        } else {
+          setFormError(result.error || "Failed to place order.");
+        }
         return;
       }
 

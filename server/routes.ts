@@ -98,6 +98,9 @@ const DEFAULT_PAYMENT_QR_URLS = {
     "https://cdn11.bigcommerce.com/s-tgrcca6nho/images/stencil/original/products/65305/136311/Quick-Scan-Pay-Stand-Scan1_136310__37301.1758003923.jpg",
 } as const;
 
+// Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
+const abuseAttempts = new Map<string, { count: number; blockedAt: number }>();
+
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_ADMIN_IMAGE_UPLOAD_BYTES },
@@ -1658,6 +1661,57 @@ export async function registerRoutes(
           deliveryAddress,
         } = req.body;
 
+      // --- New Customer Order Limit & Abuse Prevention ---
+      const MAX_ITEMS_NEW_CUSTOMER = 5;
+      const MIN_ORDERS_FOR_UNLIMITED = 5;
+      const ABUSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+      const totalQuantity = items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
+      const customerEmail = shipping.email.toLowerCase().trim();
+      const clientIp = req.ip || req.get("x-forwarded-for") || "unknown";
+      const abuseKey = `${clientIp}:${customerEmail}`;
+
+      // Check if customer has enough order history to bypass limit
+      const orderCount = await storage.getOrderCountByEmail(customerEmail);
+      const isTrustedCustomer = orderCount >= MIN_ORDERS_FOR_UNLIMITED;
+
+      if (!isTrustedCustomer && totalQuantity > MAX_ITEMS_NEW_CUSTOMER) {
+        // Track abuse attempts
+        const existing = abuseAttempts.get(abuseKey) || { count: 0, blockedAt: 0 };
+        const newCount = existing.count + 1;
+        if (newCount >= 3) {
+          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: Date.now() });
+        } else {
+          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: existing.blockedAt });
+        }
+
+        logger.warn(`Order limit exceeded: ${customerEmail} tried to order ${totalQuantity} items (limit: ${MAX_ITEMS_NEW_CUSTOMER}, orders: ${orderCount}, attempts: ${newCount})`);
+        return res.status(400).json({
+          success: false,
+          error: `New customers can order up to ${MAX_ITEMS_NEW_CUSTOMER} items at a time. You currently have ${totalQuantity} items in your cart. Please reduce your quantity or contact us for large orders.`,
+          code: "NEW_CUSTOMER_LIMIT_EXCEEDED",
+          limit: MAX_ITEMS_NEW_CUSTOMER,
+          orderCount,
+        });
+      }
+
+      // Check if IP/email is temporarily blocked for abuse
+      const abuseEntry = abuseAttempts.get(abuseKey);
+      if (abuseEntry && Date.now() - abuseEntry.blockedAt < ABUSE_TIMEOUT_MS) {
+        const remaining = Math.ceil((ABUSE_TIMEOUT_MS - (Date.now() - abuseEntry.blockedAt)) / 1000 / 60);
+        return res.status(429).json({
+          success: false,
+          error: `Too many failed attempts. Please try again in ${remaining} minute${remaining > 1 ? "s" : ""}.`,
+          code: "ABUSE_TIMEOUT",
+          retryAfter: remaining,
+        });
+      }
+
+      // Clear abuse block if timeout has passed
+      if (abuseEntry && Date.now() - abuseEntry.blockedAt >= ABUSE_TIMEOUT_MS) {
+        abuseAttempts.delete(abuseKey);
+      }
+
       const orderSubtotal = items.reduce(
         (acc: number, item: any) => acc + item.priceAtTime * item.quantity,
         0,
@@ -1965,6 +2019,18 @@ export async function registerRoutes(
     imageBase64: z.string().min(1),
   });
 
+  const updatePaymentMethodSchema = z.object({
+    paymentMethod: z.enum([
+      "esewa",
+      "khalti",
+      "fonepay",
+      "stripe",
+      "bank",
+      "bank_transfer",
+      "cash_on_delivery",
+    ]),
+  });
+
   app.post(
     "/api/orders/:id/payment-proof",
     validateRequest(paymentProofSchema),
@@ -1990,6 +2056,44 @@ export async function registerRoutes(
         return res
           .status(500)
           .json({ success: false, error: "Failed to upload payment proof" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/orders/:id/payment-method",
+    validateRequest(updatePaymentMethodSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const orderId = req.params.id as string;
+        const { paymentMethod } = req.body;
+        const order = await storage.getOrderById(orderId);
+
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (order.status === "completed" || order.status === "cancelled") {
+          return res.status(400).json({
+            success: false,
+            error: "Cannot change payment method for completed or cancelled orders",
+          });
+        }
+
+        if (order.paymentVerified === "verified") {
+          return res.status(400).json({
+            success: false,
+            error: "Cannot change payment method after payment is verified",
+          });
+        }
+
+        const updated = await storage.updateOrderPaymentMethod(orderId, paymentMethod);
+        return res.json({ success: true, data: updated });
+      } catch (err) {
+        console.error("Error in PATCH /api/orders/:id/payment-method", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to update payment method" });
       }
     },
   );

@@ -275,8 +275,10 @@ export interface IStorage {
     timeRange?: string;
   }): Promise<number>;
   getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }>;
+  getOrderCountByEmail(email: string): Promise<number>;
   createOrder(data: CreateOrderInput): Promise<Order>;
   updateOrderStatus(id: string, status: string): Promise<Order>;
+  updateOrderPaymentMethod(id: string, paymentMethod: string): Promise<Order>;
   updateOrderPaymentProof(id: string, paymentProofUrl: string): Promise<Order>;
   updateOrderPaymentVerified(
     id: string,
@@ -1203,6 +1205,15 @@ export class PgStorage implements IStorage {
     return { ...orderRow, items };
   }
 
+  async getOrderCountByEmail(email: string): Promise<number> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(orders)
+      .where(sql`lower(${orders.email}) = ${normalizedEmail}`);
+    return Number(result?.count ?? 0);
+  }
+
   async createOrder(data: CreateOrderInput): Promise<Order> {
     // IMPORTANT:
     // Some deployed/staged DBs don't have `orders.delivery_location`.
@@ -1338,6 +1349,44 @@ export class PgStorage implements IStorage {
       });
     }
 
+    return row;
+  }
+
+  async updateOrderPaymentMethod(id: string, paymentMethod: string): Promise<Order> {
+    const [row] = await db
+      .update(orders)
+      .set({ paymentMethod })
+      .where(eq(orders.id, id))
+      .returning({
+        id: orders.id,
+        userId: orders.userId,
+        email: orders.email,
+        fullName: orders.fullName,
+        addressLine1: orders.addressLine1,
+        addressLine2: orders.addressLine2,
+        city: orders.city,
+        region: orders.region,
+        postalCode: orders.postalCode,
+        country: orders.country,
+        total: orders.total,
+        status: orders.status,
+        paymentMethod: orders.paymentMethod,
+        paymentProofUrl: orders.paymentProofUrl,
+        paymentVerified: orders.paymentVerified,
+        locationCoordinates: orders.locationCoordinates,
+        promoCode: orders.promoCode,
+        promoDiscountAmount: orders.promoDiscountAmount,
+        source: orders.source,
+        deliveryRequired: orders.deliveryRequired,
+        deliveryProvider: orders.deliveryProvider,
+        // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
+        deliveryLocation: orders.locationCoordinates,
+        deliveryAddress: orders.deliveryAddress,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+      });
+
+    if (!row) throw new Error("Order not found");
     return row;
   }
 
@@ -3444,6 +3493,11 @@ export class MemStorage implements IStorage {
     return { ...order, items: itemsWithProducts };
   }
 
+  async getOrderCountByEmail(email: string): Promise<number> {
+    const normalizedEmail = email.toLowerCase().trim();
+    return this._orders.filter((o) => o.email.toLowerCase().trim() === normalizedEmail).length;
+  }
+
   async createOrder(data: CreateOrderInput): Promise<Order> {
     const id = crypto.randomUUID();
     const order: Order & { items: OrderItem[] } = {
@@ -3490,6 +3544,15 @@ export class MemStorage implements IStorage {
     const order = this._orders.find((o) => o.id === id);
     if (!order) throw new Error("Order not found");
     order.paymentProofUrl = url;
+    const { items: _, ...rest } = order;
+    return rest;
+  }
+
+  async updateOrderPaymentMethod(id: string, paymentMethod: string): Promise<Order> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    order.paymentMethod = paymentMethod;
+    order.updatedAt = new Date();
     const { items: _, ...rest } = order;
     return rest;
   }
