@@ -276,7 +276,7 @@ export default function AdminLayout({
                   <item.icon className="h-4 w-4" />
                   <span className="flex flex-col leading-tight">
                     {isCanvasItem ? (
-                      <span className="mb-0.5 inline-flex w-fit rounded-full border border-amber-300/70 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-amber-800">
+                      <span className="mb-0.5 inline-flex w-fit rounded-full border border-red-300/70 bg-red-50 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-200">
                         BETA
                       </span>
                     ) : null}
@@ -368,7 +368,7 @@ export default function AdminLayout({
                         >
                           <span className="flex flex-col leading-tight">
                             {isCanvasItem ? (
-                              <span className="mb-0.5 inline-flex w-fit rounded-full border border-amber-300/70 bg-amber-100 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-amber-800">
+                              <span className="mb-0.5 inline-flex w-fit rounded-full border border-red-300/70 bg-red-50 px-1.5 py-0.5 text-[8px] font-black tracking-[0.18em] text-red-700 dark:border-red-400/30 dark:bg-red-500/15 dark:text-red-200">
                                 BETA
                               </span>
                             ) : null}
@@ -444,12 +444,12 @@ export default function AdminLayout({
               className={cn(
                 "hidden lg:inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] transition-colors",
                 isCanvasRoute
-                  ? "border-amber-400/80 bg-amber-100 text-amber-900"
-                  : "border-border bg-card/50 text-muted-foreground hover:border-amber-400/60 hover:text-foreground",
+                  ? "border-red-300/90 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-200"
+                  : "border-border bg-card/50 text-muted-foreground hover:border-red-300/70 hover:text-foreground dark:hover:border-red-400/40",
               )}
             >
               <span>Canvas</span>
-              <span className="rounded-full bg-amber-500 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white">
+              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:bg-red-500">
                 BETA
               </span>
             </Link>
