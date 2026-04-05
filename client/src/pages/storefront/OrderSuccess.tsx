@@ -100,7 +100,7 @@ export default function OrderSuccess() {
   });
 
   return (
-    <div className="order-confirmation-page container mx-auto px-4 py-10 lg:py-16 max-w-5xl">
+    <div className="order-confirmation-page container mx-auto px-4 pt-6 pb-10 lg:pt-10 lg:pb-16 max-w-5xl">
       <Helmet>
         <title>Order confirmed | Rare Atelier</title>
         <meta
@@ -145,7 +145,7 @@ export default function OrderSuccess() {
       </style>
 
       {/* Floating icon — outside and above the hero box */}
-      <div className="relative z-30 -mt-8 mb-6 flex justify-center">
+      <div className="relative z-30 -mt-10 mb-4 flex justify-center">
         <div className="order-confirm-icon-float relative flex h-28 w-28 items-center justify-center rounded-full border-4 border-white dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-[0_0_40px_rgba(0,0,0,0.3),0_8px_32px_rgba(0,0,0,0.15)] md:h-36 md:w-36 overflow-hidden">
           <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-black/15 blur-xl" />
           <img
