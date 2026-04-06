@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import { Helmet } from "react-helmet-async";
 const SizeFitGuide = lazy(() => import("@/components/product/SizeFitGuide"));
 
@@ -24,6 +25,83 @@ function parseJsonArray(s: string | null | undefined): string[] {
 
 function getDominantWheelDelta(deltaY: number, deltaX: number): number {
   return Math.abs(deltaY) >= Math.abs(deltaX) ? deltaY : deltaX;
+}
+
+const COLOR_NAME_SWATCHES: Record<string, string> = {
+  black: "#111111",
+  white: "#f5f5f5",
+  cream: "#f2eadf",
+  ivory: "#fff8e7",
+  beige: "#d8c3a5",
+  tan: "#c19a6b",
+  brown: "#7a5a43",
+  mocha: "#7b5b45",
+  chocolate: "#5d3a1a",
+  camel: "#c19a6b",
+  grey: "#7c7c7c",
+  gray: "#7c7c7c",
+  charcoal: "#36454f",
+  silver: "#bfc5cc",
+  blue: "#2548b1",
+  navy: "#1f2a44",
+  "navy blue": "#1f2a44",
+  royal: "#4169e1",
+  "royal blue": "#4169e1",
+  sky: "#76b5ff",
+  "sky blue": "#76b5ff",
+  baby: "#a9d6ff",
+  "baby blue": "#a9d6ff",
+  teal: "#0f766e",
+  turquoise: "#40e0d0",
+  green: "#2f7d32",
+  olive: "#556b2f",
+  sage: "#9caf88",
+  mint: "#98ff98",
+  red: "#c62828",
+  maroon: "#6b1f2a",
+  burgundy: "#6d213c",
+  wine: "#722f37",
+  pink: "#f7a6ec",
+  blush: "#e8b4b8",
+  rose: "#e11d48",
+  purple: "#7c3aed",
+  lavender: "#b497d6",
+  lilac: "#c8a2c8",
+  yellow: "#facc15",
+  mustard: "#d4a017",
+  orange: "#f97316",
+  gold: "#c9a84c",
+};
+
+function resolveNamedColorSwatch(label: string): string | null {
+  const normalized = label.trim().toLowerCase();
+  if (!normalized) return null;
+  return COLOR_NAME_SWATCHES[normalized] ?? null;
+}
+
+function parseColorOption(value: string): { label: string; swatch: string | null } {
+  const trimmed = value.trim();
+  const hexMatch = trimmed.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/);
+  const label = trimmed
+    .replace(/\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g, "")
+    .replace(/\|\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})/g, "")
+    .trim();
+
+  return {
+    label: label || trimmed,
+    swatch: hexMatch?.[0] ?? resolveNamedColorSwatch(label || trimmed),
+  };
+}
+
+function normalizeColorLabel(value: string | null | undefined): string {
+  return parseColorOption(value ?? "").label.trim().toLowerCase();
+}
+
+function getMotionDirection(
+  nextIndex: number,
+  currentIndex: number,
+): "down" | "up" {
+  return nextIndex >= currentIndex ? "down" : "up";
 }
 
 const SHIRT_SIZE_CHART: ProductSizeChart = {
@@ -157,6 +235,10 @@ export default function ProductDetail() {
   const gallerySectionRefs = useRef<Array<HTMLElement | null>>([]);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
+  const colorOptions = useMemo(
+    () => colors.map((color) => ({ value: color, ...parseColorOption(color) })),
+    [colors],
+  );
   const stockBySize = product?.stockBySize ?? {};
   const configuredSizes = useMemo(
     () => parseJsonArray(product?.sizeOptions ?? undefined),
@@ -189,6 +271,16 @@ export default function ProductDetail() {
     return list.length ? list : [""];
   }, [mainImageUrl, galleryUrls]);
   const productSizeChart = useMemo(() => resolveSizeChart(product ?? null), [product]);
+  const backToShopHref = useMemo(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const requestedFrom = searchParams.get("from");
+
+    if (requestedFrom && (requestedFrom.startsWith("/products") || requestedFrom.startsWith("/shop"))) {
+      return requestedFrom;
+    }
+
+    return "/products";
+  }, []);
 
   useEffect(() => {
     if (selectedImageIndex > allImages.length - 1) {
@@ -391,7 +483,7 @@ export default function ProductDetail() {
       product?.variants?.find((variant) => {
         if (variant.size !== effectiveSize) return false;
         if (!effectiveColor) return true;
-        return (variant.color ?? "Default") === effectiveColor;
+        return normalizeColorLabel(variant.color ?? "Default") === normalizeColorLabel(effectiveColor);
       }) ?? null
     );
   }, [effectiveColor, effectiveSize, product?.variants]);
@@ -470,13 +562,13 @@ export default function ProductDetail() {
         variants: (product.variants ?? []).map((variant) => ({
           id: variant.id,
           size: variant.size,
-          color: variant.color ?? "Default",
+          color: parseColorOption(variant.color ?? "Default").label,
         })),
       },
       {
         id: selectedVariant?.id,
         size: effectiveSize ?? "One Size",
-        color: effectiveColor ?? "Default",
+        color: parseColorOption(effectiveColor ?? "Default").label,
       },
       quantity,
     );
@@ -564,6 +656,15 @@ export default function ProductDetail() {
     goToImage(selectedImageIndex - 1, { direction: "up", distance: 1 });
   };
 
+  const previewImage = (index: number) => {
+    if (index === selectedImageIndex || index < 0 || index >= allImages.length) return;
+    setPreviousImageIndex(selectedImageIndex);
+    setImageMotionDirection(getMotionDirection(index, selectedImageIndex));
+    setImageMotionDurationMs(260);
+    setSelectedImageIndex(index);
+    setImageMotionTick((tick) => tick + 1);
+  };
+
   const openGallery = (index?: number) => {
     if (typeof index === "number") {
       setSelectedImageIndex(index);
@@ -645,8 +746,20 @@ export default function ProductDetail() {
         <meta property="og:url" content={window.location.href} />
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
-        </script>
+          </script>
       </Helmet>
+
+      <div className="mx-auto mb-8 max-w-[1600px]">
+        <StorefrontBreadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Shop", href: backToShopHref },
+            { label: product.name },
+          ]}
+          backHref={backToShopHref}
+        />
+      </div>
+
       <div className="grid gap-8 lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)] lg:gap-8 xl:gap-10">
         <aside className="space-y-5 lg:sticky lg:top-28 lg:self-start">
           <h1
@@ -853,10 +966,10 @@ export default function ProductDetail() {
                           <button
                             key={i}
                             type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            openGallery(i);
-                          }}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              previewImage(i);
+                            }}
                             className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
                               selectedImageIndex === i
                                 ? "border-white opacity-100"
@@ -914,7 +1027,10 @@ export default function ProductDetail() {
                     <button
                       key={`thumb-${i}`}
                       type="button"
-                      onClick={() => openGallery(i)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        previewImage(i);
+                      }}
                       className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
                         selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
                       }`}
@@ -933,22 +1049,31 @@ export default function ProductDetail() {
         </section>
 
         <aside className="space-y-6 lg:sticky lg:top-28 lg:self-start">
-          {colors.length > 0 ? (
+          {colorOptions.length > 0 ? (
             <div>
               <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Color</p>
-              <div className="flex flex-wrap gap-2">
-                {colors.map((c) => (
+              <div className="flex flex-wrap gap-3">
+                {colorOptions.map((color) => (
                   <button
-                    key={c}
+                    key={color.value}
                     type="button"
-                    onClick={() => setSelectedColor(c)}
-                    className={`h-8 min-w-[2rem] rounded-sm border px-3 text-xs font-medium transition-all ${
-                      effectiveColor === c
-                        ? "border-primary bg-primary text-primary-foreground"
+                    onClick={() => setSelectedColor(color.value)}
+                    className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
+                      effectiveColor === color.value
+                        ? "border-foreground bg-foreground/5 text-foreground"
                         : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
                     }`}
+                    aria-label={`Select ${color.label} color`}
                   >
-                    {c}
+                    <span
+                      className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
+                      style={{
+                        background:
+                          color.swatch ??
+                          "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
+                      }}
+                    />
+                    <span>{color.label}</span>
                   </button>
                 ))}
               </div>
@@ -1123,13 +1248,13 @@ export default function ProductDetail() {
           You May Also Like
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {relatedProducts.map((p) => (
-            <Link
-              key={p.id}
-              href={`/product/${p.id}`}
-              className="group block"
-              onClick={() => {
-                window.scrollTo(0, 0);
+            {relatedProducts.map((p) => (
+              <Link
+                key={p.id}
+                href={`/product/${p.id}?from=${encodeURIComponent(backToShopHref)}`}
+                className="group block"
+                onClick={() => {
+                  window.scrollTo(0, 0);
               }}
             >
               <div className="aspect-[3/4] overflow-hidden bg-neutral-100 dark:bg-neutral-900 mb-4 relative rounded-sm">

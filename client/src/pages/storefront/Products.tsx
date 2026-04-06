@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDownWideNarrow, ExternalLink, Palette, Ruler, Sparkles, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,18 +44,45 @@ const SORT_LABELS: Record<string, string> = {
   "highest-stock": "Highest Stock",
 };
 
-export default function Products() {
+function readShopSearchParams() {
   const searchParams = new URLSearchParams(window.location.search);
-  const initialCategory = searchParams.get("category");
 
-  const [category, setCategory] = useState<string>(initialCategory || "all");
-  const [sortBy, setSortBy] = useState("newest");
-  const [stockFilter, setStockFilter] = useState("all");
-  const [sizeFilter, setSizeFilter] = useState("all");
-  const [colorFilter, setColorFilter] = useState("all");
+  return {
+    category: searchParams.get("category") || "all",
+    sortBy: searchParams.get("sort") || "newest",
+    stockFilter: searchParams.get("stock") || "all",
+    sizeFilter: searchParams.get("size") || "all",
+    colorFilter: searchParams.get("color") || "all",
+    page: Math.max(1, Number.parseInt(searchParams.get("page") || "1", 10) || 1),
+  };
+}
+
+export default function Products() {
+  const initialState = readShopSearchParams();
+
+  const [category, setCategory] = useState<string>(initialState.category);
+  const [sortBy, setSortBy] = useState(initialState.sortBy);
+  const [stockFilter, setStockFilter] = useState(initialState.stockFilter);
+  const [sizeFilter, setSizeFilter] = useState(initialState.sizeFilter);
+  const [colorFilter, setColorFilter] = useState(initialState.colorFilter);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialState.page);
   const PAGE_SIZE = 12;
+  const hasInitializedFilters = useRef(false);
+
+  const shopPath = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (category !== "all") params.set("category", category);
+    if (sortBy !== "newest") params.set("sort", sortBy);
+    if (stockFilter !== "all") params.set("stock", stockFilter);
+    if (sizeFilter !== "all") params.set("size", sizeFilter);
+    if (colorFilter !== "all") params.set("color", colorFilter);
+    if (page > 1) params.set("page", String(page));
+
+    const query = params.toString();
+    return `/products${query ? `?${query}` : ""}`;
+  }, [category, colorFilter, page, sizeFilter, sortBy, stockFilter]);
 
   useEffect(() => {
     if (!isSortMenuOpen) return;
@@ -76,6 +104,18 @@ export default function Products() {
       document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
     };
   }, [isSortMenuOpen]);
+
+  useEffect(() => {
+    window.history.replaceState(window.history.state, "", shopPath);
+  }, [shopPath]);
+
+  useEffect(() => {
+    if (!hasInitializedFilters.current) {
+      hasInitializedFilters.current = true;
+      return;
+    }
+    setPage(1);
+  }, [category, sortBy, stockFilter, sizeFilter, colorFilter]);
 
   const { data: categories = [] } = useQuery({
     queryKey: ["categories"],
@@ -204,6 +244,15 @@ export default function Products() {
 
   return (
     <div className="container mx-auto px-4 py-16 mt-16">
+      <div className="mb-8">
+        <StorefrontBreadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Shop" },
+          ]}
+        />
+      </div>
+
       <div className="text-center mb-12">
         <h1 className="text-4xl font-black uppercase tracking-tight text-neutral-900 dark:text-neutral-100">
           All Products
@@ -449,20 +498,20 @@ export default function Products() {
                   {filteredProducts.map((product) => {
                     const hoverImage = getHoverImage(product);
                     const mainImage = product.imageUrl ?? hoverImage ?? "";
-                    return (
-                      <Link
-                        key={product.id}
-                        href={`/product/${product.id}`}
-                        className="group block"
-                      >
+                      return (
+                        <Link
+                          key={product.id}
+                          href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
+                          className="group block"
+                        >
                         <div className="aspect-[3/4] overflow-hidden bg-white/[0.02] dark:bg-white/[0.04] mb-4 relative rounded-xl border border-black/[0.06] dark:border-white/[0.08]">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              window.open(`/product/${product.id}`, "_blank");
-                            }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                window.open(`/product/${product.id}?from=${encodeURIComponent(shopPath)}`, "_blank");
+                              }}
                             className="absolute top-3 right-3 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
                             aria-label="Open product in new tab"
                           >

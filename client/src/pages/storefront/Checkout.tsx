@@ -78,6 +78,27 @@ function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, 
   return currentPrice;
 }
 
+function hydrateOrderWithCartSelections(order: any, items: CartState["items"]) {
+  const remaining = [...items];
+  const nextItems = (order?.items ?? []).map((item: any) => {
+    const matchIndex = remaining.findIndex(
+      (cartItem) =>
+        cartItem.product.id === item.productId &&
+        cartItem.variant.size === (item.size ?? cartItem.variant.size),
+    );
+    const match = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+    return match
+      ? {
+          ...item,
+          color: match.variant.color,
+          variantColor: item.variantColor ?? match.variant.color,
+        }
+      : item;
+  });
+
+  return { ...order, items: nextItems };
+}
+
 export default function Checkout() {
   const [, setLocation] = useLocation();
   const { items, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
@@ -349,7 +370,7 @@ export default function Checkout() {
 
       if (paymentMethod === "stripe") {
         setStep(3);
-        cacheLatestOrder(result.data.order);
+        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
         clearCart();
         toast({ title: "Order created. Redirecting to Stripe..." });
         try {
@@ -380,7 +401,7 @@ export default function Checkout() {
           phone: phoneVal,
         });
         setStep(3);
-        cacheLatestOrder(result.data.order);
+        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
         setLocation(
           `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
         );
@@ -389,7 +410,7 @@ export default function Checkout() {
       }
 
       setStep(3);
-      cacheLatestOrder(result.data.order);
+      cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
       setLocation(`/order-confirmation/${result.data.order.id}`);
       clearCart();
       clearSavedFormData();

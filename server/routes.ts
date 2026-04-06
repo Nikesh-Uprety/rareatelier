@@ -2286,14 +2286,6 @@ export async function registerRoutes(
         message,
       });
 
-      // Create admin notification and broadcast via WebSocket
-      await storage.createAdminNotification({
-        title: "New Contact Message",
-        message: `From: ${name} (${subject})`,
-        type: "contact",
-        link: "/admin/messages",
-      });
-
       return res.status(201).json({ success: true, data: created });
     } catch (err) {
       console.error("Error in POST /api/contact", err);
@@ -2982,6 +2974,35 @@ export async function registerRoutes(
       return res
         .status(404)
         .json({ success: false, error: "Order not found" });
+    }
+  });
+
+  app.patch("/api/orders/:id/cancel", async (req: Request, res: Response) => {
+    try {
+      const id = getQueryParam(req.params.id);
+      if (!id) {
+        return res.status(400).json({ success: false, error: "Order ID is required" });
+      }
+
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      if (order.status === "cancelled") {
+        return res.json({ success: true, data: order });
+      }
+
+      if (order.status === "completed") {
+        return res.status(400).json({ success: false, error: "Completed orders cannot be cancelled" });
+      }
+
+      const updated = await storage.updateOrderStatus(id, "cancelled");
+      const fullOrder = await storage.getOrderById(id);
+      return res.json({ success: true, data: fullOrder ?? updated });
+    } catch (err) {
+      console.error("Error in PATCH /api/orders/:id/cancel", err);
+      return res.status(500).json({ success: false, error: "Failed to cancel order" });
     }
   });
 
