@@ -418,8 +418,12 @@ export default function AdminLayout({
               </p>
               <div className="space-y-1">
                 {websiteNavItems.map((item) => {
-                const isActive = currentCanvasLocation === item.href;
-                return item.href.startsWith("/admin/canvas?") ? (
+                  const isActive = currentCanvasLocation === item.href;
+                  if (!item.href.startsWith("/admin/canvas")) {
+                    return null;
+                  }
+
+                  return (
                     <button
                       key={item.href}
                       type="button"
@@ -444,30 +448,6 @@ export default function AdminLayout({
                         <p className="truncate text-[10px] text-muted-foreground">{item.description}</p>
                       </div>
                     </button>
-                  ) : (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={cn(
-                        "flex items-start gap-3 rounded-xl px-4 py-3 transition-colors",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                      )}
-                    >
-                      <item.icon className="mt-0.5 h-4 w-4 shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-[12px] font-semibold">{item.label}</span>
-                          {item.badge ? (
-                            <span className="inline-flex rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
-                              {item.badge}
-                            </span>
-                          ) : null}
-                        </div>
-                        <p className="truncate text-[10px] text-muted-foreground">{item.description}</p>
-                      </div>
-                    </Link>
                   );
                 })}
               </div>
@@ -601,12 +581,9 @@ export default function AdminLayout({
                             "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
                         )}
                         onClick={() => {
-                          if (item.href.startsWith("/admin/canvas?")) {
+                          if (item.href.startsWith("/admin/canvas")) {
                             navigateToCustomization(item.href);
                             return;
-                          }
-                          if (typeof window !== "undefined") {
-                            window.location.href = item.href;
                           }
                         }}
                       >
@@ -662,8 +639,8 @@ export default function AdminLayout({
         </div>
       </Sidebar>
 
-      <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-hidden bg-muted dark:bg-neutral-900">
-        <header className="relative sticky top-0 z-20 h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
+      <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-visible bg-muted dark:bg-neutral-900">
+        <header className="relative sticky top-0 z-40 overflow-visible h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex shrink-0" />
             {!isVisuallyExpanded ? (
@@ -766,7 +743,7 @@ export default function AdminLayout({
 
               {profileMenuOpen ? (
                 <div
-                  className="absolute right-0 top-[calc(100%+6px)] z-50 w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
+                  className="absolute right-0 top-[calc(100%+6px)] z-[80] w-56 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
                   onMouseEnter={openProfileMenu}
                   onMouseLeave={scheduleProfileMenuClose}
                 >
