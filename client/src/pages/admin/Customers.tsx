@@ -326,7 +326,14 @@ export default function AdminCustomers() {
             transition={{ duration: 0.2 }}
             className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm"
           >
-            <Table>
+            <Table className="min-w-[980px] table-fixed">
+              <colgroup>
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "41%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "14%" }} />
+              </colgroup>
               <TableHeader className="bg-transparent">
                 <TableRow className="border-b border-[#E5E5E0] dark:border-border hover:bg-transparent">
                   <TableHead className="w-[80px] py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer</TableHead>
