@@ -513,17 +513,14 @@ export default function AdminLayout({
             <Link
               href={canvasHref}
               className={cn(
-                "hidden lg:inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.14em] transition-all duration-150",
-                "shadow-[0_3px_0_0_rgba(127,29,29,0.45),0_12px_24px_-14px_rgba(127,29,29,0.75)] hover:-translate-y-[1px] hover:shadow-[0_4px_0_0_rgba(127,29,29,0.5),0_16px_30px_-16px_rgba(127,29,29,0.8)] active:translate-y-[1px] active:shadow-[0_1px_0_0_rgba(127,29,29,0.5)]",
+                "hidden lg:inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] transition-colors",
                 isCanvasRoute
-                  ? "border-red-400/70 bg-gradient-to-b from-red-500 to-red-700 text-white dark:border-red-500/70 dark:from-red-500 dark:to-red-700"
-                  : "border-red-700/60 bg-gradient-to-b from-red-500 to-red-700 text-white hover:border-red-500/80 dark:border-red-600/70 dark:from-red-500 dark:to-red-700",
+                  ? "border-red-300/90 bg-red-50 text-red-800 dark:border-red-400/40 dark:bg-red-500/15 dark:text-red-200"
+                  : "border-border bg-card/50 text-[#111111] hover:border-red-300/70 hover:text-[#111111] dark:text-[#111827] dark:hover:border-red-400/40 dark:hover:text-[#111827]",
               )}
             >
-              <span className="text-[11px] font-extrabold tracking-[0.16em] [text-shadow:0_1px_0_rgb(127,29,29),0_2px_0_rgb(127,29,29),0_3px_10px_rgba(0,0,0,0.45)]">
-                Canvas
-              </span>
-              <span className="rounded-full border border-white/35 bg-black/20 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white shadow-inner">
+              <span>Canvas</span>
+              <span className="rounded-full border border-red-700/60 bg-red-600 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-white dark:border-red-500/70 dark:bg-red-500">
                 BETA
               </span>
             </Link>
@@ -591,7 +588,7 @@ export default function AdminLayout({
                 {user?.profileImageUrl ? (
                   <img src={user.profileImageUrl} alt={displayName} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-background/60 flex items-center justify-center text-foreground text-[10px] font-bold">
+                  <div className="w-full h-full bg-background/60 flex items-center justify-center text-foreground text-[11px] font-black">
                     {initials}
                   </div>
                 )}
