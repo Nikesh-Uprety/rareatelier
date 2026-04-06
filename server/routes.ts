@@ -1,6 +1,7 @@
 import express from "express";
 
 import type { Express, NextFunction, Request, Response } from "express";
+import crypto from "node:crypto";
 import fs from "fs";
 import { type Server } from "http";
 import path from "path";
@@ -110,6 +111,10 @@ const PAYMENT_PROOF_STORAGE = (process.env.PAYMENT_PROOF_STORAGE || "cloudinary"
 
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
 const abuseAttempts = new Map<string, { count: number; blockedAt: number }>();
+
+// Draft preview: short-lived tokens for previewing unpublished pages
+const previewTokens = new Map<string, { pageId: number; expiresAt: number }>();
+const PREVIEW_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const memoryUpload = multer({
   storage: multer.memoryStorage(),
@@ -1533,6 +1538,40 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/admin/canvas/pages/:id/duplicate", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [original] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+      if (!original) return res.status(404).json({ error: "Page not found" });
+
+      const [dup] = await db
+        .insert(pages)
+        .values({
+          title: `${original.title} (Copy)`,
+          slug: `${original.slug === "/" ? "/copy" : original.slug + "-copy"}-${Date.now()}`,
+          description: original.description,
+          status: "draft",
+          isHomepage: false,
+          showInNav: original.showInNav,
+          sortOrder: original.sortOrder + 1,
+          seoTitle: original.seoTitle,
+          seoDescription: original.seoDescription,
+          seoImage: original.seoImage,
+        })
+        .returning();
+
+      const origSections = await db.select().from(pageSections).where(and(eq(pageSections.pageId, id), sql`${pageSections.templateId} IS NULL`)).orderBy(pageSections.orderIndex);
+      if (origSections.length > 0) {
+        await db.insert(pageSections).values(origSections.map((s) => ({ pageId: dup.id, sectionType: s.sectionType, label: s.label, orderIndex: s.orderIndex, isVisible: s.isVisible, config: s.config })));
+      }
+
+      return res.json(dup);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/pages/:id/duplicate", err);
+      return res.status(500).json({ error: "Failed to duplicate page" });
+    }
+  });
+
   app.patch("/api/admin/canvas/pages/reorder", requireAdminPageAccess("landing-page"), validateRequest(z.object({ orderedIds: z.array(z.number()).min(1) })), async (req: Request, res: Response) => {
     try {
       const { orderedIds } = req.body as { orderedIds: number[] };
@@ -1558,6 +1597,23 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error in PATCH /api/admin/canvas/pages/:id/publish", err);
       return res.status(500).json({ error: "Failed to toggle publish status" });
+    }
+  });
+
+  app.post("/api/admin/canvas/pages/:id/preview-token", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [page] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+      if (!page) return res.status(404).json({ error: "Page not found" });
+
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + PREVIEW_TOKEN_TTL_MS;
+      previewTokens.set(token, { pageId: id, expiresAt });
+
+      return res.json({ token });
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/pages/:id/preview-token", err);
+      return res.status(500).json({ error: "Failed to generate preview token" });
     }
   });
 
@@ -1884,6 +1940,15 @@ export async function registerRoutes(
     try {
       const slugParam = (req.query.slug as string) ?? "/";
       const templateIdParam = req.query.templateId ? parseInt(req.query.templateId as string) : null;
+      const previewToken = (req.query.token as string) ?? null;
+
+      let previewPageId: number | null = null;
+      if (previewToken) {
+        const tokenData = previewTokens.get(previewToken);
+        if (tokenData && tokenData.expiresAt > Date.now()) {
+          previewPageId = tokenData.pageId;
+        }
+      }
 
       if (templateIdParam) {
         const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, templateIdParam)).limit(1);
@@ -1910,7 +1975,9 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Page not found" });
       }
 
-      if (page.status !== "published" && page.slug !== "/") {
+      const isPreviewAuthorized = previewPageId !== null && previewPageId === page.id;
+
+      if (page.status !== "published" && page.slug !== "/" && !isPreviewAuthorized) {
         return res.status(404).json({ error: "Page not found" });
       }
 

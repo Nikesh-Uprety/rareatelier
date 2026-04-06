@@ -28,7 +28,7 @@ import session from "express-session";
 import { createServer } from "http";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { products, users } from "@shared/schema";
+import { products, users, pages, pageSections, pageTemplates, siteSettings } from "@shared/schema";
 import { configurePassport, passport } from "./auth";
 import { db, pool } from "./db";
 import { logger } from "./logger";
@@ -395,6 +395,52 @@ async function ensureRootSuperAdminState() {
   } catch (error) {
     logger.warn(
       "Default product attributes bootstrap skipped",
+      {
+        timestamp: new Date().toISOString(),
+        source: "APP",
+      },
+      error,
+      {
+        reason: "database_unavailable_during_startup",
+      },
+    );
+  }
+
+  // Ensure Home page exists for Canvas multi-page builder
+  try {
+    const { sql } = await import("drizzle-orm");
+    const [homePage] = await db.select().from(pages).where(sql`${pages.isHomepage} = true`).limit(1);
+    if (!homePage) {
+      const settings = await db.select().from(siteSettings).limit(1);
+      const activeTemplateId = settings[0]?.activeTemplateId;
+      const [newHomePage] = await db.insert(pages).values({
+        slug: "/",
+        title: "Home",
+        status: "published",
+        isHomepage: true,
+        showInNav: true,
+        sortOrder: 0,
+      }).returning();
+
+      if (activeTemplateId) {
+        const templateSections = await db.select().from(pageSections).where(sql`${pageSections.templateId} = ${activeTemplateId} AND ${pageSections.pageId} IS NULL`).orderBy(pageSections.orderIndex);
+        if (templateSections.length > 0) {
+          await db.insert(pageSections).values(
+            templateSections.map((s) => ({
+              pageId: newHomePage.id,
+              sectionType: s.sectionType,
+              label: s.label,
+              orderIndex: s.orderIndex,
+              isVisible: s.isVisible,
+              config: s.config,
+            }))
+          );
+        }
+      }
+    }
+  } catch (error) {
+    logger.warn(
+      "Home page migration skipped",
       {
         timestamp: new Date().toISOString(),
         source: "APP",

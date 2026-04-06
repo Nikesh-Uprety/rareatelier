@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { CanvasPage } from "@/lib/adminApi";
-import { getCanvasPages, deleteCanvasPage, toggleCanvasPagePublish } from "@/lib/adminApi";
+import { getCanvasPages, deleteCanvasPage, toggleCanvasPagePublish, duplicateCanvasPage } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 
 interface PageListSidebarProps {
@@ -53,6 +53,17 @@ export function PageListSidebar({
     mutationFn: toggleCanvasPagePublish,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages"] });
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: duplicateCanvasPage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages"] });
+      toast({ title: "Page duplicated", description: "A copy of the page has been created." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to duplicate page.", variant: "destructive" });
     },
   });
 
@@ -133,6 +144,10 @@ export function PageListSidebar({
                 <DropdownMenuContent align="end" className="w-40">
                   <DropdownMenuItem onClick={() => publishMutation.mutate(page.id)}>
                     {page.status === "published" ? "Unpublish" : "Publish"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => duplicateMutation.mutate(page.id)}>
+                    <Copy className="h-3.5 w-3.5 mr-1.5" />
+                    Duplicate
                   </DropdownMenuItem>
                   {onPreview && (
                     <DropdownMenuItem onClick={() => onPreview(page)}>

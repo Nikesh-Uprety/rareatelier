@@ -10,6 +10,7 @@ import {
   Plus,
   Save,
   ArrowLeft,
+  Copy,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SortableSectionList } from "./SortableSectionList";
@@ -25,6 +26,7 @@ import {
   toggleCanvasPagePublish,
   deletePageSection,
   updatePageSection,
+  duplicateCanvasPage,
 } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 
@@ -95,6 +97,17 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages", pageId] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages"] });
+    },
+  });
+
+  const duplicatePageMutation = useMutation({
+    mutationFn: () => duplicateCanvasPage(pageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/pages"] });
+      toast({ title: "Page duplicated", description: "A copy of the page has been created." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to duplicate page.", variant: "destructive" });
     },
   });
 
@@ -227,6 +240,16 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
               onClick={() => publishMutation.mutate()}
             >
               {page.status === "published" ? "Unpublish" : "Publish"}
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => duplicatePageMutation.mutate()}
+            >
+              <Copy className="h-3.5 w-3.5 mr-1" />
+              Duplicate Page
             </Button>
 
             <Button

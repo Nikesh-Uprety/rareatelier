@@ -1095,6 +1095,11 @@ export async function reorderCanvasPages(orderedIds: number[]): Promise<void> {
   await apiRequest("PATCH", "/api/admin/canvas/pages/reorder", { orderedIds });
 }
 
+export async function duplicateCanvasPage(id: number): Promise<CanvasPage> {
+  const res = await apiRequest("POST", `/api/admin/canvas/pages/${id}/duplicate`);
+  return (await res.json()) as CanvasPage;
+}
+
 export async function toggleCanvasPagePublish(id: number): Promise<CanvasPage> {
   const res = await apiRequest("PATCH", `/api/admin/canvas/pages/${id}/publish`);
   return (await res.json()) as CanvasPage;
@@ -1197,8 +1202,16 @@ export async function getPublicPages(): Promise<CanvasPage[]> {
   return json;
 }
 
-export async function getPublicPageConfig(slug: string): Promise<any> {
-  const res = await fetch(`/api/public/page-config?slug=${encodeURIComponent(slug)}`);
+export async function generatePreviewToken(pageId: number): Promise<string> {
+  const res = await apiRequest("POST", `/api/admin/canvas/pages/${pageId}/preview-token`);
+  const json = (await res.json()) as { token: string };
+  return json.token;
+}
+
+export async function getPublicPageConfig(slug: string, token?: string): Promise<any> {
+  const params = new URLSearchParams({ slug });
+  if (token) params.set("token", token);
+  const res = await fetch(`/api/public/page-config?${params.toString()}`);
   return (await res.json()) as any;
 }
 
