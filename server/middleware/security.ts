@@ -108,12 +108,12 @@ export function securityHeaders(_req: Request, res: Response, next: NextFunction
   if (process.env.NODE_ENV === "production") {
     res.set(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
+      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https:; worker-src 'self' blob:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
     );
   } else {
     res.set(
       "Content-Security-Policy",
-      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https: ws: wss:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
+      `default-src 'self'; script-src 'self' 'unsafe-inline' https://www.instagram.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' https: ws: wss:; worker-src 'self' blob:; frame-src 'self' https://www.google.com https://player.cloudinary.com https://www.instagram.com; frame-ancestors ${frameAncestors}; object-src 'none'; base-uri 'self';`
     );
   }
 

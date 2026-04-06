@@ -518,6 +518,94 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  app.get("/sitemap.xml", async (req: Request, res: Response) => {
+    try {
+      const forwardedProtoHeader = req.headers["x-forwarded-proto"];
+      const forwardedProto = Array.isArray(forwardedProtoHeader)
+        ? forwardedProtoHeader[0]
+        : forwardedProtoHeader?.split(",")[0];
+      const protocol = forwardedProto?.trim() || req.protocol || "https";
+      const host = req.get("host");
+
+      if (!host) {
+        return res.status(400).send("Missing host");
+      }
+
+      const baseUrl = `${protocol}://${host}`;
+      const staticEntries = [
+        { path: "/", lastmod: null as Date | string | null },
+        { path: "/products", lastmod: null as Date | string | null },
+        { path: "/new-collection", lastmod: null as Date | string | null },
+        { path: "/atelier", lastmod: null as Date | string | null },
+        { path: "/shipping", lastmod: null as Date | string | null },
+        { path: "/refund", lastmod: null as Date | string | null },
+        { path: "/privacy", lastmod: null as Date | string | null },
+        { path: "/terms", lastmod: null as Date | string | null },
+      ];
+
+      const publishedPages = await db
+        .select({
+          slug: pages.slug,
+          updatedAt: pages.updatedAt,
+        })
+        .from(pages)
+        .where(eq(pages.status, "published"));
+
+      const publishedProducts = await db
+        .select({
+          id: products.id,
+          updatedAt: products.updatedAt,
+        })
+        .from(products);
+
+      const uniqueEntries = new Map<string, { lastmod: Date | string | null }>();
+
+      const addEntry = (pathValue: string, lastmod: Date | string | null) => {
+        if (!pathValue.startsWith("/") || pathValue.startsWith("/admin")) return;
+        const existing = uniqueEntries.get(pathValue);
+        if (!existing || (lastmod && !existing.lastmod)) {
+          uniqueEntries.set(pathValue, { lastmod });
+        }
+      };
+
+      staticEntries.forEach((entry) => addEntry(entry.path, entry.lastmod));
+      publishedPages.forEach((page) => addEntry(page.slug, page.updatedAt ?? null));
+      publishedProducts.forEach((product) => addEntry(`/product/${product.id}`, product.updatedAt ?? null));
+
+      const escapeXml = (value: string) =>
+        value
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&apos;");
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${Array.from(uniqueEntries.entries())
+  .map(([pathValue, entry]) => {
+    const loc = escapeXml(new URL(pathValue, baseUrl).toString());
+    const lastmod =
+      entry.lastmod instanceof Date
+        ? entry.lastmod.toISOString()
+        : typeof entry.lastmod === "string" && entry.lastmod
+          ? new Date(entry.lastmod).toISOString()
+          : null;
+
+    return `  <url>
+    <loc>${loc}</loc>${lastmod ? `
+    <lastmod>${escapeXml(lastmod)}</lastmod>` : ""}
+  </url>`;
+  })
+  .join("\n")}
+</urlset>`;
+
+      res.type("application/xml").send(xml);
+    } catch (error) {
+      handleApiError(res, error, "GET /sitemap.xml");
+    }
+  });
+
   const sectionVariant = (section: { config?: unknown }) => {
     if (!section?.config || typeof section.config !== "object") return null;
     const variant = (section.config as Record<string, unknown>).variant;

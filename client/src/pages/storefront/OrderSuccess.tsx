@@ -2,11 +2,11 @@ import { useRoute, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles, Shield, Mail, MessageSquare } from "lucide-react";
-import { Helmet } from "react-helmet-async";
 import { fetchOrderById, getCachedLatestOrder, updateCachedOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { formatPrice } from "@/lib/format";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function paymentMethodLabel(method: string) {
   const labels: Record<string, string> = {
@@ -115,23 +115,39 @@ export default function OrderSuccess() {
 
   if (isLoading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <BrandedLoader />
-      </div>
+      <>
+        <StorefrontSeo
+          title="Order Confirmed | Rare Atelier"
+          description="Your Rare Atelier order has been placed successfully."
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          noIndex
+        />
+        <div className="min-h-[70vh] flex items-center justify-center">
+          <BrandedLoader />
+        </div>
+      </>
     );
   }
 
   if (!order) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-2xl font-bold mb-4">Order Not Found</h1>
-        <p className="text-muted-foreground mb-8">
-          We couldn't find this order, or you do not have access to view it.
-        </p>
-        <Link href="/">
-          <Button>Return to Home</Button>
-        </Link>
-      </div>
+      <>
+        <StorefrontSeo
+          title="Order Confirmation | Rare Atelier"
+          description="This order confirmation page is not available."
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          noIndex
+        />
+        <div className="min-h-[60vh] flex flex-col items-center justify-center p-4 text-center">
+          <h1 className="text-2xl font-bold mb-4">Order Not Found</h1>
+          <p className="text-muted-foreground mb-8">
+            We couldn't find this order, or you do not have access to view it.
+          </p>
+          <Link href="/">
+            <Button>Return to Home</Button>
+          </Link>
+        </div>
+      </>
     );
   }
 
@@ -181,13 +197,12 @@ export default function OrderSuccess() {
 
   return (
     <div className="order-confirmation-page container mx-auto px-4 pt-6 pb-10 lg:pt-10 lg:pb-16 max-w-5xl">
-      <Helmet>
-        <title>Order confirmed | Rare Atelier</title>
-        <meta
-          name="description"
-          content={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
-        />
-      </Helmet>
+      <StorefrontSeo
+        title="Order Confirmed | Rare Atelier"
+        description={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
+        canonicalPath={`/order-confirmation/${order.id}`}
+        noIndex
+      />
       <style>
         {`
           @keyframes ocFloat {

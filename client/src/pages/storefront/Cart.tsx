@@ -8,6 +8,7 @@ import { cancelOrder, fetchOrderById, getCachedOrderHistory, updateCachedOrder }
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function getCartOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
   const currentPrice = Number(price);
@@ -255,36 +256,59 @@ export default function Cart() {
 
   if (!hasHydrated) {
     return (
-      <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
-        <div className="flex items-center justify-center py-20">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
+      <>
+        <StorefrontSeo
+          title="Your Bag | Rare Atelier"
+          description="Review the items in your Rare Atelier bag before checkout."
+          canonicalPath="/cart"
+          noIndex
+        />
+        <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
+          <div className="flex items-center justify-center py-20">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
-        <div className="max-w-lg mx-auto text-center py-20">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 italic">Empty Bag</h1>
-            <p className="text-zinc-500 uppercase text-[10px] tracking-widest font-bold mb-12">Your selection is currently empty.</p>
-            <Button size="lg" asChild className="rounded-none px-12 h-14 bg-black text-white hover:bg-zinc-800 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-2xl">
-              <Link href="/products">Continue Exploring</Link>
-            </Button>
-          </motion.div>
+      <>
+        <StorefrontSeo
+          title="Your Bag | Rare Atelier"
+          description="Review the items in your Rare Atelier bag before checkout."
+          canonicalPath="/cart"
+          noIndex
+        />
+        <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+          <div className="max-w-lg mx-auto text-center py-20">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 italic">Empty Bag</h1>
+              <p className="text-zinc-500 uppercase text-[10px] tracking-widest font-bold mb-12">Your selection is currently empty.</p>
+              <Button size="lg" asChild className="rounded-none px-12 h-14 bg-black text-white hover:bg-zinc-800 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-2xl">
+                <Link href="/products">Continue Exploring</Link>
+              </Button>
+            </motion.div>
+          </div>
+          <RecentOrderSection />
         </div>
-        <RecentOrderSection />
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+    <>
+      <StorefrontSeo
+        title="Your Bag | Rare Atelier"
+        description="Review the items in your Rare Atelier bag before checkout."
+        canonicalPath="/cart"
+        noIndex
+      />
+      <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
       <h1 className="text-4xl font-black uppercase tracking-tighter mb-16 italic underline decoration-zinc-100 dark:decoration-white/5 underline-offset-[20px]">Your Bag</h1>
 
       <div className="flex flex-col lg:flex-row gap-20">
@@ -425,6 +449,7 @@ export default function Cart() {
       </div>
       
       <RecentOrderSection />
-    </div>
+      </div>
+    </>
   );
 }

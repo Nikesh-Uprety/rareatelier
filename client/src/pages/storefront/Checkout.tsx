@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 
@@ -421,7 +422,14 @@ export default function Checkout() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
+    <>
+      <StorefrontSeo
+        title="Checkout | Rare Atelier"
+        description="Complete your Rare Atelier order with secure checkout and delivery details."
+        canonicalPath="/checkout"
+        noIndex
+      />
+      <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
       <div className="flex flex-col lg:flex-row gap-20">
         <form
           data-testid="checkout-form"
@@ -799,6 +807,7 @@ export default function Checkout() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
