@@ -287,6 +287,30 @@ export default function AdminLayout({
       icon: FileText,
       badge: "BETA" as const,
     },
+    {
+      href: "/admin/canvas?tab=templates",
+      label: "Templates",
+      description: "Rare Atelier default templates",
+      icon: Layers3,
+    },
+    {
+      href: "/admin/canvas?tab=theme",
+      label: "Theme",
+      description: "Typography and storefront styling",
+      icon: Type,
+    },
+    {
+      href: "/admin/canvas?tab=branding",
+      label: "Branding",
+      description: "Logos, colors, and brand assets",
+      icon: Paintbrush2,
+    },
+    {
+      href: "/admin/canvas?tab=navigation",
+      label: "Navigation",
+      description: "Header links and page order",
+      icon: Link2,
+    },
   ];
   const currentCanvasLocation =
     typeof window !== "undefined"

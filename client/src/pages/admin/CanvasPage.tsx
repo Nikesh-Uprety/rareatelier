@@ -60,12 +60,55 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-type ActiveTab = "pages";
+type ActiveTab = "pages" | "templates" | "theme" | "branding" | "navigation";
+
+const CUSTOMIZATION_TABS: Array<{
+  id: ActiveTab;
+  label: string;
+  description: string;
+  icon: typeof FileText;
+}> = [
+  {
+    id: "pages",
+    label: "Pages",
+    description: "Edit full-page storefront layouts",
+    icon: FileText,
+  },
+  {
+    id: "templates",
+    label: "Templates",
+    description: "Start from Rare Atelier defaults",
+    icon: Layout,
+  },
+  {
+    id: "theme",
+    label: "Theme",
+    description: "Typography and presentation system",
+    icon: Type,
+  },
+  {
+    id: "branding",
+    label: "Branding",
+    description: "Logos, colors, and visual assets",
+    icon: Palette,
+  },
+  {
+    id: "navigation",
+    label: "Navigation",
+    description: "Header links and page ordering",
+    icon: LinkIcon,
+  },
+];
 
 export default function CanvasPage() {
   const [location] = useLocation();
   const readTabFromUrl = (): ActiveTab => {
-    return "pages";
+    if (typeof window === "undefined") return "pages";
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("tab");
+    return CUSTOMIZATION_TABS.some((tab) => tab.id === value)
+      ? (value as ActiveTab)
+      : "pages";
   };
   const initialTab = useMemo<ActiveTab>(() => readTabFromUrl(), []);
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
@@ -85,7 +128,13 @@ export default function CanvasPage() {
       const params = new URLSearchParams(window.location.search);
       setActiveTab(readTabFromUrl());
 
-      if (params.get("panel") === "list") {
+      const nextPageId = Number(params.get("pageId"));
+      if (params.get("tab") === "pages" && Number.isFinite(nextPageId) && nextPageId > 0) {
+        setSelectedPageId(nextPageId);
+        return;
+      }
+
+      if (params.get("panel") === "list" || params.get("tab") !== "pages") {
         setSelectedPageId(null);
       }
     };
@@ -104,19 +153,45 @@ export default function CanvasPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    params.set("tab", "pages");
+    params.set("tab", activeTab);
+    if (activeTab !== "pages") {
+      params.delete("panel");
+      params.delete("pageId");
+    }
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    window.dispatchEvent(new Event("canvas-customization-nav"));
   }, [activeTab]);
 
   function handlePageSelect(id: number) {
     setSelectedPageId(id);
     setActiveTab("pages");
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", "pages");
+      params.set("panel", "editor");
+      params.set("pageId", String(id));
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, "", nextUrl);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      window.dispatchEvent(new Event("canvas-customization-nav"));
+    }
   }
 
   function handlePageCreated(id: number) {
     setSelectedPageId(id);
     setSelectedCreateTemplate(null);
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("tab", "pages");
+      params.set("panel", "editor");
+      params.set("pageId", String(id));
+      const nextUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState({}, "", nextUrl);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      window.dispatchEvent(new Event("canvas-customization-nav"));
+    }
   }
 
   function handleDeletePage(_id: number) {
@@ -131,16 +206,19 @@ export default function CanvasPage() {
   }
 
   const sidebarWidth = sidebarCollapsed ? "w-12" : "w-64";
+  const activeTabMeta = CUSTOMIZATION_TABS.find((tab) => tab.id === activeTab);
+  const isEditingPage = activeTab === "pages" && Boolean(selectedPageId);
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
       {/* Sidebar */}
-      <div
-        className={cn(
-          "border-r bg-card/50 flex flex-col transition-all duration-300 shrink-0",
-          sidebarWidth
-        )}
-      >
+      {!isEditingPage ? (
+        <div
+          className={cn(
+            "border-r bg-card/50 flex flex-col transition-all duration-300 shrink-0",
+            sidebarWidth
+          )}
+        >
         {/* Collapse toggle */}
         <div className="flex items-center justify-between p-3 border-b">
           {!sidebarCollapsed && (
@@ -169,26 +247,34 @@ export default function CanvasPage() {
         {/* Nav items */}
         {!sidebarCollapsed && (
           <div className="flex-1 overflow-y-auto">
-            {/* Pages section */}
             <div className="p-3">
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                  activeTab === "pages"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted/50 text-muted-foreground"
-                )}
-                onClick={() => setActiveTab("pages")}
-              >
-                <FileText className="h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate">Pages</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Build multi-page site
-                  </p>
-                </div>
-              </button>
+              <div className="space-y-1.5">
+                {CUSTOMIZATION_TABS.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      className={cn(
+                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "hover:bg-muted/50 text-muted-foreground"
+                      )}
+                      onClick={() => setActiveTab(tab.id)}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold truncate">{tab.label}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {tab.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
           </div>
@@ -197,20 +283,27 @@ export default function CanvasPage() {
         {/* Collapsed icon nav */}
         {sidebarCollapsed && (
           <div className="flex-1 flex flex-col items-center gap-4 py-4">
-            <button
-              type="button"
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                activeTab === "pages" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-              )}
-              onClick={() => setActiveTab("pages")}
-              title="Pages"
-            >
-              <FileText className="h-4 w-4" />
-            </button>
+            {CUSTOMIZATION_TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    activeTab === tab.id ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+                  )}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={tab.label}
+                >
+                  <Icon className="h-4 w-4" />
+                </button>
+              );
+            })}
           </div>
         )}
-      </div>
+        </div>
+      ) : null}
 
       {/* Page List (when Pages tab active and no page selected) */}
       {activeTab === "pages" && !selectedPageId && (
@@ -236,9 +329,48 @@ export default function CanvasPage() {
       {/* Page Editor (when a page is selected) */}
       {activeTab === "pages" && selectedPageId && (
         <div className="flex-1 overflow-hidden">
-          <PageEditor pageId={selectedPageId} onBack={() => setSelectedPageId(null)} />
+          <PageEditor
+            pageId={selectedPageId}
+            onBack={() => {
+              setSelectedPageId(null);
+              if (typeof window !== "undefined") {
+                const params = new URLSearchParams(window.location.search);
+                params.set("tab", "pages");
+                params.set("panel", "list");
+                params.delete("pageId");
+                const nextUrl = `${window.location.pathname}?${params.toString()}`;
+                window.history.replaceState({}, "", nextUrl);
+                window.dispatchEvent(new PopStateEvent("popstate"));
+                window.dispatchEvent(new Event("canvas-customization-nav"));
+              }
+            }}
+          />
         </div>
       )}
+
+      {activeTab !== "pages" ? (
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="border-b bg-card/40 px-6 py-5">
+            <h2 className="text-lg font-semibold">{activeTabMeta?.label}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{activeTabMeta?.description}</p>
+          </div>
+
+          {activeTab === "templates" ? (
+            <TemplatesPanel
+              templates={templates}
+              isLoading={templatesLoading}
+              onUseTemplate={(template) => {
+                setSelectedCreateTemplate(template);
+                setShowCreateDialog(true);
+              }}
+            />
+          ) : null}
+
+          {activeTab === "theme" ? <TypographyManager /> : null}
+          {activeTab === "branding" ? <BrandingManager /> : null}
+          {activeTab === "navigation" ? <NavigationManager /> : null}
+        </div>
+      ) : null}
 
       {/* Create Page Dialog */}
       <CreatePageDialog
