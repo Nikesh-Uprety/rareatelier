@@ -156,7 +156,7 @@ function MaisonNocturneHero({ heroImages, config }: { heroImages: string[]; conf
                   className="absolute inset-0"
                   style={{
                     background:
-                      "linear-gradient(180deg, rgba(14,12,10,0.08) 0%, rgba(14,12,10,0.3) 100%), linear-gradient(90deg, rgba(14,12,10,0.28) 0%, rgba(14,12,10,0.1) 35%, rgba(14,12,10,0.0) 100%), linear-gradient(135deg, rgba(201,169,110,0.08) 0%, transparent 48%)",
+                      "linear-gradient(180deg, rgba(14,12,10,0.35) 0%, rgba(14,12,10,0.55) 100%), linear-gradient(90deg, rgba(14,12,10,0.28) 0%, rgba(14,12,10,0.1) 35%, rgba(14,12,10,0.0) 100%), linear-gradient(135deg, rgba(201,169,110,0.08) 0%, transparent 48%)",
                   }}
                 />
               </div>
@@ -436,7 +436,8 @@ function DraftHeroOverlay({
               {tag}
             </span>
 
-            <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter shadow-black/20 text-shadow-sm">
+            <h1 className="font-serif text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-semibold leading-[0.9] tracking-tighter"
+              style={{ textShadow: "0 2px 24px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3)" }}>
               {headline.split("\n").map((line, index) => (
                 <span key={`${line}-${index}`}>
                   {index > 0 ? <br /> : null}
@@ -445,7 +446,8 @@ function DraftHeroOverlay({
               ))}
             </h1>
 
-            <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide text-shadow-sm">
+            <p className="mt-4 md:mt-8 text-xl sm:text-3xl md:text-4xl font-serif italic opacity-70 tracking-wide"
+              style={{ textShadow: "0 1px 12px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)" }}>
               {subline}
             </p>
           </motion.div>
@@ -482,7 +484,8 @@ function DraftHeroOverlay({
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.6 }}
             transition={{ duration: 0.8, delay: 1.0, ease: "easeOut" }}
-            className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold text-shadow-sm mt-1 md:mt-0"
+            className="text-[8px] md:text-[11px] tracking-[0.5em] md:tracking-[0.7em] uppercase text-white font-bold mt-1 md:mt-0"
+            style={{ textShadow: "0 1px 8px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.2)" }}
           >
             {footnote}
           </motion.p>
@@ -569,7 +572,12 @@ function OfficialCompactHero({
           </motion.div>
         </AnimatePresence>
       )}
-      <div className="absolute inset-0 bg-black/24 pointer-events-none" />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "linear-gradient(180deg, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.20) 25%, rgba(0,0,0,0.10) 50%, transparent 100%)",
+        }}
+      />
       <DraftHeroOverlay {...overlay} />
     </section>
   );
@@ -664,7 +672,12 @@ export default function HeroSection({
           </motion.div>
         </AnimatePresence>
       )}
-      <div className="absolute inset-0 bg-black/24 pointer-events-none" />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "linear-gradient(180deg, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.20) 25%, rgba(0,0,0,0.10) 50%, transparent 100%)",
+        }}
+      />
 
       <DraftHeroOverlay />
     </section>

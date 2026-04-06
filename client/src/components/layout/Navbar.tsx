@@ -223,7 +223,7 @@ export default function Navbar() {
     : "brightness(0) invert(1)";
   const navUnderlineColor = useHeroContrastState ? "#ffffff" : navForegroundColor;
   const navTextShadow = useHeroContrastState
-    ? "0 0 16px rgba(255,255,255,0.34), 0 2px 16px rgba(0,0,0,0.2)"
+    ? "0 2px 12px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.15)"
     : "none";
   const mobileMenuSurface = {
     background: "#ffffff",

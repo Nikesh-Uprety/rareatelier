@@ -43,7 +43,20 @@ import {
   Save,
   RotateCcw,
   ShieldAlert,
+  Type,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  persistAdminFontSettings,
+  readAdminFontSettings,
+  type AdminFontScale,
+} from "@/lib/adminFont";
 
 interface ProfileOverview {
   profile: {
@@ -184,6 +197,7 @@ export default function AdminProfilePage() {
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string | null>(null);
   const [avatarToDelete, setAvatarToDelete] = useState<AvatarHistoryItem | null>(null);
+  const [fontScale, setFontScale] = useState<AdminFontScale>(() => readAdminFontSettings().scale);
 
   const overviewQuery = useQuery<{ success: boolean; data: ProfileOverview }>({
     queryKey: ["admin", "profile", "overview"],
@@ -235,6 +249,25 @@ export default function AdminProfilePage() {
     setFormErrors(nextErrors);
     return Object.keys(nextErrors).length === 0;
   };
+
+  const handleFontScaleChange = (scale: AdminFontScale) => {
+    setFontScale(scale);
+    const settings = readAdminFontSettings();
+    persistAdminFontSettings({ ...settings, scale });
+    toast({ title: "Font size updated", description: `Text size set to ${scale.replace("-", " ")}.` });
+  };
+
+  useEffect(() => {
+    const syncFontScale = () => {
+      setFontScale(readAdminFontSettings().scale);
+    };
+    window.addEventListener("admin-font-settings-updated", syncFontScale);
+    window.addEventListener("storage", syncFontScale);
+    return () => {
+      window.removeEventListener("admin-font-settings-updated", syncFontScale);
+      window.removeEventListener("storage", syncFontScale);
+    };
+  }, []);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -713,6 +746,25 @@ export default function AdminProfilePage() {
                 checked={form.orderAlertSound}
                 onCheckedChange={(checked) => setForm((prev) => (prev ? { ...prev, orderAlertSound: checked } : prev))}
               />
+            </div>
+            <Separator />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Type className="h-4 w-4 text-muted-foreground" />
+                <p className="font-medium">Font Size</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Adjust the text size across the admin panel.</p>
+              <Select value={fontScale} onValueChange={handleFontScaleChange}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select size" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="large">Large</SelectItem>
+                  <SelectItem value="very-large">Very Large</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
