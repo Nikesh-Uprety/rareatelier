@@ -1050,6 +1050,7 @@ export interface SiteBranding {
   ogImageUrl: string | null;
   footerLogoUrl: string | null;
   footerText: string | null;
+  fontPreset: string | null;
   updatedAt: string;
 }
 

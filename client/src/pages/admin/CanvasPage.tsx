@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PageListSidebar } from "@/components/canvas/PageListSidebar";
 import { PageEditor } from "@/components/canvas/PageEditor";
 import { CreatePageDialog } from "@/components/canvas/CreatePageDialog";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import {
   FileText,
@@ -27,15 +27,19 @@ import {
   Plus,
   Check,
   Trash2,
+  X,
+  Loader2,
+  Edit,
 } from "lucide-react";
 import {
   Label,
   Skeleton,
   OptimizedImage,
 } from "@/components/ui";
+import { STOREFRONT_FONT_OPTIONS, STOREFRONT_FONT_FAMILIES, type StorefrontFontPreset } from "@/lib/storefrontFonts";
 import type { CanvasPage, SiteBranding, ColorPreset } from "@/lib/adminApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset } from "@/lib/adminApi";
+import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
@@ -342,20 +346,8 @@ export default function CanvasPage() {
       {/* Branding tab - management */}
       {activeTab === "branding" && <BrandingManager />}
 
-      {/* Theme tab - placeholder */}
-      {activeTab === "theme" && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center space-y-3">
-            <Type className="h-10 w-10 mx-auto text-muted-foreground/30" />
-            <div>
-              <h3 className="text-lg font-semibold">Theme & Branding</h3>
-              <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                Font presets are available in the existing Canvas. Color presets and branding coming soon.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Theme tab - typography */}
+      {activeTab === "theme" && <TypographyManager />}
 
       {/* Create Page Dialog */}
       <CreatePageDialog
@@ -367,13 +359,121 @@ export default function CanvasPage() {
   );
 }
 
+function TypographyManager() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: branding, isLoading } = useQuery({
+    queryKey: ["/api/admin/canvas/branding"],
+    queryFn: getBranding,
+  });
+
+  const updateBrandingMutation = useMutation({
+    mutationFn: (data: Partial<SiteBranding>) => updateBranding(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/branding"] });
+      toast({ title: "Font updated", description: "Typography preset has been applied." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to update font.", variant: "destructive" });
+    },
+  });
+
+  const currentFont = (branding?.fontPreset || "inter") as StorefrontFontPreset;
+
+  if (isLoading) {
+    return (
+      <div className="flex-1 p-6">
+        <div className="space-y-4">
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-3/4" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <Type className="h-5 w-5" />
+            Typography
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Choose a font preset for your storefront.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          {STOREFRONT_FONT_OPTIONS.map((option) => {
+            const families = STOREFRONT_FONT_FAMILIES[option.id as StorefrontFontPreset];
+            const isActive = currentFont === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => updateBrandingMutation.mutate({ fontPreset: option.id })}
+                className={cn(
+                  "flex items-center gap-4 p-4 rounded-lg border text-left transition-colors",
+                  isActive
+                    ? "border-primary bg-primary/5"
+                    : "border-muted/50 hover:border-muted/100 hover:bg-muted/30"
+                )}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold" style={{ fontFamily: families.preview }}>
+                      {option.label}
+                    </p>
+                    {isActive && (
+                      <Badge variant="default" className="text-[9px] px-1.5 py-0">Active</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+                </div>
+                <div className="text-2xl font-bold text-muted-foreground/20" style={{ fontFamily: families.preview }}>
+                  Aa
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="p-4 rounded-lg border bg-muted/30">
+          <p className="text-xs text-muted-foreground mb-3">Preview</p>
+          <p className="text-xl font-semibold mb-2" style={{ fontFamily: STOREFRONT_FONT_FAMILIES[currentFont].display }}>
+            The quick brown fox
+          </p>
+          <p className="text-sm" style={{ fontFamily: STOREFRONT_FONT_FAMILIES[currentFont].body }}>
+            jumps over the lazy dog. 0123456789.
+          </p>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => updateBrandingMutation.mutate({ fontPreset: "inter" })}
+          disabled={currentFont === "inter"}
+        >
+          Reset to default
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function BrandingManager() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [showLogoDialog, setShowLogoDialog] = useState(false);
+  const [showLogoDarkDialog, setShowLogoDarkDialog] = useState(false);
   const [showFaviconDialog, setShowFaviconDialog] = useState(false);
   const [showFooterDialog, setShowFooterDialog] = useState(false);
+  const [showColorDialog, setShowColorDialog] = useState(false);
+  const [editingPreset, setEditingPreset] = useState<ColorPreset | null>(null);
 
   const { data: branding, isLoading: brandingLoading } = useQuery({
     queryKey: ["/api/admin/canvas/branding"],
@@ -432,16 +532,16 @@ function BrandingManager() {
     },
   });
 
-const deletePresetMutation = useMutation({
-  mutationFn: (id: number) => deleteColorPreset(id),
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/colors"] });
-    toast({ title: "Color preset deleted", description: "Color preset has been removed." });
-  },
-  onError: (err: any) => {
-    toast({ title: "Error", description: err.message || "Failed to delete color preset.", variant: "destructive" });
-  },
-});
+  const deletePresetMutation = useMutation({
+    mutationFn: (id: number) => deleteColorPreset(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/colors"] });
+      toast({ title: "Color preset deleted", description: "Color preset has been removed." });
+    },
+    onError: (err: any) => {
+      toast({ title: "Error", description: err.message || "Failed to delete color preset.", variant: "destructive" });
+    },
+  });
 
   if (brandingLoading || presetsLoading) {
     return (
@@ -470,17 +570,14 @@ const deletePresetMutation = useMutation({
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Logo Upload */}
+            {/* Logo Light Upload */}
             <div className="space-y-3">
               <Label className="flex items-center gap-2">
                 Logo (Light Mode)
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowLogoDialog(true);
-                    // We'll implement this with an actual upload component in a real implementation
-                  }}
+                  onClick={() => setShowLogoDialog(true)}
                 >
                   <Upload className="h-3 w-3" />
                   Upload
@@ -508,9 +605,7 @@ const deletePresetMutation = useMutation({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    setShowFaviconDialog(true);
-                  }}
+                  onClick={() => setShowFaviconDialog(true)}
                 >
                   <Upload className="h-3 w-3" />
                   Upload
@@ -527,6 +622,33 @@ const deletePresetMutation = useMutation({
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">No favicon uploaded</p>
+              )}
+            </div>
+
+            {/* Logo Dark Upload */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                Logo (Dark Mode)
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowLogoDarkDialog(true)}
+                >
+                  <Upload className="h-3 w-3" />
+                  Upload
+                </Button>
+              </Label>
+              {branding?.logoDarkUrl ? (
+                <div className="mt-2">
+                  <p className="text-xs text-muted-foreground">Current dark logo:</p>
+                  <OptimizedImage
+                    src={branding.logoDarkUrl}
+                    alt="Brand logo dark"
+                    className="h-16 w-auto rounded border border-muted/50"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">No dark logo uploaded</p>
               )}
             </div>
           </div>
@@ -548,9 +670,8 @@ const deletePresetMutation = useMutation({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  // Open color preset creator dialog
-                  // This would open a dialog to create a new preset
-                  toast({ title: "Coming soon", description: "Color preset creator dialog will be implemented in a future update." });
+                  setEditingPreset(null);
+                  setShowColorDialog(true);
                 }}
               >
                 <Plus className="h-3 w-3 mr-1.5" />
@@ -571,8 +692,8 @@ const deletePresetMutation = useMutation({
                       isActive={activePresetId === preset.id}
                       onActivate={() => activatePresetMutation.mutate(preset.id)}
                       onEdit={() => {
-                        // Open editor for this preset
-                        toast({ title: "Coming soon", description: "Color preset editor will be implemented in a future update." });
+                        setEditingPreset(preset);
+                        setShowColorDialog(true);
                       }}
                       onDelete={() => deletePresetMutation.mutate(preset.id)}
                     />
@@ -603,10 +724,7 @@ const deletePresetMutation = useMutation({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  // Implement logo upload for footer
-                  toast({ title: "Coming soon", description: "Footer logo upload will be implemented in a future update." });
-                }}
+                onClick={() => setShowFooterDialog(true)}
               >
                 <Upload className="h-3 w-3" />
                 Upload
@@ -627,9 +745,7 @@ const deletePresetMutation = useMutation({
           </div>
 
           <div className="space-y-3">
-            <Label className="flex items-center gap-2">
-              Footer Text
-            </Label>
+            <Label>Footer Text</Label>
             <Input
               placeholder="© 2026 Rare Atelier. All rights reserved."
               defaultValue={branding?.footerText || ""}
@@ -641,21 +757,306 @@ const deletePresetMutation = useMutation({
           </div>
         </div>
       </div>
+
+      {/* Upload Dialogs */}
+      <ImageUploadDialog
+        open={showLogoDialog}
+        onOpenChange={setShowLogoDialog}
+        title="Upload Logo (Light Mode)"
+        maxSizeMB={2}
+        accept="image/png,image/jpeg,image/svg+xml"
+        onSuccess={(url) => updateBrandingMutation.mutate({ logoUrl: url })}
+      />
+      <ImageUploadDialog
+        open={showLogoDarkDialog}
+        onOpenChange={setShowLogoDarkDialog}
+        title="Upload Logo (Dark Mode)"
+        maxSizeMB={2}
+        accept="image/png,image/jpeg,image/svg+xml"
+        onSuccess={(url) => updateBrandingMutation.mutate({ logoDarkUrl: url })}
+      />
+      <ImageUploadDialog
+        open={showFaviconDialog}
+        onOpenChange={setShowFaviconDialog}
+        title="Upload Favicon"
+        maxSizeMB={0.5}
+        accept="image/png,image/x-icon,image/svg+xml"
+        onSuccess={(url) => updateBrandingMutation.mutate({ faviconUrl: url })}
+      />
+      <ImageUploadDialog
+        open={showFooterDialog}
+        onOpenChange={setShowFooterDialog}
+        title="Upload Footer Logo"
+        maxSizeMB={2}
+        accept="image/png,image/jpeg,image/svg+xml"
+        onSuccess={(url) => updateBrandingMutation.mutate({ footerLogoUrl: url })}
+      />
+
+      {/* Color Preset Dialog */}
+      <ColorPresetDialog
+        open={showColorDialog}
+        onOpenChange={(open) => {
+          setShowColorDialog(open);
+          if (!open) setEditingPreset(null);
+        }}
+        preset={editingPreset}
+        onSave={(data) => {
+          if (editingPreset) {
+            updatePresetMutation.mutate({ id: editingPreset.id, data });
+          } else {
+            createPresetMutation.mutate(data);
+          }
+        }}
+      />
     </div>
   );
 }
 
+function ImageUploadDialog({ open, onOpenChange, title, maxSizeMB, accept, onSuccess }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  maxSizeMB: number;
+  accept: string;
+  onSuccess: (url: string) => void;
+}) {
+  const { toast } = useToast();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.size > maxSizeMB * 1024 * 1024) {
+      toast({ title: "File too large", description: `Maximum size is ${maxSizeMB}MB.`, variant: "destructive" });
+      return;
+    }
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    setUploading(true);
+    setProgress(0);
+    try {
+      const url = await uploadProductImageFile(file, (p) => setProgress(p));
+      onSuccess(url);
+      toast({ title: "Image uploaded", description: "File has been uploaded successfully." });
+      setFile(null);
+      setPreview(null);
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message || "Failed to upload image.", variant: "destructive" });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setFile(null);
+    setPreview(null);
+    setProgress(0);
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <input
+            ref={inputRef}
+            type="file"
+            accept={accept}
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <Button
+            variant="outline"
+            onClick={() => inputRef.current?.click()}
+            className="w-full"
+            disabled={uploading}
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            {file ? file.name : "Choose file"}
+          </Button>
+          {preview && (
+            <div className="flex items-center justify-center p-4 border rounded-lg bg-muted/30">
+              <img src={preview} alt="Preview" className="max-h-32 max-w-full object-contain" />
+            </div>
+          )}
+          {file && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                {(file.size / 1024).toFixed(1)} KB
+              </p>
+              <Button
+                onClick={handleUpload}
+                disabled={uploading}
+                className="w-full"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading... {progress}%
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload
+                  </>
+                )}
+              </Button>
+              {uploading && (
+                <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ColorPresetDialog({ open, onOpenChange, preset, onSave }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  preset: ColorPreset | null;
+  onSave: (data: Partial<ColorPreset>) => void;
+}) {
+  const [name, setName] = useState(preset?.presetName || "");
+  const [bgPrimary, setBgPrimary] = useState(preset?.bgPrimary || "#ffffff");
+  const [bgSecondary, setBgSecondary] = useState(preset?.bgSecondary || "#f5f5f5");
+  const [textPrimary, setTextPrimary] = useState(preset?.textPrimary || "#000000");
+  const [textSecondary, setTextSecondary] = useState(preset?.textSecondary || "#666666");
+  const [accentColor, setAccentColor] = useState(preset?.accentColor || "#3b82f6");
+  const [borderColor, setBorderColor] = useState(preset?.borderColor || "#e5e5e5");
+
+  const handleSave = () => {
+    if (!name.trim()) return;
+    onSave({
+      presetName: name,
+      bgPrimary,
+      bgSecondary,
+      textPrimary,
+      textSecondary,
+      accentColor,
+      borderColor,
+    });
+    onOpenChange(false);
+  };
+
+  function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-8 rounded border cursor-pointer shrink-0"
+        />
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="font-mono text-xs"
+          maxLength={7}
+        />
+        <Label className="text-xs text-muted-foreground whitespace-nowrap w-24">{label}</Label>
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{preset ? "Edit" : "Create"} Color Preset</DialogTitle>
+          <DialogDescription>
+            {preset ? "Update the color values for this preset." : "Define a new color scheme for your brand."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Preset Name</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Ocean Blue, Midnight..."
+            />
+          </div>
+
+          <div className="space-y-3">
+            <Label>Colors</Label>
+            <ColorField label="Background" value={bgPrimary} onChange={setBgPrimary} />
+            <ColorField label="Background 2" value={bgSecondary} onChange={setBgSecondary} />
+            <ColorField label="Text" value={textPrimary} onChange={setTextPrimary} />
+            <ColorField label="Text 2" value={textSecondary} onChange={setTextSecondary} />
+            <ColorField label="Accent" value={accentColor} onChange={setAccentColor} />
+            <ColorField label="Border" value={borderColor} onChange={setBorderColor} />
+          </div>
+
+          {/* Live Preview */}
+          <div className="space-y-2">
+            <Label>Preview</Label>
+            <div
+              className="rounded-lg border p-4 space-y-3"
+              style={{ backgroundColor: bgPrimary, borderColor }}
+            >
+              <div
+                className="rounded p-3"
+                style={{ backgroundColor: bgSecondary }}
+              >
+                <p style={{ color: textPrimary }} className="text-sm font-semibold">
+                  Sample Heading
+                </p>
+                <p style={{ color: textSecondary }} className="text-xs mt-1">
+                  This is how your color scheme will look.
+                </p>
+              </div>
+              <button
+                className="px-3 py-1.5 rounded text-xs font-medium text-white"
+                style={{ backgroundColor: accentColor }}
+              >
+                Accent Button
+              </button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={!name.trim()}>
+            {preset ? "Update" : "Create"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ColorPresetItem({ preset, isActive, onActivate, onEdit, onDelete }: { preset: ColorPreset; isActive: boolean; onActivate: () => void; onEdit: () => void; onDelete: () => void }) {
+  const swatchBg = preset.accentColor || "#3b82f6";
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg border border-muted/50 hover:border-muted/100 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg">
-            <div className="flex h-full w-full items-center justify-center">
-              <div className="h-6 w-6 rounded bg-[preset.accentColor]/20 text-[preset.accentColor] text-xs font-medium">
-                Aa
-              </div>
-            </div>
+          <div
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-xs font-medium"
+            style={{ backgroundColor: `${swatchBg}20`, color: swatchBg }}
+          >
+            Aa
           </div>
           <div>
             <p className="text-sm font-medium">{preset.presetName}</p>
@@ -666,7 +1067,7 @@ function ColorPresetItem({ preset, isActive, onActivate, onEdit, onDelete }: { p
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <Badge
           variant={isActive ? "default" : "secondary"}
           className={isActive ? "text-[9px] px-2 py-0.5" : "text-[9px] px-1.5 py-0"}
@@ -689,7 +1090,7 @@ function ColorPresetItem({ preset, isActive, onActivate, onEdit, onDelete }: { p
           onClick={onEdit}
           title="Edit preset"
         >
-          <Settings className="h-3.5 w-3.5" />
+          <Edit className="h-3.5 w-3.5" />
         </Button>
         <Button
           variant="destructive"
