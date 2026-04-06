@@ -113,7 +113,7 @@ function Card3ExchangeArt() {
           width={220}
           height={220}
           decoding="async"
-          className="block h-[148px] w-[148px] shrink-0 scale-[1.06] rounded-full border border-white/25 object-cover object-[center_36%] opacity-[0.95] select-none"
+          className="block h-[156px] w-[156px] shrink-0 rounded-full border border-white/25 object-contain object-center opacity-[0.98] select-none"
           draggable={false}
           onError={(event) => {
             const target = event.currentTarget;

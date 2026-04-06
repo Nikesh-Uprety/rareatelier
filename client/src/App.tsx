@@ -88,6 +88,7 @@ const AdminLandingPageManager = lazy(loadAdminLandingPageManagerPage);
 const AdminImages = lazy(loadAdminImagesPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
 const Canvas = lazy(() => import("@/pages/admin/Canvas"));
+const CanvasPage = lazy(() => import("@/pages/admin/CanvasPage"));
 const LoginPage = lazy(loadLoginPage);
 const NotFound = lazy(loadNotFoundPage);
 const LegalPlaceholder = lazy(loadLegalPlaceholderPage);
@@ -279,6 +280,13 @@ function AppRoutes() {
         </ProtectedRoute>
       </Route>
       <Route path="/admin/canvas">
+        <ProtectedRoute requiredAdminPage="landing-page">
+          <AdminLayout>
+            <CanvasPage />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/canvas/legacy">
         <ProtectedRoute requiredAdminPage="landing-page">
           <AdminLayout>
             <Canvas />
