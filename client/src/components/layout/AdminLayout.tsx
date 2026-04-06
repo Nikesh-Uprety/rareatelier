@@ -287,30 +287,6 @@ export default function AdminLayout({
       icon: FileText,
       badge: "BETA" as const,
     },
-    {
-      href: "/admin/canvas?tab=templates",
-      label: "Templates",
-      description: "Homepage layouts",
-      icon: Layers3,
-    },
-    {
-      href: "/admin/canvas?tab=theme",
-      label: "Theme",
-      description: "Fonts and tone",
-      icon: Type,
-    },
-    {
-      href: "/admin/canvas?tab=branding",
-      label: "Branding",
-      description: "Logo, favicon, colors",
-      icon: Paintbrush2,
-    },
-    {
-      href: "/admin/canvas?tab=navigation",
-      label: "Navigation",
-      description: "Menus and links",
-      icon: Link2,
-    },
   ];
   const currentCanvasLocation =
     typeof window !== "undefined"

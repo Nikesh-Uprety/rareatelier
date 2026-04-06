@@ -99,7 +99,7 @@ export function renderSection(section: any, ctx: RenderSectionContext = {}, keyP
           <FeaturedCollection
             featuredProducts={ctx.featuredProducts || []}
             isFeaturedSuccess={ctx.isFeaturedSuccess || false}
-            featureCollectionImages={ctx.lifestyleImages as any || {}}
+            featureCollectionImages={Array.isArray(ctx.lifestyleImages) ? ctx.lifestyleImages : []}
             carouselIndex={ctx.carouselIndex || 0}
             isTransitioning={ctx.isTransitioning || false}
             onCarouselNext={ctx.onCarouselNext || (() => {})}

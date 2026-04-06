@@ -6,6 +6,7 @@ import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -244,6 +245,30 @@ export default function Products() {
 
   return (
     <div className="container mx-auto px-4 py-16 mt-16">
+      <StorefrontSeo
+        title={
+          category !== "all"
+            ? `${category.charAt(0).toUpperCase() + category.slice(1)} | Shop Rare Atelier`
+            : "Shop Rare Atelier | Premium Streetwear Collection"
+        }
+        description={
+          category !== "all"
+            ? `Browse ${category} pieces from Rare Atelier. Discover premium silhouettes, refined details, and limited streetwear drops.`
+            : "Browse the Rare Atelier shop for premium streetwear, new arrivals, curated categories, and elevated everyday essentials."
+        }
+        canonicalPath={shopPath}
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: category !== "all" ? `${category} collection` : "Rare Atelier shop",
+          url:
+            typeof window !== "undefined"
+              ? `${window.location.origin}${shopPath}`
+              : shopPath,
+          numberOfItems: filteredProducts.length,
+        }}
+      />
+
       <div className="mb-8">
         <StorefrontBreadcrumbs
           items={[

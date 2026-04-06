@@ -811,15 +811,19 @@ export default function AdminProducts() {
     mutationFn: (id: string) => deleteAdminProduct(id),
     onMutate: async (id: string) => {
       await queryClient.cancelQueries({ queryKey: ["admin", "products"] });
-      const previous = queryClient.getQueryData<ProductApi[]>([
+      const previous = queryClient.getQueryData<{ data: ProductApi[]; total: number }>([
         "admin",
         "products",
         filters,
       ]);
-      if (previous) {
-        queryClient.setQueryData<ProductApi[]>(
+      if (previous?.data) {
+        queryClient.setQueryData<{ data: ProductApi[]; total: number }>(
           ["admin", "products", filters],
-          previous.filter((p) => p.id !== id),
+          {
+            ...previous,
+            data: previous.data.filter((p) => p.id !== id),
+            total: Math.max(0, previous.total - 1),
+          },
         );
       }
       return { previous };
@@ -842,6 +846,7 @@ export default function AdminProducts() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
     },
   });
 

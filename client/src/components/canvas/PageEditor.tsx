@@ -184,58 +184,72 @@ function PagePreview({
   );
 
   return (
-    <div className="min-h-full bg-[#0d0d10]">
+    <div className="min-h-full bg-[linear-gradient(180deg,#ffffff_0%,#fbfaf7_42%,#f4efe6_100%)] text-neutral-900">
       <main>
         {nonFaqSections.map((section) => (
-          <button
+          <div
             key={section.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             className={cn(
               "group relative block w-full cursor-pointer text-left transition-all",
               selectedSectionId === section.id &&
                 "ring-2 ring-inset ring-[#c9a84c] shadow-[0_0_0_1px_rgba(201,168,76,0.35)]",
             )}
             onClick={() => onSelectSection(section.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectSection(section.id);
+              }
+            }}
           >
             <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#c9a84c]/35 bg-[#100f0d]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d7b66a] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               {getSectionLabel(section)}
             </div>
             {renderSection(section, previewCtx, `page-preview-${page.id}`)}
-          </button>
+          </div>
         ))}
 
         {!hasContact ? (
-          <div className="border-y border-dashed border-white/10 bg-black/10 px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
+          <div className="border-y border-dashed border-black/10 bg-black/[0.03] px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
             Default contact section renders on the storefront when no custom contact block is present.
           </div>
         ) : null}
 
         {!hasBackToTop ? (
-          <div className="border-b border-dashed border-white/10 bg-black/10 px-6 py-8 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
+          <div className="border-b border-dashed border-black/10 bg-black/[0.03] px-6 py-8 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
             Back to top section renders automatically on the storefront.
           </div>
         ) : null}
 
         {faqSections.map((section) => (
-          <button
+          <div
             key={section.id}
-            type="button"
+            role="button"
+            tabIndex={0}
             className={cn(
               "group relative block w-full cursor-pointer text-left transition-all",
               selectedSectionId === section.id &&
                 "ring-2 ring-inset ring-[#c9a84c] shadow-[0_0_0_1px_rgba(201,168,76,0.35)]",
             )}
             onClick={() => onSelectSection(section.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onSelectSection(section.id);
+              }
+            }}
           >
             <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#c9a84c]/35 bg-[#100f0d]/85 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#d7b66a] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
               {getSectionLabel(section)}
             </div>
             {renderSection(section, previewCtx, `page-preview-faq-${page.id}`)}
-          </button>
+          </div>
         ))}
 
         {!hasFaq && visibleSections.length > 0 ? (
-          <div className="border-b border-dashed border-white/10 bg-black/10 px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
+          <div className="border-b border-dashed border-black/10 bg-black/[0.03] px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
             FAQ renders automatically on the storefront when no custom FAQ block is present.
           </div>
         ) : null}
@@ -256,6 +270,23 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   const [sectionItems, setSectionItems] = useState<CanvasSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<SectionEditorDraft>(buildSectionDraft(null));
   const [titleDraft, setTitleDraft] = useState("");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousClasses = root.className;
+    const previousColorScheme = root.style.colorScheme;
+
+    // Keep the canvas page preview in the intended storefront light theme
+    // instead of letting the saved admin dark theme repaint it black.
+    root.classList.remove("dark", "warm");
+    root.classList.add("light");
+    root.style.colorScheme = "light";
+
+    return () => {
+      root.className = previousClasses;
+      root.style.colorScheme = previousColorScheme;
+    };
+  }, []);
 
   const { data: page, isLoading: pageLoading } = useQuery({
     queryKey: ["/api/admin/canvas/pages", pageId],
@@ -553,16 +584,16 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#0b0b0d] text-white">
-      <div className="flex w-80 shrink-0 flex-col border-r border-white/10 bg-[#101012]">
-        <div className="space-y-4 border-b border-white/10 p-4">
+    <div className="flex h-full overflow-hidden bg-[linear-gradient(180deg,#faf8f4_0%,#f3eee5_100%)] text-neutral-900">
+      <div className="flex w-80 shrink-0 flex-col border-r border-black/10 bg-white/90 backdrop-blur-sm">
+        <div className="space-y-4 border-b border-black/10 p-4">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-white/80 hover:bg-white/5 hover:text-white" onClick={onBack}>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-neutral-600 hover:bg-black/5 hover:text-neutral-900" onClick={onBack}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="min-w-0 flex-1">
               <h3 className="truncate text-sm font-semibold">{page.title}</h3>
-              <p className="truncate font-mono text-[10px] text-white/45">{page.slug}</p>
+              <p className="truncate font-mono text-[10px] text-neutral-500">{page.slug}</p>
             </div>
           </div>
 
@@ -570,8 +601,8 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             <Badge
               variant="outline"
               className={cn(
-                "border-white/10 bg-white/[0.03] text-[10px] font-semibold uppercase tracking-[0.18em]",
-                page.status === "published" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                "border-black/10 bg-black/[0.03] text-[10px] font-semibold uppercase tracking-[0.18em]",
+                page.status === "published" && "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
               )}
             >
               {page.status === "published" ? "Published" : "Draft"}
@@ -579,7 +610,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs text-white/75 hover:bg-white/5 hover:text-white"
+              className="h-7 px-2 text-xs text-neutral-600 hover:bg-black/5 hover:text-neutral-900"
               onClick={() => publishMutation.mutate()}
             >
               {page.status === "published" ? "Unpublish" : "Publish"}
@@ -587,7 +618,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="ml-auto h-7 px-2 text-xs text-white/75 hover:bg-white/5 hover:text-white"
+              className="ml-auto h-7 px-2 text-xs text-neutral-600 hover:bg-black/5 hover:text-neutral-900"
               onClick={() => duplicatePageMutation.mutate()}
             >
               <Copy className="mr-1.5 h-3.5 w-3.5" />
@@ -609,18 +640,18 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
               onDelete={handleDelete}
             />
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-10 text-center">
-              <p className="text-sm text-white/75">No sections yet</p>
-              <p className="mt-1 text-xs text-white/45">Start the page with a Rare Atelier section block.</p>
+            <div className="rounded-2xl border border-dashed border-black/10 bg-black/[0.02] px-4 py-10 text-center">
+              <p className="text-sm text-neutral-700">No sections yet</p>
+              <p className="mt-1 text-xs text-neutral-500">Start the page with a Rare Atelier section block.</p>
             </div>
           )}
         </div>
 
-        <div className="border-t border-white/10 p-3">
+        <div className="border-t border-black/10 p-3">
           <button
             type="button"
             onClick={() => setShowSectionPicker(true)}
-            className="flex w-full items-center justify-center rounded-2xl border border-dashed border-[#c9a84c]/30 bg-[#171513] px-4 py-4 text-sm font-semibold text-[#d2b15e] transition-colors hover:border-[#c9a84c]/65 hover:bg-[#1d1914]"
+            className="flex w-full items-center justify-center rounded-2xl border border-dashed border-[#c9a84c]/40 bg-[#fffaf0] px-4 py-4 text-sm font-semibold text-[#8f6a15] transition-colors hover:border-[#c9a84c]/70 hover:bg-[#fff4db]"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add a Section
@@ -629,7 +660,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-center gap-3 border-b border-white/10 bg-[#0f0f12] px-5 py-4">
+        <div className="flex items-center gap-3 border-b border-black/10 bg-white/80 px-5 py-4 backdrop-blur-sm">
           <div className="min-w-0 flex-1">
             <Input
               value={titleDraft}
@@ -639,14 +670,14 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                   pageUpdateMutation.mutate({ title: titleDraft.trim() });
                 }
               }}
-              className="h-10 border-white/10 bg-white/[0.03] text-base font-semibold text-white"
+              className="h-10 border-black/10 bg-white text-base font-semibold text-neutral-900"
             />
-            <p className="mt-1 text-xs text-white/45">
+            <p className="mt-1 text-xs text-neutral-500">
               Live page preview with section selection and device resizing.
             </p>
           </div>
 
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] p-1">
+          <div className="flex items-center gap-2 rounded-full border border-black/10 bg-white p-1">
             {VIEWPORT_BUTTONS.map((viewport) => {
               const Icon = viewport.icon;
               const active = previewViewport === viewport.id;
@@ -659,7 +690,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                     "flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                     active
                       ? "bg-[#c9a84c] text-black"
-                      : "text-white/65 hover:bg-white/5 hover:text-white",
+                      : "text-neutral-600 hover:bg-black/5 hover:text-neutral-900",
                   )}
                 >
                   <Icon className="h-3.5 w-3.5" />
@@ -672,7 +703,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 gap-2 border border-white/10 bg-white/[0.03] text-white/80 hover:bg-white/5 hover:text-white"
+            className="h-9 gap-2 border border-black/10 bg-white text-neutral-700 hover:bg-black/5 hover:text-neutral-900"
             onClick={() => window.open(page.slug, "_blank", "noopener,noreferrer")}
           >
             <Eye className="h-4 w-4" />
@@ -682,7 +713,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 w-9 p-0 text-white/80 hover:bg-white/5 hover:text-white"
+            className="h-9 w-9 p-0 text-neutral-700 hover:bg-black/5 hover:text-neutral-900"
             onClick={() => setShowMetadataForm(true)}
           >
             <Settings className="h-4 w-4" />
@@ -690,15 +721,15 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.12),transparent_28%),linear-gradient(180deg,#0e0e11_0%,#060608_100%)]">
-            <div className="border-b border-white/10 px-5 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/45">
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,rgba(201,168,76,0.14),transparent_28%),linear-gradient(180deg,#faf7f0_0%,#f3ede1_100%)]">
+            <div className="border-b border-black/10 px-5 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
                 Full Page Live Preview
               </p>
             </div>
             <div className="min-h-0 flex-1 overflow-auto p-6">
               <div className={cn("mx-auto transition-all duration-300", getPreviewWidth(previewViewport))}>
-                <div className="overflow-hidden rounded-[28px] border border-white/10 bg-black shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                <div className="overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.12)]">
                   <PagePreview
                     page={page}
                     sections={sectionItems}
@@ -711,12 +742,12 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             </div>
           </div>
 
-          <div className="flex w-[360px] shrink-0 flex-col border-l border-white/10 bg-[#111114]">
-            <div className="border-b border-white/10 px-5 py-4">
-              <h2 className="text-sm font-semibold text-white">
+          <div className="flex w-[360px] shrink-0 flex-col border-l border-black/10 bg-white/90 backdrop-blur-sm">
+            <div className="border-b border-black/10 px-5 py-4">
+              <h2 className="text-sm font-semibold text-neutral-900">
                 {selectedSection ? getSectionLabel(selectedSection) : "Section Settings"}
               </h2>
-              <p className="mt-1 text-xs text-white/45">
+              <p className="mt-1 text-xs text-neutral-500">
                 {selectedSection
                   ? `Edit the selected ${resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType} block.`
                   : "Select a section from the list or preview to customize it."}
@@ -727,20 +758,20 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
               <div className="flex-1 overflow-y-auto px-5 py-4">
                 <div className="space-y-5">
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-[0.18em] text-white/55">Section Label</Label>
+                    <Label className="text-xs uppercase tracking-[0.18em] text-neutral-500">Section Label</Label>
                     <Input
                       value={sectionDraft.label}
                       onChange={(event) =>
                         setSectionDraft((current) => ({ ...current, label: event.target.value }))
                       }
-                      className="border-white/10 bg-white/[0.03] text-white"
+                      className="border-black/10 bg-white text-neutral-900"
                     />
                   </div>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <div className="flex items-center justify-between rounded-2xl border border-black/10 bg-black/[0.02] px-4 py-3">
                     <div>
-                      <p className="text-sm font-medium text-white">Visible on page</p>
-                      <p className="text-xs text-white/45">Hidden sections stay in the list but disappear from preview.</p>
+                      <p className="text-sm font-medium text-neutral-900">Visible on page</p>
+                      <p className="text-xs text-neutral-500">Hidden sections stay in the list but disappear from preview.</p>
                     </div>
                     <Switch
                       checked={sectionDraft.isVisible}
@@ -750,26 +781,26 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                     />
                   </div>
 
-                  <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">Section Type</p>
-                    <p className="mt-2 text-sm text-white">
+                  <div className="rounded-2xl border border-black/10 bg-black/[0.02] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">Section Type</p>
+                    <p className="mt-2 text-sm text-neutral-900">
                       {resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType}
                     </p>
-                    <p className="mt-1 text-xs text-white/45">
+                    <p className="mt-1 text-xs text-neutral-500">
                       Click the live preview to swap between page sections while keeping this panel open.
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-[0.18em] text-white/55">Config JSON</Label>
+                    <Label className="text-xs uppercase tracking-[0.18em] text-neutral-500">Config JSON</Label>
                     <Textarea
                       value={sectionDraft.configText}
                       onChange={(event) =>
                         setSectionDraft((current) => ({ ...current, configText: event.target.value }))
                       }
-                      className="min-h-[320px] border-white/10 bg-[#0d0d10] font-mono text-xs text-white"
+                      className="min-h-[320px] border-black/10 bg-[#fffdf9] font-mono text-xs text-neutral-900"
                     />
-                    <p className="text-xs text-white/45">
+                    <p className="text-xs text-neutral-500">
                       Update copy, images, links, and layout data directly. The preview refreshes after save.
                     </p>
                   </div>
@@ -778,15 +809,15 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             ) : (
               <div className="flex flex-1 items-center justify-center px-6 text-center">
                 <div>
-                  <p className="text-sm font-medium text-white">Select a section to edit</p>
-                  <p className="mt-2 text-xs text-white/45">
+                  <p className="text-sm font-medium text-neutral-900">Select a section to edit</p>
+                  <p className="mt-2 text-xs text-neutral-500">
                     You can pick from the left list or click directly on the live page preview.
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="border-t border-white/10 p-4">
+            <div className="border-t border-black/10 p-4">
               <Button
                 onClick={handleSaveSection}
                 disabled={!selectedSection || patchSectionMutation.isPending}

@@ -25,6 +25,12 @@ interface FeaturedCollectionProps {
   config?: Record<string, any>;
 }
 
+function normalizeFeatureCollectionImages(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
 function resolveFeaturedProducts(
   featuredProducts: any[],
   config?: Record<string, any>,
@@ -460,6 +466,7 @@ export default function FeaturedCollection({
   void isFeaturedSuccess;
   void isTransitioning;
   const products = resolveFeaturedProducts(featuredProducts, config);
+  const collectionImages = normalizeFeatureCollectionImages(featureCollectionImages);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [galleryStartIndex, setGalleryStartIndex] = useState(0);
 
@@ -504,7 +511,7 @@ export default function FeaturedCollection({
             className="flex h-full transition-transform duration-600 ease-in-out"
             style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
           >
-            {featureCollectionImages.map((src, i) => (
+            {collectionImages.map((src, i) => (
               <button
                 key={src}
                 type="button"
@@ -547,7 +554,7 @@ export default function FeaturedCollection({
         </button>
 
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex gap-2.5 items-center bg-black/20 backdrop-blur-sm rounded-full px-3 py-2">
-          {featureCollectionImages.map((_, i) => (
+          {collectionImages.map((_, i) => (
             <button
               key={i}
               onClick={(e) => { e.stopPropagation(); onCarouselGoTo?.(i); }}
@@ -572,7 +579,7 @@ export default function FeaturedCollection({
       {/* Full-screen image gallery modal */}
       {galleryOpen && (
         <ImageGalleryModal
-          images={featureCollectionImages}
+          images={collectionImages}
           initialIndex={galleryStartIndex}
           onClose={() => setGalleryOpen(false)}
         />

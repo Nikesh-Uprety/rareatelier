@@ -1,6 +1,5 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Helmet } from "react-helmet-async";
 import { useLocation } from "wouter";
 import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
@@ -8,6 +7,7 @@ import { renderSection, type RenderSectionContext } from "@/lib/renderSection";
 import { getPublicPageConfig } from "@/lib/adminApi";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { Suspense, lazy } from "react";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const ContactSection = lazy(() => import("@/components/home/ContactSection"));
 const BackToTopSection = lazy(() => import("@/components/home/BackToTopSection"));
@@ -49,6 +49,23 @@ export default function DynamicPage() {
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
   const heroVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousClasses = root.className;
+    const previousColorScheme = root.style.colorScheme;
+
+    // Canvas-driven storefront pages should keep their authored public theme
+    // instead of inheriting the admin user's saved dark-mode preference.
+    root.classList.remove("dark", "warm");
+    root.classList.add("light");
+    root.style.colorScheme = "light";
+
+    return () => {
+      root.className = previousClasses;
+      root.style.colorScheme = previousColorScheme;
+    };
+  }, []);
 
   useEffect(() => {
     const check = () => {
@@ -169,17 +186,19 @@ export default function DynamicPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <ScrollProgress />
-      <Helmet>
-        <title>{pageTitle}</title>
-        {pageDesc && <meta name="description" content={pageDesc} />}
-        {page?.seoImage && (
-          <>
-            <meta property="og:image" content={page.seoImage} />
-            <meta property="og:title" content={pageTitle} />
-            {pageDesc && <meta property="og:description" content={pageDesc} />}
-          </>
-        )}
-      </Helmet>
+      <StorefrontSeo
+        title={pageTitle}
+        description={pageDesc}
+        image={page?.seoImage}
+        canonicalPath={slug}
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: pageTitle,
+          description: pageDesc || undefined,
+          url: typeof window !== "undefined" ? `${window.location.origin}${slug}` : slug,
+        }}
+      />
 
       <main>
         {nonFaqSections.map((section: any) => renderSection(section, renderCtx))}

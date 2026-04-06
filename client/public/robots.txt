@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /checkout/
+Disallow: /order-confirmation
+Disallow: /order-confirmation/
+Disallow: /sentry-test
+

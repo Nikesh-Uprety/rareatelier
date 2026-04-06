@@ -2,7 +2,11 @@ import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
-if (process.env.SENTRY_DSN) {
+const shouldEnableSentry =
+  Boolean(process.env.SENTRY_DSN) &&
+  (process.env.NODE_ENV === "production" || process.env.ENABLE_SENTRY_IN_DEV === "true");
+
+if (shouldEnableSentry) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "development",
@@ -543,7 +547,7 @@ async function ensureRootSuperAdminState() {
   registerSentryTestRoutes(app);
 
   // Sentry error handler must be after all controllers but before other error handlers
-  if (process.env.SENTRY_DSN) {
+  if (shouldEnableSentry) {
     Sentry.setupExpressErrorHandler(app);
   }
 

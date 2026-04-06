@@ -60,20 +60,12 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-type ActiveTab = "pages" | "templates" | "theme" | "branding" | "navigation";
+type ActiveTab = "pages";
 
 export default function CanvasPage() {
   const [location] = useLocation();
   const readTabFromUrl = (): ActiveTab => {
-    if (typeof window === "undefined") return "pages";
-    const raw = new URLSearchParams(window.location.search).get("tab");
-    return raw === "pages" ||
-      raw === "templates" ||
-      raw === "theme" ||
-      raw === "branding" ||
-      raw === "navigation"
-      ? raw
-      : "pages";
+    return "pages";
   };
   const initialTab = useMemo<ActiveTab>(() => readTabFromUrl(), []);
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab);
@@ -112,7 +104,7 @@ export default function CanvasPage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    params.set("tab", activeTab);
+    params.set("tab", "pages");
     const nextUrl = `${window.location.pathname}?${params.toString()}`;
     window.history.replaceState({}, "", nextUrl);
   }, [activeTab]);
@@ -199,101 +191,6 @@ export default function CanvasPage() {
               </button>
             </div>
 
-            <Separator className="mx-3" />
-
-            {/* Templates section */}
-            <div className="p-3">
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                  activeTab === "templates"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted/50 text-muted-foreground"
-                )}
-                onClick={() => setActiveTab("templates")}
-              >
-                <Palette className="h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate">Templates</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Homepage layouts
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            <Separator className="mx-3" />
-
-            {/* Navigation section */}
-            <div className="p-3">
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                  activeTab === "navigation"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted/50 text-muted-foreground"
-                )}
-                onClick={() => setActiveTab("navigation")}
-              >
-                <LinkIcon className="h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate">Navigation</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Manage storefront nav
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            <Separator className="mx-3" />
-
-            {/* Theme section */}
-            <div className="p-3">
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                  activeTab === "theme"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted/50 text-muted-foreground"
-                )}
-                onClick={() => setActiveTab("theme")}
-              >
-                <Type className="h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate">Theme</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Fonts & typography
-                  </p>
-                </div>
-              </button>
-            </div>
-
-            <Separator className="mx-3" />
-
-            {/* Branding section */}
-            <div className="p-3">
-              <button
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors",
-                  activeTab === "branding"
-                    ? "bg-primary/10 text-primary"
-                    : "hover:bg-muted/50 text-muted-foreground"
-                )}
-                onClick={() => setActiveTab("branding")}
-              >
-                <Palette className="h-4 w-4 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold truncate">Branding</p>
-                  <p className="text-[10px] text-muted-foreground truncate">
-                    Logo, colors & favicon
-                  </p>
-                </div>
-              </button>
-            </div>
           </div>
         )}
 
@@ -310,39 +207,6 @@ export default function CanvasPage() {
               title="Pages"
             >
               <FileText className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                activeTab === "templates" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-              )}
-              onClick={() => setActiveTab("templates")}
-              title="Templates"
-            >
-              <Palette className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                activeTab === "theme" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-              )}
-              onClick={() => setActiveTab("theme")}
-              title="Theme"
-            >
-              <Type className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "p-2 rounded-lg transition-colors",
-                activeTab === "navigation" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
-              )}
-              onClick={() => setActiveTab("navigation")}
-              title="Navigation"
-            >
-              <LinkIcon className="h-4 w-4" />
             </button>
           </div>
         )}
@@ -375,27 +239,6 @@ export default function CanvasPage() {
           <PageEditor pageId={selectedPageId} onBack={() => setSelectedPageId(null)} />
         </div>
       )}
-
-      {/* Templates tab - placeholder */}
-      {activeTab === "templates" && (
-        <TemplatesPanel
-          templates={templates}
-          isLoading={templatesLoading}
-          onUseTemplate={(template) => {
-            setSelectedCreateTemplate(template);
-            setShowCreateDialog(true);
-          }}
-        />
-      )}
-
-      {/* Navigation tab - management */}
-      {activeTab === "navigation" && <NavigationManager />}
-
-      {/* Branding tab - management */}
-      {activeTab === "branding" && <BrandingManager />}
-
-      {/* Theme tab - typography */}
-      {activeTab === "theme" && <TypographyManager />}
 
       {/* Create Page Dialog */}
       <CreatePageDialog

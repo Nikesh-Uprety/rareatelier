@@ -10,7 +10,7 @@ import { fetchProductById, fetchProducts, type ProductApi, type ProductSizeChart
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
-import { Helmet } from "react-helmet-async";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 const SizeFitGuide = lazy(() => import("@/components/product/SizeFitGuide"));
 
 function parseJsonArray(s: string | null | undefined): string[] {
@@ -736,18 +736,18 @@ export default function ProductDetail() {
           100% { transform: translateY(0); opacity: 1; }
         }
       `}</style>
-      <Helmet>
-        <title>{`${product.name} | Rare Atelier`}</title>
-        <meta name="description" content={product.shortDetails || product.description?.substring(0, 160) || `Buy ${product.name} at Rare Atelier.`} />
-        <meta property="og:title" content={`${product.name} | Rare Atelier`} />
-        <meta property="og:description" content={product.shortDetails || `Rare Atelier: ${product.name}`} />
-        <meta property="og:image" content={mainImageUrl} />
-        <meta property="og:type" content="product" />
-        <meta property="og:url" content={window.location.href} />
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-          </script>
-      </Helmet>
+      <StorefrontSeo
+        title={`${product.name} | Rare Atelier`}
+        description={
+          product.shortDetails ||
+          product.description?.substring(0, 160) ||
+          `Buy ${product.name} at Rare Atelier.`
+        }
+        image={mainImageUrl}
+        canonicalPath={`/product/${product.id}`}
+        type="product"
+        structuredData={structuredData}
+      />
 
       <div className="mx-auto mb-8 max-w-[1600px]">
         <StorefrontBreadcrumbs

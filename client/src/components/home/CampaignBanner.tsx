@@ -292,7 +292,7 @@ function MaisonNocturneLookbook({
             >
               <div className="absolute inset-0 overflow-hidden">
                 <img
-                  src={item.image || exploreCollectionImage}
+                  src={item.image || exploreCollectionImage || CAMPAIGN_IMAGE_HARD_FALLBACK}
                   alt={item.label}
                   className="h-full w-full object-cover brightness-[0.96] saturate-[1.22] contrast-[1.03] dark:brightness-[0.6] dark:saturate-[0.95] dark:contrast-[1] transition duration-700 group-hover:scale-[1.06]"
                   onError={(event) =>
@@ -366,7 +366,7 @@ function NikeshDesignLookbook({
             >
               <div className="absolute inset-0 overflow-hidden">
                 <img
-                  src={item.image || exploreCollectionImage}
+                  src={item.image || exploreCollectionImage || CAMPAIGN_IMAGE_HARD_FALLBACK}
                   alt={item.label}
                   className="h-full w-full object-cover brightness-[0.96] saturate-[1.22] contrast-[1.03] dark:brightness-[0.6] dark:saturate-[0.95] dark:contrast-[1] transition duration-700 group-hover:scale-[1.06]"
                   onError={(event) =>
