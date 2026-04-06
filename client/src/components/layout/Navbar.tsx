@@ -7,6 +7,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchPageConfig } from "@/lib/api";
+import { getPublicPages } from "@/lib/adminApi";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
@@ -156,9 +157,21 @@ export default function Navbar() {
     { name: "Collection", href: "/new-collection" },
     { name: "Atelier", href: "/atelier" },
   ];
+
+  const { data: canvasPages } = useQuery({
+    queryKey: ["/api/public/pages"],
+    queryFn: getPublicPages,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
   const navLinks = useMemo(() => {
-    return baseNavLinks;
-  }, [baseNavLinks]);
+    if (!canvasPages || canvasPages.length === 0) return baseNavLinks;
+    const canvasNavItems = canvasPages
+      .filter((p) => p.status === "published" && p.showInNav && p.slug !== "/")
+      .map((p) => ({ name: p.title, href: p.slug }));
+    return [...baseNavLinks, ...canvasNavItems];
+  }, [canvasPages]);
 
   const getGlassChrome = (mode: "light" | "dark", options?: { active?: boolean }) => {
     if (options?.active === false) {

@@ -89,6 +89,7 @@ const AdminImages = lazy(loadAdminImagesPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
 const Canvas = lazy(() => import("@/pages/admin/Canvas"));
 const CanvasPage = lazy(() => import("@/pages/admin/CanvasPage"));
+const DynamicPage = lazy(() => import("@/pages/storefront/DynamicPage"));
 const LoginPage = lazy(loadLoginPage);
 const NotFound = lazy(loadNotFoundPage);
 const LegalPlaceholder = lazy(loadLegalPlaceholderPage);
@@ -519,6 +520,11 @@ function AppRoutes() {
         <ViewBill />
       </Route>
       
+      {/* Dynamic Canvas Pages — catch-all, must be before NotFound */}
+      <Route path="/*">
+        <DynamicPage />
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
