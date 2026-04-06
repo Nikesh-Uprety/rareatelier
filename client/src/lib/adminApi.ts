@@ -1005,3 +1005,204 @@ export async function updateAdminPromoCode(
 export async function deleteAdminPromoCode(id: string): Promise<void> {
   await apiRequest("DELETE", `/api/admin/promo-codes/${id}`);
 }
+
+// ─── Canvas Pages ──────────────────────────────────────────────
+
+export interface CanvasPage {
+  id: number;
+  slug: string;
+  title: string;
+  description: string | null;
+  status: "draft" | "published";
+  isHomepage: boolean;
+  showInNav: boolean;
+  sortOrder: number;
+  seoTitle: string | null;
+  seoDescription: string | null;
+  seoImage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CanvasPageWithSections extends CanvasPage {
+  sections: CanvasSection[];
+}
+
+export interface CanvasSection {
+  id: number;
+  templateId: number | null;
+  pageId: number | null;
+  sectionType: string;
+  label: string | null;
+  orderIndex: number;
+  isVisible: boolean;
+  config: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SiteBranding {
+  id: number;
+  logoUrl: string | null;
+  logoDarkUrl: string | null;
+  logoHeight: number;
+  faviconUrl: string | null;
+  ogImageUrl: string | null;
+  footerLogoUrl: string | null;
+  footerText: string | null;
+  updatedAt: string;
+}
+
+export interface ColorPreset {
+  id: number;
+  presetName: string;
+  bgPrimary: string | null;
+  bgSecondary: string | null;
+  textPrimary: string | null;
+  textSecondary: string | null;
+  accentColor: string | null;
+  borderColor: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export async function getCanvasPages(): Promise<CanvasPage[]> {
+  const res = await apiRequest("GET", "/api/admin/canvas/pages");
+  const json = (await res.json()) as CanvasPage[];
+  return json;
+}
+
+export async function createCanvasPage(data: { title: string; slug: string; fromTemplateId?: number }): Promise<CanvasPage> {
+  const res = await apiRequest("POST", "/api/admin/canvas/pages", data);
+  return (await res.json()) as CanvasPage;
+}
+
+export async function getCanvasPage(id: number): Promise<CanvasPageWithSections> {
+  const res = await apiRequest("GET", `/api/admin/canvas/pages/${id}`);
+  return (await res.json()) as CanvasPageWithSections;
+}
+
+export async function updateCanvasPage(id: number, data: Partial<CanvasPage>): Promise<CanvasPage> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/pages/${id}`, data);
+  return (await res.json()) as CanvasPage;
+}
+
+export async function deleteCanvasPage(id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/canvas/pages/${id}`);
+}
+
+export async function reorderCanvasPages(orderedIds: number[]): Promise<void> {
+  await apiRequest("PATCH", "/api/admin/canvas/pages/reorder", { orderedIds });
+}
+
+export async function toggleCanvasPagePublish(id: number): Promise<CanvasPage> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/pages/${id}/publish`);
+  return (await res.json()) as CanvasPage;
+}
+
+// ─── Canvas Page Sections ──────────────────────────────────────
+
+export async function getPageSections(pageId: number): Promise<CanvasSection[]> {
+  const res = await apiRequest("GET", `/api/admin/canvas/pages/${pageId}/sections`);
+  return (await res.json()) as CanvasSection[];
+}
+
+export async function addPageSection(pageId: number, data: { sectionType: string; label?: string; config?: Record<string, unknown> }): Promise<CanvasSection> {
+  const res = await apiRequest("POST", `/api/admin/canvas/pages/${pageId}/sections`, data);
+  return (await res.json()) as CanvasSection;
+}
+
+export async function reorderPageSections(pageId: number, orderedIds: number[]): Promise<void> {
+  await apiRequest("PATCH", `/api/admin/canvas/pages/${pageId}/sections/reorder`, { orderedIds });
+}
+
+export async function updatePageSection(id: number, data: Partial<CanvasSection>): Promise<CanvasSection> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/pages/0/sections/${id}`, data);
+  return (await res.json()) as CanvasSection;
+}
+
+export async function deletePageSection(id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/canvas/pages/0/sections/${id}`);
+}
+
+// ─── Canvas Templates (enhanced) ───────────────────────────────
+
+export async function createCanvasTemplate(data: { name: string; slug: string; description?: string; tier?: string; fromPageId?: number }): Promise<any> {
+  const res = await apiRequest("POST", "/api/admin/canvas/templates", data);
+  return (await res.json()) as any;
+}
+
+export async function updateCanvasTemplate(id: number, data: Partial<any>): Promise<any> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/templates/${id}`, data);
+  return (await res.json()) as any;
+}
+
+export async function deleteCanvasTemplate(id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/canvas/templates/${id}`);
+}
+
+export async function duplicateCanvasTemplate(id: number): Promise<any> {
+  const res = await apiRequest("POST", `/api/admin/canvas/templates/${id}/duplicate`);
+  return (await res.json()) as any;
+}
+
+export async function savePageAsTemplate(pageId: number, data: { name: string; slug: string; tier?: string }): Promise<any> {
+  const res = await apiRequest("POST", `/api/admin/canvas/pages/${pageId}/save-as-template`, data);
+  return (await res.json()) as any;
+}
+
+// ─── Canvas Branding ───────────────────────────────────────────
+
+export async function getBranding(): Promise<SiteBranding | null> {
+  const res = await apiRequest("GET", "/api/admin/canvas/branding");
+  return (await res.json()) as SiteBranding | null;
+}
+
+export async function updateBranding(data: Partial<SiteBranding>): Promise<SiteBranding> {
+  const res = await apiRequest("PATCH", "/api/admin/canvas/branding", data);
+  return (await res.json()) as SiteBranding;
+}
+
+// ─── Canvas Colors ─────────────────────────────────────────────
+
+export async function getColorPresets(): Promise<ColorPreset[]> {
+  const res = await apiRequest("GET", "/api/admin/canvas/colors");
+  return (await res.json()) as ColorPreset[];
+}
+
+export async function createColorPreset(data: Partial<ColorPreset>): Promise<ColorPreset> {
+  const res = await apiRequest("POST", "/api/admin/canvas/colors", data);
+  return (await res.json()) as ColorPreset;
+}
+
+export async function updateColorPreset(id: number, data: Partial<ColorPreset>): Promise<ColorPreset> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/colors/${id}`, data);
+  return (await res.json()) as ColorPreset;
+}
+
+export async function activateColorPreset(id: number): Promise<ColorPreset> {
+  const res = await apiRequest("PATCH", `/api/admin/canvas/colors/${id}/activate`);
+  return (await res.json()) as ColorPreset;
+}
+
+export async function deleteColorPreset(id: number): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/canvas/colors/${id}`);
+}
+
+// ─── Public Pages ──────────────────────────────────────────────
+
+export async function getPublicPages(): Promise<CanvasPage[]> {
+  const res = await fetch("/api/public/pages");
+  const json = (await res.json()) as CanvasPage[];
+  return json;
+}
+
+export async function getPublicPageConfig(slug: string): Promise<any> {
+  const res = await fetch(`/api/public/page-config?slug=${encodeURIComponent(slug)}`);
+  return (await res.json()) as any;
+}
+
+export async function getPublicBranding(): Promise<{ branding: SiteBranding | null; colors: ColorPreset | null }> {
+  const res = await fetch("/api/public/branding");
+  return (await res.json()) as { branding: SiteBranding | null; colors: ColorPreset | null };
+}

@@ -106,15 +106,23 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
         data: chartData.map((d) => d.revenue),
         label: "Revenue",
         id: "revenue",
+        yAxisId: "revenue",
         labelMarkType: Line,
         color: isDark ? "#d4a843" : "#2C5234",
+        valueFormatter: (value: number | null) =>
+          value == null
+            ? ""
+            : `NPR ${Math.round(value).toLocaleString("en-NP")}`,
       },
       {
         data: chartData.map((d) => d.total),
         label: "Orders",
         id: "orders",
+        yAxisId: "orders",
         labelMarkType: Line,
         color: isDark ? "#7fbf8a" : "#81a074",
+        valueFormatter: (value: number | null) =>
+          value == null ? "" : `${Math.round(value).toLocaleString("en-NP")} orders`,
       },
     ],
     xAxis: [
@@ -125,15 +133,29 @@ export default function OrdersTrendChart({ orders = [], trendData, timeRange = "
     ],
     yAxis: [
       {
-        width: 90,
+        id: "orders",
+        width: 62,
+        min: 0,
         valueFormatter: (value: number | null) => {
           if (value === null) return "";
-          return value.toLocaleString("en-NP");
+          return Math.round(value).toLocaleString("en-NP");
+        },
+      },
+      {
+        id: "revenue",
+        position: "right",
+        width: 88,
+        min: 0,
+        valueFormatter: (value: number | null) => {
+          if (value === null) return "";
+          if (value >= 1000000) return `NPR ${(value / 1000000).toFixed(1)}M`;
+          if (value >= 1000) return `NPR ${(value / 1000).toFixed(0)}k`;
+          return `NPR ${Math.round(value).toLocaleString("en-NP")}`;
         },
       },
     ],
     height: 300,
-    margin: { left: 90, right: 24, top: 10, bottom: 10 },
+    margin: { left: 62, right: 88, top: 12, bottom: 12 },
     sx: {
       backgroundColor: "transparent",
       [`.${lineElementClasses.root}, .${markElementClasses.root}`]: {

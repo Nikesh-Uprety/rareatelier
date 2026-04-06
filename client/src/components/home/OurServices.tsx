@@ -14,6 +14,8 @@ type ServiceCardConfig = {
 };
 
 const GRAIN_DATA_URI = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E")`;
+const EASY_EXCHANGE_IMAGE_URL =
+  "https://cdn.vectorstock.com/i/1000v/17/13/return-parcel-exchange-icon-vector-22621713.jpg";
 
 function SectionMountainSilhouette() {
   return (
@@ -106,13 +108,17 @@ function Card3ExchangeArt() {
     <div className="relative flex h-[240px] lg:h-[280px] items-center justify-center overflow-hidden bg-gradient-to-br from-[#050505] via-[#0b0b0b] to-[#141414]">
       <div className="our-services-box-exchange relative flex items-center justify-center">
         <img
-          src={`${import.meta.env.BASE_URL}easyexchange.svg`}
-          alt=""
-          width={180}
-          height={194}
+          src={EASY_EXCHANGE_IMAGE_URL}
+          alt="Easy exchange icon"
+          width={220}
+          height={220}
           decoding="async"
-          className="block h-[118px] w-[118px] shrink-0 object-contain object-center opacity-[0.9] select-none"
+          className="block h-[148px] w-[148px] shrink-0 scale-[1.06] rounded-full border border-white/25 object-cover object-[center_36%] opacity-[0.95] select-none"
           draggable={false}
+          onError={(event) => {
+            const target = event.currentTarget;
+            target.src = `${import.meta.env.BASE_URL}easyexchange.svg`;
+          }}
         />
       </div>
     </div>

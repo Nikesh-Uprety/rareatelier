@@ -133,7 +133,7 @@ const SECTION_TYPE_GROUPS = [
   { label: "Hero", types: ["hero"] },
   { label: "Product", types: ["featured", "arrivals", "fresh-release"] },
   { label: "Editorial", types: ["ticker", "quote", "campaign"] },
-  { label: "Utility", types: ["services"] },
+  { label: "Utility", types: ["services", "back-to-top", "faq"] },
 ] as const;
 
 const SECTION_PREVIEW_STYLES: Record<string, string> = {
@@ -144,6 +144,8 @@ const SECTION_PREVIEW_STYLES: Record<string, string> = {
   campaign: "from-purple-950 via-zinc-900 to-amber-900",
   arrivals: "from-slate-100 via-white to-slate-300 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700",
   services: "from-emerald-100 via-white to-emerald-200 dark:from-emerald-950 dark:via-neutral-900 dark:to-emerald-900/50",
+  "back-to-top": "from-zinc-800 via-zinc-700 to-zinc-600 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-700",
+  faq: "from-rose-100 via-white to-amber-100 dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-700",
   "fresh-release": "from-neutral-950 via-neutral-900 to-sky-900",
 };
 
@@ -748,6 +750,57 @@ export default function Canvas() {
       };
     }
 
+    if (sectionType === "faq") {
+      return {
+        label,
+        variant: "",
+        image: "",
+        title: "Frequently Asked Questions",
+        text: "Everything you need to know before placing your order.",
+        hint: "",
+        attribution: "",
+        eyebrow: "",
+        ctaLabel: "",
+        ctaHref: "",
+        secondaryCtaLabel: "",
+        secondaryCtaHref: "",
+        layoutPreset: "",
+        items:
+          "How do I place an order? | Browse products, add them to your cart, and complete checkout with shipping and payment details.\nCan I modify or cancel my order? | Yes, before shipping. Once an order is processed and dispatched, edits and cancellations are no longer available.\nWhat payment methods do you accept? | We currently support online payment options shown at checkout, plus verified payment channels configured by Rare Atelier.",
+        heroSlides: "",
+        campaignImages: "",
+        serviceCards: "",
+        productIds: "",
+        columns: "",
+        rawConfig: JSON.stringify({}, null, 2),
+      };
+    }
+
+    if (sectionType === "back-to-top") {
+      return {
+        label,
+        variant: "",
+        image: "/images/home-campaign-editorial.webp",
+        title: "Back to Top",
+        text: "Image section shown above contact with a quick return action.",
+        hint: "",
+        attribution: "",
+        eyebrow: "",
+        ctaLabel: "",
+        ctaHref: "",
+        secondaryCtaLabel: "",
+        secondaryCtaHref: "",
+        layoutPreset: "",
+        items: "",
+        heroSlides: "",
+        campaignImages: "",
+        serviceCards: "",
+        productIds: "",
+        columns: "",
+        rawConfig: JSON.stringify({}, null, 2),
+      };
+    }
+
     return {
       label,
       variant: "",
@@ -865,6 +918,50 @@ export default function Canvas() {
             },
           },
         ];
+      case "faq":
+        return [
+          {
+            id: "store-policy",
+            label: "Store Policy",
+            apply: {
+              title: "Shipping, Payment & Returns",
+              text: "Quick answers to the most common checkout and delivery questions.",
+              items:
+                "How long does delivery take? | Orders usually dispatch within 24-48 hours, with delivery timelines based on destination.\nCan I return items? | Eligible returns follow our return policy window. Contact support with your order number.\nDo you support online payments? | Yes. Available payment options appear on checkout based on current gateway setup.",
+            },
+          },
+          {
+            id: "ordering-help",
+            label: "Ordering Help",
+            apply: {
+              title: "Need Help Before Ordering?",
+              text: "Answers for sizing, payment, shipping, and order updates.",
+              items:
+                "How do I choose size? | Use our size guide on each product page and contact support if you need fitting help.\nCan I change my order after payment? | You can request changes before dispatch. Once shipped, modifications are not possible.\nWhere can I track my order? | Tracking updates are shared after confirmation and dispatch.",
+            },
+          },
+        ];
+      case "back-to-top":
+        return [
+          {
+            id: "editorial-scroll",
+            label: "Editorial Scroll",
+            apply: {
+              title: "Back to Top",
+              text: "Image section above contact with smooth return-to-top action.",
+              image: "/images/home-campaign-editorial.webp",
+            },
+          },
+          {
+            id: "minimal-scroll",
+            label: "Minimal Scroll",
+            apply: {
+              title: "Return",
+              text: "Keep the footer transition clean and intentional.",
+              image: "/images/landingpage3.webp",
+            },
+          },
+        ];
       default:
         return [];
     }
@@ -914,7 +1011,19 @@ export default function Canvas() {
 
     const config = (selectedSection?.config ?? {}) as Record<string, unknown>;
     const items = Array.isArray(config.items)
-      ? config.items.filter((item): item is string => typeof item === "string").join("\n")
+      ? config.items
+          .map((item) => {
+            if (selectedSection?.sectionType === "faq") {
+              if (!item || typeof item !== "object") return "";
+              const entry = item as Record<string, unknown>;
+              const title = typeof entry.title === "string" ? entry.title : "";
+              const content = typeof entry.content === "string" ? entry.content : "";
+              return [title, content].join(" | ").trim();
+            }
+            return typeof item === "string" ? item : "";
+          })
+          .filter(Boolean)
+          .join("\n")
       : "";
     const heroSlides = Array.isArray(config.slides)
       ? config.slides
@@ -1163,6 +1272,15 @@ export default function Canvas() {
         };
       })
       .filter((item) => item.title || item.text || item.buttonLabel || item.target);
+    const faqItems = sectionDraft.items
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [faqTitle = "", faqContent = ""] = line.split("|").map((part) => part.trim());
+        return { title: faqTitle, content: faqContent };
+      })
+      .filter((item) => item.title || item.content);
 
     switch (selectedSection.sectionType) {
       case "hero":
@@ -1208,6 +1326,11 @@ export default function Canvas() {
         if (selectedSection.sectionType === "services") {
           assignOrDelete("cards", serviceCards);
         }
+        break;
+      case "faq":
+        assignOrDelete("title", title);
+        assignOrDelete("text", text);
+        assignOrDelete("items", faqItems);
         break;
       default:
         assignOrDelete("title", title);
@@ -1274,6 +1397,19 @@ export default function Canvas() {
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
+      if (items.length) config.items = items;
+    }
+
+    if (section.sectionType === "faq") {
+      const items = sectionDraft.items
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [title = "", content = ""] = line.split("|").map((part) => part.trim());
+          return { title, content };
+        })
+        .filter((item) => item.title || item.content);
       if (items.length) config.items = items;
     }
 
@@ -1364,6 +1500,16 @@ export default function Canvas() {
           .slice(0, 4)
       : [];
     const servicesText = typeof config.text === "string" ? config.text : "";
+    const faqItems = Array.isArray(config.items)
+      ? config.items
+          .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+          .map((item) => ({
+            title: typeof item.title === "string" ? item.title : "",
+            content: typeof item.content === "string" ? item.content : "",
+          }))
+          .filter((item) => item.title || item.content)
+          .slice(0, 2)
+      : [];
     const effectivePreviewImage = heroImage || previewImage;
 
     return (
@@ -1550,7 +1696,33 @@ export default function Canvas() {
           </div>
         ) : null}
 
-        {!["hero", "ticker", "quote", "fresh-release", "campaign", "featured", "services"].includes(section.sectionType) ? (
+        {section.sectionType === "faq" ? (
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+              {(faqItems.length ? faqItems : [{ title: "Frequently Asked Questions", content: "" }]).map((item, index) => (
+                <p
+                  key={`faq-preview-${section.id}-${index}`}
+                  className="line-clamp-1 text-[9px] uppercase tracking-[0.16em] text-white/85"
+                >
+                  {item.title}
+                </p>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {section.sectionType === "back-to-top" ? (
+          <div className="absolute inset-x-0 bottom-0 p-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-center">
+              <p className="text-[9px] uppercase tracking-[0.2em] text-white/90">Back to Top</p>
+              <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-white/70">
+                Image + scroll action
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        {!["hero", "ticker", "quote", "fresh-release", "campaign", "featured", "services", "faq", "back-to-top"].includes(section.sectionType) ? (
           <div className="absolute left-3 top-3 right-3">
             <p className="text-[9px] uppercase tracking-[0.24em] text-[rgba(201,169,110,0.88)]">
               {section.sectionType}
@@ -1586,7 +1758,7 @@ export default function Canvas() {
       ? "Hero Settings"
       : selectedSection?.sectionType === "ticker"
         ? "Ticker Settings"
-        : selectedSection?.sectionType === "quote"
+      : selectedSection?.sectionType === "quote"
           ? "Statement Settings"
           : selectedSection?.sectionType === "featured"
             ? "Featured Product Settings"
@@ -1594,6 +1766,10 @@ export default function Canvas() {
               ? "Fresh Release Settings"
               : selectedSection?.sectionType === "campaign"
                 ? "Editorial Grid Settings"
+                : selectedSection?.sectionType === "back-to-top"
+                  ? "Back To Top Settings"
+                : selectedSection?.sectionType === "faq"
+                  ? "FAQ Accordion Settings"
                 : "Section Settings";
   const sectionPresets = getSectionPresets(selectedSection);
 
@@ -3351,7 +3527,7 @@ export default function Canvas() {
                       </>
                     ) : null}
 
-                    {selectedSection.sectionType === "arrivals" || selectedSection.sectionType === "services" ? (
+                    {selectedSection.sectionType === "arrivals" || selectedSection.sectionType === "services" || selectedSection.sectionType === "faq" ? (
                       <>
                         <div className="space-y-2">
                           <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">Title</label>
@@ -3450,6 +3626,22 @@ export default function Canvas() {
                                 </CardContent>
                               </Card>
                             ))}
+                          </div>
+                        ) : null}
+                        {selectedSection.sectionType === "faq" ? (
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                              FAQ Items
+                            </label>
+                            <Textarea
+                              value={sectionDraft.items}
+                              onChange={(event) => setSectionDraft((prev) => ({ ...prev, items: event.target.value }))}
+                              className="min-h-32 rounded-xl font-mono text-xs"
+                              placeholder="Question | Answer (one per line)"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Format: <span className="font-mono">Question | Answer</span>
+                            </p>
                           </div>
                         ) : null}
                       </>

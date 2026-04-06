@@ -544,6 +544,12 @@ export const pageTemplates = pgTable('page_templates', {
   isActive: boolean('is_active')
     .notNull()
     .default(true),
+  isCustom: boolean('is_custom')
+    .notNull()
+    .default(false),
+  createdBy: varchar('created_by')
+    .references(() => users.id),
+  thumbnailConfig: jsonb('thumbnail_config'),
   createdAt: timestamp('created_at').defaultNow(),
 })
 
@@ -555,8 +561,10 @@ export type InsertPageTemplate =
 export const pageSections = pgTable('page_sections', {
   id: serial('id').primaryKey(),
   templateId: integer('template_id')
-    .notNull()
     .references(() => pageTemplates.id,
+      { onDelete: 'cascade' }),
+  pageId: integer('page_id')
+    .references(() => pages.id,
       { onDelete: 'cascade' }),
   sectionType: varchar('section_type', { length: 50 })
     .notNull(),
@@ -592,3 +600,63 @@ export type SiteSettings =
   typeof siteSettings.$inferSelect
 export type InsertSiteSettings =
   typeof siteSettings.$inferInsert
+
+export const pages = pgTable("pages", {
+  id: serial("id").primaryKey(),
+  slug: varchar("slug", { length: 100 }).notNull().unique(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  status: varchar("status", { length: 20 }).notNull().default("draft"),
+  isHomepage: boolean("is_homepage").notNull().default(false),
+  showInNav: boolean("show_in_nav").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  seoTitle: varchar("seo_title", { length: 200 }),
+  seoDescription: text("seo_description"),
+  seoImage: text("seo_image"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+
+export type Page = typeof pages.$inferSelect
+export type InsertPage = typeof pages.$inferInsert
+
+export const siteBranding = pgTable("site_branding", {
+  id: serial("id").primaryKey(),
+  logoUrl: text("logo_url"),
+  logoDarkUrl: text("logo_dark_url"),
+  logoHeight: integer("logo_height").notNull().default(40),
+  faviconUrl: text("favicon_url"),
+  ogImageUrl: text("og_image_url"),
+  footerLogoUrl: text("footer_logo_url"),
+  footerText: text("footer_text"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+
+export type SiteBranding = typeof siteBranding.$inferSelect
+export type InsertSiteBranding = typeof siteBranding.$inferInsert
+
+export const siteColors = pgTable("site_colors", {
+  id: serial("id").primaryKey(),
+  presetName: varchar("preset_name", { length: 50 }).notNull().default("default"),
+  bgPrimary: varchar("bg_primary", { length: 20 }),
+  bgSecondary: varchar("bg_secondary", { length: 20 }),
+  textPrimary: varchar("text_primary", { length: 20 }),
+  textSecondary: varchar("text_secondary", { length: 20 }),
+  accentColor: varchar("accent_color", { length: 20 }),
+  borderColor: varchar("border_color", { length: 20 }),
+  isActive: boolean("is_active").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
+export type SiteColor = typeof siteColors.$inferSelect
+export type InsertSiteColor = typeof siteColors.$inferInsert
+
+export const slugRedirects = pgTable("slug_redirects", {
+  id: serial("id").primaryKey(),
+  oldSlug: varchar("old_slug", { length: 100 }).notNull(),
+  newSlug: varchar("new_slug", { length: 100 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+})
+
+export type SlugRedirect = typeof slugRedirects.$inferSelect
+export type InsertSlugRedirect = typeof slugRedirects.$inferInsert

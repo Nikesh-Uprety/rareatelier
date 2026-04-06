@@ -15,6 +15,8 @@ const GoldTickerSection = lazy(() => import("@/components/home/GoldTickerSection
 const FreshReleaseSection = lazy(() => import("@/components/home/FreshReleaseSection"));
 const OurServices = lazy(() => import("@/components/home/OurServices"));
 const ContactSection = lazy(() => import("@/components/home/ContactSection"));
+const FaqSection = lazy(() => import("@/components/home/FaqSection"));
+const BackToTopSection = lazy(() => import("@/components/home/BackToTopSection"));
 
 type SiteAsset = {
   id: string;
@@ -476,6 +478,8 @@ export default function Home() {
     { id: -4, sectionType: "campaign", isVisible: true, config: {}, orderIndex: 4 },
     { id: -5, sectionType: "arrivals", isVisible: true, config: {}, orderIndex: 5 },
     { id: -6, sectionType: "services", isVisible: true, config: {}, orderIndex: 6 },
+    { id: -7, sectionType: "back-to-top", isVisible: true, config: {}, orderIndex: 7 },
+    { id: -8, sectionType: "faq", isVisible: true, config: {}, orderIndex: 8 },
   ];
 
   const templateSlug = pageConfig?.template?.slug;
@@ -508,6 +512,17 @@ export default function Home() {
   })();
   const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
   const shouldRenderFallbackContact = !pageConfigLoading && !activeSections.some((s: any) => s.sectionType === "contact");
+  const shouldRenderFallbackBackToTop =
+    !pageConfigLoading &&
+    isMaisonNocturne &&
+    previewSectionId == null &&
+    !activeSections.some((s: any) => s.sectionType === "back-to-top");
+  const shouldRenderFallbackFaq =
+    !pageConfigLoading &&
+    previewSectionId == null &&
+    !activeSections.some((s: any) => s.sectionType === "faq");
+  const faqSections = activeSections.filter((section: any) => section.sectionType === "faq");
+  const nonFaqSections = activeSections.filter((section: any) => section.sectionType !== "faq");
 
   useEffect(() => {
     if (!isLuxuryEditorialTemplate || isCanvasPreview) return;
@@ -628,6 +643,27 @@ export default function Home() {
             <ContactSection />
           </DeferredSection>
         );
+      case "back-to-top": {
+        const config = (section.config ?? {}) as Record<string, unknown>;
+        const imageFromConfig =
+          typeof config.image === "string" && config.image.trim().length > 0
+            ? config.image.trim()
+            : "";
+        return (
+          <DeferredSection key={section.id} minHeightClassName="min-h-[16rem]">
+            <BackToTopSection
+              imageUrl={imageFromConfig || campaignBannerImage || "/images/home-campaign-editorial.webp"}
+              imageAlt={campaignBannerAltText}
+            />
+          </DeferredSection>
+        );
+      }
+      case "faq":
+        return (
+          <DeferredSection key={section.id} minHeightClassName="min-h-[24rem]">
+            <FaqSection config={section.config} />
+          </DeferredSection>
+        );
       case "fresh-release":
         return (
           <DeferredSection key={section.id} minHeightClassName="min-h-[30rem]">
@@ -656,11 +692,27 @@ export default function Home() {
         <meta property="og:url" content={window.location.origin} />
       </Helmet>
       <main className={isLuxuryEditorialTemplate ? "bg-[var(--bg)] text-[var(--fg)]" : undefined}>
-        {activeSections.map(renderSection)}
+        {nonFaqSections.map(renderSection)}
         {/* Always render ContactSection at the bottom when not already present */}
         {shouldRenderFallbackContact && (
-          <DeferredSection minHeightClassName="min-h-[26rem]">
-            <ContactSection />
+          <>
+            {shouldRenderFallbackBackToTop ? (
+              <DeferredSection minHeightClassName="min-h-[16rem]">
+                <BackToTopSection
+                  imageUrl={campaignBannerImage || "/images/home-campaign-editorial.webp"}
+                  imageAlt={campaignBannerAltText}
+                />
+              </DeferredSection>
+            ) : null}
+            <DeferredSection minHeightClassName="min-h-[26rem]">
+              <ContactSection />
+            </DeferredSection>
+          </>
+        )}
+        {faqSections.map(renderSection)}
+        {shouldRenderFallbackFaq && (
+          <DeferredSection minHeightClassName="min-h-[24rem]">
+            <FaqSection />
           </DeferredSection>
         )}
       </main>

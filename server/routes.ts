@@ -23,7 +23,7 @@ import {
 
 
 
-import { and, desc, eq, gte, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
     bills,
@@ -36,6 +36,7 @@ import {
     orders,
     pageSections,
     pageTemplates,
+    pages,
     posSessions,
     platforms,
     Product,
@@ -45,6 +46,9 @@ import {
     securityLogs,
     siteAssets,
     siteSettings,
+    siteBranding,
+    siteColors,
+    slugRedirects,
     users,
     adminProfileSettings,
 } from "../shared/schema";
@@ -479,6 +483,102 @@ export async function registerRoutes(
     return [...normalizedSections, ...extraSections].sort((a, b) => a.orderIndex - b.orderIndex);
   };
 
+  const ensureFaqSectionForTemplate = async <
+    T extends {
+      id?: number;
+      templateId: number | null;
+      pageId: number | null;
+      sectionType: string;
+      orderIndex: number;
+      isVisible?: boolean;
+      label?: string | null;
+      config?: unknown;
+    },
+  >(
+    templateId: number,
+    sections: T[],
+  ): Promise<T[]> => {
+    if (sections.some((section) => section.sectionType === "faq")) return sections;
+
+    const nextOrderIndex =
+      sections.reduce((max, section) => Math.max(max, section.orderIndex ?? 0), 0) + 1;
+
+    const defaultFaqConfig = {
+      title: "Frequently Asked Questions",
+      text: "Everything you need to know before placing your order.",
+      items: [
+        {
+          title: "How do I place an order?",
+          content:
+            "Browse products, add them to your cart, and complete checkout with shipping and payment details.",
+        },
+        {
+          title: "Can I modify or cancel my order?",
+          content:
+            "Yes, before shipping. Once an order is processed and dispatched, edits and cancellations are no longer available.",
+        },
+        {
+          title: "What payment methods do you accept?",
+          content:
+            "We currently support online payment options shown at checkout, plus verified payment channels configured by Rare Atelier.",
+        },
+      ],
+    } as const;
+
+    const [created] = await db
+      .insert(pageSections)
+      .values({
+        templateId,
+        sectionType: "faq",
+        label: "FAQ",
+        orderIndex: nextOrderIndex,
+        isVisible: true,
+        config: defaultFaqConfig,
+      })
+      .returning();
+
+    return [...sections, created as unknown as T].sort((a, b) => a.orderIndex - b.orderIndex);
+  };
+
+  const ensureBackToTopSectionForTemplate = async <
+    T extends {
+      id?: number;
+      templateId: number | null;
+      pageId: number | null;
+      sectionType: string;
+      orderIndex: number;
+      isVisible?: boolean;
+      label?: string | null;
+      config?: unknown;
+    },
+  >(
+    templateId: number,
+    sections: T[],
+  ): Promise<T[]> => {
+    if (sections.some((section) => section.sectionType === "back-to-top")) return sections;
+
+    const nextOrderIndex =
+      sections.reduce((max, section) => Math.max(max, section.orderIndex ?? 0), 0) + 1;
+
+    const [created] = await db
+      .insert(pageSections)
+      .values({
+        templateId,
+        sectionType: "back-to-top",
+        label: "Back To Top",
+        orderIndex: nextOrderIndex,
+        isVisible: true,
+        config: {
+          title: "Back to Top",
+          text: "Image section above contact with smooth return-to-top action.",
+          image: "/images/home-campaign-editorial.webp",
+        },
+      })
+      .returning();
+
+    return [...sections, created as unknown as T].sort((a, b) => a.orderIndex - b.orderIndex);
+  };
+
   // Security Logging Middleware
   app.use(async (req, res, next) => {
     const start = Date.now();
@@ -688,10 +788,12 @@ export async function registerRoutes(
       const sections = await db
         .select()
         .from(pageSections)
-        .where(eq(pageSections.templateId, activeId))
+        .where(and(eq(pageSections.templateId, activeId), sql`${pageSections.pageId} IS NULL`))
         .orderBy(pageSections.orderIndex);
 
-      const normalizedSections = ensureTemplateSections(template[0] ?? null, sections);
+      const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(activeId, sections as any);
+      const sectionsWithFaq = await ensureFaqSectionForTemplate(activeId, sectionsWithBackToTop as any);
+      const normalizedSections = ensureTemplateSections(template[0] ?? null, sectionsWithFaq as any);
 
       applyPageConfigCacheHeaders();
       return res.json({
@@ -1025,9 +1127,12 @@ export async function registerRoutes(
       const sections = await db
         .select()
         .from(pageSections)
-        .where(eq(pageSections.templateId, parseInt(id)))
+        .where(and(eq(pageSections.templateId, parseInt(id)), sql`${pageSections.pageId} IS NULL`))
         .orderBy(pageSections.orderIndex);
-      return res.json(ensureTemplateSections(template ?? null, sections));
+      const parsedId = parseInt(id);
+      const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(parsedId, sections as any);
+      const sectionsWithFaq = await ensureFaqSectionForTemplate(parsedId, sectionsWithBackToTop);
+      return res.json(ensureTemplateSections(template ?? null, sectionsWithFaq as any));
     } catch (err) {
       console.error("Error in GET /api/admin/canvas/templates/:id/sections", err);
       return res.status(500).json({ error: "Failed to load sections" });
@@ -1156,7 +1261,11 @@ export async function registerRoutes(
       const siblingSections = await db
         .select()
         .from(pageSections)
-        .where(eq(pageSections.templateId, existing.templateId))
+        .where(
+          existing.templateId
+            ? and(eq(pageSections.templateId, existing.templateId), sql`${pageSections.pageId} IS NULL`)
+            : and(eq(pageSections.pageId, Number(existing.pageId)), sql`${pageSections.templateId} IS NULL`)
+        )
         .orderBy(pageSections.orderIndex);
 
       const nextOrderIndex =
@@ -1166,6 +1275,7 @@ export async function registerRoutes(
         .insert(pageSections)
         .values({
           templateId: existing.templateId,
+          pageId: existing.pageId,
           sectionType: existing.sectionType,
           label: existing.label ? `${existing.label} Copy` : `${existing.sectionType} Copy`,
           orderIndex: nextOrderIndex,
@@ -1306,6 +1416,552 @@ export async function registerRoutes(
     } catch (err) {
       console.error("Error in PATCH /api/admin/canvas/settings", err);
       return res.status(500).json({ error: "Failed to update canvas settings" });
+    }
+  });
+
+  // ─── Pages CRUD ──────────────────────────────────────────────
+
+  app.get("/api/admin/canvas/pages", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const allPages = await db.select().from(pages).orderBy(pages.sortOrder, pages.title);
+      return res.json(allPages);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/pages", err);
+      return res.status(500).json({ error: "Failed to load pages" });
+    }
+  });
+
+  app.post("/api/admin/canvas/pages", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const { title, slug, fromTemplateId } = req.body as { title: string; slug: string; fromTemplateId?: number };
+      const normalizedSlug = slug.startsWith("/") ? slug : `/${slug}`;
+
+      const [newPage] = await db
+        .insert(pages)
+        .values({
+          title,
+          slug: normalizedSlug,
+          status: "draft",
+          isHomepage: normalizedSlug === "/",
+          showInNav: true,
+          sortOrder: 0,
+        })
+        .returning();
+
+      if (fromTemplateId) {
+        const templateSections = await db
+          .select()
+          .from(pageSections)
+          .where(and(eq(pageSections.templateId, fromTemplateId), sql`${pageSections.pageId} IS NULL`))
+          .orderBy(pageSections.orderIndex);
+
+        if (templateSections.length > 0) {
+          await db.insert(pageSections).values(
+            templateSections.map((s) => ({
+              pageId: newPage.id,
+              sectionType: s.sectionType,
+              label: s.label,
+              orderIndex: s.orderIndex,
+              isVisible: s.isVisible,
+              config: s.config,
+            }))
+          );
+        }
+      }
+
+      return res.json(newPage);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/pages", err);
+      return res.status(500).json({ error: "Failed to create page" });
+    }
+  });
+
+  app.get("/api/admin/canvas/pages/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [page] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+      if (!page) return res.status(404).json({ error: "Page not found" });
+
+      const pageSectionsList = await db
+        .select()
+        .from(pageSections)
+        .where(and(eq(pageSections.pageId, id), sql`${pageSections.templateId} IS NULL`))
+        .orderBy(pageSections.orderIndex);
+
+      return res.json({ ...page, sections: pageSectionsList });
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/pages/:id", err);
+      return res.status(500).json({ error: "Failed to load page" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/pages/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const { title, slug, description, status, showInNav, sortOrder, seoTitle, seoDescription, seoImage } = req.body as any;
+      const updateData: any = { updatedAt: new Date() };
+      if (title !== undefined) updateData.title = title;
+      if (slug !== undefined) updateData.slug = slug.startsWith("/") ? slug : `/${slug}`;
+      if (description !== undefined) updateData.description = description;
+      if (status !== undefined) updateData.status = status;
+      if (showInNav !== undefined) updateData.showInNav = showInNav;
+      if (sortOrder !== undefined) updateData.sortOrder = sortOrder;
+      if (seoTitle !== undefined) updateData.seoTitle = seoTitle;
+      if (seoDescription !== undefined) updateData.seoDescription = seoDescription;
+      if (seoImage !== undefined) updateData.seoImage = seoImage;
+
+      const [updated] = await db.update(pages).set(updateData).where(eq(pages.id, id)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/pages/:id", err);
+      return res.status(500).json({ error: "Failed to update page" });
+    }
+  });
+
+  app.delete("/api/admin/canvas/pages/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [page] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+      if (!page) return res.status(404).json({ error: "Page not found" });
+      if (page.isHomepage) return res.status(400).json({ error: "Cannot delete the home page" });
+
+      await db.delete(pages).where(eq(pages.id, id));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/canvas/pages/:id", err);
+      return res.status(500).json({ error: "Failed to delete page" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/pages/reorder", requireAdminPageAccess("landing-page"), validateRequest(z.object({ orderedIds: z.array(z.number()).min(1) })), async (req: Request, res: Response) => {
+    try {
+      const { orderedIds } = req.body as { orderedIds: number[] };
+      await db.transaction(async (tx) => {
+        await Promise.all(orderedIds.map((id, index) => tx.update(pages).set({ sortOrder: index + 1 }).where(eq(pages.id, id))));
+      });
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/pages/reorder", err);
+      return res.status(500).json({ error: "Failed to reorder pages" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/pages/:id/publish", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [page] = await db.select().from(pages).where(eq(pages.id, id)).limit(1);
+      if (!page) return res.status(404).json({ error: "Page not found" });
+
+      const newStatus = page.status === "published" ? "draft" : "published";
+      const [updated] = await db.update(pages).set({ status: newStatus, updatedAt: new Date() }).where(eq(pages.id, id)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/pages/:id/publish", err);
+      return res.status(500).json({ error: "Failed to toggle publish status" });
+    }
+  });
+
+  // ─── Page Sections ───────────────────────────────────────────
+
+  app.get("/api/admin/canvas/pages/:id/sections", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const pageId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const sections = await db
+        .select()
+        .from(pageSections)
+        .where(and(eq(pageSections.pageId, pageId), sql`${pageSections.templateId} IS NULL`))
+        .orderBy(pageSections.orderIndex);
+      return res.json(sections);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/pages/:id/sections", err);
+      return res.status(500).json({ error: "Failed to load sections" });
+    }
+  });
+
+  app.post("/api/admin/canvas/pages/:id/sections", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const pageId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const { sectionType, label, config } = req.body as { sectionType: string; label?: string; config?: Record<string, unknown> };
+
+      const maxOrder = await db.select({ max: sql<number>`MAX(${pageSections.orderIndex})` }).from(pageSections).where(eq(pageSections.pageId, pageId));
+      const nextOrderIndex = (maxOrder[0]?.max ?? 0) + 1;
+
+      const [newSection] = await db
+        .insert(pageSections)
+        .values({ pageId, sectionType, label: label || sectionType, orderIndex: nextOrderIndex, isVisible: true, config: config ?? {} })
+        .returning();
+      return res.json(newSection);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/pages/:id/sections", err);
+      return res.status(500).json({ error: "Failed to add section" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/pages/:id/sections/reorder", requireAdminPageAccess("landing-page"), validateRequest(z.object({ orderedIds: z.array(z.number()).min(1) })), async (req: Request, res: Response) => {
+    try {
+      const { orderedIds } = req.body as { orderedIds: number[] };
+      await db.transaction(async (tx) => {
+        await Promise.all(orderedIds.map((id, index) => tx.update(pageSections).set({ orderIndex: index + 1, updatedAt: new Date() }).where(eq(pageSections.id, id))));
+      });
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/pages/:id/sections/reorder", err);
+      return res.status(500).json({ error: "Failed to reorder sections" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/pages/:pageId/sections/:sid", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const sid = parseInt(Array.isArray(req.params.sid) ? req.params.sid[0] : req.params.sid);
+      const { isVisible, config, orderIndex, label } = req.body as any;
+      const updateData: any = { updatedAt: new Date() };
+      if (isVisible !== undefined) updateData.isVisible = isVisible;
+      if (config !== undefined) updateData.config = config;
+      if (orderIndex !== undefined) updateData.orderIndex = orderIndex;
+      if (label !== undefined) updateData.label = label;
+
+      const [updated] = await db.update(pageSections).set(updateData).where(eq(pageSections.id, sid)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/pages/:pageId/sections/:sid", err);
+      return res.status(500).json({ error: "Failed to update section" });
+    }
+  });
+
+  app.delete("/api/admin/canvas/pages/:pageId/sections/:sid", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const sid = parseInt(Array.isArray(req.params.sid) ? req.params.sid[0] : req.params.sid);
+      await db.delete(pageSections).where(eq(pageSections.id, sid));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/canvas/pages/:pageId/sections/:sid", err);
+      return res.status(500).json({ error: "Failed to delete section" });
+    }
+  });
+
+  // ─── Enhanced Templates ──────────────────────────────────────
+
+  app.post("/api/admin/canvas/templates", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const { name, slug, description, tier, fromPageId } = req.body as { name: string; slug: string; description?: string; tier?: string; fromPageId?: number };
+      const userId = (req.user as Express.User | undefined)?.id ?? null;
+
+      const [newTemplate] = await db
+        .insert(pageTemplates)
+        .values({ name, slug, description, tier: tier || "free", isCustom: true, createdBy: userId })
+        .returning();
+
+      if (fromPageId) {
+        const pageSectionsList = await db
+          .select()
+          .from(pageSections)
+          .where(and(eq(pageSections.pageId, fromPageId), sql`${pageSections.templateId} IS NULL`))
+          .orderBy(pageSections.orderIndex);
+
+        if (pageSectionsList.length > 0) {
+          await db.insert(pageSections).values(
+            pageSectionsList.map((s) => ({
+              templateId: newTemplate.id,
+              sectionType: s.sectionType,
+              label: s.label,
+              orderIndex: s.orderIndex,
+              isVisible: s.isVisible,
+              config: s.config,
+            }))
+          );
+        }
+      }
+
+      return res.json(newTemplate);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/templates", err);
+      return res.status(500).json({ error: "Failed to create template" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/templates/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const { name, description, tier, thumbnailUrl } = req.body as any;
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (tier !== undefined) updateData.tier = tier;
+      if (thumbnailUrl !== undefined) updateData.thumbnailUrl = thumbnailUrl;
+
+      const [updated] = await db.update(pageTemplates).set(updateData).where(eq(pageTemplates.id, id)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/templates/:id", err);
+      return res.status(500).json({ error: "Failed to update template" });
+    }
+  });
+
+  app.delete("/api/admin/canvas/templates/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, id)).limit(1);
+      if (!template) return res.status(404).json({ error: "Template not found" });
+      if (!template.isCustom) return res.status(403).json({ error: "Cannot delete seeded templates" });
+
+      await db.delete(pageTemplates).where(eq(pageTemplates.id, id));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/canvas/templates/:id", err);
+      return res.status(500).json({ error: "Failed to delete template" });
+    }
+  });
+
+  app.post("/api/admin/canvas/templates/:id/duplicate", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [original] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, id)).limit(1);
+      if (!original) return res.status(404).json({ error: "Template not found" });
+
+      const [dup] = await db
+        .insert(pageTemplates)
+        .values({
+          name: `${original.name} (Copy)`,
+          slug: `${original.slug}-copy-${Date.now()}`,
+          description: original.description,
+          thumbnailUrl: original.thumbnailUrl,
+          tier: original.tier,
+          priceNpr: original.priceNpr,
+          isCustom: true,
+        })
+        .returning();
+
+      const origSections = await db.select().from(pageSections).where(and(eq(pageSections.templateId, id), sql`${pageSections.pageId} IS NULL`)).orderBy(pageSections.orderIndex);
+      if (origSections.length > 0) {
+        await db.insert(pageSections).values(origSections.map((s) => ({ templateId: dup.id, sectionType: s.sectionType, label: s.label, orderIndex: s.orderIndex, isVisible: s.isVisible, config: s.config })));
+      }
+
+      return res.json(dup);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/templates/:id/duplicate", err);
+      return res.status(500).json({ error: "Failed to duplicate template" });
+    }
+  });
+
+  app.post("/api/admin/canvas/pages/:id/save-as-template", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const pageId = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const { name, slug, tier } = req.body as { name: string; slug: string; tier?: string };
+      const userId = (req.user as Express.User | undefined)?.id ?? null;
+
+      const [page] = await db.select().from(pages).where(eq(pages.id, pageId)).limit(1);
+      if (!page) return res.status(404).json({ error: "Page not found" });
+
+      const [newTemplate] = await db
+        .insert(pageTemplates)
+        .values({ name, slug, description: page.description, tier: tier || "free", isCustom: true, createdBy: userId })
+        .returning();
+
+      const pageSectionsList = await db.select().from(pageSections).where(and(eq(pageSections.pageId, pageId), sql`${pageSections.templateId} IS NULL`)).orderBy(pageSections.orderIndex);
+      if (pageSectionsList.length > 0) {
+        await db.insert(pageSections).values(pageSectionsList.map((s) => ({ templateId: newTemplate.id, sectionType: s.sectionType, label: s.label, orderIndex: s.orderIndex, isVisible: s.isVisible, config: s.config })));
+      }
+
+      return res.json(newTemplate);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/pages/:id/save-as-template", err);
+      return res.status(500).json({ error: "Failed to save as template" });
+    }
+  });
+
+  // ─── Branding ────────────────────────────────────────────────
+
+  app.get("/api/admin/canvas/branding", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const branding = await db.select().from(siteBranding).limit(1);
+      return res.json(branding[0] ?? null);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/branding", err);
+      return res.status(500).json({ error: "Failed to load branding" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/branding", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const data = req.body as any;
+      const existing = await db.select().from(siteBranding).limit(1);
+
+      let result;
+      if (existing.length > 0) {
+        [result] = await db.update(siteBranding).set({ ...data, updatedAt: new Date() }).where(eq(siteBranding.id, existing[0].id)).returning();
+      } else {
+        [result] = await db.insert(siteBranding).values(data).returning();
+      }
+      return res.json(result);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/branding", err);
+      return res.status(500).json({ error: "Failed to update branding" });
+    }
+  });
+
+  // ─── Colors ──────────────────────────────────────────────────
+
+  app.get("/api/admin/canvas/colors", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
+    try {
+      const colors = await db.select().from(siteColors).orderBy(siteColors.presetName);
+      return res.json(colors);
+    } catch (err) {
+      console.error("Error in GET /api/admin/canvas/colors", err);
+      return res.status(500).json({ error: "Failed to load colors" });
+    }
+  });
+
+  app.post("/api/admin/canvas/colors", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const data = req.body as any;
+      if (data.isActive) {
+        await db.update(siteColors).set({ isActive: false }).where(sql`1=1`);
+      }
+      const [created] = await db.insert(siteColors).values(data).returning();
+      return res.json(created);
+    } catch (err) {
+      console.error("Error in POST /api/admin/canvas/colors", err);
+      return res.status(500).json({ error: "Failed to create color preset" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/colors/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const data = req.body as any;
+      const [updated] = await db.update(siteColors).set(data).where(eq(siteColors.id, id)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/colors/:id", err);
+      return res.status(500).json({ error: "Failed to update color preset" });
+    }
+  });
+
+  app.patch("/api/admin/canvas/colors/:id/activate", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      await db.update(siteColors).set({ isActive: false }).where(sql`1=1`);
+      const [updated] = await db.update(siteColors).set({ isActive: true }).where(eq(siteColors.id, id)).returning();
+      return res.json(updated);
+    } catch (err) {
+      console.error("Error in PATCH /api/admin/canvas/colors/:id/activate", err);
+      return res.status(500).json({ error: "Failed to activate color preset" });
+    }
+  });
+
+  app.delete("/api/admin/canvas/colors/:id", requireAdminPageAccess("landing-page"), async (req: Request, res: Response) => {
+    try {
+      const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id);
+      const [color] = await db.select().from(siteColors).where(eq(siteColors.id, id)).limit(1);
+      if (!color) return res.status(404).json({ error: "Color preset not found" });
+      if (color.isActive) return res.status(400).json({ error: "Cannot delete active color preset" });
+
+      await db.delete(siteColors).where(eq(siteColors.id, id));
+      return res.json({ success: true });
+    } catch (err) {
+      console.error("Error in DELETE /api/admin/canvas/colors/:id", err);
+      return res.status(500).json({ error: "Failed to delete color preset" });
+    }
+  });
+
+  // ─── Public Routes ───────────────────────────────────────────
+
+  app.get("/api/public/pages", async (_req: Request, res: Response) => {
+    try {
+      const publishedPages = await db
+        .select()
+        .from(pages)
+        .where(and(eq(pages.status, "published"), eq(pages.showInNav, true)))
+        .orderBy(pages.sortOrder);
+      return res.json(publishedPages);
+    } catch (err) {
+      console.error("Error in GET /api/public/pages", err);
+      return res.status(500).json({ error: "Failed to load pages" });
+    }
+  });
+
+  app.get("/api/public/page-config", async (req: Request, res: Response) => {
+    try {
+      const slugParam = (req.query.slug as string) ?? "/";
+      const templateIdParam = req.query.templateId ? parseInt(req.query.templateId as string) : null;
+
+      if (templateIdParam) {
+        const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, templateIdParam)).limit(1);
+        const sections = await db.select().from(pageSections).where(and(eq(pageSections.templateId, templateIdParam), sql`${pageSections.pageId} IS NULL`)).orderBy(pageSections.orderIndex);
+        const settings = await db.select().from(siteSettings).limit(1);
+        return res.json({
+          fontPreset: settings[0]?.fontPreset ?? "inter",
+          template,
+          sections: sections.filter((s) => s.isVisible),
+        });
+      }
+
+      const [page] = await db.select().from(pages).where(eq(pages.slug, slugParam)).limit(1);
+      if (!page) {
+        if (slugParam === "/") {
+          const settings = await db.select().from(siteSettings).limit(1);
+          const activeId = settings[0]?.activeTemplateId;
+          if (activeId) {
+            const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, activeId)).limit(1);
+            const sections = await db.select().from(pageSections).where(and(eq(pageSections.templateId, activeId), sql`${pageSections.pageId} IS NULL`)).orderBy(pageSections.orderIndex);
+            return res.json({ fontPreset: settings[0]?.fontPreset ?? "inter", template, sections: sections.filter((s) => s.isVisible) });
+          }
+        }
+        return res.status(404).json({ error: "Page not found" });
+      }
+
+      if (page.status !== "published" && page.slug !== "/") {
+        return res.status(404).json({ error: "Page not found" });
+      }
+
+      const pageSectionsList = await db
+        .select()
+        .from(pageSections)
+        .where(and(eq(pageSections.pageId, page.id), sql`${pageSections.templateId} IS NULL`))
+        .orderBy(pageSections.orderIndex);
+
+      const settings = await db.select().from(siteSettings).limit(1);
+
+      return res.json({
+        page,
+        fontPreset: settings[0]?.fontPreset ?? "inter",
+        sections: pageSectionsList.filter((s) => s.isVisible),
+      });
+    } catch (err) {
+      console.error("Error in GET /api/public/page-config", err);
+      return res.status(500).json({ error: "Failed to load page config" });
+    }
+  });
+
+  app.get("/api/public/branding", async (_req: Request, res: Response) => {
+    try {
+      const branding = await db.select().from(siteBranding).limit(1);
+      const colors = await db.select().from(siteColors).where(eq(siteColors.isActive, true)).limit(1);
+      return res.json({ branding: branding[0] ?? null, colors: colors[0] ?? null });
+    } catch (err) {
+      console.error("Error in GET /api/public/branding", err);
+      return res.status(500).json({ error: "Failed to load branding" });
+    }
+  });
+
+  app.get("/api/public/sitemap.xml", async (_req: Request, res: Response) => {
+    try {
+      const baseUrl = process.env.SITE_URL || "https://rare-np-production.up.railway.app";
+      const publishedPages = await db.select().from(pages).where(and(eq(pages.status, "published"), eq(pages.showInNav, true))).orderBy(pages.sortOrder);
+
+      let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+      xml += `  <url><loc>${baseUrl}/</loc></url>\n`;
+      for (const p of publishedPages) {
+        if (p.slug === "/") continue;
+        xml += `  <url><loc>${baseUrl}${p.slug}</loc></url>\n`;
+      }
+      xml += `</urlset>`;
+
+      res.setHeader("Content-Type", "application/xml");
+      return res.send(xml);
+    } catch (err) {
+      console.error("Error in GET /api/public/sitemap.xml", err);
+      return res.status(500).json({ error: "Failed to generate sitemap" });
     }
   });
 

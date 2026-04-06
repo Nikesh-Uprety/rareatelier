@@ -49,11 +49,11 @@
 }
 
 .our-services-truck-wrap {
-  animation: our-services-truck-drive 2.4s ease-in-out infinite;
+  animation: our-services-truck-drive 4.2s ease-in-out infinite;
 }
 
 .our-services-speed-line {
-  animation: our-services-speed 1.2s ease-in-out infinite;
+  animation: our-services-speed 2.3s ease-in-out infinite;
 }
 
 .our-services-speed-line:nth-of-type(1) {
@@ -70,7 +70,7 @@
 
 .our-services-flag-wrap {
   transform-origin: bottom center;
-  animation: our-services-flag-wave 2.5s ease-in-out infinite;
+  animation: our-services-flag-wave 4.5s ease-in-out infinite;
 }
 
 .our-services-flag-wrap svg {
@@ -78,7 +78,7 @@
 }
 
 .our-services-box-exchange {
-  animation: our-services-box-spin 6.5s ease-in-out infinite;
+  animation: our-services-box-spin 10s ease-in-out infinite;
 }
 
 /* Scroll reveal */
