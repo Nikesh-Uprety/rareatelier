@@ -195,9 +195,7 @@ export default function AdminImagesPage() {
     const q = normalizeName(debouncedSearch.trim());
     const data = images ?? [];
     if (!q) return data;
-    return data.filter((img) =>
-      normalizeName(img.filename || img.url).includes(q),
-    );
+    return data.filter((img) => normalizeName(img.filename ?? img.url ?? "").includes(q));
   }, [images, debouncedSearch]);
 
   const previewAsset = previewIndex !== null ? filtered[previewIndex] ?? null : null;
@@ -697,7 +695,7 @@ export default function AdminImagesPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3">
             {filtered.map((item: AdminImageAsset, index) => {
               const id = item.id;
-              const url = item.url;
+              const url = item.url ?? "";
               const absoluteUrl = getAbsoluteAssetUrl(url);
               const displayName = getDisplayName(item.filename ?? url);
               const isSelected = selectedIds.has(id);
@@ -759,7 +757,7 @@ export default function AdminImagesPage() {
                     {category === "payment_qr" && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {PAYMENT_QR_PROVIDER_META.map((provider) => {
-                          const linkedProviders = qrImageProvidersMap.get(item.url) ?? [];
+                          const linkedProviders = item.url ? (qrImageProvidersMap.get(item.url) ?? []) : [];
                           const isActiveForProvider = linkedProviders.includes(provider.key);
                           return (
                             <button
@@ -874,7 +872,7 @@ export default function AdminImagesPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <img
-                  src={previewAsset.url}
+                  src={previewAsset.url ?? undefined}
                   alt={previewAsset.filename ?? "Preview"}
                   className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"
                 />
@@ -951,7 +949,7 @@ export default function AdminImagesPage() {
             <div className="space-y-4 py-2">
               <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
                 <img
-                  src={assetToDelete.url}
+                  src={assetToDelete.url ?? undefined}
                   alt={assetToDelete.filename ?? "Delete image"}
                   className="h-48 w-full object-cover"
                 />

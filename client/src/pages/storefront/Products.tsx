@@ -68,7 +68,7 @@ export default function Products() {
   const [colorFilter, setColorFilter] = useState(initialState.colorFilter);
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   const [page, setPage] = useState(initialState.page);
-  const PAGE_SIZE = 12;
+  const PAGE_SIZE = 10;
   const hasInitializedFilters = useRef(false);
 
   const shopPath = useMemo(() => {
@@ -244,7 +244,7 @@ export default function Products() {
   const isOverflowSelected = overflowCategories.some((cat) => cat.slug === category);
 
   return (
-    <div className="w-full px-3 pb-16 pt-4 sm:px-5 sm:pt-6 lg:px-8 2xl:px-12">
+    <div className="w-full pb-16 pt-4 pl-3 pr-1 sm:pt-6 sm:pl-4 sm:pr-2 lg:pl-6 lg:pr-2 xl:pl-7 xl:pr-2 2xl:pl-8 2xl:pr-2">
       <StorefrontSeo
         title={
           category !== "all"
@@ -295,7 +295,7 @@ export default function Products() {
           <div className="mb-10 space-y-5">
             <div className="flex flex-col gap-4 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] md:items-center">
               <div className="w-full overflow-x-auto scrollbar-hide md:col-start-2 md:w-auto md:max-w-full md:justify-self-center">
-                <div className="flex w-max min-w-full items-center gap-6 md:min-w-0 md:justify-center">
+                <div className="flex w-max min-w-full items-center gap-4 md:min-w-0 md:flex-wrap md:justify-center md:gap-5">
                   <button
                     onClick={() => setCategory("all")}
                     style={{ fontFamily: "Roboto, sans-serif" }}
@@ -518,7 +518,7 @@ export default function Products() {
           ) : (
             <div>
               {filteredProducts.length > 0 ? (
-                <div className="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-2 sm:grid-cols-[repeat(auto-fit,minmax(210px,1fr))] sm:gap-3 md:gap-4 xl:grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 md:grid-cols-4 md:gap-3 lg:grid-cols-5 xl:grid-cols-5 2xl:grid-cols-5">
                   {filteredProducts.map((product) => {
                     const hoverImage = getHoverImage(product);
                     const mainImage = product.imageUrl ?? hoverImage ?? "";
@@ -528,8 +528,8 @@ export default function Products() {
                           href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
                           className="group block"
                         >
-                        <div className="mb-3 rounded-2xl border border-zinc-200 bg-white p-2 shadow-[0_6px_20px_rgba(15,23,42,0.06)] dark:border-zinc-700 dark:bg-zinc-900/40">
-                          <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-zinc-50 dark:bg-zinc-900/70">
+                        <div className="mb-2">
+                          <div className="relative aspect-[3/5] overflow-hidden rounded-md border border-white/80 bg-zinc-50 dark:border-white/20 dark:bg-zinc-900/70">
                           <button
                             type="button"
                               onClick={(e) => {
@@ -610,13 +610,15 @@ export default function Products() {
                 </div>
               )}
 
-              {/* Pagination */}
               {totalProducts > PAGE_SIZE && (
                 <div className="mt-12 flex items-center justify-center gap-2">
                   <button
-                    onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.max(1, p - 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page === 1}
-                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
@@ -630,8 +632,11 @@ export default function Products() {
                     return (
                       <button
                         key={pageNum}
-                        onClick={() => { setPage(pageNum); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-                        className={`h-10 w-10 flex items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                        onClick={() => {
+                          setPage(pageNum);
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }}
+                        className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                           pageNum === page
                             ? "bg-[#2C3E2D] text-white dark:bg-[#4ADE80] dark:text-[#1A251B]"
                             : "border border-border/60 text-foreground hover:bg-muted"
@@ -642,14 +647,18 @@ export default function Products() {
                     );
                   })}
                   <button
-                    onClick={() => { setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.min(Math.ceil(totalProducts / PAGE_SIZE), p + 1));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page >= Math.ceil(totalProducts / PAGE_SIZE)}
-                    className="h-10 w-10 flex items-center justify-center rounded-full border border-border/60 text-foreground hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </button>
                 </div>
               )}
+
             </div>
           )}
         </div>

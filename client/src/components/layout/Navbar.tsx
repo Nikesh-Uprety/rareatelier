@@ -271,7 +271,10 @@ export default function Navbar() {
   const announcementItems = [...ANNOUNCEMENT_ITEMS, ...ANNOUNCEMENT_ITEMS];
   const announceHeight = announceRef.current?.offsetHeight ?? 28;
   const forceSolidLightNavbar = isInnerStorefrontRoute;
-  const navForegroundColor = forceSolidLightNavbar
+  const isHeroMegaOpen = isHeroRoute && !hasScrolledPastThreshold && Boolean(activeMegaNavHref);
+  const navForegroundColor = isHeroMegaOpen
+    ? "#111111"
+    : forceSolidLightNavbar
     ? "#111111"
     : useHeroContrastState
       ? "#ffffff"
@@ -279,14 +282,24 @@ export default function Navbar() {
         ? "#111111"
         : "#ffffff";
   const navLinkColor = navForegroundColor;
-  const navChrome = forceSolidLightNavbar
+  const navChrome = isHeroMegaOpen
+    ? {
+        background: "#ffffff",
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+        borderColor: "rgba(0,0,0,0.08)",
+        boxShadow: "0 1px 0 rgba(0,0,0,0.05)",
+      }
+    : forceSolidLightNavbar
     ? getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const logoFilter = navForegroundColor === "#111111"
     ? "brightness(0)"
     : "brightness(0) invert(1)";
-  const navUnderlineColor = useHeroContrastState ? "#ffffff" : navForegroundColor;
-  const navTextShadow = useHeroContrastState
+  const navUnderlineColor = isHeroMegaOpen ? "#111111" : useHeroContrastState ? "#ffffff" : navForegroundColor;
+  const navTextShadow = isHeroMegaOpen
+    ? "none"
+    : useHeroContrastState
     ? "0 2px 12px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.15)"
     : "none";
   const mobileMenuSurface = {
@@ -324,13 +337,13 @@ export default function Navbar() {
     ? megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent]
     : null;
   const megaPanelTheme = {
-    shellBg: theme === "dark" ? "rgba(6,6,6,0.96)" : "rgba(255,255,255,0.97)",
-    shellBorder: theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
-    cardBg: theme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(248,248,248,0.94)",
-    cardBorder: theme === "dark" ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)",
-    body: theme === "dark" ? "rgba(255,255,255,0.86)" : "rgba(0,0,0,0.74)",
-    muted: theme === "dark" ? "rgba(255,255,255,0.56)" : "rgba(0,0,0,0.52)",
-    strong: theme === "dark" ? "#ffffff" : "#111111",
+    shellBg: isHeroMegaOpen ? "#ffffff" : theme === "dark" ? "rgba(6,6,6,0.96)" : "rgba(255,255,255,0.97)",
+    shellBorder: isHeroMegaOpen ? "rgba(0,0,0,0.08)" : theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
+    cardBg: isHeroMegaOpen ? "#ffffff" : theme === "dark" ? "rgba(255,255,255,0.04)" : "rgba(248,248,248,0.94)",
+    cardBorder: isHeroMegaOpen ? "rgba(0,0,0,0.08)" : theme === "dark" ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.08)",
+    body: isHeroMegaOpen ? "rgba(0,0,0,0.74)" : theme === "dark" ? "rgba(255,255,255,0.86)" : "rgba(0,0,0,0.74)",
+    muted: isHeroMegaOpen ? "rgba(0,0,0,0.52)" : theme === "dark" ? "rgba(255,255,255,0.56)" : "rgba(0,0,0,0.52)",
+    strong: isHeroMegaOpen ? "#111111" : theme === "dark" ? "#ffffff" : "#111111",
   };
 
   const mobileMenu =

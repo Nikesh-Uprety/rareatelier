@@ -4301,16 +4301,18 @@ export class MemStorage implements IStorage {
 
   async createMediaAsset(data: NewMediaAsset): Promise<MediaAsset> {
     const asset: MediaAsset = {
-      ...data,
       id: crypto.randomUUID(),
-      url: data.url,
-      provider: data.provider,
       category: data.category,
+      url: data.url ?? null,
+      provider: data.provider,
+      assetType: data.assetType ?? "file",
       publicId: data.publicId ?? null,
       filename: data.filename ?? null,
       bytes: data.bytes ?? null,
       width: data.width ?? null,
       height: data.height ?? null,
+      folderPath: data.folderPath ?? null,
+      expiresAt: data.expiresAt ?? null,
       createdAt: new Date(),
     };
     return asset;

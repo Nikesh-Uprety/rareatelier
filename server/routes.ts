@@ -24,7 +24,7 @@ import {
 
 
 
-import { and, desc, eq, gte, ilike, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import {
     bills,
@@ -3670,6 +3670,13 @@ ${Array.from(uniqueEntries.entries())
           .select({ max: sql<number>`COALESCE(MAX(${siteAssets.sortOrder}), -1)` })
           .from(siteAssets)
           .where(eq(siteAssets.section, section));
+
+        if (!asset.url) {
+          return res.status(500).json({
+            success: false,
+            error: "Failed to resolve uploaded image URL",
+          });
+        }
 
         const [created] = await db
           .insert(siteAssets)
@@ -8527,6 +8534,7 @@ ${Array.from(uniqueEntries.entries())
 
       const latestByCategory = new Map<string, string>();
       for (const row of rows) {
+        if (!row.url) continue;
         if (!latestByCategory.has(row.category)) {
           latestByCategory.set(row.category, row.url);
         }
@@ -8575,6 +8583,7 @@ ${Array.from(uniqueEntries.entries())
         { id: string; url: string; createdAt: Date | null }
       >();
       for (const row of rows) {
+        if (!row.url) continue;
         if (!latestByCategory.has(row.category)) {
           latestByCategory.set(row.category, {
             id: row.id,
@@ -8636,6 +8645,10 @@ ${Array.from(uniqueEntries.entries())
         }
 
         const category = PAYMENT_QR_CATEGORIES[provider];
+        if (!source.url) {
+          return res.status(400).json({ success: false, error: "Selected image has no URL" });
+        }
+
         const [created] = await db
           .insert(mediaAssets)
           .values({
