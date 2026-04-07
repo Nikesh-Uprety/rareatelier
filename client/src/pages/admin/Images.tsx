@@ -31,7 +31,8 @@ type ImageCategory =
   | "website"
   | "landing_page"
   | "collection_page"
-  | "payment_qr";
+  | "payment_qr"
+  | "our_services";
 
 const CATEGORY_LABELS: Record<ImageCategory, string> = {
   product: "Product images",
@@ -40,6 +41,7 @@ const CATEGORY_LABELS: Record<ImageCategory, string> = {
   landing_page: "Landing page",
   collection_page: "Collection page",
   payment_qr: "Payment QR",
+  our_services: "Our Services",
 };
 
 const PAYMENT_QR_PROVIDER_META: Array<{ key: PaymentQrProvider; label: string }> = [
@@ -97,6 +99,7 @@ export default function AdminImagesPage() {
         provider,
         category,
         search: debouncedSearch || undefined,
+        assetType: "file",
         limit: imagePageSize,
         offset: (imagePage - 1) * imagePageSize,
       }),
@@ -403,20 +406,46 @@ export default function AdminImagesPage() {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground flex items-center gap-3">
-            <ImagesIcon className="h-7 w-7" />
-            Images
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Central library for product, model, website, and payment QR assets.
-          </p>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <div className="rounded-3xl border border-[#DCE8DB] dark:border-[#2E3B32] bg-gradient-to-br from-[#F6FBF6] via-white to-[#F1F6F1] dark:from-[#0F1712] dark:via-[#111A15] dark:to-[#0C140F] p-6 sm:p-8 shadow-[0_18px_40px_rgba(34,63,41,0.14)] dark:shadow-[0_24px_50px_rgba(0,0,0,0.4)]">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <ImagesIcon className="h-7 w-7 text-[#2C3E2D] dark:text-[#D7E6D9]" />
+              <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">Images</h1>
+              <span className="rounded-full bg-[#223C2A] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.35em] text-white shadow-sm">
+                New
+              </span>
+            </div>
+            <p className="text-muted-foreground mt-2 max-w-2xl">
+              Central library for product, model, website, and payment QR assets.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-[#D6E2D6] dark:border-[#2C3A30] bg-white/80 dark:bg-card/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Total</p>
+              <p className="text-lg font-semibold text-[#1E2F22] dark:text-foreground">{totalImages}</p>
+            </div>
+            <div className="rounded-2xl border border-[#D6E2D6] dark:border-[#2C3A30] bg-white/80 dark:bg-card/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Selected</p>
+              <p className="text-lg font-semibold text-[#1E2F22] dark:text-foreground">{selectedIds.size}</p>
+            </div>
+            <div className="rounded-2xl border border-[#D6E2D6] dark:border-[#2C3A30] bg-white/80 dark:bg-card/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Provider</p>
+              <p className="text-sm font-semibold capitalize text-[#1E2F22] dark:text-foreground">{provider}</p>
+            </div>
+            <div className="rounded-2xl border border-[#D6E2D6] dark:border-[#2C3A30] bg-white/80 dark:bg-card/70 px-3 py-2">
+              <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Category</p>
+              <p className="text-sm font-semibold text-[#1E2F22] dark:text-foreground">
+                {CATEGORY_LABELS[category]}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      <section className="bg-white dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-4">
+      <section className="bg-white/90 dark:bg-card rounded-2xl border border-[#E5E5E0] dark:border-border p-6 space-y-5 shadow-[0_12px_30px_rgba(34,63,41,0.08)] dark:shadow-[0_14px_30px_rgba(0,0,0,0.35)]">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3 justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center gap-1 rounded-full bg-muted p-1">
@@ -542,10 +571,10 @@ export default function AdminImagesPage() {
             addBulkFiles(e.dataTransfer.files);
           }}
           className={cn(
-            "mt-3 border-2 border-dashed rounded-xl p-4 flex flex-col gap-3 items-center justify-center text-center transition-colors",
+            "mt-3 border-2 border-dashed rounded-2xl p-6 flex flex-col gap-3 items-center justify-center text-center transition-all",
             isDragging
               ? "border-primary bg-primary/5"
-              : "border-border hover:border-primary/60 hover:bg-muted/40",
+              : "border-border hover:border-primary/60 hover:bg-gradient-to-br hover:from-white hover:to-[#F3F7F1] dark:hover:from-[#121A15] dark:hover:to-[#0F1511]",
           )}
         >
           <p className="text-xs font-black uppercase tracking-[0.25em] text-muted-foreground">
@@ -677,7 +706,7 @@ export default function AdminImagesPage() {
                 <div
                   key={id}
                   className={cn(
-                    "group relative rounded-xl border bg-muted overflow-hidden",
+                    "group relative rounded-2xl border bg-white dark:bg-card overflow-hidden shadow-sm transition-shadow hover:shadow-xl",
                     isSelected ? "border-primary ring-2 ring-primary/40" : "border-muted/40",
                   )}
                 >
