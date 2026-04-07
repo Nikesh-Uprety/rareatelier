@@ -1,13 +1,14 @@
 import { Link, useLocation } from "wouter";
 import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles } from "lucide-react";
+import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles, PackageCheck, Truck, CircleX } from "lucide-react";
 import { formatPrice } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
-import { fetchOrderById } from "@/lib/api";
+import { cancelOrder, fetchOrderById, getCachedOrderHistory, updateCachedOrder } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function getCartOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
   const currentPrice = Number(price);
@@ -39,11 +40,24 @@ export default function Cart() {
   const { toast } = useToast();
 
   const lastOrderId = typeof window !== 'undefined' ? localStorage.getItem("ra_last_order_id") : null;
+  const recentOrders = useMemo(() => getCachedOrderHistory(), []);
 
   const { data: lastOrder, isLoading: isLoadingRecent } = useQuery({
     queryKey: ["recent-order", lastOrderId],
     queryFn: () => fetchOrderById(lastOrderId!),
     enabled: !!lastOrderId,
+  });
+
+  const recentOrderIds = useMemo(() => recentOrders.map((order) => order.id), [recentOrders]);
+  const { data: liveRecentOrders = [] } = useQuery({
+    queryKey: ["recent-orders-history", recentOrderIds],
+    queryFn: async () => {
+      const fetched = await Promise.all(recentOrderIds.map((id) => fetchOrderById(id)));
+      const resolved = fetched.filter((order): order is NonNullable<typeof order> => Boolean(order));
+      resolved.forEach((order) => updateCachedOrder(order));
+      return resolved;
+    },
+    enabled: recentOrderIds.length > 0,
   });
 
   const handleReorder = (order: any) => {
@@ -102,7 +116,11 @@ export default function Cart() {
   const total = subtotal + shipping;
 
   const RecentOrderSection = () => {
-    if (!lastOrder) return null;
+    const ordersToShow = liveRecentOrders.length > 0 ? liveRecentOrders : lastOrder ? [lastOrder] : [];
+    if (ordersToShow.length === 0) return null;
+
+    const canCancelOrder = (order: any) =>
+      order.status !== "cancelled" && order.status !== "completed";
 
     return (
       <div className="mt-20 pt-16 border-t border-gray-100 dark:border-white/5 animate-in fade-in slide-in-from-bottom-4 duration-1000">
@@ -112,65 +130,125 @@ export default function Cart() {
               <History size={18} className="text-zinc-400" />
             </div>
             <div>
-              <h2 className="text-lg font-black uppercase tracking-tighter">Recent Order</h2>
+              <h2 className="text-lg font-black uppercase tracking-tighter">Recent Orders</h2>
               <p className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold mt-0.5">
-                #{lastOrder.id.slice(0, 8)} · {new Date(lastOrder.createdAt).toLocaleDateString()}
+                Your latest website orders with quick actions
               </p>
             </div>
           </div>
-          <Button 
-            onClick={() => handleReorder(lastOrder)}
-            variant="outline" 
-            className="rounded-full px-6 h-10 gap-2 uppercase tracking-widest text-[9px] font-black border-zinc-200 dark:border-white/10 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all"
-          >
-            <RotateCcw size={12} />
-            Order Again
-          </Button>
         </div>
 
-        <div className="divide-y border-t border-b border-gray-100 dark:border-white/5">
-          {lastOrder.items.map((item: any) => (
-            <div key={item.id} className="py-6 flex gap-6 opacity-70 hover:opacity-100 transition-opacity">
-              <div className="w-24 h-30 bg-zinc-50 dark:bg-zinc-800 shrink-0 border border-gray-100 dark:border-white/10 p-1 rounded-sm overflow-hidden">
-                {item.product?.imageUrl ? (
-                  <img 
-                    src={item.product.imageUrl} 
-                    alt={item.product?.name || "Product"} 
-                    className="w-full h-full object-cover rounded-sm" 
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-100 dark:bg-zinc-700 rounded-sm flex items-center justify-center">
-                    <ShoppingBag size={20} className="text-zinc-300 dark:text-zinc-500" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 flex flex-col justify-center">
-                <div className="flex justify-between items-start mb-1">
-                  <div>
-                    <h3 className="font-black uppercase tracking-widest text-[11px] mb-1 line-clamp-1">
-                      {item.product?.name || "Product"}
-                    </h3>
-                    <p className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">
-                      SKU: {item.productId.slice(0, 8)}
-                    </p>
-                  </div>
-                  <span className="font-black text-[11px] tracking-widest shrink-0 ml-4">
-                    {formatPrice(item.unitPrice)}
+        <div className="space-y-8">
+          {ordersToShow.map((order) => (
+            <div key={order.id} className="rounded-3xl border border-gray-100 bg-white/60 p-6 dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="mb-5 flex flex-col gap-4 border-b border-gray-100 pb-5 dark:border-white/10 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-zinc-400">
+                    #{order.id.slice(0, 8)} · {new Date(order.createdAt).toLocaleDateString()}
+                  </p>
+                  <h3 className="mt-2 text-sm font-black uppercase tracking-widest">
+                    {order.fullName}
+                  </h3>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-zinc-200 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-zinc-500 dark:border-white/10 dark:text-zinc-300">
+                    Status · {order.status}
+                  </span>
+                  <span className="rounded-full border border-zinc-200 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-zinc-500 dark:border-white/10 dark:text-zinc-300">
+                    Delivery · {order.deliveryProvider || "Pending"}
                   </span>
                 </div>
-                <div className="mt-auto pt-2">
-                  <span className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">
-                    Qty: {item.quantity}
-                  </span>
+              </div>
+
+              <div className="divide-y border-t border-b border-gray-100 dark:border-white/5">
+                {order.items.map((item: any) => (
+                  <div key={item.id} className="py-6 flex gap-6 opacity-70 hover:opacity-100 transition-opacity">
+                    <div className="w-24 h-30 bg-zinc-50 dark:bg-zinc-800 shrink-0 border border-gray-100 dark:border-white/10 p-1 rounded-sm overflow-hidden">
+                      {item.product?.imageUrl ? (
+                        <img 
+                          src={item.product.imageUrl} 
+                          alt={item.product?.name || "Product"} 
+                          className="w-full h-full object-cover rounded-sm" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-zinc-100 dark:bg-zinc-700 rounded-sm flex items-center justify-center">
+                          <ShoppingBag size={20} className="text-zinc-300 dark:text-zinc-500" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 flex flex-col justify-center">
+                      <div className="flex justify-between items-start mb-1">
+                        <div>
+                          <h3 className="font-black uppercase tracking-widest text-[11px] mb-1 line-clamp-1">
+                            {item.product?.name || "Product"}
+                          </h3>
+                          <p className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">
+                            SKU: {item.productId.slice(0, 8)}
+                          </p>
+                        </div>
+                        <span className="font-black text-[11px] tracking-widest shrink-0 ml-4">
+                          {formatPrice(item.unitPrice)}
+                        </span>
+                      </div>
+                      <div className="mt-auto pt-2">
+                        <span className="text-[9px] text-zinc-400 uppercase tracking-widest font-bold">
+                          Qty: {item.quantity}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-black">
+                  Order Total <span className="ml-2 text-lg text-foreground">{formatPrice(order.total)}</span>
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  <Button 
+                    onClick={() => handleReorder(order)}
+                    variant="outline" 
+                    className="rounded-full px-5 h-10 gap-2 uppercase tracking-widest text-[9px] font-black border-zinc-200 dark:border-white/10 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black transition-all"
+                  >
+                    <RotateCcw size={12} />
+                    Order Again
+                  </Button>
+                  <Button asChild variant="outline" className="rounded-full px-5 h-10 gap-2 uppercase tracking-widest text-[9px] font-black">
+                    <Link href={`/order-confirmation/${order.id}`}>
+                      <PackageCheck size={12} />
+                      Order Status
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="rounded-full px-5 h-10 gap-2 uppercase tracking-widest text-[9px] font-black">
+                    <Link href={`/order-confirmation/${order.id}`}>
+                      <Truck size={12} />
+                      Track Delivery
+                    </Link>
+                  </Button>
+                  {canCancelOrder(order) ? (
+                    <Button
+                      variant="outline"
+                      className="rounded-full px-5 h-10 gap-2 uppercase tracking-widest text-[9px] font-black border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-950/30"
+                      onClick={async () => {
+                        try {
+                          const updated = await cancelOrder(order.id);
+                          if (updated) {
+                            updateCachedOrder(updated);
+                            toast({ title: "Order cancelled", description: "Your order has been marked as cancelled." });
+                            window.location.reload();
+                          }
+                        } catch {
+                          toast({ title: "Unable to cancel order", variant: "destructive" });
+                        }
+                      }}
+                    >
+                      <CircleX size={12} />
+                      Cancel Order
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
           ))}
-        </div>
-
-        <div className="flex justify-between items-center mt-6 pt-6 border-t border-zinc-100 dark:border-white/5">
-          <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-black">Order Total</span>
-          <span className="text-lg font-black">{formatPrice(lastOrder.total)}</span>
         </div>
       </div>
     );
@@ -178,36 +256,59 @@ export default function Cart() {
 
   if (!hasHydrated) {
     return (
-      <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
-        <div className="flex items-center justify-center py-20">
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
+      <>
+        <StorefrontSeo
+          title="Your Bag | Rare Atelier"
+          description="Review the items in your Rare Atelier bag before checkout."
+          canonicalPath="/cart"
+          noIndex
+        />
+        <div className="container mx-auto mt-10 max-w-7xl px-4 py-32">
+          <div className="flex items-center justify-center py-20">
+            <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-400">Loading bag</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
-        <div className="max-w-lg mx-auto text-center py-20">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-          >
-            <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 italic">Empty Bag</h1>
-            <p className="text-zinc-500 uppercase text-[10px] tracking-widest font-bold mb-12">Your selection is currently empty.</p>
-            <Button size="lg" asChild className="rounded-none px-12 h-14 bg-black text-white hover:bg-zinc-800 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-2xl">
-              <Link href="/products">Continue Exploring</Link>
-            </Button>
-          </motion.div>
+      <>
+        <StorefrontSeo
+          title="Your Bag | Rare Atelier"
+          description="Review the items in your Rare Atelier bag before checkout."
+          canonicalPath="/cart"
+          noIndex
+        />
+        <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+          <div className="max-w-lg mx-auto text-center py-20">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+            >
+              <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 italic">Empty Bag</h1>
+              <p className="text-zinc-500 uppercase text-[10px] tracking-widest font-bold mb-12">Your selection is currently empty.</p>
+              <Button size="lg" asChild className="rounded-none px-12 h-14 bg-black text-white hover:bg-zinc-800 transition-colors uppercase tracking-[0.3em] text-[10px] font-black shadow-2xl">
+                <Link href="/products">Continue Exploring</Link>
+              </Button>
+            </motion.div>
+          </div>
+          <RecentOrderSection />
         </div>
-        <RecentOrderSection />
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
+    <>
+      <StorefrontSeo
+        title="Your Bag | Rare Atelier"
+        description="Review the items in your Rare Atelier bag before checkout."
+        canonicalPath="/cart"
+        noIndex
+      />
+      <div className="container mx-auto px-4 py-32 max-w-7xl mt-10">
       <h1 className="text-4xl font-black uppercase tracking-tighter mb-16 italic underline decoration-zinc-100 dark:decoration-white/5 underline-offset-[20px]">Your Bag</h1>
 
       <div className="flex flex-col lg:flex-row gap-20">
@@ -348,6 +449,7 @@ export default function Cart() {
       </div>
       
       <RecentOrderSection />
-    </div>
+      </div>
+    </>
   );
 }

@@ -2,10 +2,10 @@ import { lazy, Suspense, useState, useEffect, useRef, useCallback, useMemo, type
 import { useQuery } from "@tanstack/react-query";
 import { fetchHomeFeaturedProducts, fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
 import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
-import { Helmet } from "react-helmet-async";
 import { ArrowUp } from "lucide-react";
 import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const QuoteSection = lazy(() => import("@/components/home/QuoteSection"));
 const FeaturedCollection = lazy(() => import("@/components/home/FeaturedCollection"));
@@ -685,12 +685,23 @@ export default function Home() {
     >
       {/* Scroll Progress Indicator - Minimal premium line at top */}
       {isCanvasPreview ? null : <ScrollProgress />}
-      <Helmet>
-        <title>Rare Atelier | Home - Premium Streetwear</title>
-        <meta name="description" content="Welcome to Rare Atelier. Explore our premium streetwear and minimal luxury collection. Authentic style, timeless designs." />
-        <meta property="og:title" content="Rare Atelier | Premium Streetwear" />
-        <meta property="og:url" content={window.location.origin} />
-      </Helmet>
+      <StorefrontSeo
+        title="Rare Atelier | Premium Streetwear"
+        description="Welcome to Rare Atelier. Explore premium streetwear, minimal luxury, and signature editorial collections crafted for everyday style."
+        canonicalPath="/"
+        image={heroImages[0] || "/images/landingpage3.webp"}
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          name: "Rare Atelier",
+          url: typeof window !== "undefined" ? window.location.origin : "/",
+          potentialAction: {
+            "@type": "SearchAction",
+            target: typeof window !== "undefined" ? `${window.location.origin}/products` : "/products",
+            "query-input": "required name=search_term_string",
+          },
+        }}
+      />
       <main className={isLuxuryEditorialTemplate ? "bg-[var(--bg)] text-[var(--fg)]" : undefined}>
         {nonFaqSections.map(renderSection)}
         {/* Always render ContactSection at the bottom when not already present */}

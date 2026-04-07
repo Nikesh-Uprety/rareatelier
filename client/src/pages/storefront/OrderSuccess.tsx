@@ -1,11 +1,12 @@
 import { useRoute, Link } from "wouter";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles, Shield, Mail, MessageSquare } from "lucide-react";
-import { Helmet } from "react-helmet-async";
-import { fetchOrderById, getCachedLatestOrder } from "@/lib/api";
+import { fetchOrderById, getCachedLatestOrder, updateCachedOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { formatPrice } from "@/lib/format";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function paymentMethodLabel(method: string) {
   const labels: Record<string, string> = {
@@ -47,6 +48,41 @@ function selectedColorLabel(item: any): string {
   return options.length === 1 ? options[0] : "-";
 }
 
+const ORDER_COLOR_NAME_SWATCHES: Record<string, string> = {
+  black: "#111111",
+  white: "#f5f5f5",
+  cream: "#f2eadf",
+  ivory: "#fff8e7",
+  beige: "#d8c3a5",
+  brown: "#7a5a43",
+  mocha: "#7b5b45",
+  grey: "#7c7c7c",
+  gray: "#7c7c7c",
+  blue: "#2548b1",
+  navy: "#1f2a44",
+  "navy blue": "#1f2a44",
+  green: "#2f7d32",
+  red: "#c62828",
+  maroon: "#6b1f2a",
+  burgundy: "#6d213c",
+  pink: "#f7a6ec",
+  purple: "#7c3aed",
+  yellow: "#facc15",
+  orange: "#f97316",
+  gold: "#c9a84c",
+};
+
+function parseOrderColor(value: string): { label: string; swatch: string | null } {
+  const trimmed = value.trim();
+  const hexMatch = trimmed.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/);
+  const label = trimmed.replace(/\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g, "").trim();
+  const normalized = label.toLowerCase();
+  return {
+    label: label || trimmed,
+    swatch: hexMatch?.[0] ?? ORDER_COLOR_NAME_SWATCHES[normalized] ?? null,
+  };
+}
+
 export default function OrderSuccess() {
   const [, newParams] = useRoute("/order-confirmation/:orderId");
   const [, legacyParams] = useRoute("/checkout/success/:id");
@@ -59,6 +95,13 @@ export default function OrderSuccess() {
     enabled: !!orderId && !cachedOrder,
   });
   const order = fetchedOrder ?? cachedOrder;
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+
+  useEffect(() => {
+    if (fetchedOrder) {
+      updateCachedOrder(fetchedOrder);
+    }
+  }, [fetchedOrder]);
 
   const itemsSubtotal = order
     ? order.items.reduce(
@@ -72,23 +115,39 @@ export default function OrderSuccess() {
 
   if (isLoading) {
     return (
-      <div className="min-h-[70vh] flex items-center justify-center">
-        <BrandedLoader />
-      </div>
+      <>
+        <StorefrontSeo
+          title="Order Confirmed | Rare Atelier"
+          description="Your Rare Atelier order has been placed successfully."
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          noIndex
+        />
+        <div className="min-h-[70vh] flex items-center justify-center">
+          <BrandedLoader />
+        </div>
+      </>
     );
   }
 
   if (!order) {
     return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center p-4 text-center">
-        <h1 className="text-2xl font-bold mb-4">Order Not Found</h1>
-        <p className="text-muted-foreground mb-8">
-          We couldn't find this order, or you do not have access to view it.
-        </p>
-        <Link href="/">
-          <Button>Return to Home</Button>
-        </Link>
-      </div>
+      <>
+        <StorefrontSeo
+          title="Order Confirmation | Rare Atelier"
+          description="This order confirmation page is not available."
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          noIndex
+        />
+        <div className="min-h-[60vh] flex flex-col items-center justify-center p-4 text-center">
+          <h1 className="text-2xl font-bold mb-4">Order Not Found</h1>
+          <p className="text-muted-foreground mb-8">
+            We couldn't find this order, or you do not have access to view it.
+          </p>
+          <Link href="/">
+            <Button>Return to Home</Button>
+          </Link>
+        </div>
+      </>
     );
   }
 
@@ -99,15 +158,51 @@ export default function OrderSuccess() {
     day: "numeric",
   });
 
+  const handleDownloadPdf = async () => {
+    const target = document.getElementById("order-confirmation-export");
+    if (!target || !order) return;
+    setIsDownloadingPdf(true);
+    try {
+      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+        import("html2canvas"),
+        import("jspdf"),
+      ]);
+
+      const canvas = await html2canvas(target, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        onclone: (doc) => {
+          doc.documentElement.classList.remove("dark");
+          doc.body.classList.remove("dark");
+          doc.body.style.background = "#ffffff";
+          const cloned = doc.getElementById("order-confirmation-export");
+          if (cloned) {
+            cloned.style.background = "#ffffff";
+            cloned.style.color = "#111111";
+          }
+        },
+      });
+
+      const imageData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      pdf.addImage(imageData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`rare-order-${order.id.slice(0, 8)}.pdf`);
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   return (
     <div className="order-confirmation-page container mx-auto px-4 pt-6 pb-10 lg:pt-10 lg:pb-16 max-w-5xl">
-      <Helmet>
-        <title>Order confirmed | Rare Atelier</title>
-        <meta
-          name="description"
-          content={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
-        />
-      </Helmet>
+      <StorefrontSeo
+        title="Order Confirmed | Rare Atelier"
+        description={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
+        canonicalPath={`/order-confirmation/${order.id}`}
+        noIndex
+      />
       <style>
         {`
           @keyframes ocFloat {
@@ -303,7 +398,7 @@ export default function OrderSuccess() {
         </div>
       </div>
 
-      <div className="order-confirmation-bill relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-black dark:text-zinc-100 shadow-[0_30px_80px_-35px_rgba(0,0,0,0.45)] dark:shadow-[0_30px_80px_-35px_rgba(0,0,0,0.6)]">
+      <div id="order-confirmation-export" className="order-confirmation-bill relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-black dark:text-zinc-100 shadow-[0_30px_80px_-35px_rgba(0,0,0,0.45)] dark:shadow-[0_30px_80px_-35px_rgba(0,0,0,0.6)]">
         {(order.paymentMethod === "esewa" || order.paymentMethod === "khalti" || order.paymentMethod === "fonepay") && order.paymentVerified !== "verified" && (
           <div className="no-print rounded-none border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-6 py-5">
             <div className="flex gap-3">
@@ -378,6 +473,7 @@ export default function OrderSuccess() {
                   const lineTotal = Number(item.unitPrice) * item.quantity;
                   const sizeLabel = String(item.size ?? "").trim() || "-";
                   const colorLabel = selectedColorLabel(item);
+                  const colorMeta = colorLabel !== "-" ? parseOrderColor(colorLabel) : null;
                   return (
                     <tr key={item.id} className="border-b border-zinc-100 dark:border-zinc-800 align-top">
                       <td className="py-3 pr-2">
@@ -389,9 +485,19 @@ export default function OrderSuccess() {
                         </span>
                       </td>
                       <td className="py-3 px-2">
-                        <span className="inline-flex rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                          {colorLabel}
-                        </span>
+                        {colorMeta ? (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            <span
+                              className="h-3.5 w-3.5 rounded-sm border border-black/10"
+                              style={{ background: colorMeta.swatch ?? "#d4d4d8" }}
+                            />
+                            {colorMeta.label}
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                            -
+                          </span>
+                        )}
                       </td>
                       <td className="py-3 px-2 text-center text-zinc-700 dark:text-zinc-300">{item.quantity}</td>
                       <td className="py-3 px-2 text-right text-zinc-700 dark:text-zinc-300">{formatPrice(item.unitPrice)}</td>
@@ -447,9 +553,9 @@ export default function OrderSuccess() {
       </div>
 
       <div className="order-confirmation-actions no-print flex flex-wrap gap-3 mt-6">
-        <Button onClick={() => window.print()} className="h-11 rounded-none uppercase tracking-widest text-xs">
+        <Button onClick={handleDownloadPdf} disabled={isDownloadingPdf} className="h-11 rounded-none uppercase tracking-widest text-xs">
           <Printer className="h-4 w-4 mr-2" />
-          Download as PDF
+          {isDownloadingPdf ? "Preparing PDF" : "Download as PDF"}
         </Button>
         <Button asChild variant="outline" className="h-11 rounded-none uppercase tracking-widest text-xs">
           <Link href="/">Continue Shopping</Link>

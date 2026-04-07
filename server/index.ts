@@ -2,7 +2,11 @@ import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
 
-if (process.env.SENTRY_DSN) {
+const shouldEnableSentry =
+  Boolean(process.env.SENTRY_DSN) &&
+  (process.env.NODE_ENV === "production" || process.env.ENABLE_SENTRY_IN_DEV === "true");
+
+if (shouldEnableSentry) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "development",
@@ -28,7 +32,7 @@ import session from "express-session";
 import { createServer } from "http";
 import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
-import { products, users } from "@shared/schema";
+import { products, users, pages, pageSections, pageTemplates, siteSettings } from "@shared/schema";
 import { configurePassport, passport } from "./auth";
 import { db, pool } from "./db";
 import { logger } from "./logger";
@@ -406,6 +410,93 @@ async function ensureRootSuperAdminState() {
     );
   }
 
+  // Ensure default pages exist for Canvas multi-page builder
+  try {
+    const { sql } = await import("drizzle-orm");
+    const existingPages = await db.select().from(pages).orderBy(pages.sortOrder);
+    const hasHome = existingPages.some((p) => p.isHomepage);
+    const hasShop = existingPages.some((p) => p.slug === "/shop");
+    const hasCollection = existingPages.some((p) => p.slug === "/new-collection");
+    const hasAtelier = existingPages.some((p) => p.slug === "/atelier");
+
+    if (!hasHome) {
+      const settings = await db.select().from(siteSettings).limit(1);
+      const activeTemplateId = settings[0]?.activeTemplateId;
+      const [newHomePage] = await db.insert(pages).values({
+        slug: "/",
+        title: "Home",
+        status: "published",
+        isHomepage: true,
+        showInNav: true,
+        sortOrder: 0,
+      }).returning();
+
+      if (activeTemplateId) {
+        const templateSections = await db.select().from(pageSections).where(sql`${pageSections.templateId} = ${activeTemplateId} AND ${pageSections.pageId} IS NULL`).orderBy(pageSections.orderIndex);
+        if (templateSections.length > 0) {
+          await db.insert(pageSections).values(
+            templateSections.map((s) => ({
+              pageId: newHomePage.id,
+              sectionType: s.sectionType,
+              label: s.label,
+              orderIndex: s.orderIndex,
+              isVisible: s.isVisible,
+              config: s.config,
+            }))
+          );
+        }
+      }
+    }
+
+    if (!hasShop) {
+      await db.insert(pages).values({
+        slug: "/shop",
+        title: "Shop",
+        description: "Browse all products",
+        status: "published",
+        isHomepage: false,
+        showInNav: true,
+        sortOrder: 1,
+      });
+    }
+
+    if (!hasCollection) {
+      await db.insert(pages).values({
+        slug: "/new-collection",
+        title: "Collection",
+        description: "New collection",
+        status: "published",
+        isHomepage: false,
+        showInNav: true,
+        sortOrder: 2,
+      });
+    }
+
+    if (!hasAtelier) {
+      await db.insert(pages).values({
+        slug: "/atelier",
+        title: "Atelier",
+        description: "About Rare Atelier",
+        status: "published",
+        isHomepage: false,
+        showInNav: true,
+        sortOrder: 3,
+      });
+    }
+  } catch (error) {
+    logger.warn(
+      "Default pages migration skipped",
+      {
+        timestamp: new Date().toISOString(),
+        source: "APP",
+      },
+      error,
+      {
+        reason: "database_unavailable_during_startup",
+      },
+    );
+  }
+
   // Serve uploaded files - MUST be before registerRoutes and vite
   const path = await import("path");
   const uploadsPath = path.resolve(UPLOADS_DIR);
@@ -456,7 +547,7 @@ async function ensureRootSuperAdminState() {
   registerSentryTestRoutes(app);
 
   // Sentry error handler must be after all controllers but before other error handlers
-  if (process.env.SENTRY_DSN) {
+  if (shouldEnableSentry) {
     Sentry.setupExpressErrorHandler(app);
   }
 

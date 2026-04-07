@@ -416,8 +416,8 @@ export default function AdminAnalytics() {
     <div className="min-h-screen bg-muted dark:bg-neutral-900 pb-20 admin-font">
 
       {/* Header */}
-      <div className="flex items-center justify-between px-8 py-6 mb-8 bg-card/40 backdrop-blur-sm rounded-2xl ring-1 ring-black/5 dark:ring-white/10 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:shadow-[0_14px_28px_rgba(0,0,0,0.45)]">
-        <div>
+      <div className="mx-4 mb-8 flex flex-col gap-5 rounded-2xl bg-card/40 px-4 py-5 backdrop-blur-sm ring-1 ring-black/5 shadow-[0_10px_24px_rgba(15,23,42,0.08)] dark:ring-white/10 dark:shadow-[0_14px_28px_rgba(0,0,0,0.45)] sm:mx-6 sm:px-6 md:flex-row md:items-center md:justify-between xl:mx-8 xl:px-8 xl:py-6">
+        <div className="min-w-0">
           <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
             Analytics
           </h1>
@@ -425,8 +425,8 @@ export default function AdminAnalytics() {
             {RANGE_LABELS[range]} — performance overview
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex gap-1 bg-card border border-border rounded-xl p-1 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+          <div className="flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1 shadow-sm">
             {(["7d", "30d", "90d", "1y"] as const).map((r) => (
               <Button 
                 key={r} 
@@ -442,12 +442,14 @@ export default function AdminAnalytics() {
               </Button>
             ))}
           </div>
-          <ExportButton onExport={() => exportAnalyticsCSV(range)} />
+          <div className="sm:shrink-0">
+            <ExportButton onExport={() => exportAnalyticsCSV(range)} />
+          </div>
         </div>
       </div>
 
       {/* Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-8">
+      <div className="grid grid-cols-1 gap-4 px-4 sm:gap-5 sm:px-6 md:grid-cols-2 lg:grid-cols-4 xl:gap-6 xl:px-8">
 
         {/* KPI Row */}
         {kpiCards.map((c, idx) => (
@@ -455,7 +457,7 @@ export default function AdminAnalytics() {
         ))}
 
         {/* Revenue + Orders combo — 3 cols */}
-        <div className={cn(cardStyles, "lg:col-span-3")}>
+        <div className={cn(cardStyles, "min-w-0 lg:col-span-3")}>
           <div className="flex justify-between items-center mb-6">
             <div>
               <div className={sectionTitleStyles}>Revenue & Orders</div>
@@ -560,7 +562,7 @@ export default function AdminAnalytics() {
         </div>
 
         {/* Revenue by Platform — 2 cols */}
-        <div className={cn(cardStyles, "lg:col-span-2")}>
+        <div className={cn(cardStyles, "min-w-0 lg:col-span-2")}>
           <div className={sectionTitleStyles}>Revenue by Platform</div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={(data?.revenueByPlatform ?? []).slice(0, 8)} margin={{ left: 0, right: 10, top: 10, bottom: 0 }}>
@@ -578,7 +580,7 @@ export default function AdminAnalytics() {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4 space-y-4">
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input placeholder="key (e.g. instagram)" value={newPlatformKey} onChange={(e) => setNewPlatformKey(e.target.value.toLowerCase())} className="h-9 text-xs font-bold uppercase tracking-wider rounded-xl" />
                 <Input placeholder="label" value={newPlatformLabel} onChange={(e) => setNewPlatformLabel(e.target.value)} className="h-9 text-xs font-bold uppercase tracking-wider rounded-xl" />
                 <Button type="button" size="sm" className="h-9 px-4 text-[10px] font-black uppercase tracking-widest rounded-xl"
@@ -639,14 +641,20 @@ export default function AdminAnalytics() {
         </div>
 
         {/* New Customers */}
-        <div className={cn(cardStyles, "border-t-4 border-t-violet-500")}>
-          <div className="flex justify-between items-start mb-6">
-            <div className={sectionTitleStyles}>New Customers</div>
+        <div className={cn(cardStyles, "min-w-0 border-t-4 border-t-violet-500 lg:col-span-4")}>
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className={sectionTitleStyles}>New Customers</div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground -mt-3">
+                Signup trend across the selected period
+              </p>
+            </div>
             <span className="text-[10px] font-black uppercase tracking-widest bg-violet-500/10 text-violet-500 px-2.5 py-1 rounded-full">
               {kpis?.newCustomers ?? 0} signups
             </span>
           </div>
-          <ResponsiveContainer width="100%" height={150}>
+          <div className="h-[190px] sm:h-[220px] lg:h-[280px]">
+          <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={combinedByDay} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="cust-fill" x1="0" y1="0" x2="0" y2="1">
@@ -661,6 +669,7 @@ export default function AdminAnalytics() {
               <Area type="monotone" dataKey="newCustomers" stroke={COLOR_TOKENS.purple} strokeWidth={3} fill="url(#cust-fill)" dot={false} />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Sales Heatmap — full width */}

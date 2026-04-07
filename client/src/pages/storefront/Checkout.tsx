@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { cacheLatestOrder, createOrder, validatePromoCode } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 
@@ -76,6 +77,27 @@ function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, 
   }
 
   return currentPrice;
+}
+
+function hydrateOrderWithCartSelections(order: any, items: CartState["items"]) {
+  const remaining = [...items];
+  const nextItems = (order?.items ?? []).map((item: any) => {
+    const matchIndex = remaining.findIndex(
+      (cartItem) =>
+        cartItem.product.id === item.productId &&
+        cartItem.variant.size === (item.size ?? cartItem.variant.size),
+    );
+    const match = matchIndex >= 0 ? remaining.splice(matchIndex, 1)[0] : null;
+    return match
+      ? {
+          ...item,
+          color: match.variant.color,
+          variantColor: item.variantColor ?? match.variant.color,
+        }
+      : item;
+  });
+
+  return { ...order, items: nextItems };
 }
 
 export default function Checkout() {
@@ -349,7 +371,7 @@ export default function Checkout() {
 
       if (paymentMethod === "stripe") {
         setStep(3);
-        cacheLatestOrder(result.data.order);
+        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
         clearCart();
         toast({ title: "Order created. Redirecting to Stripe..." });
         try {
@@ -380,7 +402,7 @@ export default function Checkout() {
           phone: phoneVal,
         });
         setStep(3);
-        cacheLatestOrder(result.data.order);
+        cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
         setLocation(
           `/checkout/payment?orderId=${result.data.order.id}&method=${paymentMethod}`,
         );
@@ -389,7 +411,7 @@ export default function Checkout() {
       }
 
       setStep(3);
-      cacheLatestOrder(result.data.order);
+      cacheLatestOrder(hydrateOrderWithCartSelections(result.data.order, items));
       setLocation(`/order-confirmation/${result.data.order.id}`);
       clearCart();
       clearSavedFormData();
@@ -400,7 +422,14 @@ export default function Checkout() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
+    <>
+      <StorefrontSeo
+        title="Checkout | Rare Atelier"
+        description="Complete your Rare Atelier order with secure checkout and delivery details."
+        canonicalPath="/checkout"
+        noIndex
+      />
+      <div className="container mx-auto px-4 py-16 lg:py-32 max-w-7xl mt-10">
       <div className="flex flex-col lg:flex-row gap-20">
         <form
           data-testid="checkout-form"
@@ -778,6 +807,7 @@ export default function Checkout() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

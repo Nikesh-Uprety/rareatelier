@@ -258,13 +258,39 @@ export async function fetchOrderById(id: string): Promise<OrderDetail | null> {
   return json.data ?? null;
 }
 
+export async function cancelOrder(id: string): Promise<OrderDetail | null> {
+  const res = await apiRequest("PATCH", `/api/orders/${id}/cancel`);
+  const json = (await res.json()) as { success: boolean; data?: OrderDetail };
+  return json.data ?? null;
+}
+
 const LAST_ORDER_ID_KEY = "ra_last_order_id";
 const LAST_ORDER_CACHE_KEY = "ra_last_order_cache";
+const ORDER_HISTORY_CACHE_KEY = "ra_order_history_cache";
+
+function readOrderHistoryCache(): OrderDetail[] {
+  if (typeof window === "undefined") return [];
+  const raw = localStorage.getItem(ORDER_HISTORY_CACHE_KEY);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as OrderDetail[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeOrderHistoryCache(orders: OrderDetail[]): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ORDER_HISTORY_CACHE_KEY, JSON.stringify(orders.slice(0, 12)));
+}
 
 export function cacheLatestOrder(order: OrderDetail): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(LAST_ORDER_ID_KEY, order.id);
   localStorage.setItem(LAST_ORDER_CACHE_KEY, JSON.stringify(order));
+  const previous = readOrderHistoryCache().filter((entry) => entry.id !== order.id);
+  writeOrderHistoryCache([order, ...previous]);
 }
 
 export function getCachedLatestOrder(orderId?: string | null): OrderDetail | null {
@@ -279,6 +305,19 @@ export function getCachedLatestOrder(orderId?: string | null): OrderDetail | nul
   } catch {
     return null;
   }
+}
+
+export function getCachedOrderHistory(): OrderDetail[] {
+  return readOrderHistoryCache();
+}
+
+export function updateCachedOrder(order: OrderDetail): void {
+  if (typeof window === "undefined") return;
+  if (localStorage.getItem(LAST_ORDER_ID_KEY) === order.id) {
+    localStorage.setItem(LAST_ORDER_CACHE_KEY, JSON.stringify(order));
+  }
+  const existing = readOrderHistoryCache().filter((entry) => entry.id !== order.id);
+  writeOrderHistoryCache([order, ...existing]);
 }
 
 export async function uploadPaymentProof(

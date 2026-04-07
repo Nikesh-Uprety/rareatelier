@@ -43,6 +43,7 @@ const loadAdminBillsPage = () => import("@/pages/admin/Bills");
 const loadAdminCustomersPage = () => import("@/pages/admin/Customers");
 const loadAdminMessagesPage = () => import("@/pages/admin/Messages");
 const loadAdminStoreUsersPage = () => import("@/pages/admin/StoreUsers");
+const loadAdminStoreUserProfilePage = () => import("@/pages/admin/StoreUserProfile");
 const loadAdminPOSPage = () => import("@/pages/admin/POS");
 const loadAdminAnalyticsPage = () => import("@/pages/admin/Analytics");
 const loadAdminPromoCodesPage = () => import("@/pages/admin/PromoCodes");
@@ -76,6 +77,7 @@ const AdminBills = lazy(loadAdminBillsPage);
 const AdminCustomers = lazy(loadAdminCustomersPage);
 const AdminMessages = lazy(loadAdminMessagesPage);
 const AdminStoreUsers = lazy(loadAdminStoreUsersPage);
+const AdminStoreUserProfile = lazy(loadAdminStoreUserProfilePage);
 const AdminPOS = lazy(loadAdminPOSPage);
 const AdminAnalytics = lazy(loadAdminAnalyticsPage);
 const AdminPromoCodes = lazy(loadAdminPromoCodesPage);
@@ -88,6 +90,8 @@ const AdminLandingPageManager = lazy(loadAdminLandingPageManagerPage);
 const AdminImages = lazy(loadAdminImagesPage);
 const AdminStorefrontImages = lazy(loadAdminStorefrontImagesPage);
 const Canvas = lazy(() => import("@/pages/admin/Canvas"));
+const CanvasPage = lazy(() => import("@/pages/admin/CanvasPage"));
+const DynamicPage = lazy(() => import("@/pages/storefront/DynamicPage"));
 const LoginPage = lazy(loadLoginPage);
 const NotFound = lazy(loadNotFoundPage);
 const LegalPlaceholder = lazy(loadLegalPlaceholderPage);
@@ -142,6 +146,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
   if (cleanPath === "/admin/customers") return loadAdminCustomersPage();
   if (cleanPath === "/admin/messages") return loadAdminMessagesPage();
+  if (/^\/admin\/store-users\/[^/]+$/.test(cleanPath)) return loadAdminStoreUserProfilePage();
   if (cleanPath === "/admin/store-users") return loadAdminStoreUsersPage();
   if (cleanPath === "/admin/bills") return loadAdminBillsPage();
   if (cleanPath === "/admin/pos") return loadAdminPOSPage();
@@ -257,7 +262,7 @@ function LoginRoute() {
   }
 
   if (user && canAccessAdminPanel(user.role)) {
-    return <Redirect to={getDefaultAdminPath(user.role)} />;
+    return <Redirect to={getDefaultAdminPath(user.role, user.adminPageAccess)} />;
   }
 
   if (user) {
@@ -279,6 +284,13 @@ function AppRoutes() {
         </ProtectedRoute>
       </Route>
       <Route path="/admin/canvas">
+        <ProtectedRoute requiredAdminPage="landing-page">
+          <AdminLayout>
+            <CanvasPage />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/canvas/legacy">
         <ProtectedRoute requiredAdminPage="landing-page">
           <AdminLayout>
             <Canvas />
@@ -366,6 +378,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="store-users">
           <AdminLayout>
             <AdminStoreUsers />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/store-users/:id">
+        <ProtectedRoute requiredAdminPage="store-users">
+          <AdminLayout>
+            <AdminStoreUserProfile />
           </AdminLayout>
         </ProtectedRoute>
       </Route>
@@ -511,6 +530,11 @@ function AppRoutes() {
         <ViewBill />
       </Route>
       
+      {/* Dynamic Canvas Pages — catch-all, must be before NotFound */}
+      <Route path="/*">
+        <DynamicPage />
+      </Route>
+
       <Route component={NotFound} />
     </Switch>
   );
