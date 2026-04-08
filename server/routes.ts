@@ -153,6 +153,7 @@ const CANVAS_TEMPLATE_OVERRIDES = {
 } as const;
 
 let siteSettingsHasFontPresetColumnCache: boolean | null = null;
+let mediaAssetsCompatEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
   if (siteSettingsHasFontPresetColumnCache !== null) {
@@ -486,6 +487,83 @@ function ensureUploadsDir() {
   }
 }
 
+async function ensureMediaAssetsCompatibility() {
+  if (mediaAssetsCompatEnsured) {
+    return mediaAssetsCompatEnsured;
+  }
+
+  mediaAssetsCompatEnsured = (async () => {
+    const result = await db.execute(sql`
+      select column_name
+      from information_schema.columns
+      where table_schema = current_schema()
+        and table_name = 'media_assets'
+    `);
+
+    const columns = new Set(
+      result.rows
+        .map((row) => {
+          const record = row as { column_name?: unknown };
+          return typeof record.column_name === "string" ? record.column_name : null;
+        })
+        .filter((value): value is string => Boolean(value)),
+    );
+
+    const missingColumns = [
+      !columns.has("folder_path") ? "folder_path" : null,
+      !columns.has("asset_type") ? "asset_type" : null,
+      !columns.has("expires_at") ? "expires_at" : null,
+    ].filter((value): value is string => Boolean(value));
+
+    if (missingColumns.length === 0) {
+      return;
+    }
+
+    logger.warn(
+      "media_assets compatibility columns missing; applying lightweight schema patch",
+      undefined,
+      undefined,
+      { missingColumns },
+    );
+
+    await db.execute(sql`
+      alter table media_assets
+      add column if not exists folder_path text,
+      add column if not exists asset_type text default 'file',
+      add column if not exists expires_at timestamp with time zone
+    `);
+    await db.execute(sql`
+      update media_assets
+      set asset_type = 'file'
+      where asset_type is null or length(trim(asset_type)) = 0
+    `);
+    await db.execute(sql`
+      alter table media_assets
+      alter column asset_type set default 'file'
+    `);
+
+    const nullAssetTypeRows = await db.execute(sql`
+      select count(*)::int as count
+      from media_assets
+      where asset_type is null
+    `);
+    const countRow = nullAssetTypeRows.rows[0] as { count?: number | string } | undefined;
+    const nullCount = Number(countRow?.count ?? 0);
+
+    if (nullCount === 0) {
+      await db.execute(sql`
+        alter table media_assets
+        alter column asset_type set not null
+      `);
+    }
+  })().catch((error) => {
+    mediaAssetsCompatEnsured = null;
+    throw error;
+  });
+
+  return mediaAssetsCompatEnsured;
+}
+
 function sanitizeUploadFilename(name: string) {
   const base = name.split("/").pop() || name;
   const trimmed = base.replace(/\?.*$/, "").replace(/#[^]*$/, "").trim();
@@ -518,6 +596,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  await ensureMediaAssetsCompatibility();
+
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
       const forwardedProtoHeader = req.headers["x-forwarded-proto"];

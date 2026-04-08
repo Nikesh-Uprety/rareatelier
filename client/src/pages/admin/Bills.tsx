@@ -12,6 +12,7 @@ import { formatPrice } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
+import { getErrorMessage } from "@/lib/queryClient";
 import {
   Select,
   SelectContent,
@@ -48,8 +49,12 @@ export default function AdminBills() {
       queryClient.invalidateQueries({ queryKey: ["admin", "bills"] });
       toast({ title: "Bill voided successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to void bill", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to void bill",
+        description: getErrorMessage(error, "Please try voiding this bill again."),
+        variant: "destructive",
+      });
     },
   });
 

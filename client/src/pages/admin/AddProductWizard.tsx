@@ -341,8 +341,12 @@ export default function AddProductWizard({
         addForm.setValue("galleryUrlsText", [...current, result.url].join("\n"), { shouldValidate: true, shouldDirty: true });
       }
       toast({ title: `Image uploaded to ${getProviderLabel(provider)}` });
-    } catch {
-      toast({ title: `${getProviderLabel(provider)} upload failed`, variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: `${getProviderLabel(provider)} upload failed`,
+        description: getErrorMessage(error, "Please try a different image or upload provider."),
+        variant: "destructive",
+      });
     } finally {
       if (target === "main") {
         setMainUploadProgress(100);
@@ -383,8 +387,12 @@ export default function AddProductWizard({
         addForm.setValue("galleryUrlsText", [...current, url].join("\n"), { shouldValidate: true, shouldDirty: true });
       }
       toast({ title: "Image uploaded locally" });
-    } catch {
-      toast({ title: "Upload failed", variant: "destructive" });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: getErrorMessage(error, "Please try a different image or upload again."),
+        variant: "destructive",
+      });
     } finally {
       setUploadingImage(false);
       if (target === "main") {

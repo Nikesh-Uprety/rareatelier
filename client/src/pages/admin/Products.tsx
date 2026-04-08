@@ -887,8 +887,12 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
       toast({ title: "Product status updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update product", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update product",
+        description: getErrorMessage(error, "Please try updating this product again."),
+        variant: "destructive",
+      });
     },
     onSettled: () => {
       setTogglingProductId(null);
@@ -905,8 +909,12 @@ export default function AdminProducts() {
       clearSelection();
       toast({ title: "Product status updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update products", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update products",
+        description: getErrorMessage(error, "Please try updating these products again."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -920,8 +928,12 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       toast({ title: "Home feature updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update home feature", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update home feature",
+        description: getErrorMessage(error, "Please try updating the home feature again."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -932,8 +944,12 @@ export default function AdminProducts() {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       toast({ title: "Visibility updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update visibility", variant: "destructive" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update visibility",
+        description: getErrorMessage(error, "Please try updating visibility again."),
+        variant: "destructive",
+      });
     },
   });
 

@@ -37,6 +37,7 @@ import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
 import OrdersTrendChart from "@/components/admin/OrdersTrendChart";
+import { getErrorMessage } from "@/lib/queryClient";
 
 const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
@@ -160,8 +161,12 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
       toast({ title: "Order status updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update status" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update status",
+        description: getErrorMessage(error, "Please try updating the order again."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -179,8 +184,12 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
       toast({ title: "Payment verification updated" });
     },
-    onError: () => {
-      toast({ title: "Failed to update verification" });
+    onError: (error) => {
+      toast({
+        title: "Failed to update verification",
+        description: getErrorMessage(error, "Please try updating the payment verification again."),
+        variant: "destructive",
+      });
     },
   });
 

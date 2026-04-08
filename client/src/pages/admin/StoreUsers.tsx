@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { ChevronRight, Loader2, MoreVertical, Plus, ShieldCheck, Trash2, User as UserIcon } from "lucide-react";
 import { useLocation } from "wouter";
 
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
@@ -191,7 +191,11 @@ export default function StoreUsers() {
     },
     onSuccess: async (result) => {
       if (!result.success) {
-        toast({ title: "Failed to add user", variant: "destructive" });
+        toast({
+          title: "Failed to add user",
+          description: "The server could not create this user.",
+          variant: "destructive",
+        });
         return;
       }
       toast({ title: "User added", description: "Setup email sent (SMTP may be delayed)." });
@@ -202,7 +206,7 @@ export default function StoreUsers() {
     onError: (err: any) => {
       toast({
         title: "Failed to add user",
-        description: err?.message ?? "Please try again.",
+        description: getErrorMessage(err, "Please check the user's details and try again."),
         variant: "destructive",
       });
     },
@@ -219,7 +223,7 @@ export default function StoreUsers() {
     onError: (err: any) => {
       toast({
         title: "Update failed",
-        description: err?.message ?? "Please try again.",
+        description: getErrorMessage(err, "Please try updating this user again."),
         variant: "destructive",
       });
     },
@@ -241,7 +245,11 @@ export default function StoreUsers() {
     },
     onSuccess: (result) => {
       if (!result.success) {
-        toast({ title: "Delete failed", variant: "destructive" });
+        toast({
+          title: "Delete failed",
+          description: "The server could not remove this user.",
+          variant: "destructive",
+        });
         return;
       }
       toast({ title: "User removed" });
@@ -251,7 +259,7 @@ export default function StoreUsers() {
     onError: (err: any) => {
       toast({
         title: "Delete failed",
-        description: err?.message ?? "Please try again.",
+        description: getErrorMessage(err, "Please try removing this user again."),
         variant: "destructive",
       });
     },

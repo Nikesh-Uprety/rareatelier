@@ -32,6 +32,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
+import { getErrorMessage } from "@/lib/queryClient";
 import {
   Dialog,
   DialogContent,
@@ -146,6 +147,13 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
       setNewValue("");
       toast({ title: "Attribute added successfully" });
     },
+    onError: (error) => {
+      toast({
+        title: "Failed to add attribute",
+        description: getErrorMessage(error, "Please choose a different attribute value."),
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteAttrMutation = useMutation({
@@ -153,6 +161,13 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin", "attributes"] });
       toast({ title: "Attribute removed" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to remove attribute",
+        description: getErrorMessage(error, "This attribute could not be removed right now."),
+        variant: "destructive",
+      });
     },
   });
 
@@ -166,6 +181,13 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
       setEditingCategory(null);
       toast({ title: "Category updated" });
     },
+    onError: (error) => {
+      toast({
+        title: "Failed to save category",
+        description: getErrorMessage(error, "Please choose a different category name."),
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteCatMutation = useMutation({
@@ -174,6 +196,13 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
       queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast({ title: "Category deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to delete category",
+        description: getErrorMessage(error, "This category could not be deleted right now."),
+        variant: "destructive",
+      });
     },
   });
 

@@ -68,6 +68,7 @@ export default function Navbar() {
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
   const isAtelierRoute = location === "/atelier";
+  const isProductDetailRoute = /^\/product\/[^/]+/.test(location);
   const isHeroRoute = isHomeRoute || isAtelierRoute;
   const isInnerStorefrontRoute = isStorefront && !isHeroRoute;
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
@@ -586,19 +587,27 @@ export default function Navbar() {
               </button>
             </div>
 
-            <Link href="/" className="justify-self-center text-center">
+            <Link href="/" className="flex justify-self-center items-center justify-center text-center">
               <img
-                src="/images/logo.webp"
+                src={isProductDetailRoute ? "/images/newproductpagelogo.png" : "/images/logo.webp"}
                 alt="Rare Atelier"
-                className="mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
-                width={1449}
-                height={289}
+                className={
+                  isProductDetailRoute
+                    ? "mx-auto h-auto w-[27vw] min-w-[150px] max-w-[360px] object-contain sm:w-[24vw] lg:w-[19vw]"
+                    : "mx-auto h-11 w-auto object-contain sm:h-12 lg:h-14"
+                }
+                width={isProductDetailRoute ? undefined : 1449}
+                height={isProductDetailRoute ? undefined : 289}
                 style={{
-                  filter: logoFilter,
+                  filter: isProductDetailRoute
+                    ? "invert(1) brightness(1.06) contrast(1.08)"
+                    : logoFilter,
                   transition: "filter 0.25s ease",
                   opacity: 1,
+                  mixBlendMode: isProductDetailRoute ? "difference" : "normal",
                   imageRendering: "-webkit-optimize-contrast",
                   backfaceVisibility: "hidden",
+                  transform: isProductDetailRoute ? "translateY(1px)" : "none",
                 }}
               />
             </Link>

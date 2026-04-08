@@ -90,6 +90,98 @@ export function handleApiError(
   context: string,
   statusCode: number = 500
 ): Response {
+  const knownDatabaseError = (() => {
+    if (!error || typeof error !== "object") return null;
+
+    const candidate = error as {
+      code?: unknown;
+      constraint?: unknown;
+      detail?: unknown;
+    };
+
+    const code = typeof candidate.code === "string" ? candidate.code : "";
+    const constraint =
+      typeof candidate.constraint === "string" ? candidate.constraint : "";
+
+    if (code === "23505") {
+      if (constraint === "products_name_unique") {
+        return {
+          statusCode: 409,
+          message: "A product with this name already exists. Please choose a different name.",
+          code: "DUPLICATE_PRODUCT",
+        };
+      }
+
+      if (constraint === "categories_slug_unique") {
+        return {
+          statusCode: 409,
+          message: "A category with this name already exists. Please choose a different name.",
+          code: "DUPLICATE_CATEGORY",
+        };
+      }
+
+      if (
+        constraint.includes("customers") &&
+        constraint.includes("email")
+      ) {
+        return {
+          statusCode: 409,
+          message: "A customer with this email already exists.",
+          code: "DUPLICATE_CUSTOMER",
+        };
+      }
+
+      if (
+        constraint.includes("users") &&
+        (constraint.includes("username") || constraint.includes("email"))
+      ) {
+        return {
+          statusCode: 409,
+          message: "A user with this email already exists.",
+          code: "DUPLICATE_USER",
+        };
+      }
+
+      if (
+        constraint.includes("promo") &&
+        constraint.includes("code")
+      ) {
+        return {
+          statusCode: 409,
+          message: "A promo code with this code already exists.",
+          code: "DUPLICATE_PROMO_CODE",
+        };
+      }
+
+      if (
+        constraint.includes("newsletter") &&
+        constraint.includes("email")
+      ) {
+        return {
+          statusCode: 409,
+          message: "This email is already subscribed.",
+          code: "DUPLICATE_NEWSLETTER_EMAIL",
+        };
+      }
+
+      return {
+        statusCode: 409,
+        message: "This record already exists. Please choose a different value.",
+        code: "DUPLICATE_RECORD",
+      };
+    }
+
+    if (code === "23503") {
+      return {
+        statusCode: 409,
+        message: "This item is still linked to other records and cannot be changed or deleted yet.",
+        code: "RELATED_RECORDS_EXIST",
+      };
+    }
+
+    return null;
+  })();
+
   const normalizedError = (() => {
     if (error instanceof Error) return error;
     if (typeof error === "string") return new Error(error);
@@ -108,6 +200,16 @@ export function handleApiError(
   const errorMessage = normalizedError.message;
 
   logger.error(`Error in ${context}`, { source: context }, normalizedError);
+
+  if (knownDatabaseError) {
+    return sendError(
+      res,
+      knownDatabaseError.message,
+      undefined,
+      knownDatabaseError.statusCode,
+      knownDatabaseError.code,
+    );
+  }
 
   if (statusCode === 400) {
     return sendError(res, "Invalid request", errorMessage, statusCode, "BAD_REQUEST");

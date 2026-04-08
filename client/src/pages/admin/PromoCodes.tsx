@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/form";
 import { fetchAdminPromoCodes, createAdminPromoCode, updateAdminPromoCode, deleteAdminPromoCode, type PromoCode } from "@/lib/adminApi";
 import { fetchProducts, type ProductApi } from "@/lib/api";
+import { getErrorMessage } from "@/lib/queryClient";
 import {
   RadioGroup,
   RadioGroupItem,
@@ -244,8 +245,12 @@ export default function AdminPromoCodes() {
       queryClient.invalidateQueries({ queryKey: ["admin", "promo-codes"] });
       toast({ title: "Promo Code Deleted" });
     },
-    onError: () => {
-      toast({ title: "Failed to delete promo code", variant: "destructive" });
+    onError: (err: any) => {
+      toast({
+        title: "Failed to delete promo code",
+        description: getErrorMessage(err, "Please try deleting this promo code again."),
+        variant: "destructive",
+      });
     },
   });
 
