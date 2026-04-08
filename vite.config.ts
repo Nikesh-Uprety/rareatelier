@@ -19,6 +19,97 @@ const devPlugins =
 const enableSourceMaps = process.env.BUILD_SOURCEMAP === "true";
 const enableImageMinify = process.env.BUILD_IMAGE_MINIFY === "true";
 
+const manualChunkPackages: Array<[string, string[]]> = [
+  ["vendor", ["react", "react-dom", "wouter"]],
+  ["ui-core", ["@radix-ui/react-label", "@radix-ui/react-separator", "@radix-ui/react-slot"]],
+  [
+    "ui-overlays",
+    [
+      "@radix-ui/react-alert-dialog",
+      "@radix-ui/react-dialog",
+      "@radix-ui/react-hover-card",
+      "@radix-ui/react-popover",
+      "@radix-ui/react-toast",
+      "@radix-ui/react-tooltip",
+    ],
+  ],
+  [
+    "ui-navigation",
+    [
+      "@radix-ui/react-accordion",
+      "@radix-ui/react-collapsible",
+      "@radix-ui/react-context-menu",
+      "@radix-ui/react-dropdown-menu",
+      "@radix-ui/react-menubar",
+      "@radix-ui/react-navigation-menu",
+      "@radix-ui/react-scroll-area",
+      "@radix-ui/react-tabs",
+    ],
+  ],
+  [
+    "ui-forms",
+    [
+      "@radix-ui/react-aspect-ratio",
+      "@radix-ui/react-avatar",
+      "@radix-ui/react-checkbox",
+      "@radix-ui/react-progress",
+      "@radix-ui/react-radio-group",
+      "@radix-ui/react-select",
+      "@radix-ui/react-slider",
+      "@radix-ui/react-switch",
+      "@radix-ui/react-toggle",
+      "@radix-ui/react-toggle-group",
+      "cmdk",
+    ],
+  ],
+  ["icons", ["lucide-react"]],
+  ["query", ["@tanstack/react-query"]],
+  ["forms", ["react-hook-form", "@hookform/resolvers", "zod", "zod-validation-error"]],
+  ["state", ["zustand", "react-use"]],
+  ["charts", ["recharts"]],
+  ["pdf-jspdf", ["jspdf"]],
+  ["pdf-html2canvas", ["html2canvas"]],
+  ["maps", ["leaflet", "react-leaflet"]],
+  ["date-fns", ["date-fns"]],
+  ["animation", ["framer-motion", "motion"]],
+];
+
+function manualChunks(id: string) {
+  if (!id.includes("node_modules")) return undefined;
+
+  for (const [chunkName, packages] of manualChunkPackages) {
+    if (packages.some((pkg) => id.includes(`/node_modules/${pkg}/`) || id.includes(`/node_modules/${pkg}\\`))) {
+      return chunkName;
+    }
+  }
+
+  if (id.includes("/node_modules/@mui/x-charts/")) {
+    return "mui-charts";
+  }
+  if (
+    id.includes("/node_modules/@mui/material/") ||
+    id.includes("/node_modules/@mui/base/") ||
+    id.includes("/node_modules/@mui/x-date-pickers/") ||
+    id.includes("/node_modules/dayjs/") ||
+    id.includes("/node_modules/@emotion/react/") ||
+    id.includes("/node_modules/@emotion/styled/")
+  ) {
+    return "mui";
+  }
+  if (
+    id.includes("/node_modules/@dnd-kit/core/") ||
+    id.includes("/node_modules/@dnd-kit/sortable/") ||
+    id.includes("/node_modules/@dnd-kit/utilities/")
+  ) {
+    return "dnd-kit";
+  }
+  if (id.includes("/node_modules/@base-ui/react/")) {
+    return "base-ui";
+  }
+
+  return undefined;
+}
+
 export default defineConfig({
   plugins: [
     react(),
@@ -62,76 +153,10 @@ export default defineConfig({
       emptyOutDir: true,
       sourcemap: enableSourceMaps,
       reportCompressedSize: false,
+      chunkSizeWarningLimit: 450,
       rollupOptions: {
         output: {
-          manualChunks: {
-          // Vendor chunk for React and routing
-          'vendor': ['react', 'react-dom', 'wouter'],
-
-          // UI primitives split by usage pattern so storefront doesn't pay for every admin primitive.
-          'ui-core': [
-            '@radix-ui/react-label',
-            '@radix-ui/react-separator',
-            '@radix-ui/react-slot',
-          ],
-          'ui-overlays': [
-            '@radix-ui/react-alert-dialog',
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-hover-card',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-toast',
-            '@radix-ui/react-tooltip',
-          ],
-          'ui-navigation': [
-            '@radix-ui/react-accordion',
-            '@radix-ui/react-collapsible',
-            '@radix-ui/react-context-menu',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-menubar',
-            '@radix-ui/react-navigation-menu',
-            '@radix-ui/react-scroll-area',
-            '@radix-ui/react-tabs',
-          ],
-          'ui-forms': [
-            '@radix-ui/react-aspect-ratio',
-            '@radix-ui/react-avatar',
-            '@radix-ui/react-checkbox',
-            '@radix-ui/react-progress',
-            '@radix-ui/react-radio-group',
-            '@radix-ui/react-select',
-            '@radix-ui/react-slider',
-            '@radix-ui/react-switch',
-            '@radix-ui/react-toggle',
-            '@radix-ui/react-toggle-group',
-            'cmdk',
-          ],
-          'icons': ['lucide-react'],
-
-          // Data fetching
-          'query': ['@tanstack/react-query'],
-
-          // Form handling and validation
-          'forms': ['react-hook-form', '@hookform/resolvers', 'zod', 'zod-validation-error'],
-
-          // State management
-          'state': ['zustand', 'react-use'],
-
-          // Charts (admin only - extracted to reduce initial load)
-          'charts': ['recharts'],
-
-          // PDF generation (billing only) split to avoid oversized chunk warning
-          'pdf-jspdf': ['jspdf'],
-          'pdf-html2canvas': ['html2canvas'],
-
-          // Maps (location picker only)
-          'maps': ['leaflet', 'react-leaflet'],
-
-          // Date utilities
-          'date-fns': ['date-fns'],
-
-          // Animation
-          'animation': ['framer-motion', 'motion'],
-          },
+          manualChunks,
         },
       },
     },

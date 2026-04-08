@@ -211,7 +211,8 @@ export default function ProductDetail() {
   const productStageRef = useRef<HTMLDivElement | null>(null);
   const galleryScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const gallerySectionRefs = useRef<Array<HTMLElement | null>>([]);
-  const desktopReelProgressRef = useRef(0);
+  const desktopReelTargetProgressRef = useRef(0);
+  const desktopRenderedProgressRef = useRef(0);
   const desktopWheelFrameRef = useRef<number | null>(null);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
@@ -269,7 +270,7 @@ export default function ProductDetail() {
   }, [allImages.length, selectedImageIndex]);
 
   useEffect(() => {
-    desktopReelProgressRef.current = desktopReelProgress;
+    desktopRenderedProgressRef.current = desktopReelProgress;
   }, [desktopReelProgress]);
 
   useEffect(() => {
@@ -301,7 +302,8 @@ export default function ProductDetail() {
   useEffect(() => {
     setSelectedImageIndex(0);
     setDesktopReelProgress(0);
-    desktopReelProgressRef.current = 0;
+    desktopReelTargetProgressRef.current = 0;
+    desktopRenderedProgressRef.current = 0;
   }, [product?.id, allImages.length, isMobileOrTablet]);
 
   useEffect(() => {
@@ -421,9 +423,22 @@ export default function ProductDetail() {
     const maxProgress = allImages.length - 1;
     const progressStep = 0.0018;
 
-    const flushReelProgress = () => {
-      desktopWheelFrameRef.current = null;
-      setDesktopReelProgress(desktopReelProgressRef.current);
+    const animateReelProgress = () => {
+      const target = desktopReelTargetProgressRef.current;
+      const rendered = desktopRenderedProgressRef.current;
+      const delta = target - rendered;
+
+      if (Math.abs(delta) < 0.0008) {
+        desktopRenderedProgressRef.current = target;
+        setDesktopReelProgress(target);
+        desktopWheelFrameRef.current = null;
+        return;
+      }
+
+      const next = rendered + delta * 0.16;
+      desktopRenderedProgressRef.current = next;
+      setDesktopReelProgress(next);
+      desktopWheelFrameRef.current = window.requestAnimationFrame(animateReelProgress);
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -439,9 +454,9 @@ export default function ProductDetail() {
 
       const movingDown = event.deltaY > 0;
       const movingUp = event.deltaY < 0;
-      const current = desktopReelProgressRef.current;
-      const atStart = current <= 0.001;
-      const atEnd = current >= maxProgress - 0.001;
+      const currentTarget = desktopReelTargetProgressRef.current;
+      const atStart = currentTarget <= 0.001;
+      const atEnd = currentTarget >= maxProgress - 0.001;
 
       const shouldLockScroll =
         (movingDown && !atEnd) ||
@@ -451,11 +466,11 @@ export default function ProductDetail() {
 
       event.preventDefault();
 
-      const next = Math.min(maxProgress, Math.max(0, current + event.deltaY * progressStep));
-      desktopReelProgressRef.current = next;
+      const next = Math.min(maxProgress, Math.max(0, currentTarget + event.deltaY * progressStep));
+      desktopReelTargetProgressRef.current = next;
 
       if (desktopWheelFrameRef.current === null) {
-        desktopWheelFrameRef.current = window.requestAnimationFrame(flushReelProgress);
+        desktopWheelFrameRef.current = window.requestAnimationFrame(animateReelProgress);
       }
     };
 
@@ -472,13 +487,8 @@ export default function ProductDetail() {
 
   const desktopReelMaxProgress = Math.max(allImages.length - 1, 0);
   const clampedDesktopReelProgress = Math.min(Math.max(desktopReelProgress, 0), desktopReelMaxProgress);
-  const desktopReelBaseIndex = Math.floor(clampedDesktopReelProgress);
-  const desktopReelNextIndex = Math.min(desktopReelBaseIndex + 1, Math.max(allImages.length - 1, 0));
-  const desktopReelTransition =
-    desktopReelBaseIndex === desktopReelNextIndex ? 0 : clampedDesktopReelProgress - desktopReelBaseIndex;
-  const activeDesktopPreviewIndex =
-    desktopReelTransition >= 0.5 ? desktopReelNextIndex : desktopReelBaseIndex;
-  const desktopReelGap = 4;
+  const activeDesktopPreviewIndex = Math.round(clampedDesktopReelProgress);
+  const desktopReelGap = 3.5;
 
   useEffect(() => {
     if (isMobileOrTablet || isGalleryOpen) return;
@@ -642,7 +652,8 @@ export default function ProductDetail() {
   const previewImage = (index: number) => {
     if (index === selectedImageIndex || index < 0 || index >= allImages.length) return;
     if (!isMobileOrTablet && allImages.length > 1) {
-      desktopReelProgressRef.current = index;
+      desktopReelTargetProgressRef.current = index;
+      desktopRenderedProgressRef.current = index;
       setSelectedImageIndex(index);
       setDesktopReelProgress(index);
       return;
@@ -960,28 +971,18 @@ export default function ProductDetail() {
                 />
               ) : (
                 <div className="absolute inset-0">
-                  <img
-                    src={allImages[desktopReelBaseIndex] || ""}
-                    alt={`${product.name} - view ${desktopReelBaseIndex + 1}`}
-                    loading={desktopReelBaseIndex === 0 ? "eager" : "lazy"}
-                    className="absolute inset-0 z-20 h-full w-full select-none object-cover object-top"
-                    style={{
-                      transform: `translate3d(0, ${desktopReelTransition * -(100 + desktopReelGap)}%, 0)`,
-                      transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
-                    }}
-                  />
-                  {desktopReelNextIndex !== desktopReelBaseIndex ? (
+                  {allImages.map((url, index) => (
                     <img
-                      src={allImages[desktopReelNextIndex] || ""}
-                      alt={`${product.name} - view ${desktopReelNextIndex + 1}`}
-                      loading="lazy"
-                      className="absolute inset-0 z-30 h-full w-full select-none object-cover object-top"
+                      key={`desktop-reel-${index}`}
+                      src={url || ""}
+                      alt={`${product.name} - view ${index + 1}`}
+                      loading={index === 0 ? "eager" : "lazy"}
+                      className="absolute inset-0 h-full w-full select-none object-cover object-top will-change-transform"
                       style={{
-                        transform: `translate3d(0, ${(1 - desktopReelTransition) * (100 + desktopReelGap)}%, 0)`,
-                        transition: "transform 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+                        transform: `translate3d(0, ${(index - clampedDesktopReelProgress) * (100 + desktopReelGap)}%, 0)`,
                       }}
                     />
-                  ) : null}
+                  ))}
                 </div>
               )}
             </div>
