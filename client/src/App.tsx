@@ -301,7 +301,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
     return isStorefrontFontPreset(rawValue) ? rawValue : null;
   }, []);
   const shouldHardRefreshConfig = previewTemplateId !== null;
-  const { data: pageConfig } = useQuery({
+  const { data: pageConfig, isLoading: pageConfigLoading } = useQuery({
     queryKey: ["page-config", previewTemplateId],
     queryFn: () => fetchPageConfig(previewTemplateId),
     staleTime: shouldHardRefreshConfig ? 0 : 5 * 60 * 1000,
@@ -310,15 +310,20 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
   });
   const isStuffyLanding = pageConfig?.template?.slug === "stuffyclone" && pathname === "/";
 
-  // Finish the pre-loader when the main app layout has mounted
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).finishLoading) {
-      // Small timeout to allow the layout to fully render first
-      setTimeout(() => {
-        (window as any).finishLoading();
-      }, 40);
-    }
-  }, []);
+    if (typeof window === "undefined") return;
+    if (pathname === "/") return;
+    if (pageConfigLoading) return;
+
+    const done = (window as { finishLoading?: () => void }).finishLoading;
+    if (typeof done !== "function") return;
+
+    const timer = window.setTimeout(() => {
+      done();
+    }, 40);
+
+    return () => window.clearTimeout(timer);
+  }, [pageConfigLoading]);
 
   useEffect(() => {
     const effectivePreset = previewFontPreset
@@ -965,15 +970,18 @@ function App() {
     typeof window !== "undefined" ? window.location.pathname : "/";
 
   useEffect(() => {
-    // Ensure loader is dismissed for every route family (storefront + admin).
     if (typeof window === "undefined") return;
+    if (!initialPath.startsWith("/admin")) return;
+
     const done = (window as { finishLoading?: () => void }).finishLoading;
     if (typeof done !== "function") return;
+
     const timer = window.setTimeout(() => {
       done();
     }, 80);
+
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [initialPath]);
 
   const aroundNav = useCallback(
     (

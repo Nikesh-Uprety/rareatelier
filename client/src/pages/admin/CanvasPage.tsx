@@ -37,6 +37,11 @@ import {
   Skeleton,
   OptimizedImage,
 } from "@/components/ui";
+import {
+  matchesLogoPreset,
+  STOREFRONT_BRANDING_QUERY_KEY,
+  STOREFRONT_LOGO_PRESETS,
+} from "@/lib/storefrontBranding";
 import { STOREFRONT_FONT_OPTIONS, STOREFRONT_FONT_FAMILIES, type StorefrontFontPreset } from "@/lib/storefrontFonts";
 import type { CanvasPage, SiteBranding, ColorPreset, CanvasTemplate } from "@/lib/adminApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -639,6 +644,7 @@ function BrandingManager() {
     mutationFn: (data: Partial<SiteBranding>) => updateBranding(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/canvas/branding"] });
+      queryClient.invalidateQueries({ queryKey: STOREFRONT_BRANDING_QUERY_KEY });
       toast({ title: "Branding saved", description: "Branding settings updated." });
     },
     onError: (err: any) => {
@@ -690,6 +696,16 @@ function BrandingManager() {
       toast({ title: "Error", description: err.message || "Failed to delete color preset.", variant: "destructive" });
     },
   });
+
+  const applyLogoPreset = (presetId: string) => {
+    const preset = STOREFRONT_LOGO_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+
+    updateBrandingMutation.mutate({
+      logoUrl: preset.logoUrl,
+      logoDarkUrl: preset.logoDarkUrl ?? preset.logoUrl,
+    });
+  };
 
   if (brandingLoading || presetsLoading) {
     return (
@@ -798,6 +814,56 @@ function BrandingManager() {
               ) : (
                 <p className="text-xs text-muted-foreground italic">No dark logo uploaded</p>
               )}
+            </div>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <div>
+              <h4 className="text-sm font-semibold">Preset Logos</h4>
+              <p className="text-xs text-muted-foreground">
+                Apply one of the previous storefront logos instantly, or upload a new one above.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              {STOREFRONT_LOGO_PRESETS.map((preset) => {
+                const isActive = matchesLogoPreset(branding, preset);
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => applyLogoPreset(preset.id)}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all",
+                      isActive
+                        ? "border-primary bg-primary/5"
+                        : "border-muted/60 hover:border-muted hover:bg-muted/20",
+                    )}
+                  >
+                    <div
+                      className="flex min-h-[8.5rem] items-center justify-center rounded-lg border border-muted/50 p-4"
+                      style={{ background: preset.previewBackground ?? "#ffffff" }}
+                    >
+                      <img
+                        src={preset.logoUrl}
+                        alt={preset.label}
+                        className={cn("h-auto w-auto max-w-full object-contain", preset.previewClassName ?? "max-h-14")}
+                      />
+                    </div>
+                    <div className="mt-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{preset.label}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{preset.description}</p>
+                      </div>
+                      {isActive ? (
+                        <Badge variant="default" className="shrink-0 text-[9px] uppercase tracking-[0.18em]">
+                          <Check className="mr-1 h-3 w-3" />
+                          Active
+                        </Badge>
+                      ) : null}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>

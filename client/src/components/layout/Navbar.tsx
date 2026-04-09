@@ -24,6 +24,11 @@ import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
 import { canAccessAdminPanel } from "@shared/auth-policy";
 import { getDefaultAdminPath } from "@/lib/adminAccess";
+import { getPublicBranding } from "@/lib/adminApi";
+import {
+  getStorefrontLogoFilter,
+  STOREFRONT_BRANDING_QUERY_KEY,
+} from "@/lib/storefrontBranding";
 import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
 
 const ANNOUNCEMENT_ITEMS = [
@@ -32,6 +37,7 @@ const ANNOUNCEMENT_ITEMS = [
   "Dragon Hoodie — Back in Stock",
   "Basics Collar Jacket — Limited Qty",
 ];
+const STOREFRONT_HEADER_LOGO = "/images/updatedlogo.png";
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
@@ -64,7 +70,13 @@ export default function Navbar() {
     refetchOnMount: previewTemplateId !== null ? "always" : false,
     refetchOnWindowFocus: previewTemplateId !== null,
   });
+  const { data: publicBrandingData } = useQuery({
+    queryKey: STOREFRONT_BRANDING_QUERY_KEY,
+    queryFn: getPublicBranding,
+    staleTime: 5 * 60 * 1000,
+  });
   const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
+  const storefrontBranding = publicBrandingData?.branding;
 
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
@@ -319,8 +331,8 @@ export default function Navbar() {
     ? getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const logoFilter = navForegroundColor === "#111111"
-    ? "brightness(0)"
-    : "brightness(0) invert(1)";
+    ? getStorefrontLogoFilter({ branding: storefrontBranding, variant: "light" })
+    : getStorefrontLogoFilter({ branding: storefrontBranding, variant: "dark" });
   const navUnderlineColor = isHeroMegaOpen ? "#111111" : useHeroContrastState ? "#ffffff" : navForegroundColor;
   const navTextShadow = isHeroMegaOpen
     ? "none"
@@ -421,13 +433,15 @@ export default function Navbar() {
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <img
-                        src="/images/newproductpagelogo-removebg-preview.png"
+                        src={STOREFRONT_HEADER_LOGO}
                         alt="Rare Atelier"
-                        className="h-auto w-full max-w-[10.5rem] object-contain sm:max-w-[12rem]"
+                        className="h-auto max-h-[4.75rem] w-auto object-contain sm:max-h-[5.25rem]"
                         style={{
-                          filter: theme === "dark"
-                            ? "brightness(0) invert(1) drop-shadow(0 0 14px rgba(255,255,255,0.28))"
-                            : "brightness(0)",
+                          filter: getStorefrontLogoFilter({
+                            branding: null,
+                            variant: theme === "dark" ? "dark" : "light",
+                            glow: theme === "dark",
+                          }),
                         }}
                       />
                     </Link>
@@ -653,17 +667,24 @@ export default function Navbar() {
               <span>Menu</span>
             </button>
 
-            <div className="pointer-events-none absolute inset-x-0 flex justify-center px-20 sm:px-28 md:px-36">
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 flex justify-center px-20 sm:px-28 md:px-36"
+              style={{
+                paddingTop: "max(env(safe-area-inset-top), 1rem)",
+              }}
+            >
               {isStuffyLanding ? null : (
                 <Link href="/" className="pointer-events-auto inline-flex items-center justify-center">
                   <img
-                    src="/images/newproductpagelogo-removebg-preview.png"
+                    src={STOREFRONT_HEADER_LOGO}
                     alt="Rare Atelier"
-                    className="h-auto w-full max-w-[12rem] object-contain sm:max-w-[15rem] md:max-w-[18rem]"
+                    className="h-auto w-[6.6rem] object-contain sm:w-[6.9rem]"
                     style={{
-                      filter: theme === "dark"
-                        ? "brightness(0) invert(1) drop-shadow(0 0 18px rgba(255,255,255,0.38)) drop-shadow(0 0 34px rgba(255,255,255,0.16))"
-                        : "brightness(0)",
+                      filter: getStorefrontLogoFilter({
+                        branding: null,
+                        variant: theme === "dark" ? "dark" : "light",
+                        glow: theme === "dark",
+                      }),
                     }}
                   />
                 </Link>
@@ -759,23 +780,21 @@ export default function Navbar() {
               </button>
             </div>
 
-            <Link href="/" className="flex justify-self-center items-center justify-center text-center">
-              <span
-                className={
-                  isProductDetailRoute
-                    ? "mx-auto text-[clamp(1rem,2.1vw,1.55rem)] font-bold uppercase tracking-[0.42em]"
-                    : "mx-auto text-[13px] font-bold uppercase tracking-[0.42em] sm:text-[14px] lg:text-[15px]"
-                }
+            <Link href="/" className="flex justify-self-center items-center justify-center pt-1 text-center">
+              <img
+                src={STOREFRONT_HEADER_LOGO}
+                alt="Rare Atelier"
+                className="mx-auto h-auto w-[6.6rem] object-contain sm:w-[6.9rem]"
                 style={{
-                  color: isProductDetailRoute ? "#ffffff" : navForegroundColor,
-                  fontFamily: "\"Archivo Narrow\", system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
-                  textShadow: isProductDetailRoute ? "0 2px 12px rgba(0,0,0,0.42)" : "none",
+                  filter: getStorefrontLogoFilter({
+                    branding: null,
+                    variant: navForegroundColor === "#111111" ? "light" : "dark",
+                    glow: navForegroundColor !== "#111111",
+                  }),
                   mixBlendMode: isProductDetailRoute ? "difference" : "normal",
                   transform: isProductDetailRoute ? "translateY(1px)" : "none",
                 }}
-              >
-                Rare Atelier
-              </span>
+              />
             </Link>
 
             <div className="ml-auto flex items-center justify-end gap-1 sm:gap-2">

@@ -4,7 +4,7 @@ import { fetchPublicBill, type PublicBill } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Printer, Share2 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Barcode from "react-barcode";
 import "@/styles/bill-viewer.css";
 
@@ -35,6 +35,20 @@ export default function ViewBill() {
     queryFn: () => fetchPublicBill(billNumber),
     enabled: !!billNumber,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (isLoading) return;
+
+    const done = (window as { finishLoading?: () => void }).finishLoading;
+    if (typeof done !== "function") return;
+
+    const timer = window.setTimeout(() => {
+      done();
+    }, 40);
+
+    return () => window.clearTimeout(timer);
+  }, [isLoading]);
 
   const subtotal = useMemo(() => bill ? Number(bill.subtotal) : 0, [bill]);
   const discountAmount = useMemo(() => bill ? Number(bill.discountAmount) : 0, [bill]);

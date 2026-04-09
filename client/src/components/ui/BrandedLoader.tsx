@@ -10,24 +10,24 @@ export function BrandedLoader({ fullScreen = false, className }: BrandedLoaderPr
     <div
       className={cn(
         fullScreen
-          ? "fixed inset-0 z-50 flex items-center justify-center bg-background p-4"
+          ? "fixed inset-0 z-50 flex items-center justify-center bg-black p-4 text-white"
           : "flex w-full items-center justify-center py-16 p-4",
         className,
       )}
     >
       <div className="flex flex-col items-center gap-3 text-center">
         <div
-          className="whitespace-nowrap text-sm font-semibold uppercase tracking-[0.42em] text-foreground md:text-base"
+          className="whitespace-nowrap text-sm font-semibold uppercase tracking-[0.42em] md:text-base"
           style={{ fontFamily: '"Archivo Narrow", "Inter", sans-serif' }}
           aria-hidden="true"
         >
           RARE ATELIER
         </div>
-        <div className="h-[2px] w-40 overflow-hidden rounded-full bg-foreground/12 md:w-48">
-          <div className="loader-official-bar h-full w-full rounded-full bg-foreground/80" />
+        <div className={cn("h-[2px] w-40 overflow-hidden rounded-full md:w-48", fullScreen ? "bg-white/15" : "bg-foreground/12")}>
+          <div className={cn("loader-official-bar h-full w-full rounded-full", fullScreen ? "bg-white" : "bg-foreground/80")} />
         </div>
         <div
-          className="text-[10px] font-medium uppercase tracking-[0.28em] text-muted-foreground"
+          className={cn("text-[10px] font-medium uppercase tracking-[0.28em]", fullScreen ? "text-white/65" : "text-muted-foreground")}
           style={{ fontFamily: '"Inter", sans-serif' }}
         >
           Loading
@@ -36,7 +36,8 @@ export function BrandedLoader({ fullScreen = false, className }: BrandedLoaderPr
       <style>{`
         .loader-official-bar {
           transform-origin: left center;
-          animation: loader-official-progress 1.25s ease-in-out infinite;
+          animation: loader-official-progress 1.05s ease-in-out infinite;
+          ${fullScreen ? "box-shadow: 0 0 18px rgba(255,255,255,0.2);" : ""}
         }
 
         @keyframes loader-official-progress {

@@ -8,6 +8,12 @@ import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import { useThemeStore } from "@/store/theme";
+import { getPublicBranding } from "@/lib/adminApi";
+import {
+  getStorefrontLogoFilter,
+  resolveStorefrontLogo,
+  STOREFRONT_BRANDING_QUERY_KEY,
+} from "@/lib/storefrontBranding";
 
 const QuoteSection = lazy(() => import("@/components/home/QuoteSection"));
 const FeaturedCollection = lazy(() => import("@/components/home/FeaturedCollection"));
@@ -200,6 +206,12 @@ export default function Home() {
     return rawValue && /^-?\d+$/.test(rawValue) ? Number(rawValue) : null;
   }, []);
   const isCanvasPreview = previewTemplateId !== null;
+  const { data: publicBrandingData } = useQuery({
+    queryKey: STOREFRONT_BRANDING_QUERY_KEY,
+    queryFn: getPublicBranding,
+    staleTime: 5 * 60 * 1000,
+  });
+  const storefrontBranding = publicBrandingData?.branding;
 
   const { data: featuredProductsData = { products: [], total: 0 }, isSuccess: isFeaturedSuccess } = useQuery({
     queryKey: ["products", "featured", { limit: 2 }],
@@ -305,6 +317,7 @@ export default function Home() {
 
   const campaignBannerImage =
     exploreCollectionImage || (campaignAssets[0]?.imageUrl ?? "/images/explore.webp");
+  const landingLogo = "/images/updatedlogo.png";
 
   // Finish pre-loader only when data is ready (Hydration-First)
   const hasFinishedLoadingRef = useRef(false);
@@ -312,6 +325,8 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (hasFinishedLoadingRef.current) return;
+    if (pageConfigLoading) return;
+    if (heroLoadingState) return;
 
     const finish = () => {
       if (hasFinishedLoadingRef.current) return;
@@ -321,15 +336,9 @@ export default function Home() {
       hasFinishedLoadingRef.current = true;
     };
 
-    // If config is ready, finish immediately. Otherwise, don't keep the user waiting.
-    if (!pageConfigLoading) {
-      finish();
-      return;
-    }
-
-    const timeout = window.setTimeout(finish, 350);
+    const timeout = window.setTimeout(finish, 24);
     return () => window.clearTimeout(timeout);
-  }, [pageConfigLoading]);
+  }, [heroLoadingState, pageConfigLoading]);
 
   // Preload static campaign images
   useEffect(() => {
@@ -736,22 +745,28 @@ export default function Home() {
               paddingLeft: "max(env(safe-area-inset-left), 0.75rem)",
             }}
           >
-            <div className="flex flex-1 items-center justify-center px-5 sm:px-8 md:px-10">
-              <div className="w-full max-w-[min(88vw,40rem)] px-4 py-6 text-center sm:px-8 sm:py-8">
-                <div className="flex justify-center">
-                  <img
-                    src="/images/newproductpagelogo-removebg-preview.png"
-                    alt="Rare Atelier"
-                    className="h-auto w-full max-w-[34rem] object-contain"
+            <div className="flex flex-1 items-center justify-center px-5 pt-20 sm:px-8 sm:pt-24 md:px-10">
+              <div className="relative w-full max-w-[min(88vw,40rem)] -translate-y-6 px-4 py-6 text-center sm:-translate-y-8 sm:px-8 sm:py-8">
+                <div className="relative z-20 flex -translate-y-4 justify-center sm:-translate-y-5">
+                  <div
+                    className="w-full overflow-hidden"
                     style={{
-                      filter: isDarkTheme
-                        ? "brightness(0) invert(1) drop-shadow(0 0 22px rgba(255,255,255,0.42)) drop-shadow(0 0 38px rgba(255,255,255,0.18))"
-                        : "brightness(0) invert(1) drop-shadow(0 4px 14px rgba(0,0,0,0.24)) drop-shadow(0 0 20px rgba(255,255,255,0.24))",
+                      maxWidth: "16.8rem",
+                      height: "11.25rem",
                     }}
-                  />
+                  >
+                    <img
+                      src={landingLogo}
+                      alt="Rare Atelier"
+                      className="w-full object-contain object-top"
+                      style={{
+                        filter: "drop-shadow(0 0 18px rgba(255,255,255,0.18))",
+                      }}
+                    />
+                  </div>
                 </div>
                 <ul
-                  className="mt-10 space-y-5 text-[clamp(1rem,0.55rem+1.2vw,1.55rem)] uppercase tracking-[0.24em] sm:space-y-6 sm:tracking-[0.32em]"
+                  className="relative z-10 mt-3 space-y-5 text-[clamp(1rem,0.55rem+1.2vw,1.55rem)] uppercase tracking-[0.24em] sm:mt-4 sm:space-y-6 sm:tracking-[0.32em]"
                   style={{
                     fontFamily: "'Archivo Narrow', 'Arial Narrow', sans-serif",
                     fontWeight: 700,
@@ -804,7 +819,7 @@ export default function Home() {
                     </Link>
                   </li>
                 </ul>
-                <div className="mt-8 flex items-center justify-center gap-5">
+                <div className="relative z-10 mt-8 flex items-center justify-center gap-5">
                   <a
                     href="https://www.instagram.com/rareofficial.au/"
                     target="_blank"

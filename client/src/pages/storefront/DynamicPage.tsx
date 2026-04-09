@@ -101,6 +101,20 @@ export default function DynamicPage() {
   const sections = pageConfig?.sections || [];
   const page = pageConfig?.page || null;
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (pageConfigLoading) return;
+
+    const done = (window as { finishLoading?: () => void }).finishLoading;
+    if (typeof done !== "function") return;
+
+    const timer = window.setTimeout(() => {
+      done();
+    }, 40);
+
+    return () => window.clearTimeout(timer);
+  }, [pageConfigLoading]);
+
   const heroSections = sections.filter((s: any) => s.sectionType === "hero");
   const nonFaqSections = sections.filter((s: any) => s.sectionType !== "faq");
   const faqSections = sections.filter((s: any) => s.sectionType === "faq");
