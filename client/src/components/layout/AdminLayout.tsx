@@ -58,6 +58,8 @@ const ADMIN_SIDEBAR_DEFAULT_WIDTH = 288;
 const ADMIN_SIDEBAR_COLLAPSED_MIN_WIDTH = 56;
 const ADMIN_SIDEBAR_COLLAPSED_DEFAULT_WIDTH = 72;
 const ADMIN_SIDEBAR_VISUAL_EXPAND_THRESHOLD = 170;
+const ADMIN_PANEL_LOGO = "/images/updatedlogo.png";
+const ADMIN_PANEL_LOGO_ALT = "Rare Atelier";
 const AdminDateCalendar = lazy(() => import("@/components/admin/AdminDateCalendar"));
 
 export default function AdminLayout({
@@ -385,19 +387,23 @@ export default function AdminLayout({
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="p-4 sm:p-5 border-b border-border flex items-center justify-between bg-card/50">
-          <Link href="/" className="flex items-center">
+        <div className="relative border-b border-border bg-card/50 p-4 sm:p-5">
+          <Link
+            href="/"
+            className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
+            title="Open Home Page"
+          >
             <img
-              src="/images/newproductpagelogo.png"
-              alt="RARE.NP Logo"
-              className="h-9 sm:h-10 w-auto object-contain dark:brightness-0 dark:invert"
+              src={ADMIN_PANEL_LOGO}
+              alt={ADMIN_PANEL_LOGO_ALT}
+              className="h-10 sm:h-11 w-auto object-contain brightness-0 dark:invert"
             />
           </Link>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setMobileMenuOpen(false)}
-            className="h-8 w-8 rounded-full hover:bg-muted"
+            className="ml-auto flex h-8 w-8 rounded-full hover:bg-muted"
           >
             <span className="sr-only">Close</span>
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -500,13 +506,13 @@ export default function AdminLayout({
         >
           <Link
             href="/"
-            className="flex items-center justify-center w-full rounded-lg p-2 hover:bg-muted/40 transition-colors"
+            className="flex w-full items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted/40"
             title="Open Home Page"
           >
             <img
-              src="/images/newproductpagelogo.png"
-              alt="RARE.NP"
-              className="h-10 w-auto object-contain dark:brightness-0 dark:invert"
+              src={ADMIN_PANEL_LOGO}
+              alt={ADMIN_PANEL_LOGO_ALT}
+              className="h-11 w-auto object-contain brightness-0 dark:invert"
             />
           </Link>
         </SidebarHeader>
@@ -680,13 +686,13 @@ export default function AdminLayout({
             {!isVisuallyExpanded ? (
               <Link
                 href="/"
-                className="hidden lg:flex items-center shrink-0 absolute left-1/2 -translate-x-1/2"
+                className="absolute left-1/2 top-1/2 hidden shrink-0 -translate-x-1/2 -translate-y-1/2 items-center justify-center lg:flex"
                 title="Open Home Page"
               >
                 <img
-                  src="/images/newproductpagelogo.png"
-                  alt="RARE.NP"
-                  className="h-7 w-auto object-contain brightness-0 dark:brightness-0 dark:invert"
+                  src={ADMIN_PANEL_LOGO}
+                  alt={ADMIN_PANEL_LOGO_ALT}
+                  className="h-8 w-auto object-contain brightness-0 dark:invert"
                 />
               </Link>
             ) : null}
