@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,7 +121,7 @@ export default function AdminBucketsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(45);
+  const [pageSize, setPageSize] = useState(24);
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
@@ -135,6 +135,7 @@ export default function AdminBucketsPage() {
   const [bulkMoveTarget, setBulkMoveTarget] = useState<string>("root");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadProgressRef = useRef<Record<string, number>>({});
 
   type UploadFileStatus = "idle" | "uploading" | "success" | "error" | "skipped";
   type UploadFile = {
@@ -172,12 +173,16 @@ export default function AdminBucketsPage() {
   const foldersQuery = useQuery({
     queryKey: ["admin", "folders", provider, category],
     queryFn: () => fetchAdminFolders({ provider, category }),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
 
   const folderMarkersQuery = useQuery({
     queryKey: ["admin", "folder-markers", provider, category],
     queryFn: () =>
       fetchAdminImages({ provider, category, assetType: "folder", limit: 500 }),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
 
   const assetsQuery = useQuery<{ data: AdminImageAsset[]; total: number }>({
@@ -199,6 +204,8 @@ export default function AdminBucketsPage() {
         limit: pageSize,
         offset: (page - 1) * pageSize,
       }),
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
 
   const assets = assetsQuery.data?.data ?? [];
@@ -251,17 +258,6 @@ export default function AdminBucketsPage() {
     if (!selectedAssetId) return null;
     return assets.find((asset) => asset.id === selectedAssetId) ?? null;
   }, [assets, selectedAssetId]);
-
-  const normalizeName = (value: string) =>
-    (value.split("/").pop() || value)
-      .toLowerCase()
-      .replace(/\?.*$/, "")
-      .replace(/#[^]*$/, "")
-      .replace(/\.[a-z0-9]+$/i, "")
-      .replace(/[%_]+/g, " ")
-      .replace(/-+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
 
   const getDisplayName = (value?: string | null) => {
     if (!value) return "untitled";
@@ -318,14 +314,6 @@ export default function AdminBucketsPage() {
     if (Number.isNaN(dt.getTime())) return null;
     return dt.toISOString();
   };
-
-  const filteredAssets = useMemo(() => {
-    const q = normalizeName(debouncedSearch.trim());
-    if (!q) return assets;
-    return assets.filter((asset) =>
-      normalizeName(asset.filename || asset.url || "").includes(q),
-    );
-  }, [assets, debouncedSearch]);
 
   const addUploadFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -424,6 +412,11 @@ export default function AdminBucketsPage() {
         expiresAt: expiry ?? undefined,
         qualityMode,
         onProgress: (value) => {
+          const previousValue = uploadProgressRef.current[file.id] ?? 0;
+          const shouldCommit =
+            value >= 100 || previousValue === 0 || value - previousValue >= 5;
+          if (!shouldCommit) return;
+          uploadProgressRef.current[file.id] = value;
           setUploadQueue((prev) =>
             prev.map((item) =>
               item.id === file.id ? { ...item, progress: value } : item,
@@ -613,7 +606,7 @@ export default function AdminBucketsPage() {
   });
 
   const deleteExpired = () => {
-    const expiredIds = filteredAssets
+    const expiredIds = assets
       .filter((asset) => asset.expiresAt && new Date(asset.expiresAt) <= new Date())
       .map((asset) => asset.id);
     if (expiredIds.length === 0) {
@@ -640,9 +633,11 @@ export default function AdminBucketsPage() {
         <button
           type="button"
           onClick={() => {
-            setCurrentFolder(node.path);
-            setSelectedIds(new Set());
-            setSelectedAssetId(null);
+            startTransition(() => {
+              setCurrentFolder(node.path);
+              setSelectedIds(new Set());
+              setSelectedAssetId(null);
+            });
           }}
           className={cn(
             "w-full flex items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors",
@@ -813,7 +808,11 @@ export default function AdminBucketsPage() {
 
               <button
                 type="button"
-                onClick={() => setCurrentFolder(null)}
+                onClick={() =>
+                  startTransition(() => {
+                    setCurrentFolder(null);
+                  })
+                }
                 className={cn(
                   "w-full flex items-center justify-between rounded-lg px-2 py-2 text-left text-sm transition-colors",
                   currentFolder === null
@@ -831,7 +830,7 @@ export default function AdminBucketsPage() {
               </button>
 
               <div className="space-y-2">
-                {folderTree.length === 0 ? (
+              {folderTree.length === 0 ? (
                   <p className="text-xs text-muted-foreground">No folders yet.</p>
                 ) : (
                   folderTree.map((node) => renderFolderNode(node))
@@ -1136,13 +1135,13 @@ export default function AdminBucketsPage() {
               <div className="py-12 text-center text-sm text-muted-foreground">
                 Loading assets…
               </div>
-            ) : filteredAssets.length === 0 ? (
+            ) : assets.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted-foreground">
                 No assets found in this folder.
               </div>
             ) : viewMode === "grid" ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {filteredAssets.map((asset) => {
+                {assets.map((asset) => {
                   const isSelected = selectedIds.has(asset.id);
                   const displayName = getDisplayName(asset.filename ?? asset.url);
                   const expiresLabel = formatExpiryLabel(asset.expiresAt);
@@ -1155,7 +1154,12 @@ export default function AdminBucketsPage() {
                           ? "border-primary ring-2 ring-primary/40"
                           : "border-muted/40",
                       )}
-                      onClick={() => setSelectedAssetId(asset.id)}
+                      onClick={() =>
+                        startTransition(() => {
+                          setSelectedAssetId(asset.id);
+                        })
+                      }
+                      style={{ contentVisibility: "auto" }}
                     >
                       <div className="relative aspect-square cursor-pointer">
                         <img
@@ -1163,17 +1167,20 @@ export default function AdminBucketsPage() {
                           alt={displayName}
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                           loading="lazy"
+                          decoding="async"
                         />
                         <label className="absolute top-2 left-2 inline-flex items-center justify-center rounded-full bg-black/60 text-white h-7 w-7">
                           <input
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => {
-                              setSelectedIds((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(asset.id)) next.delete(asset.id);
-                                else next.add(asset.id);
-                                return next;
+                              startTransition(() => {
+                                setSelectedIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(asset.id)) next.delete(asset.id);
+                                  else next.add(asset.id);
+                                  return next;
+                                });
                               });
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -1234,7 +1241,7 @@ export default function AdminBucketsPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredAssets.map((asset) => {
+                {assets.map((asset) => {
                   const displayName = getDisplayName(asset.filename ?? asset.url);
                   const isSelected = selectedIds.has(asset.id);
                   return (
@@ -1244,7 +1251,12 @@ export default function AdminBucketsPage() {
                         "flex items-center justify-between rounded-2xl border bg-white px-4 py-3 transition-shadow",
                         isSelected ? "border-primary ring-2 ring-primary/40" : "border-muted/40",
                       )}
-                      onClick={() => setSelectedAssetId(asset.id)}
+                      onClick={() =>
+                        startTransition(() => {
+                          setSelectedAssetId(asset.id);
+                        })
+                      }
+                      style={{ contentVisibility: "auto" }}
                     >
                       <div className="flex items-center gap-3">
                         <label className="inline-flex items-center justify-center rounded-full bg-muted h-6 w-6">
@@ -1252,11 +1264,13 @@ export default function AdminBucketsPage() {
                             type="checkbox"
                             checked={isSelected}
                             onChange={() => {
-                              setSelectedIds((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(asset.id)) next.delete(asset.id);
-                                else next.add(asset.id);
-                                return next;
+                              startTransition(() => {
+                                setSelectedIds((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(asset.id)) next.delete(asset.id);
+                                  else next.add(asset.id);
+                                  return next;
+                                });
                               });
                             }}
                             onClick={(e) => e.stopPropagation()}
@@ -1269,6 +1283,8 @@ export default function AdminBucketsPage() {
                             src={asset.url ?? ""}
                             alt={displayName}
                             className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                           />
                         </div>
                         <div>
@@ -1355,6 +1371,7 @@ export default function AdminBucketsPage() {
                     src={selectedAsset.url ?? ""}
                     alt={selectedAsset.filename ?? "Asset preview"}
                     className="h-48 w-full object-cover"
+                    decoding="async"
                   />
                 </div>
 

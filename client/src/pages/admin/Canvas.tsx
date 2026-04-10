@@ -20,6 +20,8 @@ import {
   ArrowRightLeft,
   Trash2,
   Lock,
+  Loader2,
+  Layout,
 } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
@@ -317,6 +319,8 @@ export default function Canvas() {
       const res = await apiRequest("GET", "/api/admin/canvas/templates");
       return res.json();
     },
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
 
   const { data: settings, isLoading: settingsLoading } = useQuery<CanvasSettings>({
@@ -325,6 +329,8 @@ export default function Canvas() {
       const res = await apiRequest("GET", "/api/admin/canvas/settings");
       return res.json();
     },
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
 
   const effectiveTemplateId = selectedTemplateId ?? settings?.activeTemplate?.id ?? settings?.activeTemplateId ?? null;
@@ -336,6 +342,8 @@ export default function Canvas() {
       return res.json();
     },
     enabled: !!effectiveTemplateId,
+    placeholderData: (previous) => previous,
+    staleTime: 30_000,
   });
   const { data: productOptions = [] } = useQuery<ProductApi[]>({
     queryKey: ["admin", "canvas", "product-options"],
@@ -637,13 +645,14 @@ export default function Canvas() {
   useEffect(() => {
     if (selectedTemplateId) return;
     if (!visibleTemplates.length) return;
-    const activeTemplate = templates.find(
-      (template) =>
-        template.id === (settings?.activeTemplate?.id ?? settings?.activeTemplateId ?? null),
-    );
-    if (activeTemplate && HIDDEN_CANVAS_TEMPLATE_SLUGS.has(activeTemplate.slug)) {
-      setSelectedTemplateId(visibleTemplates[0].id);
+    const configuredTemplateId = settings?.activeTemplate?.id ?? settings?.activeTemplateId ?? null;
+    if (configuredTemplateId) {
+      const matchingVisibleTemplate =
+        visibleTemplates.find((template) => template.id === configuredTemplateId) ?? null;
+      setSelectedTemplateId(matchingVisibleTemplate?.id ?? visibleTemplates[0].id);
+      return;
     }
+    setSelectedTemplateId(visibleTemplates[0].id);
   }, [selectedTemplateId, settings?.activeTemplate?.id, settings?.activeTemplateId, templates, visibleTemplates]);
 
   const premiumTemplates = useMemo(
@@ -1147,6 +1156,14 @@ export default function Canvas() {
   };
 
   const previewTemplateId = effectiveTemplateId ?? visibleTemplates[0]?.id ?? settings?.activeTemplateId ?? null;
+  const isCanvasBootLoading =
+    (templatesLoading || settingsLoading) &&
+    visibleTemplates.length === 0 &&
+    !settings;
+  const showCanvasEmptyState =
+    !isCanvasBootLoading &&
+    !templatesLoading &&
+    visibleTemplates.length === 0;
   const selectedThemeFont =
     STOREFRONT_FONT_OPTIONS.find((font) => font.id === previewFontPreset) ?? STOREFRONT_FONT_OPTIONS[0];
   const selectedThemeFontFamily = STOREFRONT_FONT_FAMILIES[selectedThemeFont.id].preview;
@@ -2240,6 +2257,35 @@ export default function Canvas() {
         </div>
       </div>
 
+      {isCanvasBootLoading ? (
+        <Card className={CANVAS_ELEVATED_CARD_CLASS}>
+          <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-pink-500 to-amber-400 text-white shadow-lg">
+              <Loader2 className="h-7 w-7 animate-spin" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-lg font-semibold text-foreground">Loading legacy Canvas workspace</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                Templates, homepage settings, and section data are loading now so the legacy editor can render with a valid starting layout.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : showCanvasEmptyState ? (
+        <Card className={CANVAS_ELEVATED_CARD_CLASS}>
+          <CardContent className="flex min-h-[320px] flex-col items-center justify-center gap-4 p-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-700 text-white shadow-lg">
+              <Layout className="h-7 w-7" />
+            </div>
+            <div className="space-y-2">
+              <p className="text-lg font-semibold text-foreground">No legacy templates available</p>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                The legacy Canvas editor could not find a usable homepage template to open. Seed or restore a template first, then reopen this page.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
       <div className="space-y-6">
         <Card className={CANVAS_ELEVATED_CARD_CLASS}>
           <CardContent className="p-4">
@@ -3943,6 +3989,7 @@ export default function Canvas() {
         ) : null}
         </div>
       </div>
+      )}
 
       <Dialog
         open={!!mediaPickerTarget}
