@@ -445,7 +445,7 @@ export default function Navbar() {
                       <img
                         src={STOREFRONT_HEADER_LOGO}
                         alt="Rare Atelier"
-                        className="h-auto max-h-[4.75rem] w-auto object-contain sm:max-h-[5.25rem]"
+                        className="h-auto w-[5.7rem] object-contain sm:w-[6rem]"
                         style={{
                           filter: getStorefrontLogoFilter({
                             branding: null,
