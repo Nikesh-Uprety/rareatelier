@@ -93,6 +93,10 @@ import {
   uploadMediaToCloudinary,
   uploadPaymentProofToCloudinary,
 } from "./lib/cloudinary";
+import {
+  importPublicDriveFolderToTigris,
+  importPublicDriveProductsToCatalog,
+} from "./lib/publicGoogleDrive";
 
 const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -3657,7 +3661,10 @@ ${Array.from(uniqueEntries.entries())
           return res.status(400).json({ success: false, error: "No file uploaded" });
         }
 
-        const fileName = `product_${Date.now()}_${file.originalname.replace(/\s+/g, "-")}`;
+        const sanitizedOriginalName = file.originalname
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9._-]/g, "");
+        const fileName = `media/product/${Date.now()}_${sanitizedOriginalName}`;
         const asset = await storageService.uploadFile(
           file.buffer,
           fileName,
@@ -3683,7 +3690,7 @@ ${Array.from(uniqueEntries.entries())
         const buffer = Buffer.from(match ? match[2] : base64, "base64");
         
         // Use S3 storage for product images
-        const fileName = `product_${Date.now()}.png`;
+        const fileName = `media/product/${Date.now()}.png`;
         const asset = await storageService.uploadFile(
           buffer,
           fileName,
@@ -4491,6 +4498,38 @@ ${Array.from(uniqueEntries.entries())
   );
 
   app.post(
+    "/api/admin/products/import-drive-catalog",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        folderUrl: z.string().min(1),
+        collectionName: z.string().trim().min(1).optional().nullable(),
+        collectionSlug: z.string().trim().min(1).optional().nullable(),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const result = await importPublicDriveProductsToCatalog({
+          folderUrl: req.body.folderUrl,
+          collectionName: req.body.collectionName ?? null,
+          collectionSlug: req.body.collectionSlug ?? null,
+        });
+
+        return res.json({ success: true, data: result });
+      } catch (err) {
+        console.error("Error in POST /api/admin/products/import-drive-catalog", err);
+        return res.status(500).json({
+          success: false,
+          error:
+            err instanceof Error
+              ? err.message
+              : "Failed to import products from Google Drive",
+        });
+      }
+    },
+  );
+
+  app.post(
     "/api/admin/products",
     requireAdmin,
     validateRequest(adminProductSchema),
@@ -4652,10 +4691,10 @@ ${Array.from(uniqueEntries.entries())
     async (req: Request, res: Response) => {
       try {
         const permanent = getQueryParam(req.query.permanent) === "true";
-        await storage.deleteProduct(req.params.id as string, { permanent });
+        const result = await storage.deleteProduct(req.params.id as string, { permanent });
         return res.json({
           success: true,
-          action: permanent ? "deleted" : "archived",
+          action: result.action,
         });
       } catch (err) {
         console.error("Error in DELETE /api/admin/products/:id", err);
@@ -4780,6 +4819,8 @@ ${Array.from(uniqueEntries.entries())
   };
 
   type InventoryStatus = "in_stock" | "low_stock" | "out_of_stock";
+  type InventoryProductRow = typeof products.$inferSelect;
+  type InventoryVariantRow = typeof productVariants.$inferSelect;
   type InventorySummaryResponse = {
     totalProducts: number;
     totalSkus: number;
@@ -4802,7 +4843,9 @@ ${Array.from(uniqueEntries.entries())
     channel: string;
     status: InventoryStatus;
     units: number;
-    avgCost: number;
+    costPrice: number;
+    sellingPrice: number;
+    totalCost: number;
     totalValue: number;
     variant: string;
     sku: string;
@@ -4812,13 +4855,38 @@ ${Array.from(uniqueEntries.entries())
   };
 
   const INVENTORY_DEFAULT_OUTLET = "Main Outlet";
-  const CACHE_TTL = 30_000;
-  let summaryCache: { data: InventorySummaryResponse; ts: number } | null = null;
+  const ACTIVE_INVENTORY_PRODUCT_CONDITION = eq(products.isActive, true);
 
   const resolveInventoryStatus = (units: number): InventoryStatus => {
     if (units <= 0) return "out_of_stock";
     if (units <= 10) return "low_stock";
     return "in_stock";
+  };
+
+  const resolveInventorySellingPrice = (
+    product: InventoryProductRow,
+    variant?: InventoryVariantRow | null,
+  ): number => {
+    const variantSellingPrice = Number(variant?.sellingPrice ?? 0);
+    if (variantSellingPrice > 0) return variantSellingPrice;
+
+    const productSellingPrice = parseNumericValue(product.price);
+    if (productSellingPrice > 0) return productSellingPrice;
+
+    return 0;
+  };
+
+  const resolveInventoryCostPrice = (
+    product: InventoryProductRow,
+    variant?: InventoryVariantRow | null,
+  ): number => {
+    const variantCostPrice = Number(variant?.costPrice ?? 0);
+    if (variantCostPrice > 0) return variantCostPrice;
+
+    const productCostPrice = Number(product.costPrice ?? 0);
+    if (productCostPrice > 0) return productCostPrice;
+
+    return Math.floor(resolveInventorySellingPrice(product, variant) * 0.5);
   };
 
   const formatInventoryChannel = (source: string | null | undefined): string => {
@@ -4858,6 +4926,142 @@ ${Array.from(uniqueEntries.entries())
         updatedAt: new Date(),
       })
       .where(eq(products.id, productId));
+  };
+
+  const buildActiveInventoryContext = async () => {
+    const productRows = await db
+      .select()
+      .from(products)
+      .where(ACTIVE_INVENTORY_PRODUCT_CONDITION)
+      .orderBy(products.name);
+
+    const activeProductIds = productRows.map((product) => product.id);
+    const variantRows = activeProductIds.length
+      ? await db
+          .select()
+          .from(productVariants)
+          .where(inArray(productVariants.productId, activeProductIds))
+          .orderBy(productVariants.productId, productVariants.id)
+      : [];
+
+    const productChannelRows = activeProductIds.length
+      ? await db
+          .select({
+            productId: orderItems.productId,
+            source: orders.source,
+            createdAt: orders.createdAt,
+          })
+          .from(orderItems)
+          .innerJoin(orders, eq(orderItems.orderId, orders.id))
+          .innerJoin(products, eq(orderItems.productId, products.id))
+          .where(ACTIVE_INVENTORY_PRODUCT_CONDITION)
+          .orderBy(desc(orders.createdAt))
+      : [];
+
+    const latestChannelByProduct = new Map<string, string>();
+    for (const row of productChannelRows) {
+      if (!latestChannelByProduct.has(row.productId)) {
+        latestChannelByProduct.set(
+          row.productId,
+          formatInventoryChannel(row.source),
+        );
+      }
+    }
+
+    const variantsByProduct = new Map<string, InventoryVariantRow[]>();
+    for (const variant of variantRows) {
+      const bucket = variantsByProduct.get(variant.productId) ?? [];
+      bucket.push(variant);
+      variantsByProduct.set(variant.productId, bucket);
+    }
+
+    return {
+      productRows,
+      activeProductIds,
+      variantsByProduct,
+      latestChannelByProduct,
+    };
+  };
+
+  const buildInventoryItems = ({
+    productRows,
+    variantsByProduct,
+    latestChannelByProduct,
+  }: {
+    productRows: InventoryProductRow[];
+    variantsByProduct: Map<string, InventoryVariantRow[]>;
+    latestChannelByProduct: Map<string, string>;
+  }): InventoryListItemResponse[] => {
+    const items: InventoryListItemResponse[] = [];
+
+    for (const product of productRows) {
+      const channel = latestChannelByProduct.get(product.id) || "Website";
+      const productOutlet = formatInventoryOutlet(channel);
+      const productVariantsRows = variantsByProduct.get(product.id) ?? [];
+
+      if (productVariantsRows.length === 0) {
+        const units = product.stock ?? 0;
+        const sellingPrice = resolveInventorySellingPrice(product);
+        const costPrice = resolveInventoryCostPrice(product);
+
+        items.push({
+          id: `${product.id}:fallback`,
+          productId: product.id,
+          variantId: null,
+          name: product.name,
+          thumbnail: product.imageUrl || null,
+          batch: 1,
+          outlet: productOutlet,
+          channel,
+          status: resolveInventoryStatus(units),
+          units,
+          costPrice,
+          sellingPrice,
+          totalCost: units * costPrice,
+          totalValue: units * sellingPrice,
+          variant: "Standard",
+          sku: product.sku || `RR-${product.id}`,
+          category: product.category || "Uncategorized",
+          currentQty: units,
+          size: "ONE",
+        });
+        continue;
+      }
+
+      for (let index = 0; index < productVariantsRows.length; index += 1) {
+        const variant = productVariantsRows[index];
+        const units = variant.stock ?? 0;
+        const sellingPrice = resolveInventorySellingPrice(product, variant);
+        const costPrice = resolveInventoryCostPrice(product, variant);
+        const variantLabel = [variant.color?.trim(), variant.size?.trim()]
+          .filter(Boolean)
+          .join(" / ") || variant.size || "Standard";
+
+        items.push({
+          id: `${product.id}:${variant.id}`,
+          productId: product.id,
+          variantId: variant.id,
+          name: product.name,
+          thumbnail: product.imageUrl || null,
+          batch: index + 1,
+          outlet: productOutlet,
+          channel,
+          status: resolveInventoryStatus(units),
+          units,
+          costPrice,
+          sellingPrice,
+          totalCost: units * costPrice,
+          totalValue: units * sellingPrice,
+          variant: variantLabel,
+          sku: variant.sku || product.sku || `RR-${product.id}-${variant.size}`,
+          category: product.category || "Uncategorized",
+          currentQty: units,
+          size: variant.size || "ONE",
+        });
+      }
+    }
+
+    return items;
   };
 
   const recordInventoryMovement = async ({
@@ -4910,35 +5114,38 @@ ${Array.from(uniqueEntries.entries())
     requireAdmin,
     async (_req: Request, res: Response) => {
       try {
-        if (summaryCache && Date.now() - summaryCache.ts < CACHE_TTL) {
-          return res.json(summaryCache.data);
+        const { productRows, variantsByProduct, latestChannelByProduct } =
+          await buildActiveInventoryContext();
+        const items = buildInventoryItems({
+          productRows,
+          variantsByProduct,
+          latestChannelByProduct,
+        });
+
+        const itemsByProduct = new Map<string, InventoryListItemResponse[]>();
+        for (const item of items) {
+          const bucket = itemsByProduct.get(item.productId) ?? [];
+          bucket.push(item);
+          itemsByProduct.set(item.productId, bucket);
         }
 
-        const activeProductCondition = or(eq(products.isActive, true), isNull(products.isActive));
-        const productRows = await db.select().from(products).where(activeProductCondition);
-        const activeProductIds = productRows.map((product) => product.id);
-        const variants = activeProductIds.length
-          ? await db.select().from(productVariants).where(inArray(productVariants.productId, activeProductIds))
-          : [];
-
-        const totalQuantity = variants.reduce(
-          (sum, variant) => sum + (variant.stock ?? 0),
+        const totalQuantity = items.reduce((sum, item) => sum + item.units, 0);
+        const totalInventoryValue = items.reduce(
+          (sum, item) => sum + item.totalValue,
+          0,
+        );
+        const totalInventoryCost = items.reduce(
+          (sum, item) => sum + item.totalCost,
           0,
         );
 
-        const [inventoryValueRow] = await db
-          .select({
-            value: sql<string>`coalesce(sum(${productVariants.stock} * ${products.price}), 0)::text`,
-          })
-          .from(productVariants)
-          .leftJoin(products, eq(productVariants.productId, products.id))
-          .where(activeProductCondition);
-
-        const productTotals = productRows.map((product) => {
-          const productVariantRows = variants.filter((variant) => variant.productId === product.id);
-          const totalStock = productVariantRows.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
-          return { ...product, totalStock };
-        });
+        const productTotals = productRows.map((product) => ({
+          productId: product.id,
+          totalStock: (itemsByProduct.get(product.id) ?? []).reduce(
+            (sum, item) => sum + item.units,
+            0,
+          ),
+        }));
 
         const lowStockCount = productTotals.filter(
           (product) => product.totalStock > 0 && product.totalStock <= 10,
@@ -4947,24 +5154,19 @@ ${Array.from(uniqueEntries.entries())
           (product) => product.totalStock <= 0,
         ).length;
         const inStockCount = productTotals.filter((product) => product.totalStock > 10).length;
-        const totalInventoryValue = parseNumericValue(inventoryValueRow?.value);
 
         const result: InventorySummaryResponse = {
           totalProducts: productRows.length,
-          totalSkus: variants.length,
+          totalSkus: items.length,
           totalQuantity,
           totalInventoryValue,
-          totalInventoryCost: productTotals.reduce((sum, product) => {
-            const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
-            return sum + product.totalStock * costPrice;
-          }, 0),
+          totalInventoryCost,
           lowStockCount,
           criticalStockCount,
           inStockCount,
-          outletCount: 1,
+          outletCount: new Set(items.map((item) => item.outlet)).size,
         };
 
-        summaryCache = { data: result, ts: Date.now() };
         return res.json(result);
       } catch (err) {
         console.error("Error in GET /api/admin/inventory/summary", err);
@@ -4983,95 +5185,13 @@ ${Array.from(uniqueEntries.entries())
         const search = (getQueryParam(req.query.search) ?? "").trim().toLowerCase();
         const outlet = (getQueryParam(req.query.outlet) ?? "").trim().toLowerCase();
 
-        const activeProductCondition = or(eq(products.isActive, true), isNull(products.isActive));
-        const productRows = await db.select().from(products).where(activeProductCondition).orderBy(products.name);
-        const variantRows = await db
-          .select()
-          .from(productVariants)
-          .orderBy(productVariants.productId, productVariants.id);
-        const productChannelRows = await db
-          .select({
-            productId: orderItems.productId,
-            source: orders.source,
-            createdAt: orders.createdAt,
-          })
-          .from(orderItems)
-          .innerJoin(orders, eq(orderItems.orderId, orders.id))
-          .orderBy(desc(orders.createdAt));
-
-        const latestChannelByProduct = new Map<string, string>();
-        for (const row of productChannelRows) {
-          if (!latestChannelByProduct.has(row.productId)) {
-            latestChannelByProduct.set(row.productId, formatInventoryChannel(row.source));
-          }
-        }
-
-        const variantsByProduct = new Map<string, typeof variantRows>();
-        for (const variant of variantRows) {
-          const bucket = variantsByProduct.get(variant.productId) ?? [];
-          bucket.push(variant);
-          variantsByProduct.set(variant.productId, bucket);
-        }
-
-        const items: InventoryListItemResponse[] = [];
-        for (const product of productRows) {
-          const channel = latestChannelByProduct.get(product.id) || "Website";
-          const productOutlet = formatInventoryOutlet(channel);
-          const productCost = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
-          const productVariantsRows = variantsByProduct.get(product.id) ?? [];
-
-          if (productVariantsRows.length === 0) {
-            const units = product.stock ?? 0;
-            items.push({
-              id: `${product.id}:fallback`,
-              productId: product.id,
-              variantId: null,
-              name: product.name,
-              thumbnail: product.imageUrl || null,
-              batch: 1,
-              outlet: productOutlet,
-              channel,
-              status: resolveInventoryStatus(units),
-              units,
-              avgCost: productCost,
-              totalValue: units * productCost,
-              variant: "Standard",
-              sku: product.sku || `RR-${product.id}`,
-              category: product.category || "Uncategorized",
-              currentQty: units,
-              size: "ONE",
-            });
-            continue;
-          }
-
-          for (let index = 0; index < productVariantsRows.length; index += 1) {
-            const variant = productVariantsRows[index];
-            const units = variant.stock ?? 0;
-            const variantLabel = [variant.color?.trim(), variant.size?.trim()]
-              .filter(Boolean)
-              .join(" / ") || variant.size || "Standard";
-
-            items.push({
-              id: `${product.id}:${variant.id}`,
-              productId: product.id,
-              variantId: variant.id,
-              name: product.name,
-              thumbnail: product.imageUrl || null,
-              batch: index + 1,
-              outlet: productOutlet,
-              channel,
-              status: resolveInventoryStatus(units),
-              units,
-              avgCost: productCost,
-              totalValue: units * productCost,
-              variant: variantLabel,
-              sku: variant.sku || product.sku || `RR-${product.id}-${variant.size}`,
-              category: product.category || "Uncategorized",
-              currentQty: units,
-              size: variant.size || "ONE",
-            });
-          }
-        }
+        const { productRows, variantsByProduct, latestChannelByProduct } =
+          await buildActiveInventoryContext();
+        const items = buildInventoryItems({
+          productRows,
+          variantsByProduct,
+          latestChannelByProduct,
+        });
 
         let filtered = items;
         if (status && status !== "all") {
@@ -5127,23 +5247,30 @@ ${Array.from(uniqueEntries.entries())
         const search = (getQueryParam(req.query.search) ?? "").trim().toLowerCase();
         const outlet = (getQueryParam(req.query.outlet) ?? "").trim().toLowerCase();
 
-        const manualMovementRows = await db
-          .select()
-          .from(inventoryMovements)
-          .orderBy(desc(inventoryMovements.createdAt));
+        const { activeProductIds } = await buildActiveInventoryContext();
+        const manualMovementRows = activeProductIds.length
+          ? await db
+              .select()
+              .from(inventoryMovements)
+              .where(inArray(inventoryMovements.productId, activeProductIds))
+              .orderBy(desc(inventoryMovements.createdAt))
+          : [];
 
-        const orderMovementRows = await db
-          .select({
-            orderId: orders.id,
-            createdAt: orders.createdAt,
-            source: orders.source,
-            productId: orderItems.productId,
-            quantity: orderItems.quantity,
-            unitPrice: orderItems.unitPrice,
-          })
-          .from(orderItems)
-          .innerJoin(orders, eq(orderItems.orderId, orders.id))
-          .orderBy(desc(orders.createdAt));
+        const orderMovementRows = activeProductIds.length
+          ? await db
+              .select({
+                orderId: orders.id,
+                createdAt: orders.createdAt,
+                source: orders.source,
+                productId: orderItems.productId,
+                quantity: orderItems.quantity,
+                unitPrice: orderItems.unitPrice,
+              })
+              .from(orderItems)
+              .innerJoin(orders, eq(orderItems.orderId, orders.id))
+              .where(inArray(orderItems.productId, activeProductIds))
+              .orderBy(desc(orders.createdAt))
+          : [];
 
         const orderGroups = new Map<string, {
           id: string;
@@ -5265,9 +5392,9 @@ ${Array.from(uniqueEntries.entries())
             return res.status(404).json({ error: `Product not found: ${item.productId}` });
           }
 
-          const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
           let variantId = item.variantId ?? null;
           let batch = 1;
+          let movementUnitCost = resolveInventoryCostPrice(product);
 
           if (variantId) {
             const [variant] = await db
@@ -5281,6 +5408,7 @@ ${Array.from(uniqueEntries.entries())
             }
 
             batch = variant.id;
+            movementUnitCost = resolveInventoryCostPrice(product, variant);
             await db
               .update(productVariants)
               .set({
@@ -5309,8 +5437,8 @@ ${Array.from(uniqueEntries.entries())
             variantId,
             movementType: "stock_in",
             quantity: item.quantity,
-            unitCost: costPrice,
-            totalValue: item.quantity * costPrice,
+            unitCost: movementUnitCost,
+            totalValue: item.quantity * movementUnitCost,
             outlet: INVENTORY_DEFAULT_OUTLET,
             channel: "Admin",
             batch,
@@ -5318,8 +5446,6 @@ ${Array.from(uniqueEntries.entries())
             createdById: actorId,
           });
         }
-
-        summaryCache = null;
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in POST /api/admin/inventory/stock-in", err);
@@ -5385,7 +5511,7 @@ ${Array.from(uniqueEntries.entries())
         await syncProductStock(productId as string);
 
         if (quantityDelta !== 0) {
-          const costPrice = product.costPrice || Math.floor(parseNumericValue(product.price) * 0.5);
+          const costPrice = resolveInventoryCostPrice(product, existingVariant);
           await recordInventoryMovement({
             productId: productId as string,
             variantId: existingVariant.id,
@@ -5401,8 +5527,6 @@ ${Array.from(uniqueEntries.entries())
             createdById: actorId,
           });
         }
-
-        summaryCache = null;
         return res.json({ success: true });
       } catch (err) {
         console.error("Error in PATCH /api/admin/inventory/:productId/stock", err);
@@ -5456,8 +5580,6 @@ ${Array.from(uniqueEntries.entries())
 
           seeded += 1;
         }
-
-        summaryCache = null;
         return res.json({ seeded, skipped });
       } catch (err) {
         console.error("Error in POST /api/admin/inventory/seed-variants", err);
@@ -9829,6 +9951,37 @@ ${Array.from(uniqueEntries.entries())
       handleApiError(res, err, "DELETE /api/admin/storefront-image-library");
     }
   });
+
+  app.post(
+    "/api/admin/images/import-drive-folder",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        folderUrl: z.string().min(1),
+        category: z.string().min(1),
+        destinationFolderPath: z.string().optional().nullable(),
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const { folderUrl, category, destinationFolderPath } = req.body as {
+          folderUrl: string;
+          category: string;
+          destinationFolderPath?: string | null;
+        };
+
+        const result = await importPublicDriveFolderToTigris({
+          folderUrl,
+          category,
+          destinationFolderPath,
+        });
+
+        return res.json({ success: true, data: result });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/admin/images/import-drive-folder");
+      }
+    },
+  );
 
   app.post(
     "/api/admin/images/upload",

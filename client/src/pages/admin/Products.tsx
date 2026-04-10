@@ -31,7 +31,7 @@ import {
   createAdminProduct, 
   updateAdminProduct, 
   updateAdminProductHomeFeatured,
-  deleteAdminProduct, 
+  deleteAdminProduct,
   uploadProductImageFile, 
   fetchAdminAttributes, 
   ProductAttribute,
@@ -39,6 +39,7 @@ import {
   updateCategory,
   deleteCategory,
   bulkCategorizeProducts,
+  importAdminDriveProducts,
   toggleProductActive,
 } from "@/lib/adminApi";
 import { fetchCategories, type ProductApi, type CategoryApi } from "@/lib/api";
@@ -76,14 +77,12 @@ import {
 } from "@/components/ui/select";
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   Dialog,
@@ -123,6 +122,9 @@ import { getErrorMessage } from "@/lib/queryClient";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 const ARCHIVED_PRODUCT_CATEGORY_PREFIX = `${ARCHIVED_PRODUCT_CATEGORY}::`;
+const DEFAULT_DRIVE_CATALOG_FOLDER_URL =
+  "https://drive.google.com/drive/folders/14BZCUsuMwf6rYxy562iePBoloskeKs6_";
+const DEFAULT_DRIVE_CATALOG_COLLECTION_NAME = "SS26 Studio Drop";
 
 const AttributesManager = lazy(() =>
   import("./AttributesManager").then((module) => ({ default: module.AttributesManager })),
@@ -236,6 +238,15 @@ type PendingGalleryImage = {
   previewUrl: string;
 };
 
+type ProductActionDialogState = {
+  icon: "trash" | "archive" | "activate" | "deactivate";
+  tone: "destructive" | "warning" | "success";
+  title: string;
+  description: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+};
+
 export default function AdminProducts() {
   const [location, setLocation] = useLocation();
   const [search, setSearch] = useState("");
@@ -257,6 +268,14 @@ export default function AdminProducts() {
   const [moveNewCategoryName, setMoveNewCategoryName] = useState<string>("");
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(12);
+  const [productActionDialog, setProductActionDialog] = useState<ProductActionDialogState | null>(null);
+  const [driveCatalogOpen, setDriveCatalogOpen] = useState(false);
+  const [driveCatalogFolderUrl, setDriveCatalogFolderUrl] = useState(
+    DEFAULT_DRIVE_CATALOG_FOLDER_URL,
+  );
+  const [driveCatalogCollectionName, setDriveCatalogCollectionName] = useState(
+    DEFAULT_DRIVE_CATALOG_COLLECTION_NAME,
+  );
 
   const { data: attributes } = useQuery<ProductAttribute[]>({
     queryKey: ["admin", "attributes"],
@@ -385,6 +404,39 @@ export default function AdminProducts() {
   const products = productPageData?.data ?? [];
   const totalProducts = productPageData?.total ?? 0;
   const quickResults = quickSearchData?.data ?? [];
+
+  const driveCatalogMutation = useMutation({
+    mutationFn: async () =>
+      importAdminDriveProducts({
+        folderUrl: driveCatalogFolderUrl.trim(),
+        collectionName: driveCatalogCollectionName.trim() || undefined,
+        collectionSlug:
+          driveCatalogCollectionName.trim().length > 0
+            ? slugify(driveCatalogCollectionName)
+            : undefined,
+      }),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      setDriveCatalogOpen(false);
+      setCategoryFilter(result.categorySlug);
+      toast({
+        title:
+          result.updatedCount > 0
+            ? `Imported ${result.createdCount} products and refreshed ${result.updatedCount}`
+            : `Imported ${result.createdCount} products`,
+        description: `${result.categoryName} is ready with ${result.importedAssetCount} new Tigris assets${result.reusedAssetCount > 0 ? ` and ${result.reusedAssetCount} reused images` : ""}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Drive import failed",
+        description: getErrorMessage(error, "Please verify the folder URL and try again."),
+        variant: "destructive",
+      });
+    },
+  });
 
   const addForm = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
@@ -950,9 +1002,75 @@ export default function AdminProducts() {
         variant: "destructive",
       });
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
+      const retainedHistory = result.action === "retained_history";
       toast({
-        title: variables.permanent ? "Product permanently deleted" : "Product moved to archive",
+        title: retainedHistory
+          ? "Product retained for order history"
+          : variables.permanent
+            ? "Product permanently deleted"
+            : "Product moved to archive",
+        description: retainedHistory
+          ? "This product is tied to past orders, so it was hidden from product management while its order history stays intact."
+          : undefined,
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async ({ ids, permanent = false }: { ids: string[]; permanent?: boolean }) =>
+      Promise.all(ids.map((id) => deleteAdminProduct(id, { permanent }))),
+    onMutate: async ({ ids, permanent }: { ids: string[]; permanent?: boolean }) => {
+      await queryClient.cancelQueries({ queryKey: ["admin", "products"] });
+      const queryKey = [
+        "admin",
+        "products",
+        filters,
+      ] as const;
+      const previous = queryClient.getQueryData<{ data: ProductApi[]; total: number }>(queryKey);
+      if (previous) {
+        const nextIds = new Set(ids);
+        queryClient.setQueryData<{ data: ProductApi[]; total: number }>(queryKey, {
+          data: previous.data.filter((product) => !nextIds.has(product.id)),
+          total: Math.max(0, previous.total - ids.length),
+        });
+      }
+      return { previous, queryKey, permanent, count: ids.length };
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous && context.queryKey) {
+        queryClient.setQueryData(context.queryKey, context.previous);
+      }
+      toast({
+        title: context?.permanent ? "Failed to permanently delete products" : "Failed to archive products",
+        description: getErrorMessage(
+          error,
+          context?.permanent
+            ? "Some products could not be permanently deleted."
+            : "Some products could not be moved to archive.",
+        ),
+        variant: "destructive",
+      });
+    },
+    onSuccess: (results, variables) => {
+      clearSelection();
+      const retainedCount = results.filter((result) => result.action === "retained_history").length;
+      const retainedDescription =
+        retainedCount > 0
+          ? `${retainedCount} product${retainedCount === 1 ? "" : "s"} had order history, so ${retainedCount === 1 ? "it was" : "they were"} hidden from product management instead of being fully removed.`
+          : undefined;
+
+      toast({
+        title: retainedCount > 0
+          ? "Products retained for order history"
+          : variables.permanent
+            ? "Products permanently deleted"
+            : "Products moved to archive",
+        description: retainedDescription,
       });
     },
     onSettled: () => {
@@ -968,10 +1086,15 @@ export default function AdminProducts() {
       setTogglingProductId(id);
       return toggleProductActive(id);
     },
-    onSuccess: () => {
+    onSuccess: (product) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
-      toast({ title: "Product status updated" });
+      toast({
+        title: product.isActive ? "Product activated" : "Product deactivated",
+        description: product.isActive
+          ? "The product is visible in active inventory again."
+          : "The product has been hidden from the storefront.",
+      });
     },
     onError: (error) => {
       toast({
@@ -989,11 +1112,14 @@ export default function AdminProducts() {
     mutationFn: async (ids: string[]) => {
       await Promise.all(ids.map(id => toggleProductActive(id)));
     },
-    onSuccess: () => {
+    onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       queryClient.invalidateQueries({ queryKey: ["admin", "products", "stats"] });
       clearSelection();
-      toast({ title: "Product status updated" });
+      toast({
+        title: "Products deactivated",
+        description: `${ids.length} product${ids.length === 1 ? "" : "s"} ${ids.length === 1 ? "is" : "are"} now hidden from the storefront.`,
+      });
     },
     onError: (error) => {
       toast({
@@ -1042,6 +1168,17 @@ export default function AdminProducts() {
   const filteredProducts = products;
   const productTotalPages = Math.max(1, Math.ceil(totalProducts / productPageSize));
   const paginatedProducts = filteredProducts;
+  const selectedProducts = useMemo(
+    () => filteredProducts.filter((product) => selectedProductIds.has(product.id)),
+    [filteredProducts, selectedProductIds],
+  );
+  const selectedActiveProductIds = useMemo(
+    () =>
+      selectedProducts
+        .filter((product) => product.isActive && !isArchivedProductCategory(product.category))
+        .map((product) => product.id),
+    [selectedProducts],
+  );
   const featuredCount = productStats?.featuredCount ?? 0;
   const statusTabs = useMemo(
     () => [
@@ -1076,6 +1213,107 @@ export default function AdminProducts() {
   const clearSelection = () => {
     setSelectedProductIds(new Set());
     setMoveSelectionIds(new Set());
+  };
+
+  const openProductDeleteDialog = (input: {
+    ids: string[];
+    permanent?: boolean;
+    onSuccess?: () => void;
+  }) => {
+    const count = input.ids.length;
+    const permanent = input.permanent === true;
+    setProductActionDialog({
+      icon: permanent ? "trash" : "archive",
+      tone: permanent ? "destructive" : "warning",
+      title: permanent
+        ? count === 1
+          ? "Delete this archived product?"
+          : `Delete ${count} archived products?`
+        : count === 1
+          ? "Move this product to archive?"
+          : `Move ${count} products to archive?`,
+      description: permanent
+        ? count === 1
+          ? "Products linked to past orders are preserved for records, but they will still be removed from product management and search."
+          : "Any selected products linked to past orders will be preserved for records while being removed from product management and search."
+        : count === 1
+          ? "The product will be removed from active products and placed in Archived. You can restore it later."
+          : "The selected products will be removed from active products and placed in Archived. You can restore them later.",
+      confirmLabel: permanent
+        ? count === 1
+          ? "Delete Product"
+          : `Delete ${count} Products`
+        : count === 1
+          ? "Move to Archive"
+          : `Archive ${count} Products`,
+      onConfirm: () => {
+        if (count === 1) {
+          deleteMutation.mutate(
+            { id: input.ids[0], permanent },
+            { onSuccess: () => input.onSuccess?.() },
+          );
+          return;
+        }
+
+        bulkDeleteMutation.mutate({ ids: input.ids, permanent });
+      },
+    });
+  };
+
+  const openProductToggleDialog = (input: {
+    ids: string[];
+    activate: boolean;
+  }) => {
+    const count = input.ids.length;
+    setProductActionDialog({
+      icon: input.activate ? "activate" : "deactivate",
+      tone: input.activate ? "success" : "warning",
+      title: input.activate
+        ? count === 1
+          ? "Activate this product?"
+          : `Activate ${count} products?`
+        : count === 1
+          ? "Deactivate this product?"
+          : `Deactivate ${count} products?`,
+      description: input.activate
+        ? count === 1
+          ? "The product will become visible in active inventory and on the storefront again."
+          : "These products will become visible in active inventory and on the storefront again."
+        : count === 1
+          ? "The product will be hidden from the storefront while staying available in admin."
+          : "The selected products will be hidden from the storefront while staying available in admin.",
+      confirmLabel: input.activate
+        ? count === 1
+          ? "Activate Product"
+          : `Activate ${count} Products`
+        : count === 1
+          ? "Deactivate Product"
+          : `Deactivate ${count} Products`,
+      onConfirm: () => {
+        if (count === 1) {
+          toggleMutation.mutate(input.ids[0]);
+          return;
+        }
+
+        bulkToggleMutation.mutate(input.ids);
+      },
+    });
+  };
+
+  const handleBulkDeactivateRequest = () => {
+    if (selectedActiveProductIds.length === 0) {
+      toast({
+        title: "No active products selected",
+        description: "Choose active products if you want to deactivate them.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    openProductToggleDialog({
+      ids: selectedActiveProductIds,
+      activate: false,
+    });
   };
 
   const clearSearchInput = () => {
@@ -1117,6 +1355,14 @@ export default function AdminProducts() {
           <Button
             variant="outline"
             className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] dark:from-card dark:to-card/80 shadow-[0_8px_18px_rgba(34,63,41,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(34,63,41,0.16)] transition-all duration-300 flex-1 sm:flex-none"
+            onClick={() => setDriveCatalogOpen(true)}
+          >
+            <FolderInput className="mr-2 h-4 w-4" />
+            Drive Catalog
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] dark:from-card dark:to-card/80 shadow-[0_8px_18px_rgba(34,63,41,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(34,63,41,0.16)] transition-all duration-300 flex-1 sm:flex-none"
             onClick={() => setLocation("/admin/products/layout")}
           >
             <LayoutTemplate className="mr-2 h-4 w-4" />
@@ -1131,6 +1377,74 @@ export default function AdminProducts() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={driveCatalogOpen} onOpenChange={setDriveCatalogOpen}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Import Drive collection into products</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="drive-catalog-folder-url">Google Drive folder URL</Label>
+              <Input
+                id="drive-catalog-folder-url"
+                value={driveCatalogFolderUrl}
+                onChange={(event) => setDriveCatalogFolderUrl(event.target.value)}
+                placeholder="https://drive.google.com/drive/folders/..."
+                className="h-10"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="drive-catalog-collection-name">Collection / category name</Label>
+              <Input
+                id="drive-catalog-collection-name"
+                value={driveCatalogCollectionName}
+                onChange={(event) => setDriveCatalogCollectionName(event.target.value)}
+                placeholder={DEFAULT_DRIVE_CATALOG_COLLECTION_NAME}
+                className="h-10"
+              />
+              <p className="text-xs text-muted-foreground leading-5">
+                This creates a polished collection category, uploads image folders into Tigris,
+                skips BTS/video folders, and creates or refreshes matching admin products.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#DCE6D8] bg-[#F6FAF4] px-4 py-3 text-xs text-[#35533A]">
+              Existing products with the same imported names will be refreshed instead of duplicated.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDriveCatalogOpen(false)}
+              disabled={driveCatalogMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => driveCatalogMutation.mutate()}
+              disabled={
+                driveCatalogMutation.isPending ||
+                driveCatalogFolderUrl.trim().length === 0
+              }
+              className="min-w-[180px]"
+            >
+              {driveCatalogMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Importing
+                </>
+              ) : (
+                <>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Import collection
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
 
 
@@ -1337,17 +1651,10 @@ export default function AdminProducts() {
                           <DropdownMenuItem 
                             className="text-destructive font-black text-[10px] uppercase tracking-widest p-2.5"
                             onClick={() => {
-                              const isPermanentDelete = statusFilter === "archived";
-                              if (confirm(
-                                isPermanentDelete
-                                  ? `Permanently delete ${selectedProductIds.size} archived products?`
-                                  : `Move ${selectedProductIds.size} products to archive?`,
-                              )) {
-                                selectedProductIds.forEach(id =>
-                                  deleteMutation.mutate({ id, permanent: isPermanentDelete }),
-                                );
-                                setSelectedProductIds(new Set());
-                              }
+                              openProductDeleteDialog({
+                                ids: Array.from(selectedProductIds),
+                                permanent: statusFilter === "archived",
+                              });
                             }}
                           >
                             <Trash2 className="w-3.5 h-3.5 mr-2" />
@@ -1703,7 +2010,7 @@ export default function AdminProducts() {
                         )}
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleMutation.mutate(product.id);
+                          openProductToggleDialog({ ids: [product.id], activate: false });
                         }}
                         title="Mark as inactive"
                         aria-label="Mark as inactive"
@@ -1725,7 +2032,7 @@ export default function AdminProducts() {
                         )}
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleMutation.mutate(product.id);
+                          openProductToggleDialog({ ids: [product.id], activate: true });
                         }}
                         title={isArchivedProduct ? "Move to active" : "Mark as active"}
                         aria-label={isArchivedProduct ? "Move to active" : "Mark as active"}
@@ -1744,14 +2051,10 @@ export default function AdminProducts() {
                       className="flex-none w-9 h-9 border-destructive/30 text-destructive hover:bg-destructive/10"
                       onClick={(e) => {
                         e.stopPropagation();
-                        const permanent = isArchivedProduct;
-                        if (confirm(
-                          permanent
-                            ? "Are you sure? This permanently deletes the archived product."
-                            : "Move this product to archive?",
-                        )) {
-                          deleteMutation.mutate({ id: product.id, permanent });
-                        }
+                        openProductDeleteDialog({
+                          ids: [product.id],
+                          permanent: isArchivedProduct,
+                        });
                       }}
                       title={isArchivedProduct ? "Delete permanently" : "Move to archive"}
                       aria-label={isArchivedProduct ? "Delete permanently" : "Move to archive"}
@@ -1905,7 +2208,7 @@ export default function AdminProducts() {
                               )}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleMutation.mutate(product.id);
+                                openProductToggleDialog({ ids: [product.id], activate: false });
                               }}
                               title="Mark as inactive"
                               aria-label="Mark as inactive"
@@ -1927,7 +2230,7 @@ export default function AdminProducts() {
                               )}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                toggleMutation.mutate(product.id);
+                                openProductToggleDialog({ ids: [product.id], activate: true });
                               }}
                               title={isArchivedProduct ? "Move to active" : "Mark as active"}
                               aria-label={isArchivedProduct ? "Move to active" : "Mark as active"}
@@ -1946,18 +2249,14 @@ export default function AdminProducts() {
                             className="h-8 w-8 border-destructive/30 text-destructive hover:bg-destructive/10 dark:text-red-500 dark:border-red-500/30 dark:hover:bg-red-500/10"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const permanent = isArchivedProduct;
-                              if (confirm(
-                                permanent
-                                  ? "Are you sure? This permanently deletes the archived product."
-                                  : "Move this product to archive?",
-                              )) {
-                                deleteMutation.mutate({ id: product.id, permanent });
-                              }
+                              openProductDeleteDialog({
+                                ids: [product.id],
+                                permanent: isArchivedProduct,
+                              });
                             }}
                             title={isArchivedProduct ? "Delete permanently" : "Move to archive"}
                             aria-label={isArchivedProduct ? "Delete permanently" : "Move to archive"}
-                            loading={deleteMutation.isPending}
+                            loading={deleteMutation.isPending || bulkDeleteMutation.isPending}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
@@ -2004,12 +2303,8 @@ export default function AdminProducts() {
                   variant="outline"
                   size="sm"
                   className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-amber-600 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-700"
-                  onClick={() => {
-                    if (confirm(`Mark ${selectedProductIds.size} products as inactive? They will be hidden from the storefront.`)) {
-                      bulkToggleMutation.mutate(Array.from(selectedProductIds));
-                    }
-                  }}
-                  disabled={bulkToggleMutation.isPending}
+                  onClick={handleBulkDeactivateRequest}
+                  disabled={bulkToggleMutation.isPending || selectedActiveProductIds.length === 0}
                 >
                   <PowerOff className="w-3.5 h-3.5 mr-1" />
                   Deactivate
@@ -2019,17 +2314,12 @@ export default function AdminProducts() {
                   size="sm"
                   className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-destructive border-destructive/30 hover:bg-destructive/10"
                   onClick={() => {
-                    const isPermanentDelete = statusFilter === "archived";
-                    if (confirm(
-                      isPermanentDelete
-                        ? `Permanently delete ${selectedProductIds.size} archived products? This cannot be undone.`
-                        : `Move ${selectedProductIds.size} products to archive?`,
-                    )) {
-                      selectedProductIds.forEach(id =>
-                        deleteMutation.mutate({ id, permanent: isPermanentDelete }),
-                      );
-                    }
+                    openProductDeleteDialog({
+                      ids: Array.from(selectedProductIds),
+                      permanent: statusFilter === "archived",
+                    });
                   }}
+                  disabled={deleteMutation.isPending || bulkDeleteMutation.isPending}
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" />
                   {statusFilter === "archived" ? "Delete Permanently" : "Archive"}
@@ -2046,6 +2336,72 @@ export default function AdminProducts() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AlertDialog
+        open={Boolean(productActionDialog)}
+        onOpenChange={(open) => {
+          if (!open) setProductActionDialog(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border border-[#D8E4D8] bg-white/95 p-0 shadow-[0_28px_80px_rgba(21,33,24,0.22)] backdrop-blur-xl dark:border-[#2F3D33] dark:bg-[#101712]/95">
+          {productActionDialog && (
+            <>
+              <div className="border-b border-[#E4EDE4] bg-gradient-to-br from-white via-[#F6FAF5] to-[#EEF5EE] px-6 py-6 dark:border-[#243126] dark:from-[#131B15] dark:via-[#18231B] dark:to-[#111A13]">
+                <div className="flex items-start gap-4">
+                  <div
+                    className={cn(
+                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border",
+                      productActionDialog.tone === "destructive" &&
+                        "border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
+                      productActionDialog.tone === "warning" &&
+                        "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
+                      productActionDialog.tone === "success" &&
+                        "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+                    )}
+                  >
+                    {productActionDialog.icon === "trash" && <Trash2 className="h-5 w-5" />}
+                    {productActionDialog.icon === "archive" && <FolderInput className="h-5 w-5" />}
+                    {productActionDialog.icon === "activate" && <Power className="h-5 w-5" />}
+                    {productActionDialog.icon === "deactivate" && <PowerOff className="h-5 w-5" />}
+                  </div>
+                  <AlertDialogHeader className="space-y-2 text-left">
+                    <AlertDialogTitle className="text-xl font-black tracking-tight text-[#142017] dark:text-[#F3FAF4]">
+                      {productActionDialog.title}
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="text-sm leading-6 text-[#4B5A4E] dark:text-[#C7D6C9]">
+                      {productActionDialog.description}
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                </div>
+              </div>
+
+              <AlertDialogFooter className="gap-2 px-6 py-5 sm:justify-end">
+                <AlertDialogCancel className="mt-0 rounded-full border-[#D0DCCF] px-5 dark:border-[#324134] dark:bg-[#141D16] dark:text-[#E3F1E5] dark:hover:bg-[#1C2820]">
+                  Cancel
+                </AlertDialogCancel>
+                <Button
+                  type="button"
+                  className={cn(
+                    "rounded-full px-5 font-bold",
+                    productActionDialog.tone === "destructive" &&
+                      "bg-[#1B1B1B] text-white hover:bg-[#2A2A2A] dark:bg-red-500 dark:hover:bg-red-400",
+                    productActionDialog.tone === "warning" &&
+                      "bg-[#233826] text-white hover:bg-[#2E4A32] dark:bg-amber-500 dark:text-[#111] dark:hover:bg-amber-400",
+                    productActionDialog.tone === "success" &&
+                      "bg-[#1D6B3D] text-white hover:bg-[#24854B] dark:bg-emerald-500 dark:text-[#08110A] dark:hover:bg-emerald-400",
+                  )}
+                  onClick={() => {
+                    productActionDialog.onConfirm();
+                    setProductActionDialog(null);
+                  }}
+                >
+                  {productActionDialog.confirmLabel}
+                </Button>
+              </AlertDialogFooter>
+            </>
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Pagination */}
       <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
@@ -2603,43 +2959,24 @@ export default function AdminProducts() {
                           Save Changes
                         </Button>
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button data-testid="admin-product-delete" type="button" variant="destructive" className="w-full mt-4">
-                            {isArchivedProductCategory(editProduct.category) ? "Delete Permanently" : "Move to Archive"}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              {isArchivedProductCategory(editProduct.category) ? "Delete this archived product?" : "Move this product to archive?"}
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {isArchivedProductCategory(editProduct.category)
-                                ? "This cannot be undone. All variant and image data will be removed."
-                                : "The product will be removed from active products and placed in Archived. You can restore it later."}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => {
-                                deleteMutation.mutate(
-                                  {
-                                    id: editProduct.id,
-                                    permanent: isArchivedProductCategory(editProduct.category),
-                                  },
-                                  {
-                                  onSuccess: () => { setEditOpen(false); setEditProduct(null); },
-                                  },
-                                );
-                              }}
-                            >
-                              {isArchivedProductCategory(editProduct.category) ? "Delete Permanently" : "Move to Archive"}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button
+                        data-testid="admin-product-delete"
+                        type="button"
+                        variant="destructive"
+                        className="w-full mt-4"
+                        onClick={() => {
+                          openProductDeleteDialog({
+                            ids: [editProduct.id],
+                            permanent: isArchivedProductCategory(editProduct.category),
+                            onSuccess: () => {
+                              setEditOpen(false);
+                              setEditProduct(null);
+                            },
+                          });
+                        }}
+                      >
+                        {isArchivedProductCategory(editProduct.category) ? "Delete Permanently" : "Move to Archive"}
+                      </Button>
                     </div>
                   </form>
                 </Form>

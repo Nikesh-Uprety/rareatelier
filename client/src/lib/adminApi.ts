@@ -201,6 +201,35 @@ export interface AdminImageAsset {
   createdAt: string;
 }
 
+export interface AdminDriveImportResult {
+  rootFolderName: string;
+  rootFolderPath: string;
+  folderCount: number;
+  importedCount: number;
+  skippedCount: number;
+  failedCount: number;
+  errors: string[];
+}
+
+export interface AdminDriveProductImportResult {
+  collectionName: string;
+  categoryName: string;
+  categorySlug: string;
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  importedAssetCount: number;
+  reusedAssetCount: number;
+  products: Array<{
+    folderName: string;
+    productName: string;
+    status: "created" | "updated" | "skipped";
+    imageCount: number;
+    colorOptions: string[];
+  }>;
+  errors: string[];
+}
+
 export interface AdminStorefrontImageEntry {
   filename: string;
   url: string;
@@ -424,6 +453,37 @@ export async function uploadAdminImage(input: {
   return Array.isArray(json.data) ? json.data[0] : json.data;
 }
 
+export async function importAdminDriveFolder(input: {
+  folderUrl: string;
+  category: string;
+  destinationFolderPath?: string | null;
+}): Promise<AdminDriveImportResult> {
+  const res = await apiRequest("POST", "/api/admin/images/import-drive-folder", {
+    folderUrl: input.folderUrl,
+    category: input.category,
+    destinationFolderPath: input.destinationFolderPath ?? null,
+  });
+  const json = (await res.json()) as { success: boolean; data: AdminDriveImportResult };
+  return json.data;
+}
+
+export async function importAdminDriveProducts(input: {
+  folderUrl: string;
+  collectionName?: string | null;
+  collectionSlug?: string | null;
+}): Promise<AdminDriveProductImportResult> {
+  const res = await apiRequest("POST", "/api/admin/products/import-drive-catalog", {
+    folderUrl: input.folderUrl,
+    collectionName: input.collectionName ?? null,
+    collectionSlug: input.collectionSlug ?? null,
+  });
+  const json = (await res.json()) as {
+    success: boolean;
+    data: AdminDriveProductImportResult;
+  };
+  return json.data;
+}
+
 export async function deleteAdminImage(id: string): Promise<void> {
   const res = await apiRequest("DELETE", `/api/admin/images/${encodeURIComponent(id)}`);
   const json = (await res.json()) as { success: boolean; error?: string };
@@ -552,14 +612,20 @@ export async function updateAdminProduct(
   return json.data;
 }
 
+export type DeleteAdminProductResult = {
+  action: "deleted" | "archived" | "retained_history";
+};
+
 export async function deleteAdminProduct(
   id: string,
   options?: { permanent?: boolean },
-): Promise<void> {
+): Promise<DeleteAdminProductResult> {
   const params = new URLSearchParams();
   if (options?.permanent) params.set("permanent", "true");
   const url = `/api/admin/products/${id}${params.toString() ? `?${params.toString()}` : ""}`;
-  await apiRequest("DELETE", url);
+  const res = await apiRequest("DELETE", url);
+  const json = (await res.json()) as { success: boolean; action: DeleteAdminProductResult["action"] };
+  return { action: json.action };
 }
 
 export async function toggleProductActive(id: string): Promise<ProductApi> {
