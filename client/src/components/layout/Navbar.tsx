@@ -722,6 +722,27 @@ export default function Navbar() {
             </div>
 
             <div className="flex items-center justify-end gap-2 sm:gap-2.5">
+              <button
+                type="button"
+                onClick={() => openCartSidebar()}
+                className="relative flex h-10 w-10 items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                style={{
+                  color: chromeColor,
+                  background: landingControlBackground,
+                  border: `1px solid ${landingControlBorder}`,
+                  boxShadow: landingControlShadow,
+                }}
+                aria-label={`Open cart${cartItemsCount > 0 ? ` with ${cartItemsCount} items` : ""}`}
+              >
+                <ShoppingBag className="h-4.5 w-4.5" />
+                {cartItemsCount > 0 ? (
+                  <span
+                    className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-black/10 bg-white px-1.5 text-[10px] font-black leading-none text-neutral-950 shadow-[0_8px_18px_rgba(0,0,0,0.14)]"
+                  >
+                    {cartItemsCount > 99 ? "99+" : cartItemsCount}
+                  </span>
+                ) : null}
+              </button>
               <div className="[&>div>div]:border-none [&>div>div]:bg-transparent">
                 <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
               </div>
@@ -832,6 +853,23 @@ export default function Navbar() {
             </Link>
 
             <div className="ml-auto flex items-center justify-end gap-1 sm:gap-2">
+              <button
+                type="button"
+                title="Open Cart"
+                onClick={() => openCartSidebar()}
+                className="relative flex h-10 w-10 items-center justify-center"
+                style={{ color: navForegroundColor }}
+                aria-label={`Open cart${cartItemsCount > 0 ? ` with ${cartItemsCount} items` : ""}`}
+              >
+                <ShoppingBag className="h-4.5 w-4.5" />
+                {cartItemsCount > 0 ? (
+                  <span
+                    className="absolute -right-0.5 -top-0.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-black/10 bg-white px-1.5 text-[10px] font-black leading-none text-neutral-950 shadow-[0_8px_18px_rgba(0,0,0,0.14)]"
+                  >
+                    {cartItemsCount > 99 ? "99+" : cartItemsCount}
+                  </span>
+                ) : null}
+              </button>
               <div className="hidden sm:block [&>div>div]:border-none [&>div>div]:bg-transparent">
                 <SearchBar iconColor={navForegroundColor} />
               </div>

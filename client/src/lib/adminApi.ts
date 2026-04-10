@@ -1,5 +1,9 @@
 import { apiRequest } from "./queryClient";
 import type { ProductApi, CategoryApi } from "./api";
+import {
+  normalizeStorefrontProductsLayoutConfig,
+  type StorefrontProductsLayoutConfig,
+} from "@shared/storefrontProductsLayout";
 
 // Type alias for admin product view
 export type AdminProduct = ProductApi;
@@ -1010,6 +1014,26 @@ export async function fetchAdminProductStats(): Promise<AdminProductStats> {
   const res = await apiRequest("GET", "/api/admin/products/stats");
   const json = (await res.json()) as { success: boolean; data: AdminProductStats };
   return json.data;
+}
+
+export async function fetchAdminProductsLayout(): Promise<StorefrontProductsLayoutConfig> {
+  const res = await apiRequest("GET", "/api/admin/products/layout");
+  const json = (await res.json()) as {
+    success: boolean;
+    data?: StorefrontProductsLayoutConfig;
+  };
+  return normalizeStorefrontProductsLayoutConfig(json.data ?? {});
+}
+
+export async function updateAdminProductsLayout(
+  config: StorefrontProductsLayoutConfig,
+): Promise<StorefrontProductsLayoutConfig> {
+  const res = await apiRequest("PATCH", "/api/admin/products/layout", { config });
+  const json = (await res.json()) as {
+    success: boolean;
+    data?: StorefrontProductsLayoutConfig;
+  };
+  return normalizeStorefrontProductsLayoutConfig(json.data ?? config);
 }
 
 export async function exportPosBillsCSV(): Promise<void> {

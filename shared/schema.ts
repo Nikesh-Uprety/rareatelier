@@ -636,6 +636,9 @@ export const siteSettings = pgTable('site_settings', {
   activeTemplateId: integer('active_template_id')
     .references(() => pageTemplates.id),
   fontPreset: varchar('font_preset', { length: 50 }).default('inter'),
+  productsPageConfig: jsonb('products_page_config')
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   publishedAt: timestamp('published_at'),
   publishedBy: varchar('published_by')
     .references(() => users.id),

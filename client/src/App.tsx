@@ -39,6 +39,7 @@ const loadPaymentProcessPage = () => import("@/pages/storefront/PaymentProcess")
 const loadOrderSuccessPage = () => import("@/pages/storefront/OrderSuccess");
 const loadAdminDashboardPage = () => import("@/pages/admin/Dashboard");
 const loadAdminProductsPage = () => import("@/pages/admin/Products");
+const loadAdminProductLayoutPage = () => import("@/pages/admin/ProductLayout");
 const loadAdminInventoryPage = () => import("@/pages/admin/Inventory");
 const loadAdminOrdersPage = () => import("@/pages/admin/Orders");
 const loadAdminOrdersNewPage = () => import("@/pages/admin/OrdersNew");
@@ -76,6 +77,7 @@ const PaymentProcess = lazy(loadPaymentProcessPage);
 const OrderSuccess = lazy(loadOrderSuccessPage);
 const AdminDashboard = lazy(loadAdminDashboardPage);
 const AdminProducts = lazy(loadAdminProductsPage);
+const AdminProductLayout = lazy(loadAdminProductLayoutPage);
 const AdminInventory = lazy(loadAdminInventoryPage);
 const AdminOrders = lazy(loadAdminOrdersPage);
 const AdminOrdersNew = lazy(loadAdminOrdersNewPage);
@@ -227,6 +229,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/admin/logs") return loadAdminLogsPage();
   if (cleanPath === "/admin/promo-codes") return loadAdminPromoCodesPage();
   if (cleanPath === "/admin/products" || cleanPath === "/admin/products/new") return loadAdminProductsPage();
+  if (cleanPath === "/admin/products/layout") return loadAdminProductLayoutPage();
   if (cleanPath === "/admin/inventory") return loadAdminInventoryPage();
   if (cleanPath === "/admin/orders") return loadAdminOrdersPage();
   if (cleanPath === "/admin/orders/new") return loadAdminOrdersNewPage();
@@ -465,6 +468,13 @@ function AppRoutes() {
         <ProtectedRoute requiredAdminPage="products">
           <AdminLayout>
             <AdminProducts />
+          </AdminLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/products/layout">
+        <ProtectedRoute requiredAdminPage="products">
+          <AdminLayout>
+            <AdminProductLayout />
           </AdminLayout>
         </ProtectedRoute>
       </Route>

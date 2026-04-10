@@ -1,12 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 
-import { fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
+import {
+  fetchCategories,
+  fetchPageConfig,
+  fetchProducts,
+  type CategoryApi,
+  type ProductApi,
+} from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
+import {
+  getStorefrontProductsCategoryLayout,
+  normalizeStorefrontProductsLayoutConfig,
+  STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY,
+  type StorefrontProductsLayoutConfig,
+} from "@shared/storefrontProductsLayout";
 
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value?.trim()) return [];
@@ -14,7 +26,10 @@ function parseJsonArray(value: string | null | undefined): string[] {
   try {
     const parsed = JSON.parse(value);
     return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      ? parsed.filter(
+          (item): item is string =>
+            typeof item === "string" && item.trim().length > 0,
+        )
       : [];
   } catch {
     return [];
@@ -67,6 +82,14 @@ const COLOR_NAME_SWATCHES: Record<string, string> = {
   gold: "#c9a84c",
 };
 
+const DESKTOP_GRID_CLASS_NAMES: Record<number, string> = {
+  2: "lg:grid-cols-2 xl:grid-cols-2",
+  3: "lg:grid-cols-3 xl:grid-cols-3",
+  4: "lg:grid-cols-4 xl:grid-cols-4",
+  5: "lg:grid-cols-5 xl:grid-cols-5",
+  6: "lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6",
+};
+
 function resolveNamedColorSwatch(label: string): string | null {
   const normalized = label.trim().toLowerCase();
   if (!normalized) return null;
@@ -75,9 +98,14 @@ function resolveNamedColorSwatch(label: string): string | null {
 
 function parseColorOption(value: string): { label: string; swatch: string | null } {
   const trimmed = value.trim();
-  const hexMatch = trimmed.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/);
+  const hexMatch = trimmed.match(
+    /#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/,
+  );
   const label = trimmed
-    .replace(/\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g, "")
+    .replace(
+      /\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g,
+      "",
+    )
     .replace(/\|\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})/g, "")
     .trim();
 
@@ -89,6 +117,27 @@ function parseColorOption(value: string): { label: string; swatch: string | null
 
 function normalizeColorLabel(value: string | null | undefined): string {
   return parseColorOption(value ?? "").label.trim().toLowerCase();
+}
+
+function normalizeCategoryToken(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/[_\s-]+/g, "");
+}
+
+function resolveProductCategoryKey(
+  product: ProductApi,
+  categories: CategoryApi[],
+): string {
+  const rawCategory = (product.category ?? "").trim();
+  if (!rawCategory) return STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY;
+
+  const normalized = normalizeCategoryToken(rawCategory);
+  const matchedCategory = categories.find((category) => {
+    const normalizedSlug = normalizeCategoryToken(category.slug);
+    const normalizedName = normalizeCategoryToken(category.name);
+    return normalizedSlug === normalized || normalizedName === normalized;
+  });
+
+  return matchedCategory?.slug ?? rawCategory;
 }
 
 function getHoverImage(product: ProductApi): string {
@@ -104,17 +153,75 @@ function readShopSearchParams() {
 
   return {
     page: Math.max(1, Number.parseInt(searchParams.get("page") || "1", 10) || 1),
+    category:
+      searchParams.get("category")?.trim() ||
+      STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY,
   };
+}
+
+async function fetchAllStorefrontProducts(): Promise<ProductApi[]> {
+  const limit = 120;
+  const firstPage = await fetchProducts({ page: 1, limit });
+  const totalPages = Math.max(1, Math.ceil((firstPage.total ?? 0) / limit));
+
+  if (totalPages <= 1) {
+    return firstPage.products;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchProducts({
+        page: index + 2,
+        limit,
+      }),
+    ),
+  );
+
+  return [firstPage, ...remainingPages].flatMap((pageResult) => pageResult.products);
+}
+
+function orderProductsForLayout(
+  products: ProductApi[],
+  layoutConfig: StorefrontProductsLayoutConfig,
+  categoryKey: string,
+): ProductApi[] {
+  const categoryLayout = getStorefrontProductsCategoryLayout(
+    layoutConfig,
+    categoryKey,
+  );
+  const featuredIds = categoryLayout.featuredProductIds;
+
+  if (featuredIds.length === 0) return products;
+
+  const productMap = new Map(products.map((product) => [product.id, product]));
+  const featured = featuredIds
+    .map((productId) => productMap.get(productId))
+    .filter((product): product is ProductApi => Boolean(product));
+  const featuredIdSet = new Set(featured.map((product) => product.id));
+  const remaining = products.filter((product) => !featuredIdSet.has(product.id));
+  return [...featured, ...remaining];
 }
 
 export default function Products() {
   const initialState = readShopSearchParams();
   const [page, setPage] = useState(initialState.page);
-  const [selectedCardColors, setSelectedCardColors] = useState<Record<string, string>>({});
-  const [hoveredCardColors, setHoveredCardColors] = useState<Record<string, string | null>>({});
+  const [selectedCategoryKey, setSelectedCategoryKey] = useState(
+    initialState.category,
+  );
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [selectedCardColors, setSelectedCardColors] = useState<
+    Record<string, string>
+  >({});
+  const [hoveredCardColors, setHoveredCardColors] = useState<
+    Record<string, string | null>
+  >({});
+  const categoryCloseTimerRef = useRef<number | null>(null);
+
   const previewTemplateId = useMemo(() => {
     if (typeof window === "undefined") return null;
-    const rawValue = new URLSearchParams(window.location.search).get("canvasPreviewTemplateId");
+    const rawValue = new URLSearchParams(window.location.search).get(
+      "canvasPreviewTemplateId",
+    );
     return rawValue && /^\d+$/.test(rawValue) ? rawValue : null;
   }, []);
 
@@ -126,26 +233,200 @@ export default function Products() {
     refetchOnWindowFocus: previewTemplateId !== null,
   });
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const {
+    data: allProducts = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["products", "storefront-layout-catalog"],
+    queryFn: fetchAllStorefrontProducts,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const layoutConfig = useMemo(
+    () =>
+      normalizeStorefrontProductsLayoutConfig(pageConfig?.productsPageConfig ?? {}),
+    [pageConfig?.productsPageConfig],
+  );
+
   const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
-  const pageSize = isStuffyClone ? 16 : 12;
-  const shopPath = page > 1 ? `/products?page=${page}` : "/products";
+
+  const productsByCategory = useMemo(() => {
+    const grouped = new Map<string, ProductApi[]>();
+    grouped.set(STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY, allProducts);
+
+    allProducts.forEach((product) => {
+      const categoryKey = resolveProductCategoryKey(product, categories);
+      const existing = grouped.get(categoryKey) ?? [];
+      existing.push(product);
+      grouped.set(categoryKey, existing);
+    });
+
+    return grouped;
+  }, [allProducts, categories]);
+
+  const categoryMenuOptions = useMemo(() => {
+    const options = [
+      {
+        key: STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY,
+        label: "All products",
+        count: allProducts.length,
+      },
+    ];
+
+    categories.forEach((category) => {
+      const count = (productsByCategory.get(category.slug) ?? []).length;
+      if (count === 0) return;
+
+      const categoryLayout = getStorefrontProductsCategoryLayout(
+        layoutConfig,
+        category.slug,
+      );
+      if (!categoryLayout.showInMenu) return;
+
+      options.push({
+        key: category.slug,
+        label: category.name,
+        count,
+      });
+    });
+
+    return options;
+  }, [allProducts.length, categories, layoutConfig, productsByCategory]);
+
+  useEffect(() => {
+    if (!layoutConfig.showCategoryMenu) {
+      setSelectedCategoryKey(STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY);
+      return;
+    }
+
+    const isAvailable = categoryMenuOptions.some(
+      (option) => option.key === selectedCategoryKey,
+    );
+    if (!isAvailable) {
+      setSelectedCategoryKey(STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY);
+    }
+  }, [
+    categoryMenuOptions,
+    layoutConfig.showCategoryMenu,
+    selectedCategoryKey,
+  ]);
+
+  const baseProducts = useMemo(() => {
+    if (
+      !layoutConfig.showCategoryMenu ||
+      selectedCategoryKey === STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY
+    ) {
+      return allProducts;
+    }
+
+    return productsByCategory.get(selectedCategoryKey) ?? [];
+  }, [
+    allProducts,
+    layoutConfig.showCategoryMenu,
+    productsByCategory,
+    selectedCategoryKey,
+  ]);
+
+  const orderedProducts = useMemo(
+    () => orderProductsForLayout(baseProducts, layoutConfig, selectedCategoryKey),
+    [baseProducts, layoutConfig, selectedCategoryKey],
+  );
+
+  const currentCategoryLayout = useMemo(
+    () => getStorefrontProductsCategoryLayout(layoutConfig, selectedCategoryKey),
+    [layoutConfig, selectedCategoryKey],
+  );
+
+  const desktopColumns =
+    selectedCategoryKey === STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY
+      ? layoutConfig.defaultDesktopColumns
+      : currentCategoryLayout.desktopColumns;
+  const pageSize = Math.max(8, desktopColumns * 4);
+  const totalProducts = orderedProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedCategoryKey, desktopColumns]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return orderedProducts.slice(start, start + pageSize);
+  }, [orderedProducts, page, pageSize]);
+
+  const desktopGridClassName =
+    DESKTOP_GRID_CLASS_NAMES[desktopColumns] ?? DESKTOP_GRID_CLASS_NAMES[4];
+  const activeCategoryLabel =
+    categoryMenuOptions.find((option) => option.key === selectedCategoryKey)?.label ??
+    "All products";
+
+  const shopPath = useMemo(() => {
+    if (typeof window === "undefined") return "/products";
+
+    const currentSearch = new URLSearchParams(window.location.search);
+    const nextParams = new URLSearchParams();
+    const previewTemplate = currentSearch.get("canvasPreviewTemplateId");
+    const previewFontPreset = currentSearch.get("canvasFontPreset");
+
+    if (previewTemplate) nextParams.set("canvasPreviewTemplateId", previewTemplate);
+    if (previewFontPreset) nextParams.set("canvasFontPreset", previewFontPreset);
+    if (
+      layoutConfig.showCategoryMenu &&
+      selectedCategoryKey !== STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY
+    ) {
+      nextParams.set("category", selectedCategoryKey);
+    }
+    if (page > 1) {
+      nextParams.set("page", String(page));
+    }
+
+    return nextParams.toString()
+      ? `/products?${nextParams.toString()}`
+      : "/products";
+  }, [layoutConfig.showCategoryMenu, page, selectedCategoryKey]);
 
   useEffect(() => {
     window.history.replaceState(window.history.state, "", shopPath);
   }, [shopPath]);
 
-  const { data: productsData, isLoading, isError, refetch } = useQuery<{ products: ProductApi[]; total: number }>({
-    queryKey: ["products", { page, limit: pageSize }],
-    queryFn: () => fetchProducts({ page, limit: pageSize }),
-    staleTime: 1000 * 60 * 5,
-  });
+  useEffect(() => {
+    return () => {
+      if (categoryCloseTimerRef.current) {
+        window.clearTimeout(categoryCloseTimerRef.current);
+      }
+    };
+  }, []);
 
-  const products = productsData?.products ?? [];
-  const totalProducts = productsData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
+  const clearCategoryCloseTimer = () => {
+    if (categoryCloseTimerRef.current) {
+      window.clearTimeout(categoryCloseTimerRef.current);
+      categoryCloseTimerRef.current = null;
+    }
+  };
+
+  const queueCategoryMenuClose = () => {
+    clearCategoryCloseTimer();
+    categoryCloseTimerRef.current = window.setTimeout(() => {
+      setCategoryMenuOpen(false);
+    }, 180);
+  };
 
   return (
-    <div className="min-h-screen w-full bg-white pb-16 pt-20 text-neutral-950 sm:pt-24">
+    <div className="min-h-screen w-full bg-white pb-16 pt-[4.5rem] text-neutral-950 sm:pt-[5rem]">
       <StorefrontSeo
         title="Shop Rare Atelier | Premium Streetwear Collection"
         description="Browse the Rare Atelier shop for premium streetwear, new arrivals, curated categories, and elevated everyday essentials."
@@ -154,15 +435,117 @@ export default function Products() {
           "@context": "https://schema.org",
           "@type": "CollectionPage",
           name: "Rare Atelier shop",
-          url: typeof window !== "undefined" ? `${window.location.origin}${shopPath}` : shopPath,
-          numberOfItems: products.length,
+          url:
+            typeof window !== "undefined"
+              ? `${window.location.origin}${shopPath}`
+              : shopPath,
+          numberOfItems: paginatedProducts.length,
         }}
       />
 
       <div className="w-full bg-white px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8">
         <div className="min-h-[400px] text-neutral-900">
+          {layoutConfig.showCategoryMenu && categoryMenuOptions.length > 1 ? (
+            <div className="mb-4 border-b border-neutral-200 pb-2">
+              <div className="hidden justify-center md:flex">
+                <div
+                  className="relative"
+                  onMouseEnter={() => {
+                    clearCategoryCloseTimer();
+                    setCategoryMenuOpen(true);
+                  }}
+                  onMouseLeave={queueCategoryMenuClose}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-[260px] items-center justify-between rounded-full border border-neutral-200 bg-white px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-950 transition-all duration-300 hover:border-neutral-900 hover:shadow-[0_12px_24px_rgba(17,17,17,0.08)]"
+                    onClick={() => {
+                      clearCategoryCloseTimer();
+                      setCategoryMenuOpen((current) => !current);
+                    }}
+                    aria-expanded={categoryMenuOpen}
+                  >
+                    <span>{activeCategoryLabel}</span>
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform duration-300 ${
+                        categoryMenuOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  <div
+                    className={`absolute left-1/2 top-full z-20 w-[320px] -translate-x-1/2 pt-2 transition-all duration-300 ${
+                      categoryMenuOpen
+                        ? "pointer-events-auto translate-y-0 opacity-100"
+                        : "pointer-events-none -translate-y-2 opacity-0"
+                    }`}
+                    onMouseEnter={clearCategoryCloseTimer}
+                    onMouseLeave={queueCategoryMenuClose}
+                  >
+                    <div className="space-y-1 rounded-[28px] border border-neutral-200 bg-white/95 p-3 shadow-[0_24px_60px_rgba(17,17,17,0.12)] backdrop-blur-xl">
+                      {categoryMenuOptions.map((option) => {
+                        const isActive = option.key === selectedCategoryKey;
+
+                        return (
+                          <button
+                            key={option.key}
+                            type="button"
+                            className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
+                              isActive
+                                ? "bg-neutral-950 text-white"
+                                : "text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950"
+                            }`}
+                            onClick={() => {
+                              clearCategoryCloseTimer();
+                              setSelectedCategoryKey(option.key);
+                              setCategoryMenuOpen(false);
+                            }}
+                          >
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
+                              {option.label}
+                            </span>
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                                isActive
+                                  ? "bg-white/14 text-white"
+                                  : "bg-neutral-100 text-neutral-500"
+                              }`}
+                            >
+                              {option.count}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
+                {categoryMenuOptions.map((option) => {
+                  const isActive = option.key === selectedCategoryKey;
+
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`shrink-0 rounded-full border px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.2em] transition-colors ${
+                        isActive
+                          ? "border-neutral-950 bg-neutral-950 text-white"
+                          : "border-neutral-200 bg-white text-neutral-700"
+                      }`}
+                      onClick={() => setSelectedCategoryKey(option.key)}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
           {isLoading ? (
-            <div className="flex min-h-[400px] w-full items-center justify-center col-span-full">
+            <div className="flex min-h-[400px] w-full items-center justify-center">
               <BrandedLoader />
             </div>
           ) : isError ? (
@@ -177,193 +560,205 @@ export default function Products() {
                 Retry
               </button>
             </div>
-          ) : (
+          ) : paginatedProducts.length > 0 ? (
             <div>
-              {products.length > 0 ? (
-                <div className="grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-8 lg:grid-cols-4 lg:gap-x-5 lg:gap-y-10 xl:grid-cols-4">
-                  {products.map((product, index) => {
-                    const hoverImage = getHoverImage(product);
-                    const mainImage = product.imageUrl ?? hoverImage ?? "";
-                    const colorOptions = parseJsonArray(product.colorOptions);
-                    const colorImageMap = product.colorImageMap ?? {};
-                    const normalizedColorMap = Object.entries(colorImageMap).reduce<Record<string, string[]>>((acc, [key, value]) => {
-                      if (Array.isArray(value)) {
-                        acc[normalizeColorLabel(key)] = value.filter(Boolean);
-                      }
-                      return acc;
-                    }, {});
-                    const activeColor = hoveredCardColors[product.id] ?? selectedCardColors[product.id] ?? "";
-                    const activeColorImages = activeColor ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? [] : [];
-                    const primaryImage = activeColorImages[0] ?? mainImage;
-                    const secondaryImage = activeColorImages[1] ?? hoverImage ?? primaryImage;
-                    const activeColorLabel = activeColor ? parseColorOption(activeColor).label : null;
-                    const hasSaleBadge = Boolean(product.saleActive && Number(product.salePercentage) > 0);
-                    const showNewInBadge = index < 5;
-                    const saleBadgeTopClass = showNewInBadge ? "top-11" : "top-3";
-                    const stockBadgeTopClass = showNewInBadge
-                      ? hasSaleBadge
-                        ? "top-[4.55rem]"
-                        : "top-11"
-                      : hasSaleBadge
-                        ? "top-12"
-                        : "top-3";
-                    const displayPrice =
-                      hasSaleBadge
-                        ? formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))
-                        : formatPrice(product.price);
+              <div
+                className={`grid grid-cols-2 gap-x-3 gap-y-7 sm:grid-cols-2 sm:gap-x-4 sm:gap-y-8 ${desktopGridClassName} lg:gap-x-5 lg:gap-y-10`}
+              >
+                {paginatedProducts.map((product, index) => {
+                  const hoverImage = getHoverImage(product);
+                  const mainImage = product.imageUrl ?? hoverImage ?? "";
+                  const colorOptions = parseJsonArray(product.colorOptions);
+                  const colorImageMap = product.colorImageMap ?? {};
+                  const normalizedColorMap = Object.entries(colorImageMap).reduce<Record<string, string[]>>((acc, [key, value]) => {
+                    if (Array.isArray(value)) {
+                      acc[normalizeColorLabel(key)] = value.filter(Boolean);
+                    }
+                    return acc;
+                  }, {});
+                  const activeColor =
+                    hoveredCardColors[product.id] ??
+                    selectedCardColors[product.id] ??
+                    "";
+                  const activeColorImages = activeColor
+                    ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? []
+                    : [];
+                  const primaryImage = activeColorImages[0] ?? mainImage;
+                  const secondaryImage =
+                    activeColorImages[1] ?? hoverImage ?? primaryImage;
+                  const hasSaleBadge = Boolean(
+                    product.saleActive && Number(product.salePercentage) > 0,
+                  );
+                  const showNewInBadge = index < 5;
+                  const saleBadgeTopClass = showNewInBadge ? "top-11" : "top-3";
+                  const stockBadgeTopClass = showNewInBadge
+                    ? hasSaleBadge
+                      ? "top-[4.55rem]"
+                      : "top-11"
+                    : hasSaleBadge
+                      ? "top-12"
+                      : "top-3";
+                  const displayPrice = hasSaleBadge
+                    ? formatPrice(
+                        Number(product.price) *
+                          (1 - Number(product.salePercentage) / 100),
+                      )
+                    : formatPrice(product.price);
 
-                    return (
-                      <Link
-                        key={product.id}
-                        href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
-                        className="group block"
-                      >
-                        <div className="mb-2">
-                          <div className={`relative overflow-hidden rounded-none border ${isStuffyClone ? "aspect-[5/6] border-neutral-100 bg-white" : "aspect-[3/5] border-neutral-100 bg-white"}`}>
-                            {showNewInBadge ? (
-                              <div className="absolute left-3 top-3 z-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-950">
-                                NEW IN
-                              </div>
-                            ) : null}
-                            {hasSaleBadge ? (
-                              <div className={`absolute left-3 z-10 rounded-sm bg-red-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white shadow-xl ${saleBadgeTopClass}`}>
-                                {product.salePercentage}% OFF
-                              </div>
-                            ) : null}
-                            {Number(product.stock) === 0 ? (
-                              <div className={`absolute left-3 z-10 rounded bg-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white ${stockBadgeTopClass}`}>
-                                Out of Stock
-                              </div>
-                            ) : null}
-                            <img
-                              src={primaryImage}
-                              alt={product.name}
-                              loading="lazy"
-                              className={`absolute inset-0 h-full w-full object-cover ${
-                                isStuffyClone
-                                  ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                  : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
-                              }`}
-                            />
-                            <img
-                              src={secondaryImage}
-                              alt={product.name}
-                              loading="lazy"
-                              className={`absolute inset-0 h-full w-full object-cover ${
-                                isStuffyClone
-                                  ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                  : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                              }`}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 text-neutral-950">
-                          <div className="min-w-0 space-y-1">
-                            <h3
-                              className="truncate text-[rgb(17,17,17)]"
-                              style={{
-                                fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-                                fontWeight: 700,
-                                fontSize: "18px",
-                                lineHeight: "27px",
-                              }}
-                            >
-                              {product.name}
-                            </h3>
-                            <div className="flex items-center gap-2">
-                              <p
-                                className={`text-sm font-bold uppercase tracking-wider ${
-                                  hasSaleBadge ? "text-red-700" : "text-neutral-700"
-                                }`}
-                              >
-                                {displayPrice}
-                              </p>
-                              {hasSaleBadge ? (
-                                <p className="text-[10px] text-neutral-500 line-through opacity-70">
-                                  {formatPrice(product.price)}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          {colorOptions.length > 0 ? (
-                            <div className="flex max-w-[6rem] shrink-0 flex-col items-end text-right">
-                              <div className="flex flex-wrap justify-end gap-2">
-                                {colorOptions.map((color) => {
-                                  const parsed = parseColorOption(color);
-                                  const normalizedColor = normalizeColorLabel(color);
-                                  const isActive = normalizeColorLabel(activeColor) === normalizedColor;
-                                  const colorImages = normalizedColorMap[normalizedColor] ?? [];
-                                  const selectorImage = colorImages[0] ?? mainImage;
-
-                                  return (
-                                    <button
-                                      key={`${product.id}-${color}`}
-                                      type="button"
-                                      className="group/color flex w-[42px] flex-col items-center gap-1 text-center"
-                                      onMouseEnter={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
-                                      }}
-                                      onMouseLeave={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
-                                      }}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                        setSelectedCardColors((prev) => ({ ...prev, [product.id]: color }));
-                                      }}
-                                      onFocus={() => {
-                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: color }));
-                                      }}
-                                      onBlur={() => {
-                                        setHoveredCardColors((prev) => ({ ...prev, [product.id]: null }));
-                                      }}
-                                      aria-label={`Select ${parsed.label} color`}
-                                      aria-pressed={isActive}
-                                    >
-                                      <span
-                                        className={`overflow-hidden rounded-md border transition ${
-                                          isActive
-                                            ? "border-neutral-900 shadow-[0_0_0_1px_rgba(17,17,17,0.08)]"
-                                            : "border-neutral-200"
-                                        }`}
-                                      >
-                                        <img
-                                          src={selectorImage}
-                                          alt={`${product.name} in ${parsed.label}`}
-                                          loading="lazy"
-                                          className="h-11 w-[42px] object-cover transition-transform duration-300 group-hover/color:scale-[1.03]"
-                                        />
-                                      </span>
-                                      <span
-                                        className={`w-full truncate text-[8px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-                                          isActive ? "text-neutral-950" : "text-neutral-500"
-                                        }`}
-                                      >
-                                        {parsed.label}
-                                      </span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                  return (
+                    <Link
+                      key={product.id}
+                      href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
+                      className="group block"
+                    >
+                      <div className="mb-2">
+                        <div
+                          className={`relative overflow-hidden rounded-none border ${
+                            isStuffyClone
+                              ? "aspect-[5/6] border-neutral-100 bg-white"
+                              : "aspect-[3/5] border-neutral-100 bg-white"
+                          }`}
+                        >
+                          {showNewInBadge ? (
+                            <div className="absolute left-3 top-3 z-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-950">
+                              NEW IN
                             </div>
                           ) : null}
+                          {hasSaleBadge ? (
+                            <div
+                              className={`absolute left-3 z-10 rounded-sm bg-red-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white shadow-xl ${saleBadgeTopClass}`}
+                            >
+                              {product.salePercentage}% OFF
+                            </div>
+                          ) : null}
+                          {Number(product.stock) === 0 ? (
+                            <div
+                              className={`absolute left-3 z-10 rounded bg-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white ${stockBadgeTopClass}`}
+                            >
+                              Out of Stock
+                            </div>
+                          ) : null}
+                          <img
+                            src={primaryImage}
+                            alt={product.name}
+                            loading="lazy"
+                            className={`absolute inset-0 h-full w-full object-cover ${
+                              isStuffyClone
+                                ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                            }`}
+                          />
+                          <img
+                            src={secondaryImage}
+                            alt={product.name}
+                            loading="lazy"
+                            className={`absolute inset-0 h-full w-full object-cover ${
+                              isStuffyClone
+                                ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                            }`}
+                          />
                         </div>
-                      </Link>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-20 text-center text-[10px] font-bold uppercase tracking-widest text-neutral-500">
-                  No products found.
-                </div>
-              )}
+                      </div>
 
+                      <div className="mt-3 space-y-2 text-neutral-950">
+                        <div className="min-w-0 space-y-1">
+                          <h3
+                            className="truncate text-[rgb(17,17,17)]"
+                            style={{
+                              fontFamily:
+                                "Roboto, ui-sans-serif, system-ui, sans-serif",
+                              fontWeight: 700,
+                              fontSize: "18px",
+                              lineHeight: "27px",
+                            }}
+                          >
+                            {product.name}
+                          </h3>
+                          <div className="flex items-center gap-2">
+                            <p
+                              className={`text-sm font-bold uppercase tracking-wider ${
+                                hasSaleBadge ? "text-red-700" : "text-neutral-700"
+                              }`}
+                            >
+                              {displayPrice}
+                            </p>
+                            {hasSaleBadge ? (
+                              <p className="text-[10px] text-neutral-500 line-through opacity-70">
+                                {formatPrice(product.price)}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {colorOptions.length > 0 ? (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {colorOptions.map((color) => {
+                              const parsed = parseColorOption(color);
+                              const normalizedColor = normalizeColorLabel(color);
+                              const isActive =
+                                normalizeColorLabel(activeColor) === normalizedColor;
+
+                              return (
+                                <button
+                                  key={`${product.id}-${color}`}
+                                  type="button"
+                                  className={`h-3.5 w-3.5 rounded-sm border transition-all duration-200 ${
+                                    isActive
+                                      ? "scale-110 border-neutral-950 shadow-[0_0_0_1px_rgba(17,17,17,0.1)]"
+                                      : "border-neutral-300 hover:scale-105 hover:border-neutral-600"
+                                  }`}
+                                  style={{
+                                    backgroundColor: parsed.swatch ?? "#d4d4d4",
+                                  }}
+                                  onMouseEnter={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setHoveredCardColors((prev) => ({
+                                      ...prev,
+                                      [product.id]: color,
+                                    }));
+                                  }}
+                                  onMouseLeave={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setHoveredCardColors((prev) => ({
+                                      ...prev,
+                                      [product.id]: null,
+                                    }));
+                                  }}
+                                  onClick={(event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    setSelectedCardColors((prev) => ({
+                                      ...prev,
+                                      [product.id]: color,
+                                    }));
+                                  }}
+                                  onFocus={() => {
+                                    setHoveredCardColors((prev) => ({
+                                      ...prev,
+                                      [product.id]: color,
+                                    }));
+                                  }}
+                                  onBlur={() => {
+                                    setHoveredCardColors((prev) => ({
+                                      ...prev,
+                                      [product.id]: null,
+                                    }));
+                                  }}
+                                  aria-label={`Select ${parsed.label} color`}
+                                  aria-pressed={isActive}
+                                />
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
               {totalProducts > pageSize ? (
                 <div className="mt-12 flex items-center justify-center gap-2">
                   <button
@@ -382,7 +777,8 @@ export default function Products() {
                     let pageNumber = index + 1;
                     if (totalPages > 5) {
                       if (page <= 3) pageNumber = index + 1;
-                      else if (page >= totalPages - 2) pageNumber = totalPages - 4 + index;
+                      else if (page >= totalPages - 2)
+                        pageNumber = totalPages - 4 + index;
                       else pageNumber = page - 2 + index;
                     }
 
@@ -409,7 +805,9 @@ export default function Products() {
                     type="button"
                     aria-label="Next page"
                     onClick={() => {
-                      setPage((currentPage) => Math.min(totalPages, currentPage + 1));
+                      setPage((currentPage) =>
+                        Math.min(totalPages, currentPage + 1),
+                      );
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     disabled={page >= totalPages}
@@ -419,6 +817,10 @@ export default function Products() {
                   </button>
                 </div>
               ) : null}
+            </div>
+          ) : (
+            <div className="py-20 text-center text-[10px] font-bold uppercase tracking-widest text-neutral-500">
+              No products found.
             </div>
           )}
         </div>

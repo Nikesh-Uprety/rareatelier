@@ -31,7 +31,7 @@ import express, { NextFunction, type Request, Response } from "express";
 import session from "express-session";
 import { createServer } from "http";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { products, users, pages, pageSections, pageTemplates, siteSettings } from "@shared/schema";
 import { configurePassport, passport } from "./auth";
 import { db, pool } from "./db";
@@ -363,7 +363,34 @@ async function ensureRootSuperAdminState() {
   });
 }
 
+async function ensureSiteSettingsProductsPageConfigColumn() {
+  await db.execute(sql`
+    alter table site_settings
+    add column if not exists products_page_config jsonb not null default '{}'::jsonb
+  `);
+
+  await db.execute(sql`
+    update site_settings
+    set products_page_config = '{}'::jsonb
+    where products_page_config is null
+  `);
+}
+
 (async () => {
+  try {
+    await ensureSiteSettingsProductsPageConfigColumn();
+    log("Site settings products layout column ensured", "express");
+  } catch (error) {
+    logger.warn(
+      "Site settings products layout migration skipped",
+      {
+        timestamp: new Date().toISOString(),
+        source: "APP",
+      },
+      error,
+    );
+  }
+
   try {
     await ensureRootSuperAdminState();
     log("Root superadmin state ensured", "express");

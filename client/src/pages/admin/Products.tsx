@@ -1114,6 +1114,14 @@ export default function AdminProducts() {
           >
             Add Product
           </Button>
+          <Button
+            variant="outline"
+            className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] dark:from-card dark:to-card/80 shadow-[0_8px_18px_rgba(34,63,41,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(34,63,41,0.16)] transition-all duration-300 flex-1 sm:flex-none"
+            onClick={() => setLocation("/admin/products/layout")}
+          >
+            <LayoutTemplate className="mr-2 h-4 w-4" />
+            Layout
+          </Button>
           <Button 
             variant="outline"
             className="rounded-2xl border-[#CDD7C8] bg-gradient-to-br from-white to-[#F3F7F1] dark:from-card dark:to-card/80 shadow-[0_8px_18px_rgba(34,63,41,0.1)] hover:-translate-y-0.5 hover:shadow-[0_12px_24px_rgba(34,63,41,0.16)] transition-all duration-300 flex-1 sm:flex-none"

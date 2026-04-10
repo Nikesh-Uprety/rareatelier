@@ -10,6 +10,11 @@ import multer from "multer";
 import { z } from "zod";
 import { ADMIN_PAGE_KEYS, canAccessAdminPage, canAccessAdminPanel, getAdminAllowedPages, normalizeAdminPageList, requiresTwoFactorChallenge, sanitizeAdminPageOverrides } from "@shared/auth-policy";
 import { MAISON_NOCTURNE_DEFAULT_HERO_SLIDES } from "@shared/canvasDefaults";
+import {
+  normalizeStorefrontProductsLayoutConfig,
+  storefrontProductsLayoutConfigSchema,
+  type StorefrontProductsLayoutConfig,
+} from "@shared/storefrontProductsLayout";
 import { storage } from "./storage";
 import { logger } from "./logger";
 import passport from "passport";
@@ -136,6 +141,7 @@ type SiteSettingsCompatRow = {
   id: number;
   activeTemplateId: number | null;
   fontPreset: string | null;
+  productsPageConfig: StorefrontProductsLayoutConfig | null;
   publishedAt: Date | null;
   publishedBy: string | null;
   updatedAt: Date | null;
@@ -201,7 +207,13 @@ async function getSiteSettingsCompat(): Promise<SiteSettingsCompatRow[]> {
   const hasFontPresetColumn = await siteSettingsHasFontPresetColumn();
 
   if (hasFontPresetColumn) {
-    return db.select().from(siteSettings).limit(1);
+    const rows = await db.select().from(siteSettings).limit(1);
+    return rows.map((row) => ({
+      ...row,
+      productsPageConfig: normalizeStorefrontProductsLayoutConfig(
+        row.productsPageConfig ?? {},
+      ),
+    }));
   }
 
   return db
@@ -209,6 +221,7 @@ async function getSiteSettingsCompat(): Promise<SiteSettingsCompatRow[]> {
       id: siteSettings.id,
       activeTemplateId: siteSettings.activeTemplateId,
       fontPreset: sql<string>`'inter'`,
+      productsPageConfig: sql<StorefrontProductsLayoutConfig>`'{}'::jsonb`,
       publishedAt: siteSettings.publishedAt,
       publishedBy: siteSettings.publishedBy,
       updatedAt: siteSettings.updatedAt,
@@ -1129,6 +1142,9 @@ ${Array.from(uniqueEntries.entries())
       applyPageConfigCacheHeaders();
       return res.json({
         fontPreset: settings[0]?.fontPreset ?? "inter",
+        productsPageConfig: normalizeStorefrontProductsLayoutConfig(
+          settings[0]?.productsPageConfig ?? {},
+        ),
         template: normalizeCanvasTemplate(template[0] ?? null) ?? null,
         sections: normalizedSections.filter((s) => s.isVisible),
       });
@@ -4381,6 +4397,65 @@ ${Array.from(uniqueEntries.entries())
       } catch (err) {
         console.error("Error in GET /api/admin/products/stats", err);
         return res.status(500).json({ success: false, error: "Failed to load product stats" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/products/layout",
+    requireAdmin,
+    async (_req: Request, res: Response) => {
+      try {
+        const settings = await getSiteSettingsCompat();
+        return res.json({
+          success: true,
+          data: normalizeStorefrontProductsLayoutConfig(
+            settings[0]?.productsPageConfig ?? {},
+          ),
+        });
+      } catch (err) {
+        console.error("Error in GET /api/admin/products/layout", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to load products layout settings" });
+      }
+    },
+  );
+
+  app.patch(
+    "/api/admin/products/layout",
+    requireAdmin,
+    validateRequest(
+      z.object({
+        config: storefrontProductsLayoutConfigSchema,
+      }),
+    ),
+    async (req: Request, res: Response) => {
+      try {
+        const normalizedConfig = normalizeStorefrontProductsLayoutConfig(req.body?.config ?? {});
+        const settings = await getSiteSettingsCompat();
+
+        if (settings.length > 0) {
+          await db
+            .update(siteSettings)
+            .set({
+              productsPageConfig: normalizedConfig,
+              updatedAt: new Date(),
+            })
+            .where(eq(siteSettings.id, settings[0].id));
+        } else {
+          await db.insert(siteSettings).values({
+            productsPageConfig: normalizedConfig,
+            updatedAt: new Date(),
+          });
+        }
+
+        return res.json({ success: true, data: normalizedConfig });
+      } catch (err) {
+        console.error("Error in PATCH /api/admin/products/layout", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to save products layout settings" });
       }
     },
   );
