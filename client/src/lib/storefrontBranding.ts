@@ -25,8 +25,8 @@ export const STOREFRONT_LOGO_PRESETS: StorefrontLogoPreset[] = [
     id: "monogram-mark",
     label: "Monogram Mark",
     description: "Compact logo mark preset for the landing page and navigation.",
-    logoUrl: "/images/logo.webp",
-    logoDarkUrl: "/images/logo.webp",
+    logoUrl: "/images/updatedlogo.png",
+    logoDarkUrl: "/images/updatedlogo.png",
     previewBackground: "#000000",
     previewClassName: "max-h-24",
   },
@@ -75,13 +75,23 @@ export function getStorefrontLogoFilter(options: {
   glow?: boolean;
 }) {
   const { branding, variant, glow = false } = options;
-  const usingUploadedVariant =
-    variant === "dark" ? Boolean(branding?.logoDarkUrl) : Boolean(branding?.logoUrl);
+  const usingUploadedLogo =
+    variant === "dark"
+      ? Boolean(branding?.logoDarkUrl || branding?.logoUrl)
+      : Boolean(branding?.logoUrl);
 
-  if (usingUploadedVariant) {
+  // Keep uploaded assets in their original colors and add contrast instead of
+  // forcing inversion, which can make user-uploaded logos unreadable.
+  if (usingUploadedLogo) {
+    if (variant === "dark") {
+      return glow
+        ? "drop-shadow(0 0 1px rgba(0,0,0,0.68)) drop-shadow(0 0 20px rgba(255,255,255,0.18)) drop-shadow(0 0 34px rgba(255,255,255,0.10))"
+        : "drop-shadow(0 0 1px rgba(0,0,0,0.72)) drop-shadow(0 0 12px rgba(255,255,255,0.12))";
+    }
+
     return glow
-      ? "drop-shadow(0 0 18px rgba(255,255,255,0.18))"
-      : "none";
+      ? "brightness(0) saturate(100%) contrast(1.08) drop-shadow(0 0 1px rgba(255,255,255,0.26))"
+      : "brightness(0) saturate(100%) contrast(1.08)";
   }
 
   if (variant === "dark") {
@@ -90,7 +100,7 @@ export function getStorefrontLogoFilter(options: {
       : "brightness(0) invert(1)";
   }
 
-  return "brightness(0)";
+  return "brightness(0) saturate(100%) contrast(1.08)";
 }
 
 export function matchesLogoPreset(

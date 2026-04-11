@@ -85,15 +85,12 @@ export default function Navbar() {
     storefrontBranding,
     mobileMenuLogoVariant,
   );
-  const strongLightLogoFilter = "brightness(0) saturate(100%) contrast(1.08)";
   const mobileMenuLogoFilter =
-    mobileMenuLogoVariant === "dark"
-      ? getStorefrontLogoFilter({
-          branding: storefrontBranding,
-          variant: mobileMenuLogoVariant,
-          glow: true,
-        })
-      : strongLightLogoFilter;
+    getStorefrontLogoFilter({
+      branding: storefrontBranding,
+      variant: mobileMenuLogoVariant,
+      glow: mobileMenuLogoVariant === "dark",
+    });
 
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
@@ -362,9 +359,12 @@ export default function Navbar() {
     : forceSolidLightNavbar
     ? getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
-  const logoFilter = navForegroundColor === "#111111"
-    ? strongLightLogoFilter
-    : getStorefrontLogoFilter({ branding: storefrontBranding, variant: "dark" });
+  const navLogoVariant: "light" | "dark" = navForegroundColor === "#111111" ? "light" : "dark";
+  const logoFilter = getStorefrontLogoFilter({
+    branding: storefrontBranding,
+    variant: navLogoVariant,
+    glow: navLogoVariant === "dark",
+  });
   const navUnderlineColor = isHeroMegaOpen ? "#111111" : useHeroContrastState ? "#ffffff" : navForegroundColor;
   const navTextShadow = isHeroMegaOpen
     ? "none"
@@ -619,13 +619,11 @@ export default function Navbar() {
       stuffyLogoVariant,
     );
     const stuffyHeaderLogoFilter =
-      stuffyLogoVariant === "dark"
-        ? getStorefrontLogoFilter({
-            branding: storefrontBranding,
-            variant: stuffyLogoVariant,
-            glow: true,
-          })
-        : strongLightLogoFilter;
+      getStorefrontLogoFilter({
+        branding: storefrontBranding,
+        variant: stuffyLogoVariant,
+        glow: stuffyLogoVariant === "dark",
+      });
     const chromeColor = isStuffyLanding
       ? "rgba(255,255,255,0.96)"
       : isStuffyProductsRoute
@@ -883,7 +881,7 @@ export default function Navbar() {
               <img
                 src={resolveStorefrontLogo(
                   storefrontBranding,
-                  navForegroundColor === "#111111" ? "light" : "dark",
+                  navLogoVariant,
                 ).src}
                 alt="Rare Atelier"
                 className="mx-auto h-auto w-[5.7rem] object-contain sm:w-[6rem]"

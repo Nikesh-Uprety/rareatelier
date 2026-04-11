@@ -3,7 +3,13 @@ import { Link, useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { fetchPageConfig } from "@/lib/api";
+import { getPublicBranding } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
+import {
+  getStorefrontLogoFilter,
+  resolveStorefrontLogo,
+  STOREFRONT_BRANDING_QUERY_KEY,
+} from "@/lib/storefrontBranding";
 import {
   PreviewLinkCard,
   PreviewLinkCardContent,
@@ -26,6 +32,11 @@ export default function Footer() {
     staleTime: 0,
     refetchOnMount: "always",
     refetchOnWindowFocus: true,
+  });
+  const { data: publicBrandingData } = useQuery({
+    queryKey: STOREFRONT_BRANDING_QUERY_KEY,
+    queryFn: getPublicBranding,
+    staleTime: 5 * 60 * 1000,
   });
 
   const newsletterMutation = useMutation({
@@ -58,6 +69,13 @@ export default function Footer() {
   const isHomePage = location === "/";
   const isMaisonNocturne = pageConfig?.template?.slug === "maison-nocturne";
   const isNikeshDesign = pageConfig?.template?.slug === "nikeshdesign";
+  const storefrontBranding = publicBrandingData?.branding;
+  const sharedDarkLogo = resolveStorefrontLogo(storefrontBranding, "dark");
+  const footerLogoSrc = storefrontBranding?.footerLogoUrl || sharedDarkLogo.src;
+  const footerLogoFilter = storefrontBranding?.footerLogoUrl
+    ? "drop-shadow(0 0 1px rgba(0,0,0,0.72)) drop-shadow(0 0 12px rgba(255,255,255,0.12))"
+    : getStorefrontLogoFilter({ branding: storefrontBranding, variant: "dark", glow: true });
+  const footerCopyright = storefrontBranding?.footerText?.trim() || "© 2026 Rare Atelier. All rights reserved.";
   const INSTAGRAM_URL = "https://www.instagram.com/rareofficial.au/";
   const TIKTOK_URL = "https://www.tiktok.com/@rare.np";
   const FACEBOOK_URL = "https://www.facebook.com/rarenp";
@@ -130,9 +148,10 @@ export default function Footer() {
             <div className="col-span-1">
               <Link href="/" className="inline-block">
                 <img
-                  src="/images/newproductpagelogo.png"
+                  src={footerLogoSrc}
                   alt="Rare Atelier"
-                  className="h-12 w-auto mb-8 object-contain brightness-0 invert"
+                  className="mb-8 h-12 w-auto object-contain"
+                  style={{ filter: footerLogoFilter }}
                 />
               </Link>
               <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
@@ -189,7 +208,7 @@ export default function Footer() {
         </div>
         <div className="container mx-auto max-w-7xl px-6">
           <div className="flex flex-col gap-4 border-t border-gray-900 pt-6 text-[10px] uppercase tracking-[0.2em] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>© 2026 Rare Atelier. All rights reserved.</span>
+            <span>{footerCopyright}</span>
             <div className="flex flex-wrap gap-5">
               <PreviewLinkCard
                 href={BUILDER_WEBSITE_URL}
@@ -242,9 +261,10 @@ export default function Footer() {
               <div className="col-span-1">
                 <Link href="/" className="inline-block">
                   <img
-                    src="/images/newproductpagelogo.png"
+                    src={footerLogoSrc}
                     alt="Rare Atelier"
-                    className="mb-8 h-12 w-auto object-contain brightness-0 invert"
+                    className="mb-8 h-12 w-auto object-contain"
+                    style={{ filter: footerLogoFilter }}
                   />
                 </Link>
                 <p className="text-gray-500 text-sm leading-relaxed tracking-wide">
@@ -298,11 +318,11 @@ export default function Footer() {
           </div>
         </footer>
       )}
-      <footer className="py-12 border-t bg-white">
-        <div className="container mx-auto px-4 text-center text-gray-500 text-sm">
-          &copy; 2025 Rare Atelier. All rights reserved.
-        </div>
-      </footer>
+        <footer className="py-12 border-t bg-white">
+          <div className="container mx-auto px-4 text-center text-gray-500 text-sm">
+          {footerCopyright}
+          </div>
+        </footer>
     </>
   );
 }

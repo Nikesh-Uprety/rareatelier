@@ -38,7 +38,9 @@ import {
   OptimizedImage,
 } from "@/components/ui";
 import {
+  getStorefrontLogoFilter,
   matchesLogoPreset,
+  resolveStorefrontLogo,
   STOREFRONT_BRANDING_QUERY_KEY,
   STOREFRONT_LOGO_PRESETS,
 } from "@/lib/storefrontBranding";
@@ -1173,16 +1175,30 @@ export function BrandingManager() {
                   <Upload className="h-3 w-3" />
                   Upload
                 </Button>
+                {branding?.logoUrl ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateBrandingMutation.mutate({ logoUrl: null })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </Button>
+                ) : null}
               </Label>
               {branding?.logoUrl ? (
                 <div className="mt-2">
                   <p className="text-xs text-muted-foreground">Current logo:</p>
-                  <OptimizedImage
-                    src={branding.logoUrl}
-                    alt="Brand logo"
-                    className="h-16 w-auto rounded border border-muted/50"
-                    priority
-                  />
+                  <div className="mt-2 flex min-h-24 items-center justify-center rounded-lg border border-muted/50 bg-white p-4">
+                    <OptimizedImage
+                      src={resolveStorefrontLogo(branding, "light").src}
+                      alt="Brand logo"
+                      className="h-16 w-auto object-contain"
+                      style={{ filter: getStorefrontLogoFilter({ branding, variant: "light" }) }}
+                      priority
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">No logo uploaded</p>
@@ -1201,6 +1217,17 @@ export function BrandingManager() {
                   <Upload className="h-3 w-3" />
                   Upload
                 </Button>
+                {branding?.faviconUrl ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateBrandingMutation.mutate({ faviconUrl: null })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </Button>
+                ) : null}
               </Label>
               {branding?.faviconUrl ? (
                 <div className="mt-2">
@@ -1228,15 +1255,31 @@ export function BrandingManager() {
                   <Upload className="h-3 w-3" />
                   Upload
                 </Button>
+                {branding?.logoDarkUrl ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateBrandingMutation.mutate({ logoDarkUrl: null })}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </Button>
+                ) : null}
               </Label>
-              {branding?.logoDarkUrl ? (
+              {branding?.logoDarkUrl || branding?.logoUrl ? (
                 <div className="mt-2">
-                  <p className="text-xs text-muted-foreground">Current dark logo:</p>
-                  <OptimizedImage
-                    src={branding.logoDarkUrl}
-                    alt="Brand logo dark"
-                    className="h-16 w-auto rounded border border-muted/50"
-                  />
+                  <p className="text-xs text-muted-foreground">
+                    {branding?.logoDarkUrl ? "Current dark logo:" : "Dark surface preview:"}
+                  </p>
+                  <div className="mt-2 flex min-h-24 items-center justify-center rounded-lg border border-white/10 bg-neutral-950 p-4">
+                    <OptimizedImage
+                      src={resolveStorefrontLogo(branding, "dark").src}
+                      alt="Brand logo dark"
+                      className="h-16 w-auto object-contain"
+                      style={{ filter: getStorefrontLogoFilter({ branding, variant: "dark", glow: true }) }}
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">No dark logo uploaded</p>
@@ -1254,6 +1297,10 @@ export function BrandingManager() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               {STOREFRONT_LOGO_PRESETS.map((preset) => {
                 const isActive = matchesLogoPreset(branding, preset);
+                const previewIsDarkSurface = (preset.previewBackground ?? "").toLowerCase() === "#000000";
+                const presetPreviewSrc = previewIsDarkSurface
+                  ? (preset.logoDarkUrl ?? preset.logoUrl)
+                  : preset.logoUrl;
                 return (
                   <button
                     key={preset.id}
@@ -1271,7 +1318,7 @@ export function BrandingManager() {
                       style={{ background: preset.previewBackground ?? "#ffffff" }}
                     >
                       <img
-                        src={preset.logoUrl}
+                        src={presetPreviewSrc}
                         alt={preset.label}
                         className={cn("h-auto w-auto max-w-full object-contain", preset.previewClassName ?? "max-h-14")}
                       />
@@ -1370,6 +1417,17 @@ export function BrandingManager() {
                 <Upload className="h-3 w-3" />
                 Upload
               </Button>
+              {branding?.footerLogoUrl ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateBrandingMutation.mutate({ footerLogoUrl: null })}
+                  className="text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete
+                </Button>
+              ) : null}
             </Label>
             {branding?.footerLogoUrl ? (
               <div className="mt-2">

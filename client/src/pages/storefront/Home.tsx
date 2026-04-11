@@ -320,7 +320,12 @@ export default function Home() {
 
   const campaignBannerImage =
     exploreCollectionImage || (campaignAssets[0]?.imageUrl ?? "/images/explore.webp");
-  const landingLogo = "/images/updatedlogo.png";
+  const landingLogo = resolveStorefrontLogo(storefrontBranding, "dark");
+  const landingLogoFilter = getStorefrontLogoFilter({
+    branding: storefrontBranding,
+    variant: "dark",
+    glow: true,
+  });
 
   // Finish pre-loader only when data is ready (Hydration-First)
   const hasFinishedLoadingRef = useRef(false);
@@ -789,11 +794,11 @@ export default function Home() {
                     }}
                   >
                     <img
-                      src={landingLogo}
+                      src={landingLogo.src}
                       alt="Rare Atelier"
                       className="w-full object-contain object-top"
                       style={{
-                        filter: "drop-shadow(0 0 18px rgba(255,255,255,0.18))",
+                        filter: landingLogoFilter,
                       }}
                     />
                   </div>
