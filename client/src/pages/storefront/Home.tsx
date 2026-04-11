@@ -25,6 +25,7 @@ const OurServices = lazy(() => import("@/components/home/OurServices"));
 const ContactSection = lazy(() => import("@/components/home/ContactSection"));
 const FaqSection = lazy(() => import("@/components/home/FaqSection"));
 const BackToTopSection = lazy(() => import("@/components/home/BackToTopSection"));
+const FlexibleContentSection = lazy(() => import("@/components/home/FlexibleContentSection"));
 
 type SiteAsset = {
   id: string;
@@ -170,6 +171,7 @@ function DeferredSection({
 
 export default function Home() {
   const theme = useThemeStore((state) => state.theme);
+  const setTheme = useThemeStore((state) => state.setTheme);
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
   const [isTablet, setIsTablet] = useState(false);
@@ -183,6 +185,7 @@ export default function Home() {
   const dragStartX = useRef(0);
   const isDragging = useRef(false);
   const interactionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const forcedThemeRef = useRef<"light" | "dark" | "warm" | null>(null);
 
   // Featured Collection visuals (feature1/2/3) and Explore banner (explore.webp).
   // Defaults come from client public files; overrides come from admin picker via localStorage.
@@ -508,6 +511,7 @@ export default function Home() {
   ];
 
   const templateSlug = pageConfig?.template?.slug;
+  const isRareDarkLuxury = templateSlug === "rare-dark-luxury";
   const isMaisonNocturne = templateSlug === "maison-nocturne";
   const isNikeshDesign = templateSlug === "nikeshdesign";
   const isStuffyClone = templateSlug === "stuffyclone";
@@ -536,7 +540,7 @@ export default function Home() {
       ...withoutFeatured.slice(lastArrivalsIndex + 1),
     ];
   })();
-  const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign;
+  const isLuxuryEditorialTemplate = pageConfigLoading || isMaisonNocturne || isNikeshDesign || isRareDarkLuxury;
   const shouldRenderFallbackContact = !pageConfigLoading && !activeSections.some((s: any) => s.sectionType === "contact");
   const shouldRenderFallbackBackToTop =
     !pageConfigLoading &&
@@ -578,6 +582,24 @@ export default function Home() {
     nodes.forEach((node) => observer.observe(node));
     return () => observer.disconnect();
   }, [activeSections, isCanvasPreview, isLuxuryEditorialTemplate]);
+
+  useEffect(() => {
+    if (isRareDarkLuxury) {
+      if (theme !== "dark") {
+        if (forcedThemeRef.current == null) {
+          forcedThemeRef.current = theme;
+        }
+        setTheme("dark");
+      }
+      return;
+    }
+
+    if (forcedThemeRef.current && theme !== forcedThemeRef.current) {
+      const previousTheme = forcedThemeRef.current;
+      forcedThemeRef.current = null;
+      setTheme(previousTheme);
+    }
+  }, [isRareDarkLuxury, setTheme, theme]);
 
   function renderSection(section: any) {
     switch (section.sectionType) {
@@ -666,7 +688,18 @@ export default function Home() {
       case "contact":
         return (
           <DeferredSection key={section.id} minHeightClassName="min-h-[26rem]">
-            <ContactSection />
+            <ContactSection config={section.config} />
+          </DeferredSection>
+        );
+      case "testimonial":
+      case "gallery":
+      case "video":
+      case "countdown":
+      case "map":
+      case "text-block":
+        return (
+          <DeferredSection key={section.id} minHeightClassName="min-h-[26rem]">
+            <FlexibleContentSection type={section.sectionType} config={section.config} />
           </DeferredSection>
         );
       case "back-to-top": {

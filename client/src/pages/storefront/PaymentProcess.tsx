@@ -167,6 +167,14 @@ export default function PaymentProcess() {
 
         const createResult = await createOrder(pendingCheckout.orderInput);
         if (!createResult.success || !createResult.data) {
+          if (createResult.code === "ORDER_VERIFICATION_REQUIRED") {
+            toast({
+              title: createResult.error || "Email verification required before this large order can continue.",
+              variant: "destructive",
+            });
+            setLocation("/checkout?returning=1");
+            return;
+          }
           toast({ title: createResult.error || "Failed to create order", variant: "destructive" });
           return;
         }

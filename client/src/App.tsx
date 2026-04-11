@@ -323,6 +323,9 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
     refetchOnWindowFocus: shouldHardRefreshConfig,
   });
   const isStuffyLanding = pageConfig?.template?.slug === "stuffyclone" && pathname === "/";
+  // Keep the homepage hidden until the active template is known to avoid
+  // flashing a different landing layout for a split second on first paint.
+  const shouldHoldHomeFirstPaint = pathname === "/" && !shouldHardRefreshConfig && pageConfigLoading;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -364,8 +367,8 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
     };
   }, [isStuffyLanding]);
 
-  const shouldShowNavbar = true;
-  const shouldShowFooter = !isStuffyLanding;
+  const shouldShowNavbar = !shouldHoldHomeFirstPaint;
+  const shouldShowFooter = !isStuffyLanding && !shouldHoldHomeFirstPaint;
 
   return (
     <div className="storefront-shell min-h-screen bg-background flex flex-col">
@@ -382,9 +385,9 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
       <main className="flex-1 flex flex-col">
-        {children}
+        {shouldHoldHomeFirstPaint ? <BrandedLoader fullScreen /> : children}
       </main>
-      <CartSidebar />
+      {shouldHoldHomeFirstPaint ? null : <CartSidebar />}
       {shouldShowFooter ? <Footer /> : null}
     </div>
   );

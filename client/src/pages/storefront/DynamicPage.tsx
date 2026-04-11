@@ -1,17 +1,12 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { renderSection, type RenderSectionContext } from "@/lib/renderSection";
 import { getPublicPageConfig } from "@/lib/adminApi";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { Suspense, lazy } from "react";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
-
-const ContactSection = lazy(() => import("@/components/home/ContactSection"));
-const BackToTopSection = lazy(() => import("@/components/home/BackToTopSection"));
-const FaqSection = lazy(() => import("@/components/home/FaqSection"));
 
 function DeferredSection({
   children,
@@ -42,6 +37,7 @@ const HERO_IMAGES_FALLBACK = [
 export default function DynamicPage() {
   const [location] = useLocation();
   const slug = location === "/" ? "/" : location;
+  const previewToken = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("token") ?? undefined : undefined;
 
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -78,8 +74,8 @@ export default function DynamicPage() {
   }, []);
 
   const { data: pageConfig, isLoading: pageConfigLoading, error } = useQuery({
-    queryKey: ["/api/public/page-config", slug],
-    queryFn: () => getPublicPageConfig(slug),
+    queryKey: ["/api/public/page-config", slug, previewToken],
+    queryFn: () => getPublicPageConfig(slug, previewToken),
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -116,11 +112,7 @@ export default function DynamicPage() {
   }, [pageConfigLoading]);
 
   const heroSections = sections.filter((s: any) => s.sectionType === "hero");
-  const nonFaqSections = sections.filter((s: any) => s.sectionType !== "faq");
-  const faqSections = sections.filter((s: any) => s.sectionType === "faq");
-  const hasContact = sections.some((s: any) => s.sectionType === "contact");
-  const hasBackToTop = sections.some((s: any) => s.sectionType === "back-to-top");
-  const hasFaq = sections.length > 0 && faqSections.length > 0;
+  const orderedSections = [...sections].sort((a: any, b: any) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
 
   const heroImages = heroSections.length > 0
     ? (heroSections[0].config?.slides as any[])?.map((slide: any) => slide.image).filter(Boolean) || HERO_IMAGES_FALLBACK
@@ -183,7 +175,7 @@ export default function DynamicPage() {
     );
   }
 
-  if (error || !pageConfig || (page && page.status !== "published" && page.slug !== "/")) {
+  if (error || !pageConfig || (page && page.status !== "published" && page.slug !== "/" && !previewToken)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -215,27 +207,7 @@ export default function DynamicPage() {
       />
 
       <main>
-        {nonFaqSections.map((section: any) => renderSection(section, renderCtx))}
-
-        {!hasContact && (
-          <DeferredSection minHeightClassName="min-h-[26rem]">
-            <ContactSection />
-          </DeferredSection>
-        )}
-
-        {!hasBackToTop && (
-          <DeferredSection minHeightClassName="min-h-[16rem]">
-            <BackToTopSection imageUrl="/images/home-campaign-editorial.webp" />
-          </DeferredSection>
-        )}
-
-        {faqSections.map((section: any) => renderSection(section, renderCtx))}
-
-        {!hasFaq && sections.length > 0 && (
-          <DeferredSection minHeightClassName="min-h-[24rem]">
-            <FaqSection />
-          </DeferredSection>
-        )}
+        {orderedSections.map((section: any) => renderSection(section, renderCtx))}
       </main>
     </div>
   );

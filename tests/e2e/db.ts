@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db, pool } from "../../server/db";
-import { otpTokens, users } from "../../shared/schema";
+import { orderVerificationChallenges, otpTokens, pageSections, pages, users } from "../../shared/schema";
 
 async function delay(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
@@ -48,6 +48,27 @@ export async function waitForLatestOtpCodeByEmail(email: string, timeoutMs = 15_
   throw new Error(`Timed out waiting for OTP token for ${email}`);
 }
 
+export async function waitForLatestOrderVerificationCodeByEmail(email: string, timeoutMs = 15_000) {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const [record] = await db
+      .select({ code: orderVerificationChallenges.token })
+      .from(orderVerificationChallenges)
+      .where(eq(orderVerificationChallenges.email, email.toLowerCase()))
+      .orderBy(desc(orderVerificationChallenges.createdAt))
+      .limit(1);
+
+    if (record?.code) {
+      return record.code;
+    }
+
+    await delay(250);
+  }
+
+  throw new Error(`Timed out waiting for order verification token for ${email}`);
+}
+
 export async function getUserSecurityFlagsByEmail(email: string) {
   const [record] = await db
     .select({
@@ -66,6 +87,11 @@ export async function expireOtpToken(tempToken: string) {
     .update(otpTokens)
     .set({ expiresAt: new Date(Date.now() - 60_000) })
     .where(eq(otpTokens.id, tempToken));
+}
+
+export async function deleteCanvasPageById(pageId: number) {
+  await db.delete(pageSections).where(eq(pageSections.pageId, pageId));
+  await db.delete(pages).where(eq(pages.id, pageId));
 }
 
 export async function closeE2EDbPool() {

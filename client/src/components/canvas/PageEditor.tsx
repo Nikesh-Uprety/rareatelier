@@ -13,6 +13,8 @@ import {
   Settings,
   Smartphone,
   Tablet,
+  Trash2,
+  X,
 } from "lucide-react";
 
 import { fetchProducts } from "@/lib/api";
@@ -42,6 +44,7 @@ import {
   updateCanvasPage,
   updatePageSection,
   reorderPageSections,
+  generatePreviewToken,
 } from "@/lib/adminApi";
 import {
   getSectionLabel,
@@ -233,9 +236,83 @@ function applySectionImageTarget(
 }
 
 function getPreviewWidth(viewport: PreviewViewport) {
-  if (viewport === "tablet") return "max-w-[768px]";
-  if (viewport === "mobile") return "max-w-[390px]";
-  return "max-w-full";
+  if (viewport === "tablet") return "max-w-[920px]";
+  if (viewport === "mobile") return "max-w-[440px]";
+  return "max-w-[1560px]";
+}
+
+type HeroSlideDraft = {
+  tag: string;
+  headline: string;
+  eyebrow: string;
+  body: string;
+  ctaLabel: string;
+  ctaHref: string;
+  image: string;
+};
+
+function buildPagePreviewHref(page: CanvasPage, token?: string | null) {
+  const slug = page.slug === "/" ? "/" : page.slug;
+  if (!token) return slug;
+  return slug === "/" ? `/?token=${token}` : `${slug}?token=${token}`;
+}
+
+function buildEditableHeroSlides(config: Record<string, unknown> | null): HeroSlideDraft[] {
+  if (!config) return [];
+
+  const sourceSlides = Array.isArray(config.slides) && config.slides.length > 0
+    ? config.slides
+    : [
+        {
+          tag: typeof config.eyebrow === "string" ? config.eyebrow : "Campaign",
+          headline: typeof config.title === "string" ? config.title : "Your hero headline",
+          eyebrow: typeof config.eyebrow === "string" ? config.eyebrow : "Story layer",
+          body: typeof config.text === "string" ? config.text : "Guide the customer with a simple hero story.",
+          ctaLabel: typeof config.ctaLabel === "string" ? config.ctaLabel : "Shop now",
+          ctaHref: typeof config.ctaHref === "string" ? config.ctaHref : "/products",
+          image: typeof config.image === "string" ? config.image : "",
+        },
+      ];
+
+  return sourceSlides.map((slide) => {
+    const safe = slide && typeof slide === "object" ? slide as Record<string, unknown> : {};
+    return {
+      tag: typeof safe.tag === "string" ? safe.tag : typeof safe.eyebrow === "string" ? safe.eyebrow : "Campaign",
+      headline: typeof safe.headline === "string" ? safe.headline : typeof safe.title === "string" ? safe.title : "Your hero headline",
+      eyebrow: typeof safe.eyebrow === "string" ? safe.eyebrow : "Story layer",
+      body: typeof safe.body === "string" ? safe.body : typeof safe.text === "string" ? safe.text : "Guide the customer with a simple hero story.",
+      ctaLabel: typeof safe.ctaLabel === "string" ? safe.ctaLabel : "Shop now",
+      ctaHref: typeof safe.ctaHref === "string" ? safe.ctaHref : "/products",
+      image: typeof safe.image === "string" ? safe.image : "",
+    };
+  });
+}
+
+function applyHeroSlidesToConfig(
+  config: Record<string, unknown> | null,
+  slides: HeroSlideDraft[],
+): Record<string, unknown> {
+  const nextConfig = { ...(config ?? {}) };
+  const normalizedSlides = slides.map((slide) => ({
+    tag: slide.tag,
+    headline: slide.headline,
+    eyebrow: slide.eyebrow,
+    body: slide.body,
+    ctaLabel: slide.ctaLabel,
+    ctaHref: slide.ctaHref,
+    image: slide.image,
+  }));
+  const firstSlide = normalizedSlides[0];
+
+  return {
+    ...nextConfig,
+    title: firstSlide?.headline ?? nextConfig.title,
+    text: firstSlide?.body ?? nextConfig.text,
+    eyebrow: firstSlide?.eyebrow ?? nextConfig.eyebrow,
+    ctaLabel: firstSlide?.ctaLabel ?? nextConfig.ctaLabel,
+    ctaHref: firstSlide?.ctaHref ?? nextConfig.ctaHref,
+    slides: normalizedSlides,
+  };
 }
 
 function PagePreview({
@@ -246,6 +323,7 @@ function PagePreview({
   viewport,
   onAddSection,
   onMoveSection,
+  onOpenSettings,
 }: {
   page: CanvasPage;
   sections: CanvasSection[];
@@ -254,6 +332,7 @@ function PagePreview({
   viewport: PreviewViewport;
   onAddSection: () => void;
   onMoveSection: (id: number, direction: "up" | "down") => void;
+  onOpenSettings: (id: number) => void;
 }) {
   const [heroIndex, setHeroIndex] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -277,12 +356,7 @@ function PagePreview({
   );
 
   const heroSections = visibleSections.filter((section) => section.sectionType === "hero");
-  const faqSections = visibleSections.filter((section) => section.sectionType === "faq");
-  const nonFaqSections = visibleSections.filter((section) => section.sectionType !== "faq");
   const orderedVisibleIds = visibleSections.map((section) => section.id);
-  const hasContact = visibleSections.some((section) => section.sectionType === "contact");
-  const hasBackToTop = visibleSections.some((section) => section.sectionType === "back-to-top");
-  const hasFaq = visibleSections.length > 0 && faqSections.length > 0;
 
   const heroImages = heroSections.length > 0
     ? ((heroSections[0].config?.slides as Array<{ image?: string }> | undefined)
@@ -362,7 +436,7 @@ function PagePreview({
   return (
     <div className="min-h-full bg-white text-neutral-900">
       <main>
-        {nonFaqSections.map((section) => (
+        {visibleSections.map((section) => (
           <div
             key={section.id}
             role="button"
@@ -408,83 +482,23 @@ function PagePreview({
                   aria-label="Move section down"
                 >
                   <ArrowDown className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenSettings(section.id);
+                  }}
+                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff]"
+                  aria-label="Open section settings"
+                >
+                  <Settings className="h-3.5 w-3.5" />
                 </button>
               </div>
             ) : null}
             {renderSection(section, previewCtx, `page-preview-${page.id}`)}
           </div>
         ))}
-
-        {!hasContact ? (
-          <div className="border-y border-dashed border-black/10 bg-black/[0.03] px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Default contact section renders on the storefront when no custom contact block is present.
-          </div>
-        ) : null}
-
-        {!hasBackToTop ? (
-          <div className="border-b border-dashed border-black/10 bg-black/[0.03] px-6 py-8 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            Back to top section renders automatically on the storefront.
-          </div>
-        ) : null}
-
-        {faqSections.map((section) => (
-          <div
-            key={section.id}
-            role="button"
-            tabIndex={0}
-            className={cn(
-              "group relative block w-full cursor-pointer text-left transition-all",
-              selectedSectionId === section.id &&
-                "ring-2 ring-inset ring-[#4565d0] shadow-[0_0_0_1px_rgba(69,101,208,0.32)]",
-            )}
-            onClick={() => onSelectSection(section.id)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onSelectSection(section.id);
-              }
-            }}
-          >
-            <div className="pointer-events-none absolute left-4 top-4 z-20 rounded-full border border-[#4565d0]/25 bg-[#132450]/88 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#dbe5ff] opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-              {getSectionLabel(section)}
-            </div>
-            {selectedSectionId === section.id ? (
-              <div className="absolute right-4 top-4 z-20 flex items-center gap-2 rounded-full border border-[#bfd1ff] bg-white/92 px-2 py-1 shadow-sm">
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMoveSection(section.id, "up");
-                  }}
-                  disabled={orderedVisibleIds[0] === section.id}
-                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
-                  aria-label="Move section up"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMoveSection(section.id, "down");
-                  }}
-                  disabled={orderedVisibleIds[orderedVisibleIds.length - 1] === section.id}
-                  className="rounded-full p-1 text-[#3654b1] transition-colors hover:bg-[#eef3ff] disabled:cursor-not-allowed disabled:opacity-35"
-                  aria-label="Move section down"
-                >
-                  <ArrowDown className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : null}
-            {renderSection(section, previewCtx, `page-preview-faq-${page.id}`)}
-          </div>
-        ))}
-
-        {!hasFaq && visibleSections.length > 0 ? (
-          <div className="border-b border-dashed border-black/10 bg-black/[0.03] px-6 py-10 text-center text-xs uppercase tracking-[0.22em] text-muted-foreground">
-            FAQ renders automatically on the storefront when no custom FAQ block is present.
-          </div>
-        ) : null}
       </main>
     </div>
   );
@@ -501,6 +515,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   const [showMediaLibrary, setShowMediaLibrary] = useState(false);
   const [activeImageTargetId, setActiveImageTargetId] = useState<string | null>(null);
   const [previewViewport, setPreviewViewport] = useState<PreviewViewport>("desktop");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [sectionItems, setSectionItems] = useState<CanvasSection[]>([]);
   const [sectionDraft, setSectionDraft] = useState<SectionEditorDraft>(buildSectionDraft(null));
   const [titleDraft, setTitleDraft] = useState("");
@@ -545,6 +560,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     if (sectionItems.length === 0) {
       setSelectedSectionId(null);
       setSectionDraft(buildSectionDraft(null));
+      setInspectorOpen(false);
       return;
     }
 
@@ -565,6 +581,12 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     [sectionDraft.configText],
   );
 
+
+  const heroSlides = useMemo(
+    () => (selectedSection?.sectionType === "hero" ? buildEditableHeroSlides(parsedDraftConfig) : []),
+    [parsedDraftConfig, selectedSection?.sectionType],
+  );
+
   const imageTargets = useMemo(
     () => getSectionImageTargets(selectedSection, parsedDraftConfig),
     [parsedDraftConfig, selectedSection],
@@ -574,6 +596,18 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     () => imageTargets.find((target) => target.id === activeImageTargetId) ?? null,
     [activeImageTargetId, imageTargets],
   );
+
+
+  const replaceDraftConfig = useCallback((nextConfig: Record<string, unknown>) => {
+    setSectionDraft((current) => ({
+      ...current,
+      configText: JSON.stringify(nextConfig, null, 2),
+    }));
+  }, []);
+
+  const updateHeroSlidesDraft = useCallback((nextSlides: HeroSlideDraft[]) => {
+    replaceDraftConfig(applyHeroSlidesToConfig(parsedDraftConfig, nextSlides));
+  }, [parsedDraftConfig, replaceDraftConfig]);
 
   const previewSections = useMemo(() => {
     if (!selectedSection || !parsedDraftConfig) {
@@ -595,6 +629,13 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   useEffect(() => {
     setSectionDraft(buildSectionDraft(selectedSection));
     setActiveImageTargetId(null);
+  }, [selectedSection]);
+
+
+  useEffect(() => {
+    if (!selectedSection) {
+      setInspectorOpen(false);
+    }
   }, [selectedSection]);
 
   const pageUpdateMutation = useMutation({
@@ -838,6 +879,16 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
     [activeImageTarget, patchSectionMutation, sectionDraft.configText, sectionDraft.isVisible, sectionDraft.label, selectedSection, toast],
   );
 
+  const openStorefrontPreview = useCallback(async () => {
+    if (!page) return;
+
+    const previewUrl = page.status === "published"
+      ? buildPagePreviewHref(page)
+      : buildPagePreviewHref(page, await generatePreviewToken(page.id));
+
+    window.open(previewUrl, "_blank", "noopener,noreferrer");
+  }, [page]);
+
   const handleSaveSection = useCallback(() => {
     if (!selectedSection) return;
 
@@ -877,7 +928,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   if (pageLoading || sectionsLoading) {
     return (
       <div className="flex h-full gap-6 p-6">
-        <div className="w-80 space-y-3">
+        <div className="w-64 space-y-3">
           <Skeleton className="h-10 w-full" />
           {Array.from({ length: 6 }).map((_, index) => (
             <Skeleton key={index} className="h-14 w-full rounded-xl" />
@@ -886,7 +937,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
         <div className="flex-1">
           <Skeleton className="h-full w-full rounded-2xl" />
         </div>
-        <div className="w-80">
+        <div className="w-[300px]">
           <Skeleton className="h-full w-full rounded-2xl" />
         </div>
       </div>
@@ -902,8 +953,8 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-[linear-gradient(180deg,#f7f8fc_0%,#eef3ff_100%)] text-neutral-900">
-      <div className="flex w-80 shrink-0 flex-col border-r border-black/10 bg-white/90 backdrop-blur-sm">
+    <div className="flex h-full overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(147,197,253,0.18),transparent_32%),linear-gradient(180deg,#f8fbff_0%,#eef3ff_100%)] text-neutral-900">
+      <div className="flex w-64 shrink-0 flex-col border-r border-black/10 bg-white/92 backdrop-blur-sm">
         <div className="space-y-4 border-b border-black/10 p-4">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-neutral-600 hover:bg-black/5 hover:text-neutral-900" onClick={onBack}>
@@ -969,7 +1020,7 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
           <button
             type="button"
             onClick={() => setShowSectionPicker(true)}
-            className="flex w-full items-center justify-center rounded-2xl border border-dashed border-[#6c8cff] bg-[#f8fbff] px-4 py-4 text-sm font-semibold text-[#3654b1] transition-colors hover:border-[#4565d0] hover:bg-[#eef3ff]"
+            className="flex w-full items-center justify-center rounded-[20px] border border-dashed border-[#6c8cff] bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] px-4 py-4 text-sm font-semibold text-[#3654b1] transition-colors hover:border-[#4565d0] hover:bg-[#eef3ff]"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add a Section
@@ -1022,10 +1073,21 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
             variant="ghost"
             size="sm"
             className="h-9 gap-2 border border-black/10 bg-white text-neutral-700 hover:bg-black/5 hover:text-neutral-900"
-            onClick={() => window.open(page.slug, "_blank", "noopener,noreferrer")}
+            onClick={() => { void openStorefrontPreview(); }}
           >
             <Eye className="h-4 w-4" />
             Preview Storefront
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={!selectedSection}
+            className="h-9 gap-2 border border-black/10 bg-white text-neutral-700 hover:bg-black/5 hover:text-neutral-900 disabled:opacity-45"
+            onClick={() => setInspectorOpen((current) => (selectedSection ? !current : false))}
+          >
+            <Settings className="h-4 w-4" />
+            Section Settings
           </Button>
 
           <Button
@@ -1040,14 +1102,14 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[linear-gradient(180deg,#f7f8fc_0%,#eef3ff_100%)]">
-            <div className="border-b border-black/10 px-5 py-3">
+            <div className="border-b border-black/10 px-6 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#4565d0]">
                 Builder Canvas
               </p>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto p-6">
+            <div className="min-h-0 flex-1 overflow-auto px-6 py-8">
               <div className={cn("mx-auto transition-all duration-300", getPreviewWidth(previewViewport))}>
-                <div className="overflow-hidden rounded-[30px] border-2 border-[#bfd1ff] bg-white shadow-[0_26px_80px_rgba(69,101,208,0.16)]">
+                <div className="overflow-hidden rounded-[34px] border-2 border-[#bfd1ff] bg-white shadow-[0_32px_90px_rgba(69,101,208,0.18)]">
                   <PagePreview
                     page={page}
                     sections={previewSections}
@@ -1056,27 +1118,42 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                     viewport={previewViewport}
                     onAddSection={() => setShowSectionPicker(true)}
                     onMoveSection={moveSelectedSection}
+                    onOpenSettings={(id) => {
+                      setSelectedSectionId(id);
+                      setInspectorOpen(true);
+                    }}
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex w-[360px] shrink-0 flex-col border-l border-black/10 bg-white/90 backdrop-blur-sm">
-            <div className="border-b border-black/10 px-5 py-4">
-              <h2 className="text-sm font-semibold text-neutral-900">
-                {selectedSection ? getSectionLabel(selectedSection) : "Section Settings"}
-              </h2>
-              <p className="mt-1 text-xs text-neutral-500">
-                {selectedSection
-                  ? `Edit the selected ${resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType} block.`
-                  : "Select a section from the list or preview to customize it."}
-              </p>
-            </div>
+          <div
+            className={cn(
+              "flex shrink-0 flex-col border-l border-black/10 bg-white/92 backdrop-blur-sm transition-all duration-300",
+              inspectorOpen && selectedSection ? "w-[300px]" : "w-[72px]",
+            )}
+          >
+            {inspectorOpen && selectedSection ? (
+              <>
+                <div className="border-b border-black/10 px-5 py-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-neutral-900">
+                        {getSectionLabel(selectedSection)}
+                      </h2>
+                      <p className="mt-1 text-xs text-neutral-500">
+                        Edit the selected {resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType} block.
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setInspectorOpen(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
 
-            {selectedSection ? (
-              <div className="flex-1 overflow-y-auto px-5 py-4">
-                <div className="space-y-5">
+                <div className="flex-1 overflow-y-auto px-5 py-4">
+                  <div className="space-y-5">
                   <div className="space-y-2">
                     <Label className="text-xs uppercase tracking-[0.18em] text-neutral-500">Section Label</Label>
                     <Input
@@ -1107,9 +1184,112 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                       {resolveSectionTypeDefinition(selectedSection)?.label ?? selectedSection.sectionType}
                     </p>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Click the canvas to swap between sections while keeping this panel open.
+                      Click any block on the canvas, then use the gear to keep editing without leaving the page.
                     </p>
                   </div>
+
+                  {selectedSection.sectionType === "hero" ? (
+                    <div className="rounded-2xl border border-[#dbe5ff] bg-[#f8fbff] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#4565d0]">Hero slides</p>
+                          <p className="mt-1 text-xs text-slate-600">Edit hero headlines, CTA text, and slide images without touching JSON.</p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() => updateHeroSlidesDraft([
+                            ...heroSlides,
+                            {
+                              tag: "Campaign",
+                              headline: "New slide headline",
+                              eyebrow: "Story layer",
+                              body: "Add a short sentence that explains what this slide is doing.",
+                              ctaLabel: "Shop now",
+                              ctaHref: "/products",
+                              image: "",
+                            },
+                          ])}
+                        >
+                          <Plus className="mr-2 h-3.5 w-3.5" />
+                          Add slide
+                        </Button>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {heroSlides.map((slide, index) => (
+                          <div key={`hero-slide-${index}`} className="rounded-2xl border border-[#d7e4ff] bg-white p-3 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-950">Slide {index + 1}</p>
+                                <p className="text-xs text-slate-500">This content updates the live builder canvas instantly.</p>
+                              </div>
+                              {heroSlides.length > 1 ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                                  onClick={() => updateHeroSlidesDraft(heroSlides.filter((_, slideIndex) => slideIndex !== index))}
+                                >
+                                  <Trash2 className="mr-2 h-3.5 w-3.5" />
+                                  Remove
+                                </Button>
+                              ) : null}
+                            </div>
+                            <div className="mt-3 grid gap-3">
+                              <Input
+                                value={slide.tag}
+                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, tag: event.target.value } : item))}
+                                placeholder="Tag"
+                              />
+                              <Input
+                                value={slide.headline}
+                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, headline: event.target.value } : item))}
+                                placeholder="Headline"
+                              />
+                              <Input
+                                value={slide.eyebrow}
+                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, eyebrow: event.target.value } : item))}
+                                placeholder="Eyebrow"
+                              />
+                              <Textarea
+                                value={slide.body}
+                                onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, body: event.target.value } : item))}
+                                className="min-h-[100px]"
+                                placeholder="Short supporting copy"
+                              />
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                <Input
+                                  value={slide.ctaLabel}
+                                  onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaLabel: event.target.value } : item))}
+                                  placeholder="CTA label"
+                                />
+                                <Input
+                                  value={slide.ctaHref}
+                                  onChange={(event) => updateHeroSlidesDraft(heroSlides.map((item, slideIndex) => slideIndex === index ? { ...item, ctaHref: event.target.value } : item))}
+                                  placeholder="CTA link"
+                                />
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="justify-start rounded-2xl"
+                                onClick={() => {
+                                  setActiveImageTargetId(`slide:${index}`);
+                                  setShowMediaLibrary(true);
+                                }}
+                              >
+                                <ImageIcon className="mr-2 h-4 w-4" />
+                                {slide.image ? "Change slide image" : "Add slide image"}
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
 
                   <div className="grid gap-2 sm:grid-cols-2">
                     <Button
@@ -1197,33 +1377,35 @@ export function PageEditor({ pageId, onBack }: PageEditorProps) {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-6 text-center">
-                <div>
-                  <p className="text-sm font-medium text-neutral-900">Select a section to edit</p>
-                  <p className="mt-2 text-xs text-neutral-500">
-                    You can pick from the left list or click directly on the live page preview.
-                  </p>
+                <div className="border-t border-black/10 p-4">
+                  <Button
+                    onClick={handleSaveSection}
+                    disabled={!selectedSection || patchSectionMutation.isPending}
+                    className="w-full bg-[#c9a84c] text-black hover:bg-[#d8b865]"
+                  >
+                    {patchSectionMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving
+                      </>
+                    ) : (
+                      "Save Section"
+                    )}
+                  </Button>
                 </div>
+              </>
+            ) : (
+              <div className="flex h-full items-center justify-center px-3">
+                <button
+                  type="button"
+                  disabled={!selectedSection}
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl border border-black/10 bg-white text-neutral-700 shadow-sm transition hover:bg-black/5 disabled:cursor-not-allowed disabled:opacity-45"
+                  onClick={() => setInspectorOpen(true)}
+                >
+                  <Settings className="h-5 w-5" />
+                </button>
               </div>
             )}
-
-            <div className="border-t border-black/10 p-4">
-              <Button
-                onClick={handleSaveSection}
-                disabled={!selectedSection || patchSectionMutation.isPending}
-                className="w-full bg-[#c9a84c] text-black hover:bg-[#d8b865]"
-              >
-                {patchSectionMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving
-                  </>
-                ) : (
-                  "Save Section"
-                )}
-              </Button>
-            </div>
           </div>
         </div>
       </div>

@@ -27,6 +27,7 @@ import { getDefaultAdminPath } from "@/lib/adminAccess";
 import { getPublicBranding } from "@/lib/adminApi";
 import {
   getStorefrontLogoFilter,
+  resolveStorefrontLogo,
   STOREFRONT_BRANDING_QUERY_KEY,
 } from "@/lib/storefrontBranding";
 import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
@@ -37,7 +38,6 @@ const ANNOUNCEMENT_ITEMS = [
   "Dragon Hoodie — Back in Stock",
   "Basics Collar Jacket — Limited Qty",
 ];
-const STOREFRONT_HEADER_LOGO = "/images/updatedlogo.png";
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
@@ -75,14 +75,32 @@ export default function Navbar() {
     queryFn: getPublicBranding,
     staleTime: 5 * 60 * 1000,
   });
-  const isStuffyClone = pageConfig?.template?.slug === "stuffyclone";
+  const templateSlug = pageConfig?.template?.slug ?? null;
+  const isStuffyClone = templateSlug === "stuffyclone";
+  const isRareDarkLuxury = templateSlug === "rare-dark-luxury";
   const storefrontBranding = publicBrandingData?.branding;
+  const mobileMenuLogoVariant: "light" | "dark" =
+    theme === "dark" || isRareDarkLuxury ? "dark" : "light";
+  const mobileMenuLogo = resolveStorefrontLogo(
+    storefrontBranding,
+    mobileMenuLogoVariant,
+  );
+  const strongLightLogoFilter = "brightness(0) saturate(100%) contrast(1.08)";
+  const mobileMenuLogoFilter =
+    mobileMenuLogoVariant === "dark"
+      ? getStorefrontLogoFilter({
+          branding: storefrontBranding,
+          variant: mobileMenuLogoVariant,
+          glow: true,
+        })
+      : strongLightLogoFilter;
 
   const isStorefront = !location.startsWith("/admin");
   const isHomeRoute = location === "/";
   const isAtelierRoute = location === "/atelier";
   const isProductsRoute = location === "/products";
   const isProductDetailRoute = /^\/product\/[^/]+/.test(location);
+  const isLightLandingTemplate = isHomeRoute && (templateSlug === "clean-minimal" || templateSlug === "editorial-grid");
   const isStuffyProductDetail = isStuffyClone && isProductDetailRoute;
   const isStuffyProductsRoute = isStuffyClone && isProductsRoute;
   const isHeroRoute = isHomeRoute || isAtelierRoute;
@@ -319,6 +337,8 @@ export default function Navbar() {
     ? "#111111"
     : forceSolidLightNavbar
     ? "#111111"
+    : isLightLandingTemplate
+    ? "#111111"
     : useProductsGlassChrome
     ? "#111111"
     : useHeroContrastState
@@ -337,11 +357,13 @@ export default function Navbar() {
       }
     : useProductsGlassChrome
     ? getGlassChrome("light", { active: shouldUseChrome })
+    : isLightLandingTemplate
+    ? getGlassChrome("light", { active: true })
     : forceSolidLightNavbar
     ? getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const logoFilter = navForegroundColor === "#111111"
-    ? getStorefrontLogoFilter({ branding: storefrontBranding, variant: "light" })
+    ? strongLightLogoFilter
     : getStorefrontLogoFilter({ branding: storefrontBranding, variant: "dark" });
   const navUnderlineColor = isHeroMegaOpen ? "#111111" : useHeroContrastState ? "#ffffff" : navForegroundColor;
   const navTextShadow = isHeroMegaOpen
@@ -443,15 +465,11 @@ export default function Navbar() {
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       <img
-                        src={STOREFRONT_HEADER_LOGO}
+                        src={mobileMenuLogo.src}
                         alt="Rare Atelier"
                         className="h-auto w-[4.8rem] object-contain sm:w-[5.1rem]"
                         style={{
-                          filter: getStorefrontLogoFilter({
-                            branding: null,
-                            variant: theme === "dark" ? "dark" : "light",
-                            glow: theme === "dark",
-                          }),
+                          filter: mobileMenuLogoFilter,
                         }}
                       />
                     </Link>
@@ -492,24 +510,26 @@ export default function Navbar() {
                       })}
                     </nav>
 
-                    <div
-                      className="mt-6 flex items-center justify-between border-t pt-5"
-                      style={{ borderColor: mobileMenuSurface.mutedBorder }}
-                    >
-                      <p
-                        className="text-[10px] font-bold uppercase tracking-[0.24em]"
-                        style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                    {isRareDarkLuxury ? null : (
+                      <div
+                        className="mt-6 flex items-center justify-between border-t pt-5"
+                        style={{ borderColor: mobileMenuSurface.mutedBorder }}
                       >
-                        Theme
-                      </p>
-                      <ThemeTogglerButton
-                        theme={theme}
-                        onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
-                        className="rounded-full px-1 py-0.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
-                        iconClassName="h-4 w-4"
-                        title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-                      />
-                    </div>
+                        <p
+                          className="text-[10px] font-bold uppercase tracking-[0.24em]"
+                          style={{ color: mobileMenuSurface.textMuted, fontFamily: "var(--font-mono)" }}
+                        >
+                          Theme
+                        </p>
+                        <ThemeTogglerButton
+                          theme={theme}
+                          onToggle={() => setTheme(theme === "dark" ? "light" : "dark")}
+                          className="rounded-full px-1 py-0.5 transition-colors hover:bg-black/5 dark:hover:bg-white/10"
+                          iconClassName="h-4 w-4"
+                          title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                        />
+                      </div>
+                    )}
 
                     {isAuthenticated && user ? (
                       <div
@@ -592,10 +612,26 @@ export default function Navbar() {
         );
 
   if (isStuffyClone) {
+    const stuffyLogoVariant: "light" | "dark" =
+      isStuffyLanding || theme === "dark" ? "dark" : "light";
+    const stuffyHeaderLogo = resolveStorefrontLogo(
+      storefrontBranding,
+      stuffyLogoVariant,
+    );
+    const stuffyHeaderLogoFilter =
+      stuffyLogoVariant === "dark"
+        ? getStorefrontLogoFilter({
+            branding: storefrontBranding,
+            variant: stuffyLogoVariant,
+            glow: true,
+          })
+        : strongLightLogoFilter;
     const chromeColor = isStuffyLanding
       ? "rgba(255,255,255,0.96)"
       : isStuffyProductsRoute
-        ? "rgba(17,17,17,0.94)"
+        ? theme === "dark"
+          ? "rgba(255,255,255,0.94)"
+          : "rgba(17,17,17,0.94)"
       : theme === "dark"
         ? "rgba(255,255,255,0.92)"
         : "rgba(17,17,17,0.92)";
@@ -604,7 +640,9 @@ export default function Navbar() {
       : isStuffyProductsRoute && !isScrolled
         ? "transparent"
       : isStuffyProductsRoute
-        ? "linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.68) 50%, rgba(248,246,242,0.62) 100%)"
+        ? theme === "dark"
+          ? "linear-gradient(135deg, rgba(7,7,8,0.88) 0%, rgba(11,11,14,0.82) 50%, rgba(18,18,24,0.74) 100%)"
+          : "linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.68) 50%, rgba(248,246,242,0.62) 100%)"
       : isStuffyProductDetail && !isScrolled
         ? "transparent"
       : isStuffyProductDetail
@@ -619,7 +657,9 @@ export default function Navbar() {
       : isStuffyProductsRoute && !isScrolled
         ? "transparent"
       : isStuffyProductsRoute
-        ? "rgba(17,17,17,0.08)"
+        ? theme === "dark"
+          ? "rgba(255,255,255,0.08)"
+          : "rgba(17,17,17,0.08)"
       : isStuffyProductDetail && !isScrolled
         ? "transparent"
       : isStuffyProductDetail
@@ -637,8 +677,12 @@ export default function Navbar() {
       ? "transparent"
       : isStuffyProductsRoute
       ? isScrolled
-        ? "rgba(255,255,255,0.62)"
-        : "rgba(255,255,255,0.42)"
+        ? theme === "dark"
+          ? "rgba(255,255,255,0.08)"
+          : "rgba(255,255,255,0.62)"
+        : theme === "dark"
+          ? "rgba(255,255,255,0.05)"
+          : "rgba(255,255,255,0.42)"
       : isStuffyProductDetail
       ? theme === "dark"
         ? "rgba(15,23,42,0.18)"
@@ -649,14 +693,18 @@ export default function Navbar() {
     const landingControlBorder = isStuffyLanding
       ? "transparent"
       : isStuffyProductsRoute
-        ? "rgba(17,17,17,0.10)"
+        ? theme === "dark"
+          ? "rgba(255,255,255,0.12)"
+          : "rgba(17,17,17,0.10)"
       : theme === "dark"
         ? "rgba(255,255,255,0.10)"
         : "rgba(17,17,17,0.10)";
     const landingControlShadow = isStuffyLanding
       ? "none"
       : isStuffyProductsRoute
-      ? "0 12px 34px rgba(15,23,42,0.08)"
+      ? theme === "dark"
+        ? "0 18px 48px rgba(0,0,0,0.34)"
+        : "0 12px 34px rgba(15,23,42,0.08)"
       : theme === "dark"
       ? "0 12px 30px rgba(0,0,0,0.24)"
       : "0 12px 30px rgba(15,23,42,0.08)";
@@ -706,15 +754,11 @@ export default function Navbar() {
               {isStuffyLanding ? null : (
                 <Link href="/" className="inline-flex items-center justify-center">
                   <img
-                    src={STOREFRONT_HEADER_LOGO}
+                    src={stuffyHeaderLogo.src}
                     alt="Rare Atelier"
                     className="h-auto w-[5.7rem] object-contain sm:w-[6rem]"
                     style={{
-                      filter: getStorefrontLogoFilter({
-                        branding: null,
-                        variant: theme === "dark" ? "dark" : "light",
-                        glow: theme === "dark",
-                      }),
+                      filter: stuffyHeaderLogoFilter,
                     }}
                   />
                 </Link>
@@ -837,15 +881,14 @@ export default function Navbar() {
 
             <Link href="/" className="flex items-center justify-center justify-self-center text-center">
               <img
-                src={STOREFRONT_HEADER_LOGO}
+                src={resolveStorefrontLogo(
+                  storefrontBranding,
+                  navForegroundColor === "#111111" ? "light" : "dark",
+                ).src}
                 alt="Rare Atelier"
                 className="mx-auto h-auto w-[5.7rem] object-contain sm:w-[6rem]"
                 style={{
-                  filter: getStorefrontLogoFilter({
-                    branding: null,
-                    variant: navForegroundColor === "#111111" ? "light" : "dark",
-                    glow: navForegroundColor !== "#111111",
-                  }),
+                  filter: logoFilter,
                   mixBlendMode: isProductDetailRoute ? "difference" : "normal",
                   transform: isProductDetailRoute ? "translateY(1px)" : "none",
                 }}

@@ -411,12 +411,101 @@ export default function CampaignBanner({
   imageAlt = "Campaign story",
   config,
 }: CampaignBannerProps) {
+  const variant = typeof config?.variant === "string" ? config.variant : "";
+  const title =
+    typeof config?.title === "string" && config.title.trim()
+      ? config.title.trim()
+      : "Campaign Banner";
+  const text =
+    typeof config?.text === "string" && config.text.trim()
+      ? config.text.trim()
+      : "Use a striking image and compact CTA to punctuate the page.";
+  const ctaLabel =
+    typeof config?.ctaLabel === "string" && config.ctaLabel.trim()
+      ? config.ctaLabel.trim()
+      : "Shop Now";
+  const ctaHref =
+    typeof config?.ctaHref === "string" && config.ctaHref.trim()
+      ? config.ctaHref.trim()
+      : "/products";
+
   if (config?.variant === "nikeshdesign-lookbook") {
     return <NikeshDesignLookbook exploreCollectionImage={exploreCollectionImage} config={config} />;
   }
 
   if (config?.variant === "maison-nocturne-lookbook") {
     return <MaisonNocturneLookbook exploreCollectionImage={exploreCollectionImage} config={config} />;
+  }
+
+  if (
+    variant === "cta-banner" ||
+    variant === "cta-pill" ||
+    variant === "cta-split" ||
+    variant === "campaign-sale" ||
+    variant === "campaign-poster"
+  ) {
+    const isSplit = variant === "cta-split";
+    const isPoster = variant === "campaign-poster";
+    const isSale = variant === "campaign-sale";
+    return (
+      <section className="bg-[#09090b] px-6 py-18 text-white sm:px-8 lg:px-10">
+        <div
+          className={`mx-auto grid max-w-[1440px] overflow-hidden rounded-[34px] border border-white/10 ${
+            isSplit ? "lg:grid-cols-[0.95fr_1.05fr]" : ""
+          }`}
+          style={{
+            background: isPoster
+              ? "linear-gradient(135deg, rgba(201,168,76,0.16), rgba(255,255,255,0.03))"
+              : "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02))",
+          }}
+        >
+          <div className={`p-8 sm:p-10 lg:p-12 ${isSplit ? "order-2 lg:order-1" : ""}`}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-[#c9a84c]">
+              {isSale ? "Offer" : "Campaign"}
+            </p>
+            <h2
+              className="mt-4 max-w-[12ch] text-balance"
+              style={{ fontFamily: "var(--font-display)", fontSize: "clamp(34px, 5vw, 72px)", lineHeight: 0.94 }}
+            >
+              {title}
+            </h2>
+            <p className="mt-4 max-w-xl text-sm leading-7 text-white/70">{text}</p>
+            <a
+              href={ctaHref}
+              className={`mt-8 inline-flex items-center justify-center rounded-full ${
+                variant === "cta-pill" ? "bg-white text-black" : "border border-white/16 bg-white/8 text-white"
+              } px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.22em] transition-transform hover:-translate-y-0.5`}
+            >
+              {ctaLabel}
+            </a>
+          </div>
+
+          <div className={`relative min-h-[320px] ${isSplit ? "order-1 lg:order-2" : ""}`}>
+            <img
+              alt={imageAlt}
+              className="h-full w-full object-cover"
+              src={exploreCollectionImage}
+              onError={(event) => handleCampaignImageError(event, CAMPAIGN_IMAGE_HARD_FALLBACK)}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/15 to-black/10" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (variant === "divider" || variant === "divider-line" || variant === "divider-monogram") {
+    return (
+      <section className="bg-[#09090b] px-6 py-10 text-white sm:px-8 lg:px-10">
+        <div className="mx-auto flex max-w-[1200px] items-center gap-4">
+          <div className="h-px flex-1 bg-white/12" />
+          <div className="shrink-0 rounded-full border border-[#c9a84c]/28 px-4 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] text-[#c9a84c]">
+            {title}
+          </div>
+          <div className="h-px flex-1 bg-white/12" />
+        </div>
+      </section>
+    );
   }
 
   return (

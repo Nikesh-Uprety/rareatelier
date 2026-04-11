@@ -24,7 +24,7 @@ export default defineConfig({
     ? undefined
     : {
         command: "npm run dev",
-        url: `${baseURL}/`,
+        url: `${baseURL}/health`,
         reuseExistingServer: !process.env.CI,
         env: {
           ...process.env,
@@ -61,6 +61,10 @@ export default defineConfig({
       use: {
         storageState: authFile,
       },
+    },
+    {
+      name: "admin-canvas-pages",
+      testMatch: /admin-canvas-pages\.spec\.ts/,
     },
   ],
 });

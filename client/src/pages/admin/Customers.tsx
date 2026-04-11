@@ -336,28 +336,28 @@ export default function AdminCustomers() {
             className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm"
           >
             <div className="overflow-x-auto">
-            <Table className="w-full min-w-[980px] table-fixed">
+            <Table className="w-full table-fixed">
               <colgroup>
-                <col className="w-[46%]" />
+                <col className="w-[44%]" />
                 <col className="w-[14%]" />
                 <col className="w-[16%]" />
-                <col className="w-[14%]" />
+                <col className="w-[16%]" />
                 <col className="w-[10%]" />
               </colgroup>
               <TableHeader className="bg-transparent">
                 <TableRow className="border-b border-[#E5E5E0] dark:border-border hover:bg-transparent">
-                  <TableHead className="py-4 pr-6 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer Info</TableHead>
-                  <TableHead className="py-4 pr-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Joined</TableHead>
-                  <TableHead className="py-4 pr-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Orders</TableHead>
-                  <TableHead className="py-4 pr-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Spent</TableHead>
-                  <TableHead className="py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+                  <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Customer Info</TableHead>
+                  <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Joined</TableHead>
+                  <TableHead className="px-4 py-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Orders</TableHead>
+                  <TableHead className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total Spent</TableHead>
+                  <TableHead className="px-4 py-4 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="divide-y divide-[#E5E5E0] dark:divide-border">
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      <TableCell className="align-top">
+                      <TableCell className="px-4 py-4 align-top">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-full bg-muted animate-pulse" />
                           <div>
@@ -367,10 +367,10 @@ export default function AdminCustomers() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="align-top"><div className="h-4 w-20 bg-muted animate-pulse" /></TableCell>
-                      <TableCell className="align-top"><div className="h-4 w-12 bg-muted animate-pulse" /></TableCell>
-                      <TableCell className="align-top text-right"><div className="ml-auto h-4 w-20 bg-muted animate-pulse" /></TableCell>
-                      <TableCell className="align-top text-right"><div className="h-8 w-8 bg-muted animate-pulse float-right rounded" /></TableCell>
+                      <TableCell className="px-4 py-4 align-top"><div className="h-4 w-20 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="px-4 py-4 align-top"><div className="h-4 w-12 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="px-4 py-4 align-top text-right"><div className="ml-auto h-4 w-20 bg-muted animate-pulse" /></TableCell>
+                      <TableCell className="px-4 py-4 align-top text-right"><div className="ml-auto h-8 w-8 rounded bg-muted animate-pulse" /></TableCell>
                     </TableRow>
                   ))
                 ) : paginatedCustomers.length === 0 ? (
@@ -392,8 +392,8 @@ export default function AdminCustomers() {
                         )}
                         onClick={() => handleToggleExpand(customer.id)}
                       >
-                        <TableCell className="py-4 pr-6 align-top">
-                          <div className="flex w-full min-w-0 items-start gap-3">
+                        <TableCell className="px-4 py-4 align-top">
+                          <div className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
                             <Avatar className={cn("w-12 h-12 shadow-sm border border-black/5 dark:border-white/5", !customer.profileImageUrl && bgGradients[i % bgGradients.length])}>
                               {customer.profileImageUrl ? (
                                 <img src={customer.profileImageUrl} alt={`${customer.firstName} ${customer.lastName}`} className="object-cover" />
@@ -426,13 +426,13 @@ export default function AdminCustomers() {
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="py-4 pr-4 align-top">
+                        <TableCell className="px-4 py-4 align-top">
                           <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                             <Calendar className="w-3.5 h-3.5 shrink-0" />
                             <span>{new Date(customer.createdAt).toLocaleDateString()}</span>
                           </div>
                         </TableCell>
-                        <TableCell className="py-4 pr-4 align-top">
+                        <TableCell className="px-4 py-4 align-top">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="outline" className="font-medium bg-muted/50">
                               {customer.orderCount} orders
@@ -444,12 +444,12 @@ export default function AdminCustomers() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="py-4 pr-4 align-top text-right">
+                        <TableCell className="px-4 py-4 align-top text-right">
                           <div className="font-bold text-[#2C3E2D] dark:text-foreground">
                             {formatPrice(customer.totalSpent)}
                           </div>
                         </TableCell>
-                        <TableCell className="align-top text-right" onClick={(e) => e.stopPropagation()}>
+                        <TableCell className="px-4 py-4 align-top text-right" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted rounded-full">

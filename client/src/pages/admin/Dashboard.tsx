@@ -61,8 +61,8 @@ export default function AdminDashboard() {
     data: orders = [],
     isLoading: ordersLoading,
   } = useQuery<AdminOrder[]>({
-    queryKey: ["admin", "orders", { page: 1 }],
-    queryFn: () => fetchAdminOrders({ page: 1 }),
+    queryKey: ["admin", "orders", { page: 1, limit: 100 }],
+    queryFn: () => fetchAdminOrders({ page: 1, limit: 100 }),
   });
 
   const {
@@ -86,7 +86,7 @@ export default function AdminDashboard() {
     queryFn: () => fetchAnalytics("7d"), // Default to 7 days for quick overview
   });
 
-  const ordersToday = useMemo(() => {
+  const todaysOrdersRaw = useMemo(() => {
     return orders.filter((order) => {
       if (!order.createdAt) return false;
       const d = new Date(order.createdAt);
@@ -94,19 +94,47 @@ export default function AdminDashboard() {
     });
   }, [orders, today]);
 
-  const todaysRevenue = useMemo(
-    () =>
-      ordersToday.reduce((sum, order) => {
-        return sum + Number(order.total ?? 0);
-      }, 0),
-    [ordersToday],
-  );
+  const todayKey = useMemo(() => {
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, [today]);
+
+  const todaysRevenue = useMemo(() => {
+    return Number(analytics?.revenueByDay?.find((entry) => entry.date === todayKey)?.revenue ?? 0);
+  }, [analytics, todayKey]);
+
+  const todaysValidOrders = useMemo(() => {
+    return Number(analytics?.ordersByDay?.find((entry) => entry.date === todayKey)?.count ?? 0);
+  }, [analytics, todayKey]);
 
   const pendingToday = useMemo(
-    () =>
-      ordersToday.filter((order) => order.status === "pending").length,
-    [ordersToday],
+    () => todaysOrdersRaw.filter((order) => order.status === "pending").length,
+    [todaysOrdersRaw],
   );
+
+  const analyticsTrendData = useMemo(() => {
+    if (!analytics) return null;
+
+    const revenueMap = new Map((analytics.revenueByDay ?? []).map((entry) => [entry.date, Number(entry.revenue ?? 0)]));
+    const orderMap = new Map((analytics.ordersByDay ?? []).map((entry) => [entry.date, Number(entry.count ?? 0)]));
+    const keys = Array.from(new Set([...Array.from(revenueMap.keys()), ...Array.from(orderMap.keys())])).sort();
+
+    if (keys.length === 0) return null;
+
+    return {
+      rangeStart: `${keys[0]}T00:00:00.000Z`,
+      rangeEnd: `${keys[keys.length - 1]}T00:00:00.000Z`,
+      series: keys.map((day) => ({
+        day,
+        revenue: revenueMap.get(day) ?? 0,
+        total: orderMap.get(day) ?? 0,
+        completed: orderMap.get(day) ?? 0,
+        pending: 0,
+      })),
+    };
+  }, [analytics]);
 
   const lowStockProducts = useMemo(
     () => products.filter((p) => p.stock < 5),
@@ -214,7 +242,7 @@ export default function AdminDashboard() {
             Orders Today
           </p>
           <p className="text-2xl font-serif font-semibold">
-            {ordersToday.length.toString()}
+            {todaysValidOrders.toString()}
           </p>
           <p className="text-xs text-muted-foreground">
             Since midnight ({today.toLocaleDateString()})
@@ -297,7 +325,7 @@ export default function AdminDashboard() {
         </Button>
       </section>
 
-      <OrdersTrendChart orders={orders} timeRange="7d" />
+      <OrdersTrendChart trendData={analyticsTrendData} timeRange="7d" />
 
       <Suspense
         fallback={

@@ -14,6 +14,14 @@ export const STOREFRONT_BRANDING_QUERY_KEY = ["/api/public/branding"] as const;
 
 export const STOREFRONT_LOGO_PRESETS: StorefrontLogoPreset[] = [
   {
+    id: "updated-wordmark",
+    label: "Updated Wordmark",
+    description: "The previous storefront logo with automatic contrast handling across light and dark surfaces.",
+    logoUrl: "/images/updatedlogo.png",
+    previewBackground: "#ffffff",
+    previewClassName: "max-h-12",
+  },
+  {
     id: "monogram-mark",
     label: "Monogram Mark",
     description: "Compact logo mark preset for the landing page and navigation.",
@@ -42,8 +50,8 @@ export const STOREFRONT_LOGO_PRESETS: StorefrontLogoPreset[] = [
   },
 ];
 
-const FALLBACK_LIGHT_LOGO_URL = STOREFRONT_LOGO_PRESETS[0].logoUrl;
-const FALLBACK_DARK_LOGO_URL = STOREFRONT_LOGO_PRESETS[0].logoDarkUrl ?? STOREFRONT_LOGO_PRESETS[0].logoUrl;
+const FALLBACK_LIGHT_LOGO_URL = "/images/updatedlogo.png";
+const FALLBACK_DARK_LOGO_URL = "/images/updatedlogo.png";
 
 export function resolveStorefrontLogo(
   branding: Pick<SiteBranding, "logoUrl" | "logoDarkUrl"> | null | undefined,

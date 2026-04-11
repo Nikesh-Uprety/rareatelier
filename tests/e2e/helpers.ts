@@ -11,6 +11,21 @@ export async function loginAsAdmin(page: Page) {
   await expect(page).toHaveURL(/\/admin$/);
 }
 
+export async function loginAsSuperadmin(page: Page) {
+  const response = await page.context().request.post("/api/auth/login", {
+    data: {
+      email: "superadmin@rare.np",
+      password: "superadmin123",
+    },
+  });
+  const result = (await response.json()) as { success?: boolean; requires2FA?: boolean; error?: string };
+  expect(response.ok(), result.error ?? "Superadmin login failed").toBeTruthy();
+  expect(result.success, result.error ?? "Superadmin login failed").toBeTruthy();
+  expect(result.requires2FA, "Superadmin test account unexpectedly requires OTP").not.toBeTruthy();
+  await page.goto("/admin");
+  await expect(page).toHaveURL(/\/admin$/);
+}
+
 export async function openFirstProduct(page: Page) {
   await page.goto("/products");
   await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();

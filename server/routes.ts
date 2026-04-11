@@ -42,6 +42,7 @@ import {
     newsletterSubscribers,
     orders,
     orderItems,
+    orderVerificationChallenges,
     pageSections,
     pageTemplates,
     pages,
@@ -67,6 +68,7 @@ import {
     sendMarketingBroadcastEmail,
     sendNewsletterWelcomeEmail,
     sendOrderConfirmationEmail,
+    sendOrderVerificationEmail,
     sendOrderStatusUpdateEmail,
     sendOTPEmail,
     sendStoreUserWelcomeEmail,
@@ -123,6 +125,15 @@ const DEFAULT_PAYMENT_QR_URLS = {
 
 const PAYMENT_PROOF_STORAGE = (process.env.PAYMENT_PROOF_STORAGE || "cloudinary").toLowerCase();
 
+const MAX_ITEMS_NEW_CUSTOMER = 5;
+const MIN_ORDERS_FOR_UNLIMITED = 5;
+const MAX_FAILED_ORDER_ATTEMPTS = 30;
+const ABUSE_TIMEOUT_MS = 5 * 60 * 1000;
+const ORDER_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
+const ORDER_VERIFICATION_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
+const MAX_VERIFICATION_CODE_ATTEMPTS = 5;
+const MAX_GUEST_ORDER_IDS = 24;
+
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
 const abuseAttempts = new Map<string, { count: number; blockedAt: number }>();
 
@@ -166,6 +177,7 @@ const CANVAS_TEMPLATE_OVERRIDES = {
 
 let siteSettingsHasFontPresetColumnCache: boolean | null = null;
 let mediaAssetsCompatEnsured: Promise<void> | null = null;
+let orderVerificationChallengesEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
   if (siteSettingsHasFontPresetColumnCache !== null) {
@@ -612,6 +624,142 @@ async function ensureMediaAssetsCompatibility() {
   return mediaAssetsCompatEnsured;
 }
 
+async function ensureOrderVerificationChallengesTable() {
+  if (orderVerificationChallengesEnsured) {
+    return orderVerificationChallengesEnsured;
+  }
+
+  orderVerificationChallengesEnsured = (async () => {
+    await db.execute(sql`
+      create table if not exists order_verification_challenges (
+        id varchar primary key,
+        email text not null,
+        token text not null,
+        verification_token text,
+        requested_quantity integer not null,
+        status text not null default 'pending',
+        request_ip text,
+        code_attempts integer not null default 0,
+        expires_at timestamp with time zone not null,
+        verification_expires_at timestamp with time zone,
+        verified_at timestamp with time zone,
+        used_at timestamp with time zone,
+        created_at timestamp with time zone not null default now(),
+        updated_at timestamp with time zone not null default now()
+      )
+    `);
+
+    await db.execute(sql`
+      create index if not exists order_verification_challenges_email_idx
+      on order_verification_challenges (lower(email))
+    `);
+    await db.execute(sql`
+      create index if not exists order_verification_challenges_status_idx
+      on order_verification_challenges (status)
+    `);
+    await db.execute(sql`
+      create index if not exists order_verification_challenges_expiry_idx
+      on order_verification_challenges (expires_at)
+    `);
+  })().catch((error) => {
+    orderVerificationChallengesEnsured = null;
+    throw error;
+  });
+
+  return orderVerificationChallengesEnsured;
+}
+
+function normalizeCustomerEmail(email: string) {
+  return email.toLowerCase().trim();
+}
+
+function getClientIp(req: Request) {
+  const forwarded = req.get("x-forwarded-for");
+  const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  return forwardedValue?.split(",")[0]?.trim() || req.ip || "unknown";
+}
+
+function getAbuseKey(req: Request, email: string) {
+  return `${getClientIp(req)}:${normalizeCustomerEmail(email)}`;
+}
+
+function getActiveAbuseEntry(abuseKey: string) {
+  const entry = abuseAttempts.get(abuseKey);
+  if (!entry) return null;
+
+  if (entry.blockedAt > 0 && Date.now() - entry.blockedAt >= ABUSE_TIMEOUT_MS) {
+    abuseAttempts.delete(abuseKey);
+    return null;
+  }
+
+  return entry;
+}
+
+function getRemainingAbuseMinutes(entry: { blockedAt: number }) {
+  return Math.max(
+    1,
+    Math.ceil((ABUSE_TIMEOUT_MS - (Date.now() - entry.blockedAt)) / 1000 / 60),
+  );
+}
+
+function registerAbuseFailure(abuseKey: string) {
+  const existing = getActiveAbuseEntry(abuseKey) || { count: 0, blockedAt: 0 };
+  const nextCount = existing.count + 1;
+  const nextEntry =
+    nextCount >= MAX_FAILED_ORDER_ATTEMPTS
+      ? { count: nextCount, blockedAt: Date.now() }
+      : { count: nextCount, blockedAt: existing.blockedAt };
+  abuseAttempts.set(abuseKey, nextEntry);
+  return nextEntry;
+}
+
+async function getLargeOrderGate(req: Request, email: string, totalQuantity: number) {
+  const customerEmail = normalizeCustomerEmail(email);
+  const abuseKey = getAbuseKey(req, customerEmail);
+  const abuseEntry = getActiveAbuseEntry(abuseKey);
+  const orderCount = await storage.getOrderCountByEmail(customerEmail);
+  const isTrustedCustomer = orderCount >= MIN_ORDERS_FOR_UNLIMITED;
+  const requiresVerification = !isTrustedCustomer && totalQuantity > MAX_ITEMS_NEW_CUSTOMER;
+
+  return {
+    customerEmail,
+    totalQuantity,
+    orderCount,
+    isTrustedCustomer,
+    requiresVerification,
+    abuseKey,
+    abuseEntry,
+  };
+}
+
+function getGuestOrderIds(req: Request): string[] {
+  const ids = req.session?.guestOrderIds;
+  return Array.isArray(ids) ? ids.filter((value): value is string => typeof value === "string") : [];
+}
+
+function grantGuestOrderAccess(req: Request, orderId: string) {
+  if (!req.session) return;
+  const nextIds = Array.from(new Set([...getGuestOrderIds(req), orderId])).slice(-MAX_GUEST_ORDER_IDS);
+  req.session.guestOrderIds = nextIds;
+}
+
+function canAccessOrderRecord(req: Request, order: { id: string; email?: string | null; userId?: string | null }) {
+  const user = req.user as Express.User | undefined;
+  if (user) {
+    const isAdminOrStaff = canAccessAdminPanel(user.role);
+    const userEmail = user.email?.toLowerCase();
+    const orderEmail = order.email?.toLowerCase();
+    const isOwner =
+      order.userId === user.id || (!!userEmail && !!orderEmail && userEmail === orderEmail);
+
+    if (isAdminOrStaff || isOwner) {
+      return true;
+    }
+  }
+
+  return getGuestOrderIds(req).includes(order.id);
+}
+
 function sanitizeUploadFilename(name: string) {
   const base = name.split("/").pop() || name;
   const trimmed = base.replace(/\?.*$/, "").replace(/#[^]*$/, "").trim();
@@ -710,6 +858,7 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   await ensureMediaAssetsCompatibility();
+  await ensureOrderVerificationChallengesTable();
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
@@ -819,20 +968,24 @@ ${Array.from(uniqueEntries.entries())
     template: { id?: number; slug?: string | null } | null | undefined,
     sections: T[],
   ): T[] => {
-    if (template?.slug === "rare-dark-luxury") {
-      if (sections.some((section) => section.sectionType === "hero")) return sections;
+    let resolvedSections = sections;
+
+    if (template?.slug === "rare-dark-luxury" && !resolvedSections.some((section) => section.sectionType === "hero")) {
 
       const fallbackHero = {
         templateId: template.id ?? 0,
         id: -1,
         sectionType: "hero",
-        label: "Hero",
+        label: "Hero Story",
         orderIndex: 1,
         isVisible: true,
-        config: { variant: "dark-cinematic" },
+        config: {
+          variant: "maison-nocturne",
+          slides: MAISON_NOCTURNE_DEFAULT_HERO_SLIDES,
+        },
       } as T;
 
-      return [fallbackHero, ...sections.map((section) => ({
+      resolvedSections = [fallbackHero, ...resolvedSections.map((section) => ({
         ...section,
         orderIndex: Math.max(2, section.orderIndex + 1),
       }))];
@@ -844,6 +997,21 @@ ${Array.from(uniqueEntries.entries())
     };
 
     const curatedTemplates = {
+      "rare-dark-luxury": [
+        { sectionType: "ticker" },
+        { sectionType: "hero", variant: "maison-nocturne" },
+        { sectionType: "quote", variant: "maison-nocturne-statement" },
+        { sectionType: "featured", variant: "maison-nocturne" },
+        { sectionType: "gallery", variant: "gallery-lookbook" },
+        { sectionType: "campaign", variant: "campaign-poster" },
+        { sectionType: "arrivals", variant: "arrivals-spotlight" },
+        { sectionType: "fresh-release" },
+        { sectionType: "testimonial" },
+        { sectionType: "services", variant: "services-dark" },
+        { sectionType: "faq" },
+        { sectionType: "contact", variant: "contact-editorial" },
+        { sectionType: "back-to-top" },
+      ] satisfies CuratedSectionBlueprint[],
       "maison-nocturne": [
         { sectionType: "hero", variant: "maison-nocturne" },
         { sectionType: "ticker" },
@@ -865,14 +1033,14 @@ ${Array.from(uniqueEntries.entries())
         ? curatedTemplates[template.slug as keyof typeof curatedTemplates]
         : undefined;
 
-    if (!sectionBlueprints) return sections;
+    if (!sectionBlueprints) return resolvedSections;
 
     const usedSectionIds = new Set<number>();
     const normalizedSections: T[] = [];
 
     for (let index = 0; index < sectionBlueprints.length; index += 1) {
       const blueprint = sectionBlueprints[index];
-      const sameTypeSections = sections.filter((section) => section.sectionType === blueprint.sectionType);
+      const sameTypeSections = resolvedSections.filter((section) => section.sectionType === blueprint.sectionType);
       if (!sameTypeSections.length) continue;
 
       const preferred =
@@ -915,7 +1083,7 @@ ${Array.from(uniqueEntries.entries())
       normalizedSections.push(mergedSection);
     }
 
-    const extraSections = sections.filter((section) => {
+    const extraSections = resolvedSections.filter((section) => {
       if (typeof section.id === "number" && usedSectionIds.has(section.id)) {
         return false;
       }
@@ -1027,7 +1195,12 @@ ${Array.from(uniqueEntries.entries())
     const url = req.originalUrl || req.url;
     
     // Skip static files and health checks to keep logs clean/performant
-    if (url.startsWith("/uploads") || url.startsWith("/assets") || url === "/api/health") {
+    if (
+      url.startsWith("/uploads") ||
+      url.startsWith("/assets") ||
+      url === "/api/health" ||
+      url === "/health"
+    ) {
       return next();
     }
 
@@ -1188,75 +1361,18 @@ ${Array.from(uniqueEntries.entries())
     }
   });
 
-  app.get("/api/public/page-config", async (req: Request, res: Response) => {
-    try {
-      const previewTemplateIdRaw =
-        typeof req.query.templateId === "string" ? req.query.templateId : undefined;
-      const previewTemplateId =
-        previewTemplateIdRaw && /^\d+$/.test(previewTemplateIdRaw)
-          ? parseInt(previewTemplateIdRaw, 10)
-          : null;
-      const applyPageConfigCacheHeaders = () => {
-        res.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
-        if (previewTemplateId !== null) {
-          res.set("Vary", "Cookie");
-        }
-      };
-
-      if (
-        previewTemplateId !== null &&
-        !canAccessAdminPage((req.user as Express.User | undefined)?.role, "landing-page")
-      ) {
-        return res.status(403).json({ success: false, error: "Forbidden" });
-      }
-
-      const settings = await getSiteSettingsCompat();
-
-      if (!settings.length && previewTemplateId === null) {
-        applyPageConfigCacheHeaders();
-        return res.json({ template: null, sections: [] });
-      }
-
-      const activeId = previewTemplateId ?? settings[0]?.activeTemplateId ?? null;
-      if (!activeId) {
-        applyPageConfigCacheHeaders();
-        return res.json({ template: null, sections: [] });
-      }
-
-      const template = await db
-        .select()
-        .from(pageTemplates)
-        .where(eq(pageTemplates.id, activeId))
-        .limit(1);
-
-      const sections = await db
-        .select()
-        .from(pageSections)
-        .where(and(eq(pageSections.templateId, activeId), sql`${pageSections.pageId} IS NULL`))
-        .orderBy(pageSections.orderIndex);
-
-      const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(activeId, sections as any);
-      const sectionsWithFaq = await ensureFaqSectionForTemplate(activeId, sectionsWithBackToTop as any);
-      const normalizedSections = ensureTemplateSections(template[0] ?? null, sectionsWithFaq as any);
-
-      applyPageConfigCacheHeaders();
-      return res.json({
-        fontPreset: settings[0]?.fontPreset ?? "inter",
-        productsPageConfig: normalizeStorefrontProductsLayoutConfig(
-          settings[0]?.productsPageConfig ?? {},
-        ),
-        template: normalizeCanvasTemplate(template[0] ?? null) ?? null,
-        sections: normalizedSections.filter((s) => s.isVisible),
-      });
-    } catch (err) {
-      console.error("Error in GET /api/public/page-config", err);
-      return res.status(500).json({ error: "Failed to load page config" });
-    }
-  });
-
   app.post("/api/admin/canvas/seed", requireAdminPageAccess("landing-page"), async (_req: Request, res: Response) => {
     try {
       const existingTemplates = await db.select().from(pageTemplates);
+      const rareDarkTemplateValues = {
+        name: "RARE Dark Luxury",
+        slug: "rare-dark-luxury",
+        tier: "premium",
+        priceNpr: 0,
+        isPurchased: true,
+        thumbnailUrl: "/images/maison-nocturne-hero-1.webp",
+        description: "A complete dark-mode luxury storefront with cinematic merchandising.",
+      } as const;
       const maisonTemplateValues = {
         name: "Rare Atelier Official",
         slug: "maison-nocturne",
@@ -1283,6 +1399,211 @@ ${Array.from(uniqueEntries.entries())
         thumbnailUrl: "/images/stussy.webp",
         description: "Minimal full-bleed landing with side-nav storefront layout.",
       } as const;
+      const rareDarkSections = [
+        {
+          sectionType: "ticker",
+          label: "Luxury Ticker",
+          orderIndex: 1,
+          isVisible: true,
+          config: {
+            items: [
+              "Dark Luxury Capsule — Live Now",
+              "Priority dispatch on active pieces",
+              "Private styling support available",
+              "Premium exchange assistance",
+              "Curated midnight edit",
+            ],
+          },
+        },
+        {
+          sectionType: "hero",
+          label: "Dark Luxury Hero",
+          orderIndex: 2,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne",
+            slides: [
+              {
+                ...MAISON_NOCTURNE_DEFAULT_HERO_SLIDES[0],
+                tag: "Rare Dark Luxury / 01",
+                headline: "Dark Luxury.",
+                eyebrow: "A colder, sharper storefront entrance",
+                body: "A premium landing page built to present Rare Atelier through contrast, restraint, and cinematic product focus.",
+                ctaLabel: "Shop the Midnight Edit",
+                ctaHref: "/products",
+              },
+              {
+                ...MAISON_NOCTURNE_DEFAULT_HERO_SLIDES[1],
+                tag: "Capsule Story / 02",
+                headline: "Midnight Capsule.",
+                eyebrow: "Focused assortments with gallery-led storytelling",
+                body: "Lead shoppers through a darker editorial journey that still stays clear, modern, and conversion-friendly.",
+                ctaLabel: "View the Gallery",
+                ctaHref: "/gallery",
+                image: "/images/landingpage3.webp",
+              },
+              {
+                ...MAISON_NOCTURNE_DEFAULT_HERO_SLIDES[2],
+                tag: "Studio Service / 03",
+                headline: "Built To Feel Premium.",
+                eyebrow: "Luxury presentation from first scroll to checkout",
+                body: "Pair product discovery, service confidence, and brand atmosphere in one stronger home experience.",
+                ctaLabel: "Contact the Studio",
+                ctaHref: "/atelier",
+                image: "/images/home-campaign-editorial.webp",
+              },
+            ],
+          },
+        },
+        {
+          sectionType: "quote",
+          label: "Brand Statement",
+          orderIndex: 3,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne-statement",
+            text: "Built in shadow, finished with precision, and meant to hold attention without asking for it.",
+            attribution: "Rare Atelier — Dark Luxury Edition",
+          },
+        },
+        {
+          sectionType: "featured",
+          label: "Featured Products",
+          orderIndex: 4,
+          isVisible: true,
+          config: {
+            variant: "maison-nocturne",
+            label: "Luxury Edit",
+            title: "An elevated product edit for the darker storefront mood.",
+            hint: "Drag to explore",
+          },
+        },
+        {
+          sectionType: "gallery",
+          label: "Lookbook Gallery",
+          orderIndex: 5,
+          isVisible: true,
+          config: {
+            variant: "gallery-lookbook",
+            eyebrow: "Brand Gallery",
+            title: "Campaign frames, product texture, and the wider Rare visual world.",
+            text: "Use the gallery as a visual bridge between hero storytelling and product shopping.",
+            images: [
+              "/images/maison-nocturne-hero-1.webp",
+              "/images/landingpage3.webp",
+              "/images/home-campaign-editorial.webp",
+              "/images/feature1.webp",
+              "/images/feature2.webp",
+              "/images/feature3.webp",
+            ],
+          },
+        },
+        {
+          sectionType: "campaign",
+          label: "Campaign Poster",
+          orderIndex: 6,
+          isVisible: true,
+          config: {
+            variant: "campaign-poster",
+            title: "The Midnight Campaign",
+            text: "A strong promotional beat for seasonal capsules, limited drops, and event-driven launches.",
+            ctaLabel: "Explore the Drop",
+            ctaHref: "/products",
+            image: "/images/home-campaign-editorial.webp",
+          },
+        },
+        {
+          sectionType: "arrivals",
+          label: "New Arrivals",
+          orderIndex: 7,
+          isVisible: true,
+          config: {
+            variant: "arrivals-spotlight",
+            eyebrow: "New In",
+            title: "Latest arrivals in a darker release grid.",
+            text: "Fresh pieces presented with stronger contrast and a cleaner premium rhythm.",
+          },
+        },
+        {
+          sectionType: "fresh-release",
+          label: "Fresh Release",
+          orderIndex: 8,
+          isVisible: true,
+          config: {
+            title: "Fresh Release",
+            text: "A second product block for newer pieces, tighter edits, and launch-first merchandising.",
+            columns: 4,
+          },
+        },
+        {
+          sectionType: "testimonial",
+          label: "Client Notes",
+          orderIndex: 9,
+          isVisible: true,
+          config: {
+            eyebrow: "Customer Signal",
+            title: "Why the darker storefront still sells with clarity.",
+            text: "A polished social-proof layer that supports trust without making the page feel generic.",
+            items: [
+              {
+                quote: "The layout feels premium, but I can still shop it quickly.",
+                author: "Returning Customer",
+                role: "Online order",
+              },
+              {
+                quote: "The landing page looks editorial without hiding the products.",
+                author: "Campaign Buyer",
+                role: "Kathmandu",
+              },
+              {
+                quote: "It finally feels like a true luxury storefront from top to bottom.",
+                author: "Rare Community",
+                role: "Private drop member",
+              },
+            ],
+          },
+        },
+        {
+          sectionType: "services",
+          label: "Premium Services",
+          orderIndex: 10,
+          isVisible: true,
+          config: {
+            variant: "services-dark",
+            title: "Luxury service, not just product display.",
+            text: "Use service assurances to reinforce delivery, support, and exchange confidence.",
+          },
+        },
+        {
+          sectionType: "faq",
+          label: "FAQ",
+          orderIndex: 11,
+          isVisible: true,
+          config: {
+            title: "Questions before checkout",
+            text: "Answer the key buying questions with the same clean premium tone as the rest of the page.",
+          },
+        },
+        {
+          sectionType: "contact",
+          label: "Editorial Contact",
+          orderIndex: 12,
+          isVisible: true,
+          config: {
+            variant: "contact-editorial",
+            eyebrow: "Concierge",
+            title: "Speak with the Rare Atelier studio.",
+            text: "Give customers a direct premium contact path for sizing, drops, orders, or private requests.",
+          },
+        },
+        {
+          sectionType: "back-to-top",
+          label: "Back To Top",
+          orderIndex: 13,
+          isVisible: true,
+          config: {},
+        },
+      ] as const;
       const maisonSections = [
         {
           sectionType: "hero",
@@ -1446,9 +1767,26 @@ ${Array.from(uniqueEntries.entries())
 
       if (existingTemplates.length > 0) {
         let totalTemplates = existingTemplates.length;
+        const existingRareDark = existingTemplates.find((template) => template.slug === "rare-dark-luxury");
         const existingMaison = existingTemplates.find((template) => template.slug === "maison-nocturne");
         const existingNikesh = existingTemplates.find((template) => template.slug === "nikeshdesign");
         const existingStuffy = existingTemplates.find((template) => template.slug === "stuffyclone");
+
+        if (!existingRareDark) {
+          const [rareDarkLuxury] = await db
+            .insert(pageTemplates)
+            .values(rareDarkTemplateValues)
+            .returning();
+
+          await db.insert(pageSections).values(
+            rareDarkSections.map((section) => ({
+              templateId: rareDarkLuxury.id,
+              ...section,
+            })),
+          );
+
+          totalTemplates += 1;
+        }
 
         if (!existingMaison) {
           const [maisonNocturne] = await db
@@ -1503,14 +1841,7 @@ ${Array.from(uniqueEntries.entries())
 
       const [rareDarkLuxury] = await db
         .insert(pageTemplates)
-        .values({
-          name: "RARE Dark Luxury",
-          slug: "rare-dark-luxury",
-          tier: "premium",
-          priceNpr: 0,
-          isPurchased: true,
-          description: "The original RARE.NP dark editorial homepage",
-        })
+        .values(rareDarkTemplateValues)
         .returning();
 
       const [cleanMinimal] = await db
@@ -1551,12 +1882,10 @@ ${Array.from(uniqueEntries.entries())
         .returning();
 
       await db.insert(pageSections).values([
-        { templateId: rareDarkLuxury.id, sectionType: "hero", label: "Hero", orderIndex: 1, isVisible: true, config: { variant: "dark-cinematic" } },
-        { templateId: rareDarkLuxury.id, sectionType: "quote", label: "Quote Section", orderIndex: 2, isVisible: true, config: { text: "Wear the rare ones." } },
-        { templateId: rareDarkLuxury.id, sectionType: "featured", label: "Featured Collection", orderIndex: 3, isVisible: true, config: {} },
-        { templateId: rareDarkLuxury.id, sectionType: "campaign", label: "Campaign Banner", orderIndex: 4, isVisible: true, config: {} },
-        { templateId: rareDarkLuxury.id, sectionType: "arrivals", label: "New Arrivals", orderIndex: 5, isVisible: true, config: {} },
-        { templateId: rareDarkLuxury.id, sectionType: "services", label: "Our Services", orderIndex: 6, isVisible: true, config: {} },
+        ...rareDarkSections.map((section) => ({
+          templateId: rareDarkLuxury.id,
+          ...section,
+        })),
 
         { templateId: cleanMinimal.id, sectionType: "hero", label: "Simple Hero", orderIndex: 1, isVisible: true, config: { variant: "light-centered" } },
         { templateId: cleanMinimal.id, sectionType: "featured", label: "Featured Products", orderIndex: 2, isVisible: true, config: {} },
@@ -2428,6 +2757,13 @@ ${Array.from(uniqueEntries.entries())
       const slugParam = (req.query.slug as string) ?? "/";
       const templateIdParam = req.query.templateId ? parseInt(req.query.templateId as string) : null;
       const previewToken = (req.query.token as string) ?? null;
+      const settings = await getSiteSettingsCompat();
+      const basePageConfig = {
+        fontPreset: settings[0]?.fontPreset ?? "inter",
+        productsPageConfig: normalizeStorefrontProductsLayoutConfig(
+          settings[0]?.productsPageConfig ?? {},
+        ),
+      };
 
       let previewPageId: number | null = null;
       if (previewToken) {
@@ -2440,23 +2776,52 @@ ${Array.from(uniqueEntries.entries())
       if (templateIdParam) {
         const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, templateIdParam)).limit(1);
         const sections = await db.select().from(pageSections).where(and(eq(pageSections.templateId, templateIdParam), sql`${pageSections.pageId} IS NULL`)).orderBy(pageSections.orderIndex);
-        const settings = await db.select().from(siteSettings).limit(1);
+        const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(templateIdParam, sections as any);
+        const sectionsWithFaq = await ensureFaqSectionForTemplate(templateIdParam, sectionsWithBackToTop as any);
         return res.json({
-          fontPreset: settings[0]?.fontPreset ?? "inter",
-          template,
-          sections: sections.filter((s) => s.isVisible),
+          ...basePageConfig,
+          template: normalizeCanvasTemplate(template ?? null) ?? null,
+          sections: ensureTemplateSections(template ?? null, sectionsWithFaq as any).filter((s) => s.isVisible),
         });
+      }
+
+      if (slugParam === "/" && previewPageId === null) {
+        const activeId = settings[0]?.activeTemplateId;
+        if (activeId) {
+          const [template] = await db
+            .select()
+            .from(pageTemplates)
+            .where(eq(pageTemplates.id, activeId))
+            .limit(1);
+          const sections = await db
+            .select()
+            .from(pageSections)
+            .where(and(eq(pageSections.templateId, activeId), sql`${pageSections.pageId} IS NULL`))
+            .orderBy(pageSections.orderIndex);
+          const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(activeId, sections as any);
+          const sectionsWithFaq = await ensureFaqSectionForTemplate(activeId, sectionsWithBackToTop as any);
+          return res.json({
+            ...basePageConfig,
+            template: normalizeCanvasTemplate(template ?? null) ?? null,
+            sections: ensureTemplateSections(template ?? null, sectionsWithFaq as any).filter((s) => s.isVisible),
+          });
+        }
       }
 
       const [page] = await db.select().from(pages).where(eq(pages.slug, slugParam)).limit(1);
       if (!page) {
         if (slugParam === "/") {
-          const settings = await db.select().from(siteSettings).limit(1);
           const activeId = settings[0]?.activeTemplateId;
           if (activeId) {
             const [template] = await db.select().from(pageTemplates).where(eq(pageTemplates.id, activeId)).limit(1);
             const sections = await db.select().from(pageSections).where(and(eq(pageSections.templateId, activeId), sql`${pageSections.pageId} IS NULL`)).orderBy(pageSections.orderIndex);
-            return res.json({ fontPreset: settings[0]?.fontPreset ?? "inter", template, sections: sections.filter((s) => s.isVisible) });
+            const sectionsWithBackToTop = await ensureBackToTopSectionForTemplate(activeId, sections as any);
+            const sectionsWithFaq = await ensureFaqSectionForTemplate(activeId, sectionsWithBackToTop as any);
+            return res.json({
+              ...basePageConfig,
+              template: normalizeCanvasTemplate(template ?? null) ?? null,
+              sections: ensureTemplateSections(template ?? null, sectionsWithFaq as any).filter((s) => s.isVisible),
+            });
           }
         }
         return res.status(404).json({ error: "Page not found" });
@@ -2474,11 +2839,9 @@ ${Array.from(uniqueEntries.entries())
         .where(and(eq(pageSections.pageId, page.id), sql`${pageSections.templateId} IS NULL`))
         .orderBy(pageSections.orderIndex);
 
-      const settings = await db.select().from(siteSettings).limit(1);
-
       return res.json({
+        ...basePageConfig,
         page,
-        fontPreset: settings[0]?.fontPreset ?? "inter",
         sections: pageSectionsList.filter((s) => s.isVisible),
       });
     } catch (err) {
@@ -2958,10 +3321,203 @@ ${Array.from(uniqueEntries.entries())
     deliveryProvider: z.string().optional().nullable(),
     deliveryAddress: z.string().optional().nullable(),
     promoCodeId: z.string().optional(),
+    orderVerificationToken: z.string().optional(),
   });
   const adminCreateOrderSchema = createOrderSchema.extend({
     status: z.enum(["pending", "processing", "completed", "cancelled"]).optional(),
   });
+
+  const orderVerificationRequestSchema = z.object({
+    email: z.string().email(),
+    quantity: z.number().int().positive(),
+  });
+
+  const orderVerificationConfirmSchema = z.object({
+    challengeId: z.string().min(1),
+    email: z.string().email(),
+    code: z.string().trim().min(4).max(6),
+  });
+
+  app.post(
+    "/api/orders/verification/request",
+    validateRequest(orderVerificationRequestSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { email, quantity } = req.body as z.infer<typeof orderVerificationRequestSchema>;
+        const gate = await getLargeOrderGate(req, email, quantity);
+
+        if (gate.abuseEntry?.blockedAt) {
+          const remaining = getRemainingAbuseMinutes(gate.abuseEntry);
+          return res.status(429).json({
+            success: false,
+            error: `Too many failed attempts. Please try again in ${remaining} minute${remaining > 1 ? "s" : ""}.`,
+            code: "ABUSE_TIMEOUT",
+            retryAfter: remaining,
+          });
+        }
+
+        if (!gate.requiresVerification) {
+          return res.json({
+            success: true,
+            required: false,
+            orderCount: gate.orderCount,
+            limit: MAX_ITEMS_NEW_CUSTOMER,
+          });
+        }
+
+        await db
+          .update(orderVerificationChallenges)
+          .set({
+            status: "expired",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(sql`lower(${orderVerificationChallenges.email})`, gate.customerEmail),
+              or(
+                eq(orderVerificationChallenges.status, "pending"),
+                eq(orderVerificationChallenges.status, "verified"),
+              ),
+            ),
+          );
+
+        const challengeId = crypto.randomUUID();
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + ORDER_VERIFICATION_CODE_TTL_MS);
+
+        await db.insert(orderVerificationChallenges).values({
+          id: challengeId,
+          email: gate.customerEmail,
+          token: verificationCode,
+          requestedQuantity: gate.totalQuantity,
+          status: "pending",
+          requestIp: getClientIp(req),
+          codeAttempts: 0,
+          expiresAt,
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        await sendOrderVerificationEmail(gate.customerEmail, verificationCode);
+
+        return res.json({
+          success: true,
+          required: true,
+          challengeId,
+          email: gate.customerEmail,
+          expiresInMinutes: Math.ceil(ORDER_VERIFICATION_CODE_TTL_MS / 1000 / 60),
+          limit: MAX_ITEMS_NEW_CUSTOMER,
+          orderCount: gate.orderCount,
+        });
+      } catch (err) {
+        console.error("Error in POST /api/orders/verification/request", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to send verification code",
+        });
+      }
+    },
+  );
+
+  app.post(
+    "/api/orders/verification/confirm",
+    validateRequest(orderVerificationConfirmSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { challengeId, email, code } = req.body as z.infer<typeof orderVerificationConfirmSchema>;
+        const customerEmail = normalizeCustomerEmail(email);
+        const abuseKey = getAbuseKey(req, customerEmail);
+        const activeBlock = getActiveAbuseEntry(abuseKey);
+
+        if (activeBlock?.blockedAt) {
+          const remaining = getRemainingAbuseMinutes(activeBlock);
+          return res.status(429).json({
+            success: false,
+            error: `Too many failed attempts. Please try again in ${remaining} minute${remaining > 1 ? "s" : ""}.`,
+            code: "ABUSE_TIMEOUT",
+            retryAfter: remaining,
+          });
+        }
+
+        const [challenge] = await db
+          .select()
+          .from(orderVerificationChallenges)
+          .where(
+            and(
+              eq(orderVerificationChallenges.id, challengeId),
+              eq(sql`lower(${orderVerificationChallenges.email})`, customerEmail),
+            ),
+          )
+          .limit(1);
+
+        const now = new Date();
+        if (
+          !challenge ||
+          challenge.status !== "pending" ||
+          new Date(challenge.expiresAt).getTime() < now.getTime()
+        ) {
+          return res.status(400).json({
+            success: false,
+            error: "Verification code is invalid or expired.",
+            code: "INVALID_VERIFICATION_CODE",
+          });
+        }
+
+        if (challenge.token !== code.trim()) {
+          const nextAttempts = Number(challenge.codeAttempts ?? 0) + 1;
+          const shouldExpire = nextAttempts >= MAX_VERIFICATION_CODE_ATTEMPTS;
+          await db
+            .update(orderVerificationChallenges)
+            .set({
+              codeAttempts: nextAttempts,
+              status: shouldExpire ? "expired" : challenge.status,
+              updatedAt: now,
+            })
+            .where(eq(orderVerificationChallenges.id, challenge.id));
+
+          if (shouldExpire) {
+            registerAbuseFailure(abuseKey);
+          }
+
+          return res.status(400).json({
+            success: false,
+            error: shouldExpire
+              ? "Too many incorrect codes. Please request a new verification email."
+              : "The verification code did not match.",
+            code: "INVALID_VERIFICATION_CODE",
+            attemptsRemaining: Math.max(0, MAX_VERIFICATION_CODE_ATTEMPTS - nextAttempts),
+          });
+        }
+
+        const verificationToken = crypto.randomBytes(24).toString("hex");
+        await db
+          .update(orderVerificationChallenges)
+          .set({
+            status: "verified",
+            verificationToken,
+            verifiedAt: now,
+            verificationExpiresAt: new Date(now.getTime() + ORDER_VERIFICATION_TOKEN_TTL_MS),
+            updatedAt: now,
+          })
+          .where(eq(orderVerificationChallenges.id, challenge.id));
+
+        return res.json({
+          success: true,
+          verificationToken,
+          expiresInMinutes: Math.ceil(ORDER_VERIFICATION_TOKEN_TTL_MS / 1000 / 60),
+          requestedQuantity: challenge.requestedQuantity,
+          email: customerEmail,
+        });
+      } catch (err) {
+        console.error("Error in POST /api/orders/verification/confirm", err);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to verify email code",
+        });
+      }
+    },
+  );
 
   app.post(
     "/api/orders", 
@@ -2977,27 +3533,14 @@ ${Array.from(uniqueEntries.entries())
           deliveryRequired,
           deliveryProvider,
           deliveryAddress,
+          orderVerificationToken,
         } = req.body;
 
-      // --- New Customer Order Limit & Abuse Prevention ---
-      const MAX_ITEMS_NEW_CUSTOMER = 5;
-      const MIN_ORDERS_FOR_UNLIMITED = 5;
-      const MAX_FAILED_ORDER_ATTEMPTS = 30;
-      const ABUSE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-
       const totalQuantity = items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
-      const customerEmail = shipping.email.toLowerCase().trim();
-      const clientIp = req.ip || req.get("x-forwarded-for") || "unknown";
-      const abuseKey = `${clientIp}:${customerEmail}`;
+      const gate = await getLargeOrderGate(req, shipping.email, totalQuantity);
 
-      // Check if customer has enough order history to bypass limit
-      const orderCount = await storage.getOrderCountByEmail(customerEmail);
-      const isTrustedCustomer = orderCount >= MIN_ORDERS_FOR_UNLIMITED;
-      const abuseEntry = abuseAttempts.get(abuseKey);
-
-      // If abuse block is active, fail fast before any further processing.
-      if (abuseEntry && abuseEntry.blockedAt > 0 && Date.now() - abuseEntry.blockedAt < ABUSE_TIMEOUT_MS) {
-        const remaining = Math.ceil((ABUSE_TIMEOUT_MS - (Date.now() - abuseEntry.blockedAt)) / 1000 / 60);
+      if (gate.abuseEntry?.blockedAt) {
+        const remaining = getRemainingAbuseMinutes(gate.abuseEntry);
         return res.status(429).json({
           success: false,
           error: `Too many failed attempts. Please try again in ${remaining} minute${remaining > 1 ? "s" : ""}.`,
@@ -3006,39 +3549,49 @@ ${Array.from(uniqueEntries.entries())
         });
       }
 
-      // Reset stale abuse records once timeout expires.
-      if (abuseEntry && abuseEntry.blockedAt > 0 && Date.now() - abuseEntry.blockedAt >= ABUSE_TIMEOUT_MS) {
-        abuseAttempts.delete(abuseKey);
-      }
+      let verifiedChallengeId: string | null = null;
 
-      if (!isTrustedCustomer && totalQuantity > MAX_ITEMS_NEW_CUSTOMER) {
-        // Track abuse attempts
-        const existing = abuseAttempts.get(abuseKey) || { count: 0, blockedAt: 0 };
-        const newCount = existing.count + 1;
-        if (newCount >= MAX_FAILED_ORDER_ATTEMPTS) {
-          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: Date.now() });
-        } else {
-          abuseAttempts.set(abuseKey, { count: newCount, blockedAt: existing.blockedAt });
-        }
-
-        logger.warn(`Order limit exceeded: ${customerEmail} tried to order ${totalQuantity} items (limit: ${MAX_ITEMS_NEW_CUSTOMER}, orders: ${orderCount}, attempts: ${newCount})`);
-        if (newCount >= MAX_FAILED_ORDER_ATTEMPTS) {
-          return res.status(429).json({
+      if (gate.requiresVerification) {
+        if (!orderVerificationToken) {
+          const nextEntry = registerAbuseFailure(gate.abuseKey);
+          return res.status(400).json({
             success: false,
-            error: "Too many failed attempts. Please try again in 5 minutes.",
-            code: "ABUSE_TIMEOUT",
-            retryAfter: 5,
+            error: `A quick email verification is required before a new customer can place more than ${MAX_ITEMS_NEW_CUSTOMER} items in one order.`,
+            code: "ORDER_VERIFICATION_REQUIRED",
+            limit: MAX_ITEMS_NEW_CUSTOMER,
+            orderCount: gate.orderCount,
+            attemptsRemaining: Math.max(0, MAX_FAILED_ORDER_ATTEMPTS - nextEntry.count),
           });
         }
 
-        return res.status(400).json({
-          success: false,
-          error: `New customers can order up to ${MAX_ITEMS_NEW_CUSTOMER} items at a time. You currently have ${totalQuantity} items in your cart. Please reduce your quantity or contact us for large orders.`,
-          code: "NEW_CUSTOMER_LIMIT_EXCEEDED",
-          limit: MAX_ITEMS_NEW_CUSTOMER,
-          orderCount,
-          attemptsRemaining: Math.max(0, MAX_FAILED_ORDER_ATTEMPTS - newCount),
-        });
+        const [verifiedChallenge] = await db
+          .select()
+          .from(orderVerificationChallenges)
+          .where(
+            and(
+              eq(sql`lower(${orderVerificationChallenges.email})`, gate.customerEmail),
+              eq(orderVerificationChallenges.verificationToken, orderVerificationToken),
+              eq(orderVerificationChallenges.requestedQuantity, gate.totalQuantity),
+              eq(orderVerificationChallenges.status, "verified"),
+              gte(orderVerificationChallenges.verificationExpiresAt, new Date()),
+            ),
+          )
+          .orderBy(desc(orderVerificationChallenges.verifiedAt))
+          .limit(1);
+
+        if (!verifiedChallenge) {
+          const nextEntry = registerAbuseFailure(gate.abuseKey);
+          return res.status(400).json({
+            success: false,
+            error: "Your verification has expired or is no longer valid. Please request a new email code.",
+            code: "ORDER_VERIFICATION_REQUIRED",
+            limit: MAX_ITEMS_NEW_CUSTOMER,
+            orderCount: gate.orderCount,
+            attemptsRemaining: Math.max(0, MAX_FAILED_ORDER_ATTEMPTS - nextEntry.count),
+          });
+        }
+
+        verifiedChallengeId = verifiedChallenge.id;
       }
 
       const orderSubtotal = items.reduce(
@@ -3189,8 +3742,20 @@ ${Array.from(uniqueEntries.entries())
         })),
       });
 
+      if (verifiedChallengeId) {
+        await db
+          .update(orderVerificationChallenges)
+          .set({
+            status: "used",
+            usedAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(orderVerificationChallenges.id, verifiedChallengeId));
+      }
+
       // Successful order clears any previous abuse tracking for this key.
-      abuseAttempts.delete(abuseKey);
+      abuseAttempts.delete(gate.abuseKey);
+      grantGuestOrderAccess(req, order.id);
 
       for (const item of resolvedItems) {
         const productId = item.productId;
@@ -3333,19 +3898,11 @@ ${Array.from(uniqueEntries.entries())
         return res.status(404).json({ success: false, error: "Order not found" });
       }
 
-      const user = req.user as Express.User | undefined;
-      if (user) {
-        const isAdminOrStaff = canAccessAdminPanel(user?.role);
-        const userEmail = user?.email?.toLowerCase();
-        const orderEmail = order?.email?.toLowerCase();
-        const isOwner =
-          order.userId === user.id || (!!userEmail && !!orderEmail && userEmail === orderEmail);
-
-        if (!isAdminOrStaff && !isOwner) {
-          return res.status(403).json({ success: false, error: "Forbidden" });
-        }
+      if (!canAccessOrderRecord(req, order)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
       }
 
+      grantGuestOrderAccess(req, order.id);
       return res.json({ success: true, data: order });
     } catch (err) {
       console.error("Error in GET /api/orders/:id", err);
@@ -3365,6 +3922,10 @@ ${Array.from(uniqueEntries.entries())
       const order = await storage.getOrderById(id);
       if (!order) {
         return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      if (!canAccessOrderRecord(req, order)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
       }
 
       if (order.status === "cancelled") {
@@ -3406,7 +3967,13 @@ ${Array.from(uniqueEntries.entries())
     async (req: Request, res: Response) => {
       try {
         const orderId = req.params.id as string;
-        await storage.getOrderById(orderId);
+        const order = await storage.getOrderById(orderId);
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+        if (!canAccessOrderRecord(req, order)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
         const base64 = req.body.imageBase64;
         const match = base64.match(/^data:image\/(\w+);base64,(.+)$/);
         const buffer = Buffer.from(
@@ -3450,6 +4017,10 @@ ${Array.from(uniqueEntries.entries())
 
         if (!order) {
           return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (!canAccessOrderRecord(req, order)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
         }
 
         if (order.status === "completed" || order.status === "cancelled") {
@@ -3499,6 +4070,10 @@ ${Array.from(uniqueEntries.entries())
       const order = await storage.getOrderById(orderId);
       if (!order) {
         return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      if (!canAccessOrderRecord(req, order)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
       }
 
       if (order.paymentMethod !== "stripe") {
@@ -3629,6 +4204,10 @@ ${Array.from(uniqueEntries.entries())
         const order = await storage.getOrderById(orderId);
         if (!order) {
           return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (!canAccessOrderRecord(req, order)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
         }
 
         if (order.paymentMethod !== "stripe") {
@@ -6084,6 +6663,10 @@ ${Array.from(uniqueEntries.entries())
         const search = getQueryParam(req.query.search);
         const timeRange = getQueryParam(req.query.timeRange);
         const conditions = [];
+        const validOrderConditions = [
+          eq(orders.status, "completed"),
+          eq(orders.paymentVerified, "verified"),
+        ];
 
         if (status) {
           conditions.push(eq(orders.status, status as any));
@@ -6126,8 +6709,7 @@ ${Array.from(uniqueEntries.entries())
           conditions.push(gte(orders.createdAt, rangeStart));
         }
 
-        const whereClause =
-          conditions.length > 0 ? and(...conditions) : undefined;
+        const whereClause = and(...validOrderConditions, ...(conditions.length > 0 ? conditions : []));
 
         const rows = await db
           .select({
@@ -9152,6 +9734,7 @@ ${Array.from(uniqueEntries.entries())
           productId: String(item.productId),
           variantId: item.variantId ? Number(item.variantId) : null,
           size: item.size || item.selectedSize || "",
+          color: item.variantColor || item.color || null,
           quantity: Number(item.quantity ?? 0),
           unitPrice: Number(item.unitPrice ?? 0),
         })),
@@ -9196,24 +9779,52 @@ ${Array.from(uniqueEntries.entries())
       for (const item of items) {
         const productId = String(item.productId);
         const size = item.size || item.selectedSize || null;
+        const color = (item.variantColor || item.color || null) as string | null;
+        const requestedVariantId = item.variantId ? Number(item.variantId) : null;
 
-        if (size) {
-          const variant = await db
-            .select()
+        let variantToUpdate:
+          | { id: number; stock: number | null }
+          | undefined;
+
+        if (requestedVariantId) {
+          [variantToUpdate] = await db
+            .select({ id: productVariants.id, stock: productVariants.stock })
             .from(productVariants)
-            .where(and(
-              eq(productVariants.productId, productId),
-              eq(productVariants.size, size),
-            ))
+            .where(eq(productVariants.id, requestedVariantId))
             .limit(1);
+        }
 
-          if (variant.length > 0) {
-            const newStock = Math.max(0, (variant[0].stock ?? 0) - Number(item.quantity ?? 0));
-            await db
-              .update(productVariants)
-              .set({ stock: newStock, updatedAt: new Date() })
-              .where(eq(productVariants.id, variant[0].id));
+        if (!variantToUpdate && size) {
+          if (color) {
+            [variantToUpdate] = await db
+              .select({ id: productVariants.id, stock: productVariants.stock })
+              .from(productVariants)
+              .where(and(
+                eq(productVariants.productId, productId),
+                eq(productVariants.size, size),
+                eq(productVariants.color, color),
+              ))
+              .limit(1);
           }
+
+          if (!variantToUpdate) {
+            [variantToUpdate] = await db
+              .select({ id: productVariants.id, stock: productVariants.stock })
+              .from(productVariants)
+              .where(and(
+                eq(productVariants.productId, productId),
+                eq(productVariants.size, size),
+              ))
+              .limit(1);
+          }
+        }
+
+        if (variantToUpdate) {
+          const newStock = Math.max(0, (variantToUpdate.stock ?? 0) - Number(item.quantity ?? 0));
+          await db
+            .update(productVariants)
+            .set({ stock: newStock, updatedAt: new Date() })
+            .where(eq(productVariants.id, variantToUpdate.id));
         }
 
         const allVariants = await db

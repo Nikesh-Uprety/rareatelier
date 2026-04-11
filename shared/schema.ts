@@ -240,6 +240,33 @@ export const otpTokens = pgTable("otp_tokens", {
 
 export type OtpToken = typeof otpTokens.$inferSelect;
 
+export const orderVerificationChallenges = pgTable("order_verification_challenges", {
+  id: varchar("id").primaryKey(),
+  email: text("email").notNull(),
+  token: text("token").notNull(),
+  verificationToken: text("verification_token"),
+  requestedQuantity: integer("requested_quantity").notNull(),
+  status: text("status").notNull().default("pending"),
+  requestIp: text("request_ip"),
+  codeAttempts: integer("code_attempts").notNull().default(0),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  verificationExpiresAt: timestamp("verification_expires_at", { withTimezone: true }),
+  verifiedAt: timestamp("verified_at", { withTimezone: true }),
+  usedAt: timestamp("used_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+}, (table) => ({
+  orderVerificationByEmail: index("order_verification_challenges_email_idx").on(table.email),
+  orderVerificationByStatus: index("order_verification_challenges_status_idx").on(table.status),
+  orderVerificationByExpiry: index("order_verification_challenges_expiry_idx").on(table.expiresAt),
+}));
+
+export type OrderVerificationChallenge = typeof orderVerificationChallenges.$inferSelect;
+
 export const contactMessages = pgTable("contact_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),

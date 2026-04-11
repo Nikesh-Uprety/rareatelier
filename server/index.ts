@@ -140,6 +140,13 @@ const isAuthStatusRequest = (req: Request) =>
   req.method === "GET" && req.path === "/api/auth/me";
 
 app.use((req, res, next) => {
+  // Frontend documents and Vite module/static requests derive auth from
+  // explicit API calls, so avoid loading the session store for every asset.
+  // This keeps authenticated admin pages from stalling on dev-module fetches.
+  if (!req.path.startsWith("/api")) {
+    return next();
+  }
+
   sessionMiddleware(req, res, (err) => {
     if (!err) return next();
 
@@ -548,6 +555,7 @@ async function ensureSiteSettingsProductsPageConfigColumn() {
     };
     let dbOk = false;
     let redisOk = false;
+    let redisRequired = true;
     try {
       await db.query.users.findFirst();
       dbOk = true;
@@ -561,12 +569,14 @@ async function ensureSiteSettingsProductsPageConfigColumn() {
         redisOk = true;
         health.redis = "connected";
       } else {
+        redisRequired = false;
         health.redis = "not configured";
       }
     } catch {
       health.redis = "unavailable";
     }
-    const allHealthy = dbOk && redisOk;
+    const allHealthy = dbOk && (!redisRequired || redisOk);
+    health.status = allHealthy ? "ok" : "degraded";
     res.status(allHealthy ? 200 : 503).json(health);
   });
 

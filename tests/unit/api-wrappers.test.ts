@@ -10,6 +10,9 @@ import { fetchAdminOrders } from "@/lib/adminApi";
 const { apiRequestMock } = vi.hoisted(() => ({
   apiRequestMock: vi.fn(),
 }));
+const { fetchMock } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
+}));
 
 vi.mock("@/lib/queryClient", () => ({
   apiRequest: apiRequestMock,
@@ -18,6 +21,8 @@ vi.mock("@/lib/queryClient", () => ({
 describe("API wrappers", () => {
   beforeEach(() => {
     apiRequestMock.mockReset();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   it("builds product query strings correctly", async () => {
@@ -51,13 +56,18 @@ describe("API wrappers", () => {
       source: "website",
     };
 
-    apiRequestMock.mockResolvedValueOnce(
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ success: true, data: { orderNumber: "ORD-1", total: 3200, order: { id: "order-1" } } })),
     );
 
     await createOrder(payload);
 
-    expect(apiRequestMock).toHaveBeenCalledWith("POST", "/api/orders", payload);
+    expect(fetchMock).toHaveBeenCalledWith("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      credentials: "include",
+    });
   });
 
   it("sends promo validation item ids in the expected shape", async () => {

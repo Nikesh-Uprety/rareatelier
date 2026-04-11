@@ -45,7 +45,7 @@ import {
 import { STOREFRONT_FONT_OPTIONS, STOREFRONT_FONT_FAMILIES, type StorefrontFontPreset } from "@/lib/storefrontFonts";
 import type { CanvasPage, SiteBranding, ColorPreset, CanvasTemplate } from "@/lib/adminApi";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile, getCanvasTemplates } from "@/lib/adminApi";
+import { getCanvasPages, updateCanvasPage, reorderCanvasPages, getBranding, updateBranding, getColorPresets, createColorPreset, updateColorPreset, activateColorPreset, deleteColorPreset, uploadProductImageFile, getCanvasTemplates, generatePreviewToken } from "@/lib/adminApi";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
@@ -263,9 +263,21 @@ export default function CanvasPage() {
     }
   }
 
-  function handlePreview(page: CanvasPage) {
-    const slug = page.slug === "/" ? "" : page.slug;
-    window.open(`/storefront${slug}`, "_blank");
+  async function handlePreview(page: CanvasPage) {
+    const slug = page.slug === "/" ? "/" : page.slug;
+
+    if (page.status === "published") {
+      window.open(slug, "_blank", "noopener,noreferrer");
+      return;
+    }
+
+    try {
+      const token = await generatePreviewToken(page.id);
+      const previewUrl = slug === "/" ? `/?token=${token}` : `${slug}?token=${token}`;
+      window.open(previewUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      window.open(slug, "_blank", "noopener,noreferrer");
+    }
   }
 
   const sidebarWidth = sidebarCollapsed ? "w-12" : "w-64";
@@ -605,112 +617,323 @@ function TemplatesPanel({
   isLoading: boolean;
   onUseTemplate: (template: CanvasTemplate) => void;
 }) {
-  const featuredTemplates = useMemo(
-    () =>
-      templates.filter(
-        (template) => template.slug === "maison-nocturne" || template.slug === "editorial-grid",
-      ),
-    [templates],
+  const orderedTemplates = useMemo(() => {
+    const featuredOrder = ["maison-nocturne", "stuffyclone", "rare-dark-luxury", "editorial-grid", "nikeshdesign"];
+    return templates.slice().sort((a, b) => {
+      const tierScore = a.tier === b.tier ? 0 : a.tier === "premium" ? -1 : 1;
+      if (tierScore !== 0) return tierScore;
+      const aIndex = featuredOrder.indexOf(a.slug);
+      const bIndex = featuredOrder.indexOf(b.slug);
+      const normalizedA = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+      const normalizedB = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+      return normalizedA - normalizedB;
+    });
+  }, [templates]);
+
+  const premiumTemplates = useMemo(
+    () => orderedTemplates.filter((template) => template.tier === "premium"),
+    [orderedTemplates],
   );
 
-  const orderedTemplates = useMemo(() => {
-    const order = ["maison-nocturne", "editorial-grid"];
-    return featuredTemplates.slice().sort((a, b) => order.indexOf(a.slug) - order.indexOf(b.slug));
-  }, [featuredTemplates]);
+  const freeTemplates = useMemo(
+    () => orderedTemplates.filter((template) => template.tier !== "premium"),
+    [orderedTemplates],
+  );
+
+  const ownedCount = useMemo(
+    () => orderedTemplates.filter((template) => template.isPurchased).length,
+    [orderedTemplates],
+  );
+
+  const templateSurfaceClass = (template: CanvasTemplate) => {
+    if (template.slug === "stuffyclone") {
+      return "bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.12),transparent_36%),linear-gradient(135deg,#0b0b0c_0%,#17181d_58%,#0c0c0e_100%)]";
+    }
+    if (template.slug === "rare-dark-luxury") {
+      return "bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.22),transparent_34%),linear-gradient(135deg,#050505_0%,#121212_40%,#1b1408_100%)]";
+    }
+    if (template.slug === "maison-nocturne") {
+      return "bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.18),transparent_34%),linear-gradient(135deg,#111214_0%,#19161a_40%,#0d0d0f_100%)]";
+    }
+    if (template.slug === "nikeshdesign") {
+      return "bg-[linear-gradient(135deg,#0f1320_0%,#2f2337_46%,#161118_100%)]";
+    }
+    return "bg-[linear-gradient(135deg,#f8fafc_0%,#eef2ff_58%,#ffffff_100%)]";
+  };
+
+  const templateAccent = (template: CanvasTemplate) => {
+    if (template.tier === "premium") return "text-[#d4b460]";
+    return "text-[#3654b1]";
+  };
+
+  const templateHighlights = (template: CanvasTemplate) => {
+    if (template.slug === "stuffyclone") {
+      return ["Side-menu navigation", "Minimal catalog grid", "Streetwear product rhythm"];
+    }
+    if (template.slug === "rare-dark-luxury") {
+      return ["Dark-only luxury mood", "Cinematic campaign sections", "Premium long-scroll storytelling"];
+    }
+    if (template.slug === "maison-nocturne") {
+      return ["Editorial luxury layout", "Campaign-first storytelling", "Premium conversion structure"];
+    }
+    if (template.slug === "nikeshdesign") {
+      return ["Experimental homepage", "Magazine-like storytelling", "Fast brand iteration"];
+    }
+    return ["Page-builder compatible", "Ready for new pages", "Storefront-safe sections"];
+  };
 
   if (isLoading) {
     return (
       <div className="flex-1 p-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Skeleton className="h-80 w-full rounded-[28px]" />
-          <Skeleton className="h-80 w-full rounded-[28px]" />
+        <div className="space-y-6">
+          <Skeleton className="h-48 w-full rounded-[32px]" />
+          <div className="grid gap-6 xl:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Skeleton key={index} className="h-[430px] w-full rounded-[32px]" />
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold">Rare Atelier Templates</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Start new pages from the two default Rare Atelier layouts carried over from Canvas Beta.
-          </p>
-        </div>
+    <div className="flex-1 overflow-y-auto bg-[linear-gradient(180deg,#f6f8fc_0%,#eef2f8_100%)] p-6">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <section className="overflow-hidden rounded-[36px] border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div className="grid gap-6 px-8 py-8 xl:grid-cols-[minmax(0,1.35fr)_340px] xl:px-10 xl:py-10">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#eef3ff] px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.22em] text-[#3654b1]">
+                <Layout className="h-3.5 w-3.5" />
+                Template Marketplace
+              </div>
+              <h2 className="mt-5 text-4xl font-semibold tracking-[-0.04em] text-slate-950">
+                Launch new storefront pages from premium-ready layouts
+              </h2>
+              <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-600">
+                Compare storefront directions the same way you would shop for a premium theme. Pick a layout, review its merchandising style, and spin up a new editable page in one click.
+              </p>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          {orderedTemplates.map((template) => {
-            const isPremium = template.slug === "maison-nocturne";
-            return (
-              <div
-                key={template.id}
-                className="overflow-hidden rounded-[28px] border border-white/10 bg-[#101012] text-white shadow-[0_24px_60px_rgba(0,0,0,0.28)]"
-              >
-                <div
-                  className={cn(
-                    "relative h-56 overflow-hidden",
-                    isPremium
-                      ? "bg-[radial-gradient(circle_at_top_left,rgba(201,168,76,0.24),transparent_34%),linear-gradient(135deg,#15110d_0%,#0b0b0d_100%)]"
-                      : "bg-[linear-gradient(135deg,#1d1c22_0%,#0e0e11_100%)]",
-                  )}
-                >
-                  <div className="absolute inset-0 opacity-80">
-                    <div className="absolute left-8 top-8">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-[#d4b460]">
-                        {isPremium ? "Premium" : "Free"}
-                      </p>
-                      <h3 className="mt-4 font-serif text-3xl text-white">{template.name}</h3>
-                      <p className="mt-2 max-w-xs text-sm text-white/60">
-                        {template.description ?? "Rare Atelier storefront template"}
+              <div className="mt-6 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Templates</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{orderedTemplates.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Owned</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{ownedCount}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Premium</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{premiumTemplates.length}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[30px] border border-slate-200 bg-[linear-gradient(180deg,#0f172a_0%,#111827_100%)] p-5 text-white shadow-[0_20px_60px_rgba(15,23,42,0.28)]">
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-sky-200">How this works</p>
+              <div className="mt-5 space-y-3">
+                {["Choose a template direction", "Create a new page from it", "Customize sections and publish"].map((step, index) => (
+                  <div key={step} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-[11px] font-black text-slate-950">
+                      {index + 1}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-white">{step}</p>
+                      <p className="mt-1 text-xs leading-5 text-white/60">
+                        {index === 0
+                          ? "Review the design mood, grid style, and storefront story before committing."
+                          : index === 1
+                            ? "Every template becomes an editable page inside the builder, not a locked layout."
+                            : "Fine-tune branding, images, and sections, then push the page live when it is ready."}
                       </p>
                     </div>
-                    <div className="absolute bottom-8 right-8 grid w-40 gap-2">
-                      <div className="h-16 rounded-2xl border border-white/10 bg-white/[0.05]" />
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.05]" />
-                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.08]" />
-                        <div className="h-20 rounded-2xl border border-white/10 bg-white/[0.05]" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {premiumTemplates.length > 0 ? (
+          <section className="space-y-5">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Premium Collection</p>
+                <h3 className="mt-2 text-2xl font-semibold text-slate-950">High-conversion storefront themes</h3>
+              </div>
+              <Badge className="rounded-full bg-[#111827] px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white hover:bg-[#111827]">
+                Purchase-ready presentation
+              </Badge>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-3">
+              {premiumTemplates.map((template) => (
+                <article
+                  key={template.id}
+                  className="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-transform duration-200 hover:-translate-y-1"
+                >
+                  <div className={cn("relative h-[260px] overflow-hidden", templateSurfaceClass(template))}>
+                    {template.thumbnailUrl ? (
+                      <div
+                        className="absolute inset-0 opacity-55 mix-blend-screen"
+                        style={{
+                          backgroundImage: `linear-gradient(180deg,rgba(255,255,255,0.12),rgba(0,0,0,0.0)), url(${template.thumbnailUrl})`,
+                          backgroundPosition: "center",
+                          backgroundSize: "cover",
+                        }}
+                      />
+                    ) : null}
+                    <div className="absolute inset-x-6 top-6 flex items-start justify-between gap-4">
+                      <div>
+                        <p className={cn("text-[11px] font-black uppercase tracking-[0.22em]", templateAccent(template))}>
+                          {template.tier === "premium" ? "Premium Theme" : "Free Theme"}
+                        </p>
+                        <h4 className="mt-3 text-3xl font-semibold text-white">{template.name}</h4>
+                      </div>
+                      <Badge className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white hover:bg-white/10">
+                        {template.isPurchased ? "Owned" : `NPR ${template.priceNpr.toLocaleString()}`}
+                      </Badge>
+                    </div>
+                    <div className="absolute bottom-6 left-6 right-6 grid grid-cols-3 gap-3">
+                      {[0, 1, 2].map((cell) => (
+                        <div key={`${template.id}-${cell}`} className="h-24 rounded-[22px] border border-white/12 bg-white/10 backdrop-blur-[2px]" />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-5 p-6">
+                    <p className="text-sm leading-7 text-slate-600">
+                      {template.description ?? "A premium storefront layout ready for merchandising, campaigns, and live publishing."}
+                    </p>
+
+                    <div className="space-y-2">
+                      {templateHighlights(template).map((highlight) => (
+                        <div key={highlight} className="flex items-center gap-2 text-sm text-slate-700">
+                          <Check className="h-4 w-4 text-emerald-500" />
+                          <span>{highlight}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div>
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Access</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-950">
+                          {template.isPurchased ? "Ready to use in your studio" : "Purchase unlock available"}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Price</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-950">
+                          {template.priceNpr > 0 ? `NPR ${template.priceNpr.toLocaleString()}` : "Included"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <Button
+                        variant="outline"
+                        className="flex-1 rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        onClick={() => {
+                          const fallback = template.thumbnailUrl || "/";
+                          window.open(fallback, "_blank", "noopener,noreferrer");
+                        }}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview
+                      </Button>
+                      <Button
+                        className="flex-1 rounded-2xl bg-[#111827] text-white hover:bg-[#0f172a]"
+                        onClick={() => onUseTemplate(template)}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        Use Template
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {freeTemplates.length > 0 ? (
+          <section className="space-y-5">
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-[0.22em] text-slate-400">Included Templates</p>
+              <h3 className="mt-2 text-2xl font-semibold text-slate-950">Fast-start layouts for drafts and experiments</h3>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              {freeTemplates.map((template) => (
+                <article
+                  key={template.id}
+                  className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-[0_16px_40px_rgba(15,23,42,0.06)]"
+                >
+                  <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
+                    <div className={cn("relative min-h-[260px] p-6", templateSurfaceClass(template))}>
+                      {template.thumbnailUrl ? (
+                        <div
+                          className="absolute inset-0 opacity-70"
+                          style={{
+                            backgroundImage: `linear-gradient(180deg,rgba(255,255,255,0.04),rgba(0,0,0,0.0)), url(${template.thumbnailUrl})`,
+                            backgroundPosition: "center",
+                            backgroundSize: "cover",
+                          }}
+                        />
+                      ) : null}
+                      <div className="relative z-10 max-w-xs">
+                        <Badge className="rounded-full bg-white/16 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white hover:bg-white/16">
+                          Free template
+                        </Badge>
+                        <h4 className="mt-4 text-3xl font-semibold text-white">{template.name}</h4>
+                        <p className="mt-3 text-sm leading-7 text-white/72">
+                          {template.description ?? "A flexible canvas template for quick storefront drafts and experiments."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-5 p-6">
+                      <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Best for</p>
+                        <div className="mt-3 space-y-2">
+                          {templateHighlights(template).map((highlight) => (
+                            <div key={highlight} className="flex items-center gap-2 text-sm text-slate-700">
+                              <Check className="h-4 w-4 text-emerald-500" />
+                              <span>{highlight}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="flex gap-3">
+                        <Button
+                          variant="outline"
+                          className="flex-1 rounded-2xl border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          onClick={() => {
+                            const fallback = template.thumbnailUrl || "/";
+                            window.open(fallback, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          <Eye className="mr-2 h-4 w-4" />
+                          Preview
+                        </Button>
+                        <Button
+                          className="flex-1 rounded-2xl bg-[#3654b1] text-white hover:bg-[#28449c]"
+                          onClick={() => onUseTemplate(template)}
+                        >
+                          <Plus className="mr-2 h-4 w-4" />
+                          Use Template
+                        </Button>
                       </div>
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-4 p-6">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "border-white/10 bg-white/[0.04] uppercase tracking-[0.18em]",
-                        isPremium ? "text-[#d4b460]" : "text-white/70",
-                      )}
-                    >
-                      {isPremium ? "Rare Atelier Official" : "Rare Atelier Draft"}
-                    </Badge>
-                    {isPremium ? (
-                      <Badge className="bg-[#c9a84c] text-black hover:bg-[#c9a84c]">PREMIUM</Badge>
-                    ) : (
-                      <Badge variant="secondary">FREE</Badge>
-                    )}
-                  </div>
-
-                  <p className="text-sm text-white/68">
-                    {isPremium
-                      ? "Cinematic editorial layout with the polished Rare Atelier storefront direction."
-                      : "Draft-friendly magazine layout for experimenting with collections, copy, and section structure."}
-                  </p>
-
-                  <Button
-                    onClick={() => onUseTemplate(template)}
-                    className="w-full bg-[#c9a84c] text-black hover:bg-[#d8b865]"
-                  >
-                    Use Template For New Page
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
@@ -907,7 +1130,7 @@ export function BrandingManager() {
 
     updateBrandingMutation.mutate({
       logoUrl: preset.logoUrl,
-      logoDarkUrl: preset.logoDarkUrl ?? preset.logoUrl,
+      logoDarkUrl: preset.logoDarkUrl ?? null,
     });
   };
 

@@ -205,9 +205,8 @@ export default function AdminOrders() {
 
   const orderTotalPages = Math.max(1, Math.ceil(totalOrders / orderPageSize));
   const paginatedOrders = orders;
-  const serialBase = totalOrders - (orderPage - 1) * orderPageSize;
   const getOrderSerial = (idx: number) =>
-    totalOrders > 0 ? Math.max(1, serialBase - idx) : idx + 1;
+    (orderPage - 1) * orderPageSize + idx + 1;
 
   const orderTypeBadge = (order: AdminOrder) => {
     const isPos = order.source === "pos";
@@ -413,10 +412,22 @@ export default function AdminOrders() {
             className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden"
           >
             <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] table-auto text-left text-sm">
+          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[72px]" />
+              <col className="w-[18%]" />
+              <col className="w-[24%]" />
+              <col className="w-[14%]" />
+              <col className="w-[11%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[9%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+            </colgroup>
             <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
               <tr>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">S.N</th>
+                <th className="px-4 py-3 font-medium whitespace-nowrap text-center">S.N</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
                 <th className="px-4 py-3 font-medium">Items</th>
                 <th className="px-4 py-3 font-medium whitespace-nowrap">Date</th>
@@ -432,36 +443,36 @@ export default function AdminOrders() {
               {isLoading || isError
                 ? Array.from({ length: 6 }).map((_, i) => (
                     <tr key={i}>
-                      <td className="px-4 py-3">
-                        <div className="h-3 w-8 bg-muted animate-pulse" />
+                      <td className="px-4 py-3 text-center">
+                        <div className="mx-auto h-3 w-8 bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-3 w-24 bg-muted animate-pulse mb-2" />
                         <div className="h-3 w-32 bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-3 w-full max-w-[220px] bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-3 w-24 bg-muted animate-pulse mb-2" />
                         <div className="h-3 w-16 bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-3 w-20 bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-6 w-10 rounded-full bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-6 w-14 rounded-full bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-6 w-16 rounded-full bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <div className="h-8 w-8 rounded-md bg-muted animate-pulse" />
                       </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-4 py-3 align-top text-right">
                         <div className="h-3 w-16 bg-muted animate-pulse ml-auto" />
                       </td>
                     </tr>
@@ -491,8 +502,8 @@ export default function AdminOrders() {
                           setSelectedOrderSn(getOrderSerial(idx));
                         }}
                       >
-                        <td className="px-4 py-3 font-medium text-xs">{getOrderSerial(idx)}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top text-center font-medium text-xs">{getOrderSerial(idx)}</td>
+                        <td className="px-4 py-3 align-top">
                           <div className="font-medium text-[#2C3E2D] dark:text-foreground">
                             {order.fullName}
                           </div>
@@ -505,14 +516,14 @@ export default function AdminOrders() {
                             </div>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 align-top">
                           <div className="text-xs text-muted-foreground max-w-[240px]">
                             {order.items?.map((item) =>
                               `${item.name}${item.size ? ` (${item.size})` : ""} × ${item.quantity}`,
                             ).join(", ") || "—"}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                        <td className="px-4 py-3 align-top text-muted-foreground whitespace-nowrap">
                           {order.createdAt ? (
                             <div className="flex flex-col">
                               <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>

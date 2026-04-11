@@ -79,8 +79,9 @@ export function CreatePageDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Page Title</Label>
+            <Label htmlFor="canvas-page-title">Page Title</Label>
             <Input
+              id="canvas-page-title"
               value={title}
               onChange={(e) => autoSlug(e.target.value)}
               placeholder="About Us"
@@ -89,8 +90,9 @@ export function CreatePageDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>URL Slug</Label>
+            <Label htmlFor="canvas-page-slug">URL Slug</Label>
             <Input
+              id="canvas-page-slug"
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
               placeholder="/about-us"

@@ -99,6 +99,7 @@ export interface OrderInput {
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
   promoCodeId?: string;
+  orderVerificationToken?: string;
 }
 
 export interface PendingCheckoutPayload {
@@ -109,7 +110,33 @@ export interface PendingCheckoutPayload {
   createdAt: string;
 }
 
+type OrderMutationResponse = {
+  success: boolean;
+  data?: { orderNumber: string; total: number; order: OrderDetail };
+  error?: string;
+  code?: string;
+  limit?: number;
+  orderCount?: number;
+  retryAfter?: number;
+  attemptsRemaining?: number;
+};
+
+type JsonResponse<T> = T & {
+  success: boolean;
+  error?: string;
+  code?: string;
+};
+
 const PENDING_CHECKOUT_KEY = "ra_pending_checkout_order";
+
+async function postJsonAllowErrors(url: string, data?: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: data ? { "Content-Type": "application/json" } : {},
+    body: data ? JSON.stringify(data) : undefined,
+    credentials: "include",
+  });
+}
 
 export async function fetchProducts(filters?: {
   category?: string;
@@ -214,12 +241,70 @@ export async function fetchCategories(): Promise<CategoryApi[]> {
 }
 
 export async function createOrder(data: OrderInput) {
-  const res = await apiRequest("POST", "/api/orders", data);
-  return (await res.json()) as {
-    success: boolean;
-    data?: { orderNumber: string; total: number; order: OrderDetail };
-    error?: string;
-  };
+  const res = await postJsonAllowErrors("/api/orders", data);
+
+  let json: OrderMutationResponse;
+  try {
+    json = (await res.json()) as OrderMutationResponse;
+  } catch {
+    json = {
+      success: false,
+      error: res.ok ? "Unexpected server response" : `Request failed with status ${res.status}`,
+    };
+  }
+
+  return json;
+}
+
+export async function requestOrderVerification(data: {
+  email: string;
+  quantity: number;
+}): Promise<
+  JsonResponse<{
+    required?: boolean;
+    challengeId?: string;
+    email?: string;
+    expiresInMinutes?: number;
+    limit?: number;
+    orderCount?: number;
+    retryAfter?: number;
+  }>
+> {
+  const res = await postJsonAllowErrors("/api/orders/verification/request", data);
+  return (await res.json()) as JsonResponse<{
+    required?: boolean;
+    challengeId?: string;
+    email?: string;
+    expiresInMinutes?: number;
+    limit?: number;
+    orderCount?: number;
+    retryAfter?: number;
+  }>;
+}
+
+export async function confirmOrderVerification(data: {
+  challengeId: string;
+  email: string;
+  code: string;
+}): Promise<
+  JsonResponse<{
+    verificationToken?: string;
+    expiresInMinutes?: number;
+    requestedQuantity?: number;
+    email?: string;
+    attemptsRemaining?: number;
+    retryAfter?: number;
+  }>
+> {
+  const res = await postJsonAllowErrors("/api/orders/verification/confirm", data);
+  return (await res.json()) as JsonResponse<{
+    verificationToken?: string;
+    expiresInMinutes?: number;
+    requestedQuantity?: number;
+    email?: string;
+    attemptsRemaining?: number;
+    retryAfter?: number;
+  }>;
 }
 
 export function cachePendingCheckout(payload: PendingCheckoutPayload): void {

@@ -2935,6 +2935,13 @@ export class PgStorage implements IStorage {
     const days =
       range === "7d" ? 7 : range === "30d" ? 30 : range === "90d" ? 90 : 365;
 
+    const validOrderClause = (windowClause: ReturnType<typeof sql.raw>) =>
+      and(
+        eq(orders.status, "completed"),
+        eq(orders.paymentVerified, "verified"),
+        windowClause,
+      );
+
     // Current period summary
     const [summary] = await db
       .select({
@@ -2942,7 +2949,7 @@ export class PgStorage implements IStorage {
         totalOrders: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`));
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)));
 
     const avgOrderValue =
       summary.totalOrders > 0
@@ -2964,8 +2971,10 @@ export class PgStorage implements IStorage {
       })
       .from(orders)
       .where(
-        sql.raw(
-          `"created_at" >= now() - interval '${days * 2} days' AND "created_at" < now() - interval '${days} days'`,
+        validOrderClause(
+          sql.raw(
+            `"created_at" >= now() - interval '${days * 2} days' AND "created_at" < now() - interval '${days} days'`,
+          ),
         ),
       );
 
@@ -3015,7 +3024,7 @@ export class PgStorage implements IStorage {
         revenue: sql<number>`sum(${orders.total})`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
       .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
 
@@ -3031,7 +3040,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)
       .orderBy(asc(sql`date_trunc('day', ${orders.createdAt})::date`));
 
@@ -3065,7 +3074,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(orders.status);
 
     const ordersByStatus: OrdersByStatus = {
@@ -3091,7 +3100,13 @@ export class PgStorage implements IStorage {
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
-      .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
+      .where(
+        and(
+          eq(orders.status, "completed"),
+          eq(orders.paymentVerified, "verified"),
+          sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`),
+        ),
+      )
       .groupBy(products.id, products.name, products.imageUrl)
       .orderBy(desc(sql`sum(${orderItems.quantity} * ${orderItems.unitPrice})`))
       .limit(10);
@@ -3119,7 +3134,13 @@ export class PgStorage implements IStorage {
       .from(orderItems)
       .innerJoin(orders, eq(orderItems.orderId, orders.id))
       .innerJoin(products, eq(orderItems.productId, products.id))
-      .where(sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`))
+      .where(
+        and(
+          eq(orders.status, "completed"),
+          eq(orders.paymentVerified, "verified"),
+          sql.raw(`"orders"."created_at" >= now() - interval '${days} days'`),
+        ),
+      )
       .groupBy(products.category);
 
     const totalCategoryRevenue = salesCategoryRows.reduce(
@@ -3145,7 +3166,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(sql`extract(dow from ${orders.createdAt})`);
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -3163,7 +3184,7 @@ export class PgStorage implements IStorage {
         count: sql<number>`count(*)`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(orders.paymentMethod);
 
     const totalPayments = paymentRows.reduce(
@@ -3187,7 +3208,7 @@ export class PgStorage implements IStorage {
         revenue: sql<number>`sum(${orders.total})`,
       })
       .from(orders)
-      .where(sql.raw(`"created_at" >= now() - interval '${days} days'`))
+      .where(validOrderClause(sql.raw(`"created_at" >= now() - interval '${days} days'`)))
       .groupBy(orders.source);
 
     const posRows = await db
@@ -3275,10 +3296,14 @@ export class PgStorage implements IStorage {
       })
       .from(orders)
       .where(
-        sql.raw(
-          `"created_at" >= '${year}-01-01'::date AND "created_at" < '${
-            year + 1
-          }-01-01'::date`,
+        and(
+          eq(orders.status, "completed"),
+          eq(orders.paymentVerified, "verified"),
+          sql.raw(
+            `"created_at" >= '${year}-01-01'::date AND "created_at" < '${
+              year + 1
+            }-01-01'::date`,
+          ),
         ),
       )
       .groupBy(sql`date_trunc('day', ${orders.createdAt})::date`)

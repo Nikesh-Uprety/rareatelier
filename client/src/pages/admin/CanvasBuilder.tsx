@@ -18,7 +18,10 @@ export default function CanvasBuilderPage() {
   }, [isSuperAdmin]);
 
   const pageId = useMemo(() => {
-    const search = location.split("?")[1] ?? "";
+    const search =
+      typeof window !== "undefined"
+        ? window.location.search.slice(1)
+        : location.split("?")[1] ?? "";
     const params = new URLSearchParams(search);
     const raw = Number(params.get("pageId"));
     return Number.isFinite(raw) && raw > 0 ? raw : null;

@@ -74,6 +74,7 @@ export default function AdminLayout({
 
   const [location] = useLocation();
   const pathname = location.split("?")[0];
+  const isCanvasBuilderRoute = pathname === "/admin/canvas/builder";
   const { user } = useCurrentUser();
   const { theme, setTheme } = useThemeStore();
   const storefrontThemeRef = useRef<"light" | "dark" | "warm">("light");
@@ -107,6 +108,7 @@ export default function AdminLayout({
   } | null>(null);
   const profileMenuRef = useRef<HTMLDivElement | null>(null);
   const closeMenuTimeoutRef = useRef<number | null>(null);
+  const builderSidebarRestoreRef = useRef<boolean | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [profileMenuPinned, setProfileMenuPinned] = useState(false);
 
@@ -213,6 +215,24 @@ export default function AdminLayout({
     const timer = window.setInterval(() => setNow(new Date()), 1000 * 15);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!isCanvasBuilderRoute) {
+      if (builderSidebarRestoreRef.current !== null) {
+        setSidebarCollapsed(builderSidebarRestoreRef.current);
+        builderSidebarRestoreRef.current = null;
+      }
+      return;
+    }
+
+    if (builderSidebarRestoreRef.current === null) {
+      builderSidebarRestoreRef.current = sidebarCollapsed;
+    }
+
+    if (!sidebarCollapsed) {
+      setSidebarCollapsed(true);
+    }
+  }, [isCanvasBuilderRoute, sidebarCollapsed]);
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -699,7 +719,12 @@ export default function AdminLayout({
       </Sidebar>
 
       <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-visible bg-muted dark:bg-neutral-900">
-        <header className="relative sticky top-0 z-40 overflow-visible h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5">
+        <header
+          className={cn(
+            "relative sticky top-0 z-40 overflow-visible h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5",
+            isCanvasBuilderRoute && "px-3 sm:px-4",
+          )}
+        >
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <SidebarTrigger className="text-foreground hover:bg-background/50 hidden lg:flex shrink-0" />
             {!isVisuallyExpanded ? (
@@ -909,7 +934,12 @@ export default function AdminLayout({
           </div>
         </header>
 
-        <div className="admin-panel-content flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-12">
+        <div
+          className={cn(
+            "admin-panel-content flex-1 overflow-auto p-4 sm:p-6 md:p-8 lg:p-12",
+            isCanvasBuilderRoute && "p-0 sm:p-0 md:p-0 lg:p-0",
+          )}
+        >
           <Suspense
             fallback={
               <div className="relative w-full">

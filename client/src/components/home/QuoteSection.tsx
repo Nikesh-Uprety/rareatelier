@@ -136,6 +136,7 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
     typeof config?.text === "string" && config.text.trim().length > 0
       ? config.text
       : "The best way to predict the future is to create it.";
+  const quoteWords = quoteText.split(" ");
 
   return (
     <section
@@ -184,7 +185,7 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
             <div className="h-px w-10 bg-amber-600/60 dark:bg-white/50 mb-8" />
 
             <h2 className="text-2xl md:text-5xl lg:text-5xl font-serif italic leading-tight tracking-tight max-w-3xl text-neutral-900 dark:text-white mb-10">
-              {quoteText.split(" ").map((word, i) => (
+              {quoteWords.map((word, i) => (
                 <motion.span
                   key={i}
                   initial={{ opacity: 0, y: 15 }}
@@ -198,6 +199,7 @@ export default function QuoteSection({ config }: QuoteSectionProps) {
                   className="inline-block mr-[0.3em] last:mr-0"
                 >
                   {word}
+                  {i < quoteWords.length - 1 ? " " : ""}
                 </motion.span>
               ))}
             </h2>

@@ -56,6 +56,43 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
   }
 }
 
+export async function sendOrderVerificationEmail(to: string, code: string) {
+  if (skipEmailInE2EMode("order-verification", { to, code })) {
+    return;
+  }
+
+  if (shouldLogOtpCodes) {
+    console.log(`[DEV ORDER VERIFY] ${to} -> ${code}`);
+  }
+
+  try {
+    await emailQueue.add("order-verification", {
+      to,
+      subject: "Verify your large Rare Atelier order",
+      html: `
+        <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
+          <h1 style="font-size: 24px; color: #111; margin-bottom: 10px;">Confirm your order</h1>
+          <p style="color: #666; margin-bottom: 28px;">
+            We noticed a larger first-time order on Rare Atelier. Please enter this verification code at checkout to continue.
+          </p>
+          <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 14px; padding: 32px; text-align: center; margin-bottom: 24px;">
+            <p style="font-size: 46px; font-weight: 700; letter-spacing: 12px; color: #2D4A35; margin: 0;">${code}</p>
+          </div>
+          <p style="color: #999; font-size: 13px; line-height: 1.6;">
+            This code expires in 10 minutes. If you did not request this checkout, you can ignore this email.
+          </p>
+          <hr style="border: none; border-top: 1px solid #E8E4DE; margin: 24px 0;">
+          <p style="color: #bbb; font-size: 12px;">Rare Atelier · Secure large-order verification</p>
+        </div>
+      `,
+    });
+    console.log(`[Queue] Order verification job added for: ${to}`);
+  } catch (err: any) {
+    console.warn("[Queue] Order verification job failed for", to, "Error:", err.message);
+    throw err;
+  }
+}
+
 export async function sendInviteEmail(
   to: string,
   name: string,

@@ -79,13 +79,48 @@ const BillViewer = lazy(() =>
   import("@/components/admin/BillViewer").then((module) => ({ default: module.BillViewer })),
 );
 
+type ProductVariantOption = NonNullable<AdminProduct["variants"]>[number];
+
 interface CartItem {
+  cartKey: string;
   productId: string;
   productName: string;
   imageUrl: string;
   unitPrice: number;
   quantity: number;
   lineTotal: number;
+  variantId?: string | number | null;
+  variantColor?: string | null;
+  size?: string | null;
+  sku?: string | null;
+  availableStock: number;
+}
+
+function getProductVariants(product: AdminProduct): ProductVariantOption[] {
+  return Array.isArray(product.variants) ? product.variants.filter(Boolean) as ProductVariantOption[] : [];
+}
+
+function buildCartKey(productId: string, variant?: ProductVariantOption | null) {
+  if (!variant) return `${productId}::base`;
+  const parts = [productId, variant.id ?? "base", variant.color ?? "no-color", variant.size ?? "no-size"];
+  return parts.join("::");
+}
+
+function getVariantPreviewImage(product: AdminProduct, color?: string | null) {
+  if (color && product.colorImageMap && Array.isArray(product.colorImageMap[color]) && product.colorImageMap[color]![0]) {
+    return product.colorImageMap[color]![0];
+  }
+  return product.imageUrl ?? "";
+}
+
+function getVariantSummary(product: AdminProduct) {
+  const variants = getProductVariants(product);
+  const colors = new Set(variants.map((variant) => variant.color).filter((value): value is string => Boolean(value && value.trim())));
+  const sizes = new Set(variants.map((variant) => variant.size).filter((value): value is string => Boolean(value && value.trim())));
+  const parts: string[] = [];
+  if (colors.size > 0) parts.push(`${colors.size} color${colors.size === 1 ? "" : "s"}`);
+  if (sizes.size > 0) parts.push(`${sizes.size} size${sizes.size === 1 ? "" : "s"}`);
+  return parts.join(" • ");
 }
 
 const ESEWA_QR_IMAGE_PATH = "/public/images/esewa-qr.png";
@@ -142,6 +177,9 @@ export default function AdminPOS() {
   const [socialCustomerPhone, setSocialCustomerPhone] = useState("");
   const [socialCustomerEmail, setSocialCustomerEmail] = useState("");
   const [socialDeliveryLocation, setSocialDeliveryLocation] = useState("");
+  const [variantProduct, setVariantProduct] = useState<AdminProduct | null>(null);
+  const [variantColor, setVariantColor] = useState<string | null>(null);
+  const [variantSize, setVariantSize] = useState<string | null>(null);
   const lastProductClickAtRef = useRef<Record<string, number>>({});
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -213,6 +251,91 @@ export default function AdminPOS() {
     return result;
   }, [products, search, selectedCategory]);
 
+
+  const selectedProductVariants = useMemo(
+    () => (variantProduct ? getProductVariants(variantProduct) : []),
+    [variantProduct],
+  );
+
+  const variantColorOptions = useMemo(() => {
+    const colors = Array.from(
+      new Set(
+        selectedProductVariants
+          .map((variant) => variant.color?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    return colors;
+  }, [selectedProductVariants]);
+
+  const variantSizeOptions = useMemo(() => {
+    const scopedVariants = variantColor
+      ? selectedProductVariants.filter((variant) => (variant.color ?? "") === variantColor)
+      : selectedProductVariants;
+
+    return Array.from(
+      new Set(
+        scopedVariants
+          .map((variant) => variant.size?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+  }, [selectedProductVariants, variantColor]);
+
+  const selectedVariant = useMemo(() => {
+    if (!variantProduct) return null;
+
+    const scopedByColor = variantColor
+      ? selectedProductVariants.filter((variant) => (variant.color ?? "") === variantColor)
+      : selectedProductVariants;
+
+    if (variantSize) {
+      const exact = scopedByColor.find((variant) => (variant.size ?? "") === variantSize);
+      if (exact) return exact;
+    }
+
+    return scopedByColor.find((variant) => Number(variant.stock ?? 0) > 0) ?? scopedByColor[0] ?? null;
+  }, [selectedProductVariants, variantColor, variantProduct, variantSize]);
+
+  useEffect(() => {
+    if (!variantProduct) return;
+    if (!variantColorOptions.length) {
+      setVariantColor(null);
+      return;
+    }
+    if (!variantColor || !variantColorOptions.includes(variantColor)) {
+      setVariantColor(variantColorOptions[0]);
+    }
+  }, [variantColor, variantColorOptions, variantProduct]);
+
+  useEffect(() => {
+    if (!variantProduct) return;
+    if (!variantSizeOptions.length) {
+      setVariantSize(null);
+      return;
+    }
+    if (!variantSize || !variantSizeOptions.includes(variantSize)) {
+      setVariantSize(variantSizeOptions[0]);
+    }
+  }, [variantProduct, variantSize, variantSizeOptions]);
+
+  const openVariantSelector = (product: AdminProduct) => {
+    const variants = getProductVariants(product).filter((variant) => Number(variant.stock ?? 0) > 0);
+    if (!variants.length) {
+      toast({
+        title: "Out of stock",
+        description: `${product.name} has no available variants right now.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const defaultVariant = variants[0];
+    setVariantProduct(product);
+    setVariantColor(defaultVariant.color ?? null);
+    setVariantSize(defaultVariant.size ?? null);
+  };
+
   const { data: customers } = useQuery<AdminCustomer[]>({
     queryKey: ["admin", "customers", customerSearch],
     queryFn: () => fetchAdminCustomers(customerSearch),
@@ -255,8 +378,13 @@ export default function AdminPOS() {
           );
 
           if (scannedProduct) {
-            addToCart(scannedProduct);
-            toast({ title: `Added ${scannedProduct.name}` });
+            if (getProductVariants(scannedProduct).length > 0) {
+              openVariantSelector(scannedProduct);
+              toast({ title: `Choose size and color for ${scannedProduct.name}` });
+            } else {
+              addToCart(scannedProduct);
+              toast({ title: `Added ${scannedProduct.name}` });
+            }
           } else {
             toast({ title: "Product not found", variant: "destructive" });
           }
@@ -306,14 +434,17 @@ export default function AdminPOS() {
   // Cart operations
 
   // For quantity adjustment only (used in cart sidebar)
-  const addToCart = (product: AdminProduct) => {
-    const existingInCart = cart.find((i) => i.productId === product.id);
+  const addToCart = (product: AdminProduct, variant?: ProductVariantOption | null) => {
+    const cartKey = buildCartKey(product.id, variant ?? null);
+    const unitPrice = Number(variant?.sellingPrice ?? product.price ?? 0);
+    const availableStock = Number(variant?.stock ?? product.stock ?? 0);
+    const existingInCart = cart.find((item) => item.cartKey === cartKey);
     const currentQty = existingInCart ? existingInCart.quantity : 0;
 
-    if (currentQty + 1 > product.stock) {
+    if (currentQty + 1 > availableStock) {
       toast({
         title: "Insufficient Stock",
-        description: `Only ${product.stock} units available for ${product.name}`,
+        description: `Only ${availableStock} units available for ${product.name}${variant?.size ? ` (${variant.size}${variant.color ? ` / ${variant.color}` : ""})` : ""}`,
         variant: "destructive",
       });
       return;
@@ -321,59 +452,62 @@ export default function AdminPOS() {
 
     setCart((prev) => {
       if (existingInCart) {
-        return prev.map((i) =>
-          i.productId === product.id
+        return prev.map((item) =>
+          item.cartKey === cartKey
             ? {
-                ...i,
-                quantity: i.quantity + 1,
-                lineTotal: (i.quantity + 1) * i.unitPrice,
+                ...item,
+                quantity: item.quantity + 1,
+                lineTotal: (item.quantity + 1) * item.unitPrice,
               }
-            : i,
+            : item,
         );
       }
+
       return [
         ...prev,
         {
+          cartKey,
           productId: product.id,
           productName: product.name,
-          imageUrl: product.imageUrl ?? "",
-          unitPrice: Number(product.price),
+          imageUrl: getVariantPreviewImage(product, variant?.color ?? null),
+          unitPrice,
           quantity: 1,
-          lineTotal: Number(product.price),
+          lineTotal: unitPrice,
+          variantId: variant?.id ?? null,
+          variantColor: variant?.color ?? null,
+          size: variant?.size ?? null,
+          sku: variant?.sku ?? null,
+          availableStock,
         },
       ];
     });
   };
 
-  const updateQuantity = (productId: string, delta: number) => {
-    const product = products?.find(p => p.id === productId);
-    if (!product) return;
-
+  const updateQuantity = (cartKey: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((i) => {
-          if (i.productId !== productId) return i;
-          const qty = i.quantity + delta;
-          
-          // Stock Check on Increase
-          if (delta > 0 && qty > product.stock) {
-             toast({
+        .map((item) => {
+          if (item.cartKey !== cartKey) return item;
+          const qty = item.quantity + delta;
+
+          if (delta > 0 && qty > item.availableStock) {
+            toast({
               title: "Stock Limit Reached",
-              description: `Maximum available stock is ${product.stock}`,
+              description: `Maximum available stock is ${item.availableStock}`,
               variant: "destructive",
             });
-            return i;
+            return item;
           }
 
           if (qty <= 0) return null;
-          return { ...i, quantity: qty, lineTotal: qty * i.unitPrice };
+          return { ...item, quantity: qty, lineTotal: qty * item.unitPrice };
         })
         .filter(Boolean) as CartItem[],
     );
   };
 
-  const removeFromCart = (productId: string) => {
-    setCart((prev) => prev.filter((i) => i.productId !== productId));
+  const removeFromCart = (cartKey: string) => {
+    setCart((prev) => prev.filter((item) => item.cartKey !== cartKey));
   };
 
   const handleProductCardClick = (product: AdminProduct) => {
@@ -384,9 +518,16 @@ export default function AdminPOS() {
     if (now - lastClickedAt < 300) return;
     lastProductClickAtRef.current[product.id] = now;
 
-    const inCart = cart.some((i) => i.productId === product.id);
+    const productVariants = getProductVariants(product);
+    if (productVariants.length > 0) {
+      openVariantSelector(product);
+      return;
+    }
+
+    const baseCartKey = buildCartKey(product.id, null);
+    const inCart = cart.some((item) => item.cartKey === baseCartKey);
     if (inCart) {
-      removeFromCart(product.id);
+      removeFromCart(baseCartKey);
       return;
     }
 
@@ -455,9 +596,12 @@ export default function AdminPOS() {
         items: cart.map((i) => ({
           productId: i.productId,
           productName: i.productName,
-          variantColor: "",
-          size: "",
-          sku: "",
+          variantId: i.variantId ?? null,
+          variantColor: i.variantColor ?? "",
+          color: i.variantColor ?? "",
+          size: i.size ?? "",
+          selectedSize: i.size ?? "",
+          sku: i.sku ?? "",
           quantity: i.quantity,
           unitPrice: i.unitPrice,
           lineTotal: i.lineTotal,
@@ -903,7 +1047,11 @@ export default function AdminPOS() {
                   ))
                 ) : (
                   filteredProducts.map((product) => {
-                    const inCart = cart.find((i) => i.productId === product.id);
+                    const productCartItems = cart.filter((item) => item.productId === product.id);
+                    const productCartQty = productCartItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const hasVariants = getProductVariants(product).length > 0;
+                    const variantSummary = getVariantSummary(product);
+                    const inCart = !hasVariants ? productCartItems[0] : null;
                     const isOutOfStock = product.stock <= 0;
                     const isLowStock = product.stock > 0 && product.stock <= 9;
                     const isInStock = product.stock >= 10;
@@ -938,6 +1086,11 @@ export default function AdminPOS() {
                           <div className="text-sm font-bold text-[#2C3E2D] dark:text-foreground">
                             {formatPrice(product.price)}
                           </div>
+                          {hasVariants && variantSummary ? (
+                            <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                              {variantSummary}
+                            </div>
+                          ) : null}
                           {isInStock && (
                             <div className="text-[10px] text-green-600 mt-1 font-medium">
                               In Stock: {product.stock}
@@ -954,18 +1107,38 @@ export default function AdminPOS() {
                             </div>
                           )}
                         </div>
-                        {inCart ? (
+                        {hasVariants ? (
+                          <div className="mt-3 border-t border-border/50 pt-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                                {productCartQty > 0 ? `${productCartQty} in cart` : "Choose size & color"}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full px-3 text-[11px]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openVariantSelector(product);
+                                }}
+                              >
+                                Select
+                              </Button>
+                            </div>
+                          </div>
+                        ) : inCart ? (
                           <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                             <button
                               className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                              onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, -1); }}
+                              onClick={(e) => { e.stopPropagation(); updateQuantity(inCart.cartKey, -1); }}
                             >
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="text-sm font-bold">{inCart.quantity}</span>
+                            <span className="text-sm font-bold">{productCartQty}</span>
                             <button
                               className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
-                              onClick={(e) => { e.stopPropagation(); updateQuantity(product.id, 1); }}
+                              onClick={(e) => { e.stopPropagation(); updateQuantity(inCart.cartKey, 1); }}
                             >
                               <Plus className="h-3 w-3" />
                             </button>
@@ -1008,7 +1181,11 @@ export default function AdminPOS() {
                     ))
                   ) : (
                     filteredProducts.map((product) => {
-                      const inCart = cart.find((i) => i.productId === product.id);
+                      const productCartItems = cart.filter((item) => item.productId === product.id);
+                      const productCartQty = productCartItems.reduce((sum, item) => sum + item.quantity, 0);
+                      const hasVariants = getProductVariants(product).length > 0;
+                      const variantSummary = getVariantSummary(product);
+                      const inCart = !hasVariants ? productCartItems[0] : null;
                       const isOutOfStock = product.stock <= 0;
                       const isLowStock = product.stock > 0 && product.stock <= 9;
                       const isInStock = product.stock >= 10;
@@ -1042,6 +1219,11 @@ export default function AdminPOS() {
                           <div className={cn("flex-1 min-w-0", isOutOfStock ? "cursor-not-allowed" : "cursor-pointer")} onClick={() => handleProductCardClick(product)}>
                             <div className="text-sm font-medium truncate">{product.name}</div>
                             <div className="text-xs text-muted-foreground uppercase">{product.category || "General"}</div>
+                            {hasVariants && variantSummary ? (
+                              <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                                {variantSummary}
+                              </div>
+                            ) : null}
                           </div>
                           <div className="text-right shrink-0">
                             <div className="text-sm font-bold">{formatPrice(product.price)}</div>
@@ -1060,13 +1242,33 @@ export default function AdminPOS() {
                                   : `In Stock: ${product.stock}`}
                             </div>
                           </div>
-                          {inCart && (
+                          {hasVariants ? (
+                            <div className="flex items-center gap-2 shrink-0">
+                              {productCartQty > 0 ? (
+                                <Badge variant="outline" className="rounded-full border-[#2C5234]/20 bg-[#E8F3EB] text-[#2C5234]">
+                                  {productCartQty} in cart
+                                </Badge>
+                              ) : null}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="h-8 rounded-full px-3 text-[11px]"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openVariantSelector(product);
+                                }}
+                              >
+                                Select
+                              </Button>
+                            </div>
+                          ) : inCart ? (
                             <div className="flex items-center gap-1 shrink-0">
                               <button
                                 className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  updateQuantity(product.id, -1);
+                                  updateQuantity(inCart.cartKey, -1);
                                 }}
                               >
                                 <Minus className="h-3 w-3" />
@@ -1076,13 +1278,13 @@ export default function AdminPOS() {
                                 className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border flex items-center justify-center hover:bg-muted transition"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  updateQuantity(product.id, 1);
+                                  updateQuantity(inCart.cartKey, 1);
                                 }}
                               >
                                 <Plus className="h-3 w-3" />
                               </button>
                             </div>
-                          )}
+                          ) : null}
                         </motion.div>
 
                       );
@@ -1188,7 +1390,7 @@ export default function AdminPOS() {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       exit={{ opacity: 0, x: -20 }}
-                      key={item.productId}
+                      key={item.cartKey}
                       className="flex items-center gap-3 p-3 border-b border-[#f5f5f5] dark:border-border last:border-none"
                     >
                       <div className="flex-1 min-w-0">
@@ -1196,6 +1398,9 @@ export default function AdminPOS() {
                           {item.productName}
                         </div>
                         <div className="text-xs text-muted-foreground">
+                          {item.size || item.variantColor
+                            ? [item.size, item.variantColor].filter(Boolean).join(" • ") + " · "
+                            : ""}
                           {formatPrice(item.unitPrice)} × {item.quantity}
                         </div>
                       </div>
@@ -1204,7 +1409,7 @@ export default function AdminPOS() {
                           variant="outline"
                           size="icon"
                           className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border"
-                          onClick={() => updateQuantity(item.productId, -1)}
+                          onClick={() => updateQuantity(item.cartKey, -1)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -1215,7 +1420,7 @@ export default function AdminPOS() {
                           variant="outline"
                           size="icon"
                           className="w-7 h-7 rounded-full border border-[#E5E5E0] dark:border-border"
-                          onClick={() => updateQuantity(item.productId, 1)}
+                          onClick={() => updateQuantity(item.cartKey, 1)}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -1223,7 +1428,7 @@ export default function AdminPOS() {
                           variant="ghost"
                           size="icon"
                           className="w-7 h-7 rounded-full text-red-400 hover:bg-red-50"
-                          onClick={() => removeFromCart(item.productId)}
+                          onClick={() => removeFromCart(item.cartKey)}
                         >
                           <Trash2 className="h-3 w-3" />
                         </Button>
@@ -1238,7 +1443,136 @@ export default function AdminPOS() {
             </div>
           </div>
 
-          {/* Totals + discount */}
+          <Dialog open={!!variantProduct} onOpenChange={(open) => {
+        if (!open) {
+          setVariantProduct(null);
+          setVariantColor(null);
+          setVariantSize(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl overflow-hidden rounded-[28px] border-border/60 p-0">
+          {variantProduct ? (
+            <div className="grid gap-0 md:grid-cols-[1.05fr_0.95fr]">
+              <div className="relative min-h-[320px] bg-muted/20">
+                <OptimizedImage
+                  src={getVariantPreviewImage(variantProduct, selectedVariant?.color ?? variantColor)}
+                  alt={variantProduct.name}
+                  className="h-full w-full object-cover"
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent p-5 text-white">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">Variant selector</p>
+                  <h3 className="mt-2 text-2xl font-semibold">{variantProduct.name}</h3>
+                  <p className="mt-2 max-w-sm text-sm text-white/80">
+                    Pick the exact color and size before adding this item to the POS cart.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-5 bg-background p-6">
+                <div className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Selected price</p>
+                  <div className="text-3xl font-semibold text-[#2C3E2D] dark:text-foreground">
+                    {formatPrice(selectedVariant?.sellingPrice ?? variantProduct.price)}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Stock available: {selectedVariant ? Number(selectedVariant.stock ?? 0) : variantProduct.stock}
+                  </p>
+                </div>
+
+                {variantColorOptions.length > 0 ? (
+                  <div className="space-y-3">
+                    <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Color</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {variantColorOptions.map((color) => {
+                        const isActive = variantColor === color;
+                        return (
+                          <Button
+                            key={color}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            className={cn("rounded-full px-4", !isActive && "bg-background")}
+                            onClick={() => setVariantColor(color)}
+                          >
+                            {color}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {variantSizeOptions.length > 0 ? (
+                  <div className="space-y-3">
+                    <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Size</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {variantSizeOptions.map((size) => {
+                        const sizeVariant = selectedProductVariants.find((variant) => (variant.size ?? "") === size && (!variantColor || (variant.color ?? "") === variantColor));
+                        const disabled = Number(sizeVariant?.stock ?? 0) <= 0;
+                        const isActive = variantSize === size;
+                        return (
+                          <Button
+                            key={size}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            disabled={disabled}
+                            className={cn("rounded-full px-4", !isActive && "bg-background")}
+                            onClick={() => setVariantSize(size)}
+                          >
+                            {size}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
+                  {selectedVariant ? (
+                    <>
+                      <div className="font-medium text-foreground">
+                        Ready to add: {[selectedVariant.size, selectedVariant.color].filter(Boolean).join(" • ") || "Default variant"}
+                      </div>
+                      <div className="mt-1">SKU: {selectedVariant.sku || "Not set"}</div>
+                    </>
+                  ) : (
+                    <div>Select a valid size and color to continue.</div>
+                  )}
+                </div>
+
+                <div className="mt-auto flex items-center justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setVariantProduct(null);
+                      setVariantColor(null);
+                      setVariantSize(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!selectedVariant || Number(selectedVariant.stock ?? 0) <= 0}
+                    onClick={() => {
+                      if (!variantProduct || !selectedVariant) return;
+                      addToCart(variantProduct, selectedVariant);
+                      setVariantProduct(null);
+                      setVariantColor(null);
+                      setVariantSize(null);
+                      toast({ title: `${variantProduct.name} added to cart` });
+                    }}
+                  >
+                    Add Variant
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Totals + discount */}
           {cart.length > 0 && (
             <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border p-4 space-y-2">
               <div className="flex justify-between text-sm">

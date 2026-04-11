@@ -11,6 +11,7 @@ const OurServices = lazy(() => import("@/components/home/OurServices"));
 const ContactSection = lazy(() => import("@/components/home/ContactSection"));
 const FaqSection = lazy(() => import("@/components/home/FaqSection"));
 const BackToTopSection = lazy(() => import("@/components/home/BackToTopSection"));
+const FlexibleContentSection = lazy(() => import("@/components/home/FlexibleContentSection"));
 
 function DeferredSection({
   children,
@@ -157,7 +158,19 @@ export function renderSection(section: any, ctx: RenderSectionContext = {}, keyP
     case "contact":
       return (
         <DeferredSection key={key} minHeightClassName="min-h-[26rem]">
-          <ContactSection />
+          <ContactSection config={section.config} />
+        </DeferredSection>
+      );
+
+    case "testimonial":
+    case "gallery":
+    case "video":
+    case "countdown":
+    case "map":
+    case "text-block":
+      return (
+        <DeferredSection key={key} minHeightClassName="min-h-[26rem]">
+          <FlexibleContentSection type={section.sectionType} config={section.config} />
         </DeferredSection>
       );
 

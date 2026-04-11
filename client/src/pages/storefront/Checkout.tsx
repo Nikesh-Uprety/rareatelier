@@ -7,11 +7,21 @@ import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles, Ar
 import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
-import { cacheLatestOrder, cachePendingCheckout, clearPendingCheckout, createOrder, validatePromoCode } from "@/lib/api";
+import {
+  cacheLatestOrder,
+  cachePendingCheckout,
+  clearPendingCheckout,
+  confirmOrderVerification,
+  createOrder,
+  requestOrderVerification,
+  type OrderInput,
+  validatePromoCode,
+} from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
+const MAX_NEW_CUSTOMER_ITEMS = 5;
 
 const PAYMENT_OPTIONS = [
   {
@@ -56,6 +66,18 @@ const NEPAL_DISTRICTS = [
 ] as const;
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
+
+type PendingCheckoutContinuation = {
+  orderPayload: OrderInput;
+  manualPayment: boolean;
+  totalQuantity: number;
+  emailVal: string;
+  firstNameVal: string;
+  lastNameVal: string;
+  addressVal: string;
+  cityVal: string;
+  phoneVal: string;
+};
 
 const MANUAL_PAYMENT_METHODS: PaymentMethodId[] = ["esewa", "khalti", "fonepay"];
 
@@ -154,9 +176,22 @@ export default function Checkout() {
   const [promoCodeInput, setPromoCodeInput] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<{ id: string; code: string; discountPct: number } | null>(null);
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
+  const [verificationChallengeId, setVerificationChallengeId] = useState<string | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationToken, setVerificationToken] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [verificationQuantity, setVerificationQuantity] = useState<number | null>(null);
+  const [isVerificationPanelOpen, setIsVerificationPanelOpen] = useState(false);
+  const [isRequestingVerification, setIsRequestingVerification] = useState(false);
+  const [isConfirmingVerification, setIsConfirmingVerification] = useState(false);
+  const pendingCheckoutContinuationRef = useRef<PendingCheckoutContinuation | null>(null);
 
   const subtotal = useMemo(
     () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
+    [items],
+  );
+  const totalQuantity = useMemo(
+    () => items.reduce((sum, item) => sum + item.quantity, 0),
     [items],
   );
   const productDiscountTotal = useMemo(
@@ -236,6 +271,16 @@ export default function Checkout() {
     location: useRef<HTMLDivElement>(null),
   };
 
+  const resetOrderVerification = () => {
+    setVerificationChallengeId(null);
+    setVerificationCode("");
+    setVerificationToken(null);
+    setVerificationEmail(null);
+    setVerificationQuantity(null);
+    setIsVerificationPanelOpen(false);
+    pendingCheckoutContinuationRef.current = null;
+  };
+
   const clearError = (field: string) => {
     if (errors[field]) {
       setErrors(prev => {
@@ -243,6 +288,231 @@ export default function Checkout() {
         delete newErrors[field];
         return newErrors;
       });
+    }
+  };
+
+  useEffect(() => {
+    if (!verificationEmail && !verificationQuantity) return;
+    const currentEmail = email.trim().toLowerCase();
+    if (currentEmail === verificationEmail && totalQuantity === verificationQuantity) return;
+    resetOrderVerification();
+  }, [email, totalQuantity, verificationEmail, verificationQuantity]);
+
+  const finalizeCheckout = async ({
+    orderPayload,
+    manualPayment,
+    totalQuantity: quantity,
+    emailVal,
+    firstNameVal,
+    lastNameVal,
+    addressVal,
+    cityVal,
+    phoneVal,
+  }: PendingCheckoutContinuation) => {
+    if (manualPayment) {
+      saveFormData({
+        email: emailVal,
+        firstName: firstNameVal,
+        lastName: lastNameVal,
+        address: addressVal,
+        city: cityVal,
+        phone: phoneVal,
+      });
+
+      cachePendingCheckout({
+        orderInput: orderPayload,
+        subtotal,
+        shipping,
+        total,
+        createdAt: new Date().toISOString(),
+      });
+
+      setStep(2);
+      toast({
+        title: "Proceed to payment",
+        description: "Upload your payment screenshot to complete and create the order.",
+      });
+      setLocation(`/checkout/payment?method=${paymentMethod}`);
+      return;
+    }
+
+    const result = await mutateAsync(orderPayload);
+
+    if (!result.success || !result.data) {
+      const errorCode = result.code;
+      if (errorCode === "ORDER_VERIFICATION_REQUIRED") {
+        setFormError(
+          `A quick email verification is required before a new customer can place more than ${result.limit || MAX_NEW_CUSTOMER_ITEMS} items in one order.`,
+        );
+        setIsVerificationPanelOpen(true);
+      } else if (errorCode === "ABUSE_TIMEOUT") {
+        const mins = result.retryAfter || 5;
+        setFormError(
+          `Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`,
+        );
+      } else {
+        setFormError(result.error || "Failed to place order.");
+      }
+      return;
+    }
+
+    if (paymentMethod === "stripe") {
+      setStep(3);
+      cacheLatestOrder(result.data.order);
+      clearPendingCheckout();
+      clearSavedFormData();
+      clearCart();
+      toast({ title: "Order created. Redirecting to Stripe..." });
+      try {
+        const { createCheckoutSession } = await import("@/lib/api");
+        const sessionResult = await createCheckoutSession(result.data.order.id);
+        if (sessionResult.success && sessionResult.data?.checkoutUrl) {
+          window.location.href = sessionResult.data.checkoutUrl;
+        } else {
+          setLocation(
+            `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
+          );
+        }
+      } catch {
+        setLocation(
+          `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
+        );
+      }
+      return;
+    }
+
+    setStep(3);
+    cacheLatestOrder(result.data.order);
+    clearPendingCheckout();
+    setLocation(`/order-confirmation/${result.data.order.id}`);
+    clearCart();
+    clearSavedFormData();
+    if (quantity > MAX_NEW_CUSTOMER_ITEMS) {
+      resetOrderVerification();
+    }
+    toast({ title: "Order Placed" });
+  };
+
+  const ensureLargeOrderVerification = async (
+    orderPayload: OrderInput,
+    continuation: PendingCheckoutContinuation,
+  ) => {
+    if (continuation.totalQuantity <= MAX_NEW_CUSTOMER_ITEMS) {
+      return true;
+    }
+
+    const normalizedEmail = continuation.emailVal.toLowerCase().trim();
+    const tokenMatchesCurrentOrder =
+      verificationToken &&
+      verificationEmail === normalizedEmail &&
+      verificationQuantity === continuation.totalQuantity;
+
+    if (tokenMatchesCurrentOrder) {
+      return true;
+    }
+
+    if (
+      verificationChallengeId &&
+      verificationEmail === normalizedEmail &&
+      verificationQuantity === continuation.totalQuantity
+    ) {
+      pendingCheckoutContinuationRef.current = continuation;
+      setIsVerificationPanelOpen(true);
+      setFormError("Enter the email code we sent you to continue this order.");
+      return false;
+    }
+
+    setIsRequestingVerification(true);
+    try {
+      const result = await requestOrderVerification({
+        email: normalizedEmail,
+        quantity: continuation.totalQuantity,
+      });
+
+      if (!result.success) {
+        if (result.code === "ABUSE_TIMEOUT") {
+          const mins = result.retryAfter || 5;
+          setFormError(`Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`);
+        } else {
+          setFormError(result.error || "Failed to start email verification.");
+        }
+        return false;
+      }
+
+      if (!result.required) {
+        return true;
+      }
+
+      pendingCheckoutContinuationRef.current = continuation;
+      setVerificationChallengeId(result.challengeId ?? null);
+      setVerificationCode("");
+      setVerificationToken(null);
+      setVerificationEmail(normalizedEmail);
+      setVerificationQuantity(continuation.totalQuantity);
+      setIsVerificationPanelOpen(true);
+      setFormError("Enter the email code we sent you to continue this order.");
+      toast({
+        title: "Verification code sent",
+        description: `We sent a code to ${normalizedEmail}. Confirm it to continue this order.`,
+      });
+      return false;
+    } finally {
+      setIsRequestingVerification(false);
+    }
+  };
+
+  const handleConfirmLargeOrderVerification = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!verificationChallengeId || !normalizedEmail) {
+      setFormError("Please enter your email before requesting verification.");
+      return;
+    }
+    if (!verificationCode.trim()) {
+      setFormError("Enter the verification code from your email.");
+      return;
+    }
+
+    setIsConfirmingVerification(true);
+    try {
+      const result = await confirmOrderVerification({
+        challengeId: verificationChallengeId,
+        email: normalizedEmail,
+        code: verificationCode.trim(),
+      });
+
+      if (!result.success || !result.verificationToken) {
+        if (result.code === "ABUSE_TIMEOUT") {
+          const mins = result.retryAfter || 5;
+          setFormError(`Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`);
+        } else {
+          setFormError(result.error || "Verification code did not match.");
+        }
+        return;
+      }
+
+      setVerificationToken(result.verificationToken);
+      setVerificationEmail(normalizedEmail);
+      setVerificationQuantity(result.requestedQuantity ?? totalQuantity);
+      setIsVerificationPanelOpen(false);
+      setFormError(null);
+      toast({
+        title: "Email verified",
+        description: "Your order is continuing now.",
+      });
+
+      const pendingContinuation = pendingCheckoutContinuationRef.current;
+      if (pendingContinuation) {
+        pendingCheckoutContinuationRef.current = null;
+        await finalizeCheckout({
+          ...pendingContinuation,
+          orderPayload: {
+            ...pendingContinuation.orderPayload,
+            orderVerificationToken: result.verificationToken,
+          },
+        });
+      }
+    } finally {
+      setIsConfirmingVerification(false);
     }
   };
 
@@ -326,86 +596,33 @@ export default function Checkout() {
     };
 
     try {
-      const totalQuantity = items.reduce((acc, item) => acc + Number(item.quantity), 0);
+      const manualPayment = MANUAL_PAYMENT_METHODS.includes(paymentMethod);
+      const continuation: PendingCheckoutContinuation = {
+        orderPayload,
+        manualPayment,
+        totalQuantity,
+        emailVal,
+        firstNameVal,
+        lastNameVal,
+        addressVal,
+        cityVal,
+        phoneVal,
+      };
 
-      if (MANUAL_PAYMENT_METHODS.includes(paymentMethod)) {
-        saveFormData({
-          email: emailVal,
-          firstName: firstNameVal,
-          lastName: lastNameVal,
-          address: addressVal,
-          city: cityVal,
-          phone: phoneVal,
-        });
-
-        cachePendingCheckout({
-          orderInput: orderPayload,
-          subtotal,
-          shipping,
-          total,
-          createdAt: new Date().toISOString(),
-        });
-
-        setStep(2);
-        toast({
-          title: "Proceed to payment",
-          description: "Upload your payment screenshot to complete and create the order.",
-        });
-        setLocation(`/checkout/payment?method=${paymentMethod}`);
+      const canProceed = await ensureLargeOrderVerification(orderPayload, continuation);
+      if (!canProceed) {
         return;
       }
 
-      const result = await mutateAsync(orderPayload);
-
-      if (!result.success || !result.data) {
-        const errorCode = (result as any).code;
-        if (errorCode === "NEW_CUSTOMER_LIMIT_EXCEEDED") {
-          setFormError(
-            `New customers can order up to ${(result as any).limit || 5} items at a time. You have ${totalQuantity} items. Please reduce your quantity or contact us for large orders.`
-          );
-        } else if (errorCode === "ABUSE_TIMEOUT") {
-          const mins = (result as any).retryAfter || 5;
-          setFormError(
-            `Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`
-          );
-        } else {
-          setFormError(result.error || "Failed to place order.");
-        }
-        return;
-      }
-
-      if (paymentMethod === "stripe") {
-        setStep(3);
-        cacheLatestOrder(result.data.order);
-        clearPendingCheckout();
-        clearSavedFormData();
-        clearCart();
-        toast({ title: "Order created. Redirecting to Stripe..." });
-        try {
-          const { createCheckoutSession } = await import("@/lib/api");
-          const sessionResult = await createCheckoutSession(result.data.order.id);
-          if (sessionResult.success && sessionResult.data?.checkoutUrl) {
-            window.location.href = sessionResult.data.checkoutUrl;
-          } else {
-            setLocation(
-              `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
-            );
-          }
-        } catch {
-          setLocation(
-            `/checkout/payment?orderId=${result.data.order.id}&method=stripe`,
-          );
-        }
-        return;
-      }
-
-      setStep(3);
-      cacheLatestOrder(result.data.order);
-      clearPendingCheckout();
-      setLocation(`/order-confirmation/${result.data.order.id}`);
-      clearCart();
-      clearSavedFormData();
-      toast({ title: "Order Placed" });
+      await finalizeCheckout({
+        ...continuation,
+        orderPayload: verificationToken
+          ? {
+              ...orderPayload,
+              orderVerificationToken: verificationToken,
+            }
+          : orderPayload,
+      });
     } catch (err) {
       setFormError((err as Error).message || "Failed to place order.");
     }
@@ -673,6 +890,94 @@ export default function Checkout() {
             </div>
           </div>
 
+          {isVerificationPanelOpen && (
+            <div className="border border-black/10 bg-black/[0.02] px-5 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-black/55">
+                    Large Order Check
+                  </p>
+                  <h3 className="mt-2 text-base font-semibold text-black">
+                    Confirm your email to continue this order.
+                  </h3>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-black/65">
+                    New customers ordering more than {MAX_NEW_CUSTOMER_ITEMS} items need a quick email verification before checkout completes.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-none"
+                  onClick={() => {
+                    if (verificationChallengeId) {
+                      setIsVerificationPanelOpen(false);
+                    }
+                  }}
+                >
+                  Later
+                </Button>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end">
+                <div className="flex-1 space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Verification Code
+                  </label>
+                  <Input
+                    value={verificationCode}
+                    onChange={(event) => setVerificationCode(event.target.value)}
+                    placeholder="Enter the 6-digit code"
+                    className="h-14 rounded-none border-gray-200 tracking-[0.3em] uppercase"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-14 rounded-none px-6 uppercase tracking-[0.16em] text-[10px] font-bold"
+                    disabled={isRequestingVerification}
+                    onClick={async () => {
+                      const normalizedEmail = email.trim().toLowerCase();
+                      if (!normalizedEmail || totalQuantity <= MAX_NEW_CUSTOMER_ITEMS) return;
+                      setIsRequestingVerification(true);
+                      try {
+                        const result = await requestOrderVerification({
+                          email: normalizedEmail,
+                          quantity: totalQuantity,
+                        });
+                        if (!result.success || !result.required || !result.challengeId) {
+                          setFormError(result.error || "Failed to resend verification email.");
+                          return;
+                        }
+                        setVerificationChallengeId(result.challengeId);
+                        setVerificationCode("");
+                        setVerificationEmail(normalizedEmail);
+                        setVerificationQuantity(totalQuantity);
+                        setFormError("A fresh code was sent. Enter it to continue.");
+                        toast({
+                          title: "Code resent",
+                          description: `We sent a new verification code to ${normalizedEmail}.`,
+                        });
+                      } finally {
+                        setIsRequestingVerification(false);
+                      }
+                    }}
+                  >
+                    {isRequestingVerification ? "Sending..." : "Resend Code"}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="h-14 rounded-none bg-black px-6 text-[10px] font-bold uppercase tracking-[0.16em] text-white"
+                    disabled={isConfirmingVerification}
+                    onClick={handleConfirmLargeOrderVerification}
+                  >
+                    {isConfirmingVerification ? "Verifying..." : "Verify & Continue"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {formError && (
             <p className="text-sm text-red-500">{formError}</p>
           )}
@@ -681,7 +986,7 @@ export default function Checkout() {
             type="submit"
             data-testid="checkout-submit"
             className="w-full h-16 bg-black text-white rounded-none uppercase tracking-[0.2em] text-xs font-bold"
-            disabled={isPending}
+            disabled={isPending || isRequestingVerification || isConfirmingVerification}
           >
             {isPending ? "Processing..." : "Confirm Order"}
           </Button>
