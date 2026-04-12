@@ -297,8 +297,6 @@ export default function AdminAnalytics() {
     if (!data) return [];
     return [
       { status: "Completed", key: "completed", value: toSafeNum(data.ordersByStatus.completed), color: COLOR_TOKENS.emerald, hex: COLOR_TOKENS.emerald },
-      { status: "Pending",   key: "pending",   value: toSafeNum(data.ordersByStatus.pending),   color: COLOR_TOKENS.amber, hex: COLOR_TOKENS.amber },
-      { status: "Cancelled", key: "cancelled", value: toSafeNum(data.ordersByStatus.cancelled), color: COLOR_TOKENS.red, hex: COLOR_TOKENS.red },
     ];
   }, [data]);
 

@@ -69,6 +69,7 @@ export interface AdminCustomer {
   orderCount: number;
   avatarColor: string | null;
   createdAt: string;
+  lastOrderAt?: string | null;
   phoneNumber?: string | null;
   profileImageUrl?: string | null;
 }
@@ -828,6 +829,18 @@ export async function verifyOrderPayment(
     data: AdminOrder;
   };
   return json.data;
+}
+
+export async function deleteAdminOrder(id: string): Promise<void> {
+  await apiRequest("DELETE", `/api/admin/orders/${encodeURIComponent(id)}`);
+}
+
+export async function bulkDeleteAdminOrders(orderIds: string[]): Promise<number> {
+  const res = await apiRequest("POST", "/api/admin/orders/bulk-delete", {
+    orderIds,
+  });
+  const json = (await res.json()) as { success: boolean; deleted?: number };
+  return Number(json.deleted ?? 0);
 }
 
 export function exportOrdersCSV(): Promise<void> {

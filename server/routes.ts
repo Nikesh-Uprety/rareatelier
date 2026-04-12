@@ -6653,6 +6653,47 @@ ${Array.from(uniqueEntries.entries())
     },
   );
 
+  const bulkDeleteOrdersSchema = z.object({
+    orderIds: z.array(z.string().uuid()).min(1),
+  });
+
+  app.post(
+    "/api/admin/orders/bulk-delete",
+    requireAdmin,
+    validateRequest(bulkDeleteOrdersSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const deleted = await storage.deleteOrders(req.body.orderIds);
+        return res.json({ success: true, deleted });
+      } catch (err) {
+        console.error("Error in POST /api/admin/orders/bulk-delete", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to delete orders" });
+      }
+    },
+  );
+
+  app.delete(
+    "/api/admin/orders/:id",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        if (typeof id !== "string") {
+          return res.status(400).json({ success: false, error: "Invalid ID" });
+        }
+        await storage.deleteOrder(id);
+        return res.json({ success: true });
+      } catch (err) {
+        console.error("Error in DELETE /api/admin/orders/:id", err);
+        return res
+          .status(500)
+          .json({ success: false, error: "Failed to delete order" });
+      }
+    },
+  );
+
   // Admin order trends (aggregated)
   app.get(
     "/api/admin/orders/trends",
@@ -7254,7 +7295,11 @@ ${Array.from(uniqueEntries.entries())
 
         const filteredOrders = orders.filter(o => {
           if (!o.createdAt) return false;
-          return new Date(o.createdAt) >= startDate;
+          return (
+            new Date(o.createdAt) >= startDate &&
+            o.status === "completed" &&
+            o.paymentVerified === "verified"
+          );
         });
 
         const rows: string[] = [];

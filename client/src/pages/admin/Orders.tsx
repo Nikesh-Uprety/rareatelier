@@ -1,11 +1,9 @@
 import { lazy, Suspense, useEffect, useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { ViewToggle } from "@/components/admin/ViewToggle";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
-import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle } from "lucide-react";
+import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
@@ -27,6 +25,7 @@ import {
   exportOrdersCSV,
   fetchAdminOrdersPage,
   fetchAdminOrdersTrend,
+  deleteAdminOrder,
   updateOrderStatus,
   verifyOrderPayment,
   fetchBillByOrder,
@@ -68,10 +67,10 @@ function BillButton({ orderId }: { orderId: string }) {
     <>
       <button
         onClick={(e) => { e.stopPropagation(); setShowBill(true); }}
-        className="inline-flex h-7 items-center rounded-md border border-border bg-white px-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-neutral-700 transition-colors hover:bg-neutral-900 hover:text-white dark:bg-card dark:text-neutral-200 dark:hover:bg-white dark:hover:text-black"
+        className="inline-flex h-7 items-center rounded-md border border-border bg-white px-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-700 transition-colors hover:bg-neutral-900 hover:text-white dark:bg-card dark:text-neutral-200 dark:hover:bg-white dark:hover:text-black"
         title={`Bill ${data.billNumber}`}
       >
-        View Bill
+        View
       </button>
 
       {showBill && (
@@ -91,8 +90,8 @@ export default function AdminOrders() {
   const [, setLocation] = useLocation();
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [activeSection, setActiveSection] = useState<"orders" | "chart">("orders");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [timeRange, setTimeRange] = useState<"all" | "1d" | "3d" | "7d">("all");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
   const [selectedOrderSn, setSelectedOrderSn] = useState<number | null>(null);
@@ -192,6 +191,25 @@ export default function AdminOrders() {
       toast({
         title: "Failed to update verification",
         description: getErrorMessage(error, "Please try updating the payment verification again."),
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteOrderMutation = useMutation({
+    mutationFn: deleteAdminOrder,
+    onSuccess: async (_data, orderId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin"] }),
+        queryClient.invalidateQueries({ queryKey: ["bill"] }),
+      ]);
+      setSelectedOrder((prev) => (prev?.id === orderId ? null : prev));
+      toast({ title: "Order deleted" });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to delete order",
+        description: getErrorMessage(error, "Please try deleting this order again."),
         variant: "destructive",
       });
     },
@@ -330,154 +348,130 @@ export default function AdminOrders() {
         </div>
       </div>
 
-      <OrdersTrendChart
-        orders={orders}
-        trendData={trendData}
-        timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"}
-      />
-
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex gap-2 flex-wrap">
-            {STATUS_TABS.map(tab => (
-              <button
-                key={tab}
-                onClick={() => setStatusFilter(tab === 'All' ? 'all' : tab.toLowerCase())}
-                className={cn(
-                  "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                  (tab === 'All' ? statusFilter === 'all' : statusFilter === tab.toLowerCase())
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
-                )}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
-            <Clock className="h-3 w-3 text-muted-foreground" />
-            <Select
-              value={timeRange}
-              onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
-            >
-              <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All time</SelectItem>
-                <SelectItem value="1d">Last 1 day</SelectItem>
-                <SelectItem value="3d">Last 3 days</SelectItem>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search orders, customers..."
-              data-testid="admin-orders-search"
-              className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-            />
-            {searchInput && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput("");
-                  setSearch("");
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <ViewToggle view={viewMode} onViewChange={setViewMode} />
-          <ExportButton onExport={() => exportOrdersCSV()} />
-        </div>
+      <div className="inline-flex w-fit rounded-xl border border-[#D6DAE0] bg-[#F9FAFB] p-1">
+        <button
+          type="button"
+          className={cn(
+            "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+            activeSection === "orders" ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280] hover:text-[#111827]",
+          )}
+          onClick={() => setActiveSection("orders")}
+        >
+          Orders
+        </button>
+        <button
+          type="button"
+          className={cn(
+            "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+            activeSection === "chart" ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280] hover:text-[#111827]",
+          )}
+          onClick={() => setActiveSection("chart")}
+        >
+          Order Chart
+        </button>
       </div>
 
-      <AnimatePresence mode="wait">
-        {viewMode === "list" ? (
-          <motion.div
-            key="list"
-            initial={{ opacity: 0, scale: 0.99 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.99 }}
-            transition={{ duration: 0.2 }}
-            className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden"
-          >
+      {activeSection === "orders" ? (
+        <>
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex gap-2 flex-wrap">
+                {STATUS_TABS.map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setStatusFilter(tab === 'All' ? 'all' : tab.toLowerCase())}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      (tab === 'All' ? statusFilter === 'all' : statusFilter === tab.toLowerCase())
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                    )}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
+                <Clock className="h-3 w-3 text-muted-foreground" />
+                <Select
+                  value={timeRange}
+                  onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
+                >
+                  <SelectTrigger className="h-7 border-0 bg-transparent px-0 shadow-none focus:ring-0 text-xs font-medium">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All time</SelectItem>
+                    <SelectItem value="1d">Last 1 day</SelectItem>
+                    <SelectItem value="3d">Last 3 days</SelectItem>
+                    <SelectItem value="7d">Last 7 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="relative w-full sm:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search orders, customers..."
+                  data-testid="admin-orders-search"
+                  className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearch("");
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <ExportButton onExport={() => exportOrdersCSV()} />
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
             <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
-            <colgroup>
-              <col className="w-[72px]" />
-              <col className="w-[18%]" />
-              <col className="w-[24%]" />
-              <col className="w-[14%]" />
-              <col className="w-[11%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
-              <col className="w-[9%]" />
-              <col className="w-[10%]" />
-              <col className="w-[10%]" />
-            </colgroup>
-            <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
-              <tr>
-                <th className="px-4 py-3 font-medium whitespace-nowrap text-center">S.N</th>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Items</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Date</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Payment</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Delivered</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Paid</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Status</th>
-                <th className="px-4 py-3 font-medium whitespace-nowrap">Bill</th>
-                <th className="px-4 py-3 font-medium text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
-              {isLoading || isError
-                ? Array.from({ length: 6 }).map((_, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-3 text-center">
-                        <div className="mx-auto h-3 w-8 bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-3 w-24 bg-muted animate-pulse mb-2" />
-                        <div className="h-3 w-32 bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-3 w-full max-w-[220px] bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-3 w-24 bg-muted animate-pulse mb-2" />
-                        <div className="h-3 w-16 bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-3 w-20 bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-6 w-10 rounded-full bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-6 w-14 rounded-full bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-6 w-16 rounded-full bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        <div className="h-8 w-8 rounded-md bg-muted animate-pulse" />
-                      </td>
-                      <td className="px-4 py-3 align-top text-right">
-                        <div className="h-3 w-16 bg-muted animate-pulse ml-auto" />
-                      </td>
-                    </tr>
-                  ))
-                : paginatedOrders.map((order, idx) => {
+              <table className="orders-admin-table w-full min-w-[1060px] text-left text-sm">
+                
+                <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                  <tr>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">S.N</th>
+                    <th className="px-3 py-3 font-medium text-left">Customer</th>
+                    <th className="px-3 py-3 font-medium text-left">Items</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Date</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Payment</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">Delivered</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Paid</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Status</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">Actions</th>
+                    <th className="px-3 py-3 font-medium whitespace-nowrap text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
+                  {isLoading || isError
+                    ? Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i}>
+                          <td className="px-3 py-3 align-middle text-center"><div className="mx-auto h-3 w-7 bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-3 w-28 bg-muted animate-pulse mb-2" /><div className="h-3 w-36 bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-3 w-full max-w-[220px] bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-3 w-24 bg-muted animate-pulse mb-2" /><div className="h-3 w-16 bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-3 w-20 bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-6 w-10 rounded-full bg-muted animate-pulse mx-auto" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-6 w-14 rounded-full bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle"><div className="h-6 w-16 rounded-full bg-muted animate-pulse" /></td>
+                          <td className="px-3 py-3 align-middle text-center"><div className="h-7 w-20 bg-muted animate-pulse mx-auto" /></td>
+                          <td className="px-3 py-3 align-middle text-right"><div className="h-3 w-16 bg-muted animate-pulse ml-auto" /></td>
+                        </tr>
+                      ))
+                    : paginatedOrders.map((order, idx) => {
                     const statusMap: Record<string, string> = {
                       pending: 'Pending',
                       processing: 'Processing',
@@ -486,44 +480,43 @@ export default function AdminOrders() {
                       pos: 'POS',
                     };
                     const status = statusMap[order.status] ?? order.status;
+                    const itemSummary = order.items?.map((item) => `${item.name}${item.size ? ` (${item.size})` : ""} × ${item.quantity}`).join(", ") || "—";
                     return (
                       <tr
                         key={order.id}
                         data-testid={`admin-order-row-${order.id}`}
                         className={cn(
-                          "transition-all duration-200 cursor-pointer relative",
-                          "before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:rounded-r-full before:transition-all before:duration-200",
+                          "transition-all duration-200 cursor-pointer",
                           selectedOrder?.id === order.id
-                            ? "bg-[#2C5234]/[0.06] dark:bg-[#2C5234]/[0.12] before:bg-[#2C5234] dark:before:bg-[#4ADE80]"
-                            : "before:bg-transparent hover:bg-muted/40",
+                            ? "bg-[#2C5234]/[0.06] dark:bg-[#2C5234]/[0.12]"
+                            : "hover:bg-muted/40",
                         )}
                         onClick={() => {
                           setSelectedOrder(order);
                           setSelectedOrderSn(getOrderSerial(idx));
                         }}
                       >
-                        <td className="px-4 py-3 align-top text-center font-medium text-xs">{getOrderSerial(idx)}</td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="font-medium text-[#2C3E2D] dark:text-foreground">
-                            {order.fullName}
-                          </div>
-                          <div className="text-muted-foreground text-xs">
-                            {order.email}
-                          </div>
+                        <td className={cn(
+                          "px-3 py-3 align-middle text-center font-medium text-xs whitespace-nowrap",
+                          selectedOrder?.id === order.id && "border-l-[3px] border-[#2C5234] dark:border-[#4ADE80]"
+                        )}>{getOrderSerial(idx)}</td>
+                        <td className="px-3 py-3 align-middle min-w-0">
+                          <div className="font-medium text-[#2C3E2D] dark:text-foreground truncate" title={order.fullName}>{order.fullName}</div>
+                          <div className="text-muted-foreground text-xs truncate" title={order.email}>{order.email}</div>
                           {order.country && (
-                            <div className="text-muted-foreground text-xs mt-1">
-                              <p>{order.country}</p>
-                            </div>
+                            <div className="text-muted-foreground text-xs mt-1 truncate" title={order.country}>{order.country}</div>
                           )}
-                        </td>
-                        <td className="px-4 py-3 align-top">
-                          <div className="text-xs text-muted-foreground max-w-[240px]">
-                            {order.items?.map((item) =>
-                              `${item.name}${item.size ? ` (${item.size})` : ""} × ${item.quantity}`,
-                            ).join(", ") || "—"}
+                          <div className="mt-1.5 space-y-0.5 md:hidden">
+                            <div className="text-[11px] text-muted-foreground truncate" title={itemSummary}>{itemSummary}</div>
+                            <div className="hidden sm:block text-[11px] text-muted-foreground">
+                              {order.createdAt ? `${format(new Date(order.createdAt), "MMM d, yyyy")} · ${format(new Date(order.createdAt), "h:mm a")}` : "—"}
+                            </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 align-top text-muted-foreground whitespace-nowrap">
+                        <td className="px-3 py-3 align-middle min-w-0">
+                          <div className="text-xs text-muted-foreground truncate" title={itemSummary}>{itemSummary}</div>
+                        </td>
+                        <td className="px-3 py-3 align-middle text-muted-foreground whitespace-nowrap">
                           {order.createdAt ? (
                             <div className="flex flex-col">
                               <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
@@ -533,26 +526,28 @@ export default function AdminOrders() {
                             "—"
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 align-middle">
                           <div className="flex flex-col gap-1 text-xs">
-                            <span className="font-medium capitalize">
+                            <span className="font-medium capitalize truncate" title={order.paymentMethod?.replace(/_/g, " ") ?? "—"}>
                               {order.paymentMethod?.replace(/_/g, " ") ?? "—"}
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
-                          <Switch
-                            checked={order.status === "completed"}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                statusMutation.mutate({ id: order.id, status: "completed" });
-                              } else {
-                                statusMutation.mutate({ id: order.id, status: "processing" });
-                              }
-                            }}
-                          />
+                        <td className="px-3 py-3 align-middle text-center">
+                          <div className="flex justify-center">
+                            <Switch
+                              checked={order.status === "completed"}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  statusMutation.mutate({ id: order.id, status: "completed" });
+                                } else {
+                                  statusMutation.mutate({ id: order.id, status: "processing" });
+                                }
+                              }}
+                            />
+                          </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 align-middle">
                           {order.paymentVerified === "verified" ? (
                             <Badge className="bg-green-100 text-green-700 border-green-200 text-[10px]">Paid</Badge>
                           ) : order.paymentVerified === "rejected" ? (
@@ -561,7 +556,7 @@ export default function AdminOrders() {
                             <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">Unpaid</Badge>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 py-3 align-middle">
                           <Badge
                             className={cn(
                               "text-[10px] font-bold uppercase tracking-wider",
@@ -570,125 +565,64 @@ export default function AdminOrders() {
                               status === "Processing" ? "bg-blue-100 text-blue-700 border-blue-700/20 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-900" :
                               status === "POS" ? "bg-purple-100 text-purple-700 border-purple-700/20 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-900" :
                               "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900"
-                            )}>
+                            )}
+                          >
                             {status}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3">
-                          <BillButton orderId={order.id} />
+                        <td className="px-3 py-3 align-middle">
+                          <div className="flex items-center justify-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+                            <BillButton orderId={order.id} />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                if (!window.confirm("Delete this order? This cannot be undone.")) return;
+                                deleteOrderMutation.mutate(order.id);
+                              }}
+                              disabled={deleteOrderMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                        <td className="px-3 py-3 align-middle text-right font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
                           {formatAdminNpr((order.total ?? 0) - (order.discountAmount ?? 0))}
                         </td>
                       </tr>
                     );
                   })}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+            <Pagination
+              currentPage={orderPage}
+              totalPages={orderTotalPages}
+              onPageChange={(page) => {
+                setOrderPage(page);
+                setSelectedOrder(null);
+              }}
+              totalItems={totalOrders}
+              pageSize={orderPageSize}
+              onPageSizeChange={setOrderPageSize}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="rounded-2xl border border-[#E3E5E8] bg-white p-5 shadow-sm">
+          <OrdersTrendChart
+            orders={orders}
+            trendData={trendData}
+            timeRange={timeRange as "1d" | "3d" | "7d" | "30d" | "all"}
+          />
         </div>
-      </motion.div>
-    ) : (
-      <motion.div
-        key="grid"
-        initial={{ opacity: 0, scale: 0.99 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.99 }}
-        transition={{ duration: 0.2 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-      >
-        {isLoading || isError
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-card rounded-xl border border-border p-5 space-y-4 animate-pulse">
-                <div className="flex justify-between items-start">
-                  <div className="h-4 w-24 bg-muted rounded" />
-                  <div className="h-4 w-16 bg-muted rounded" />
-                </div>
-                <div className="space-y-2">
-                  <div className="h-3 w-32 bg-muted rounded" />
-                  <div className="h-3 w-40 bg-muted rounded" />
-                </div>
-                <div className="h-10 w-full bg-muted rounded" />
-              </div>
-            ))
-          : paginatedOrders.map((order, idx) => {
-              const status = order.status.charAt(0).toUpperCase() + order.status.slice(1);
-              return (
-                <div 
-                  key={order.id} 
-                  className="bg-card rounded-xl border border-border p-5 hover:shadow-lg transition-shadow bg-white dark:bg-card cursor-pointer"
-                  onClick={() => {
-                    setSelectedOrder(order);
-                    setSelectedOrderSn(getOrderSerial(idx));
-                  }}
-                >
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        S.N {getOrderSerial(idx)}
-                      </p>
-                      <h3 className="font-serif font-medium text-base mt-1">{order.fullName}</h3>
-                    </div>
-                    <Badge
-                      className={cn(
-                        "text-[10px] font-bold uppercase tracking-wider",
-                        order.status === "completed" ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" :
-                        order.status === "pending" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-400" :
-                        "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
-                      )}
-                    >
-                      {status}
-                    </Badge>
-                  </div>
-                  
-                  <div className="space-y-3 mb-6">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Date</span>
-                      <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
-                    </div>
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>Payment</span>
-                      <span className="uppercase">{order.paymentMethod || 'Manual'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-2 border-t border-dashed border-border mt-2">
-                      <span className="text-sm font-medium">Total Amount</span>
-                      <span className="text-lg font-bold">{formatPrice(order.total)}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-2 mt-4">
-                    <Button
-                      variant="outline"
-                      className="w-full text-xs font-bold uppercase tracking-wider"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedOrder(order);
-                        setSelectedOrderSn(getOrderSerial(idx));
-                      }}
-                    >
-                      Manage Order <ChevronRight className="w-4 h-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-      </motion.div>
-    )}
-  </AnimatePresence>
-
-  {/* Pagination */}
-  <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
-    <Pagination
-      currentPage={orderPage}
-      totalPages={orderTotalPages}
-      onPageChange={(page) => {
-        setOrderPage(page);
-        setSelectedOrder(null);
-      }}
-      totalItems={totalOrders}
-      pageSize={orderPageSize}
-      onPageSizeChange={setOrderPageSize}
-    />
-  </div>
+      )}
 
   {/* Sliding Drawer for Order Details */}
       <Sheet

@@ -390,6 +390,8 @@ export interface IStorage {
     id: string,
     paymentVerified: "verified" | "rejected",
   ): Promise<Order>;
+  deleteOrder(id: string): Promise<void>;
+  deleteOrders(ids: string[]): Promise<number>;
   updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order>;
   updateOrderStripeCheckoutSession(id: string, sessionId: string): Promise<Order>;
   updateOrderStripePaymentStatus(id: string, status: string): Promise<Order>;
@@ -590,7 +592,7 @@ export class PgStorage implements IStorage {
     lastName: string;
     phoneNumber: string | null;
     since?: Date;
-  }): Promise<{ totalSpent: number; orderCount: number }> {
+  }): Promise<{ totalSpent: number; orderCount: number; lastOrderAt: Date | null }> {
     const normalizedEmail = customer.email.toLowerCase();
     const fullName = `${customer.firstName} ${customer.lastName}`;
 
@@ -606,6 +608,7 @@ export class PgStorage implements IStorage {
       .select({
         total: sql<number>`coalesce(sum(${orders.total}), 0)`,
         count: sql<number>`count(*)`,
+        lastOrderAt: sql<Date | null>`max(${orders.createdAt})`,
       })
       .from(orders)
       .where(and(...onlineConditions));
@@ -626,6 +629,7 @@ export class PgStorage implements IStorage {
       .select({
         total: sql<number>`coalesce(sum(${bills.totalAmount}), 0)`,
         count: sql<number>`count(*)`,
+        lastOrderAt: sql<Date | null>`max(${bills.createdAt})`,
       })
       .from(bills)
       .where(
@@ -636,9 +640,17 @@ export class PgStorage implements IStorage {
         ),
       );
 
+    const onlineLastOrder = onlineSummary?.lastOrderAt ? new Date(onlineSummary.lastOrderAt) : null;
+    const posLastOrder = posSummary?.lastOrderAt ? new Date(posSummary.lastOrderAt) : null;
+    const lastOrderAt =
+      onlineLastOrder && posLastOrder
+        ? (onlineLastOrder > posLastOrder ? onlineLastOrder : posLastOrder)
+        : onlineLastOrder ?? posLastOrder ?? null;
+
     return {
       totalSpent: Number(onlineSummary?.total ?? 0) + Number(posSummary?.total ?? 0),
       orderCount: Number(onlineSummary?.count ?? 0) + Number(posSummary?.count ?? 0),
+      lastOrderAt,
     };
   }
 
@@ -1687,6 +1699,41 @@ export class PgStorage implements IStorage {
     return row;
   }
 
+  async deleteOrder(id: string): Promise<void> {
+    await this.deleteOrders([id]);
+  }
+
+  async deleteOrders(ids: string[]): Promise<number> {
+    const uniqueIds = Array.from(new Set(ids.filter(Boolean)));
+    if (uniqueIds.length === 0) return 0;
+
+    const rowsToDelete = await db
+      .select({ id: orders.id, email: orders.email })
+      .from(orders)
+      .where(inArray(orders.id, uniqueIds));
+
+    if (rowsToDelete.length === 0) return 0;
+
+    const orderIds = rowsToDelete.map((row) => row.id);
+    const emails = Array.from(
+      new Set(
+        rowsToDelete
+          .map((row) => row.email?.toLowerCase().trim())
+          .filter((email): email is string => Boolean(email)),
+      ),
+    );
+
+    await db.transaction(async (tx) => {
+      await tx.delete(orderItems).where(inArray(orderItems.orderId, orderIds));
+      await tx.delete(bills).where(inArray(bills.orderId, orderIds));
+      await tx.delete(orders).where(inArray(orders.id, orderIds));
+    });
+
+    await Promise.all(emails.map((email) => this.syncCustomerStats(email)));
+
+    return orderIds.length;
+  }
+
   async updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order> {
     const [row] = await db
       .update(orders)
@@ -1873,6 +1920,7 @@ export class PgStorage implements IStorage {
           ...row,
           totalSpent: stats.totalSpent.toString(),
           orderCount: stats.orderCount,
+          lastOrderAt: stats.lastOrderAt,
         };
       }),
     );
@@ -3913,6 +3961,18 @@ export class MemStorage implements IStorage {
     order.paymentVerified = status;
     const { items: _, ...rest } = order;
     return rest;
+  }
+
+  async deleteOrder(id: string): Promise<void> {
+    this._orders = this._orders.filter((order) => order.id !== id);
+  }
+
+  async deleteOrders(ids: string[]): Promise<number> {
+    const idSet = new Set(ids.filter(Boolean));
+    if (idSet.size === 0) return 0;
+    const previousLength = this._orders.length;
+    this._orders = this._orders.filter((order) => !idSet.has(order.id));
+    return previousLength - this._orders.length;
   }
 
   async updateOrderStripePaymentIntent(id: string, paymentIntentId: string): Promise<Order> {

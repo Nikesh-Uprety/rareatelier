@@ -764,3 +764,51 @@
     padding: 16px !important;
   }
 }
+
+
+/* Orders table alignment lock: keep header/body on identical column map */
+.orders-admin-table {
+  table-layout: fixed;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.orders-admin-table th,
+.orders-admin-table td {
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orders-admin-table th:nth-child(1),
+.orders-admin-table td:nth-child(1) { width: 56px; text-align: center; }
+.orders-admin-table th:nth-child(2),
+.orders-admin-table td:nth-child(2) { width: 182px; }
+.orders-admin-table th:nth-child(3),
+.orders-admin-table td:nth-child(3) { width: 228px; }
+.orders-admin-table th:nth-child(4),
+.orders-admin-table td:nth-child(4) { width: 132px; }
+.orders-admin-table th:nth-child(5),
+.orders-admin-table td:nth-child(5) { width: 90px; }
+.orders-admin-table th:nth-child(6),
+.orders-admin-table td:nth-child(6) { width: 84px; }
+.orders-admin-table th:nth-child(7),
+.orders-admin-table td:nth-child(7) { width: 84px; }
+.orders-admin-table th:nth-child(8),
+.orders-admin-table td:nth-child(8) { width: 98px; }
+.orders-admin-table th:nth-child(9),
+.orders-admin-table td:nth-child(9) { width: 112px; }
+.orders-admin-table th:nth-child(10),
+.orders-admin-table td:nth-child(10) { width: 106px; }
+
+/* Keep multi-line date block and compact customer block readable */
+.orders-admin-table td:nth-child(2),
+.orders-admin-table td:nth-child(3) {
+  white-space: normal;
+}
+
+.orders-admin-table td:nth-child(4) {
+  white-space: nowrap;
+}

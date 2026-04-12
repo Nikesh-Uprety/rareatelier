@@ -112,7 +112,7 @@ export default function AdminBucketsPage() {
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [sortBy, setSortBy] = useState<"createdAt" | "name" | "size">("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [showExpired, setShowExpired] = useState(false);
@@ -121,7 +121,7 @@ export default function AdminBucketsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(24);
+  const [pageSize, setPageSize] = useState(20);
   const [isDragging, setIsDragging] = useState(false);
   const [isBulkUploading, setIsBulkUploading] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);

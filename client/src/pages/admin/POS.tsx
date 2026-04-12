@@ -23,6 +23,7 @@ import {
   createAdminCustomer,
   fetchPlatforms,
 } from "@/lib/adminApi";
+import { fetchProductById } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -100,6 +101,77 @@ function getProductVariants(product: AdminProduct): ProductVariantOption[] {
   return Array.isArray(product.variants) ? product.variants.filter(Boolean) as ProductVariantOption[] : [];
 }
 
+function parseOptionList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+      .filter(Boolean);
+  }
+
+  if (typeof value !== "string") return [];
+  const raw = value.trim();
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+        .filter(Boolean);
+    }
+  } catch {
+    // Fall back to comma-separated parsing.
+  }
+
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function buildFallbackVariants(product: AdminProduct): ProductVariantOption[] {
+  const declaredSizes = parseOptionList(product.sizeOptions);
+  const stockSizes = Object.keys(product.stockBySize ?? {}).filter(Boolean);
+  const sizes = Array.from(new Set([...(stockSizes.length ? stockSizes : []), ...declaredSizes]));
+
+  const declaredColors = parseOptionList(product.colorOptions);
+  const mappedColors = Object.keys(product.colorImageMap ?? {}).filter(Boolean);
+  const colors = Array.from(new Set([...declaredColors, ...mappedColors]));
+
+  const normalizedSizes = sizes.length ? sizes : [""];
+  const normalizedColors = colors.length ? colors : [""];
+
+  const fallback: ProductVariantOption[] = [];
+  for (const size of normalizedSizes) {
+    const stockFromSize = size ? Number(product.stockBySize?.[size] ?? 0) : Number(product.stock ?? 0);
+    const normalizedStock = Number.isFinite(stockFromSize) && stockFromSize > 0 ? stockFromSize : Number(product.stock ?? 0);
+
+    for (const color of normalizedColors) {
+      fallback.push({
+        id: `${product.id}::${size || "base"}::${color || "base"}`,
+        size,
+        color: color || null,
+        stock: Math.max(0, normalizedStock),
+        sku: null,
+        sellingPrice: Number(product.price ?? 0),
+        costPrice: Number(product.costPrice ?? 0),
+      });
+    }
+  }
+
+  return fallback;
+}
+
+function getColorOptionsFromProduct(product: AdminProduct): string[] {
+  const variants = getProductVariants(product);
+  const variantColors = variants
+    .map((variant) => variant.color?.trim())
+    .filter((value): value is string => Boolean(value));
+  const declaredColors = parseOptionList(product.colorOptions);
+  const mappedColors = Object.keys(product.colorImageMap ?? {}).filter(Boolean);
+  return Array.from(new Set([...variantColors, ...declaredColors, ...mappedColors]));
+}
+
 function buildCartKey(productId: string, variant?: ProductVariantOption | null) {
   if (!variant) return `${productId}::base`;
   const parts = [productId, variant.id ?? "base", variant.color ?? "no-color", variant.size ?? "no-size"];
@@ -168,7 +240,7 @@ export default function AdminPOS() {
   const [showQR, setShowQR] = useState(false);
   const [cashRollTick, setCashRollTick] = useState(0);
   const [showPaidCashIcon, setShowPaidCashIcon] = useState(false);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [isCustomersOpen, setIsCustomersOpen] = useState(false);
   const [customerViewMode, setCustomerViewMode] = useState<"grid" | "list">("list");
@@ -180,6 +252,8 @@ export default function AdminPOS() {
   const [variantProduct, setVariantProduct] = useState<AdminProduct | null>(null);
   const [variantColor, setVariantColor] = useState<string | null>(null);
   const [variantSize, setVariantSize] = useState<string | null>(null);
+  const [variantLoading, setVariantLoading] = useState(false);
+  const [variantsByProductId, setVariantsByProductId] = useState<Record<string, ProductVariantOption[]>>({});
   const lastProductClickAtRef = useRef<Record<string, number>>({});
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -252,42 +326,97 @@ export default function AdminPOS() {
   }, [products, search, selectedCategory]);
 
 
-  const selectedProductVariants = useMemo(
-    () => (variantProduct ? getProductVariants(variantProduct) : []),
-    [variantProduct],
-  );
+  const selectedProductVariants = useMemo(() => {
+    if (!variantProduct) return [];
+    const cached = variantsByProductId[variantProduct.id];
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+    return getProductVariants(variantProduct);
+  }, [variantProduct, variantsByProductId]);
+
+  const normalizedVariantRecords = useMemo(() => {
+    if (!variantProduct) return [] as ProductVariantOption[];
+
+    const hasColorDimension = selectedProductVariants.some((variant) => Boolean(variant.color?.trim()));
+    const metadataColors = getColorOptionsFromProduct(variantProduct);
+
+    if (!selectedProductVariants.length || (!hasColorDimension && metadataColors.length > 0)) {
+      const fallback = buildFallbackVariants(variantProduct);
+      if (fallback.length > 0) return fallback;
+    }
+
+    return selectedProductVariants;
+  }, [selectedProductVariants, variantProduct]);
+
+  const resolveProductVariants = async (product: AdminProduct): Promise<ProductVariantOption[]> => {
+    const cached = variantsByProductId[product.id];
+    if (Array.isArray(cached) && cached.length > 0) return cached;
+
+    const localVariants = getProductVariants(product);
+    if (localVariants.length > 0) {
+      const localHasColorDimension = localVariants.some((variant) => Boolean(variant.color?.trim()));
+      const metadataColors = getColorOptionsFromProduct(product);
+      const normalizedLocalVariants = !localHasColorDimension && metadataColors.length > 0
+        ? buildFallbackVariants(product)
+        : localVariants;
+
+      setVariantsByProductId((prev) => ({ ...prev, [product.id]: normalizedLocalVariants }));
+      return normalizedLocalVariants;
+    }
+
+    try {
+      const detailed = await fetchProductById(product.id);
+      const resolvedFromApi = Array.isArray(detailed?.variants)
+        ? (detailed.variants.filter(Boolean) as ProductVariantOption[])
+        : [];
+
+      if (resolvedFromApi.length > 0) {
+        setVariantsByProductId((prev) => ({ ...prev, [product.id]: resolvedFromApi }));
+        return resolvedFromApi;
+      }
+    } catch {
+      // Continue to metadata fallback below.
+    }
+
+    const fallback = buildFallbackVariants(product).filter((variant) => Number(variant.stock ?? 0) > 0);
+    if (fallback.length > 0) {
+      setVariantsByProductId((prev) => ({ ...prev, [product.id]: fallback }));
+    }
+    return fallback;
+  };
 
   const variantColorOptions = useMemo(() => {
-    const colors = Array.from(
-      new Set(
-        selectedProductVariants
-          .map((variant) => variant.color?.trim())
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-    return colors;
-  }, [selectedProductVariants]);
+    if (!variantProduct) return [];
+    const variantColors = normalizedVariantRecords
+      .map((variant) => variant.color?.trim())
+      .filter((value): value is string => Boolean(value));
+    const declaredColors = getColorOptionsFromProduct(variantProduct);
+    return Array.from(new Set([...variantColors, ...declaredColors]));
+  }, [normalizedVariantRecords, variantProduct]);
 
   const variantSizeOptions = useMemo(() => {
-    const scopedVariants = variantColor
-      ? selectedProductVariants.filter((variant) => (variant.color ?? "") === variantColor)
-      : selectedProductVariants;
+    if (!variantProduct) return [];
 
-    return Array.from(
-      new Set(
-        scopedVariants
-          .map((variant) => variant.size?.trim())
-          .filter((value): value is string => Boolean(value)),
-      ),
-    );
-  }, [selectedProductVariants, variantColor]);
+    const hasColorAwareVariants = normalizedVariantRecords.some((variant) => Boolean(variant.color?.trim()));
+    const scopedVariants = variantColor && hasColorAwareVariants
+      ? normalizedVariantRecords.filter((variant) => (variant.color ?? "") === variantColor)
+      : normalizedVariantRecords;
+
+    const variantSizes = scopedVariants
+      .map((variant) => variant.size?.trim())
+      .filter((value): value is string => Boolean(value));
+    const declaredSizes = parseOptionList(variantProduct.sizeOptions);
+    const stockSizes = Object.keys(variantProduct.stockBySize ?? {}).filter(Boolean);
+
+    return Array.from(new Set([...variantSizes, ...stockSizes, ...declaredSizes]));
+  }, [normalizedVariantRecords, variantColor, variantProduct]);
 
   const selectedVariant = useMemo(() => {
     if (!variantProduct) return null;
 
-    const scopedByColor = variantColor
-      ? selectedProductVariants.filter((variant) => (variant.color ?? "") === variantColor)
-      : selectedProductVariants;
+    const hasColorAwareVariants = normalizedVariantRecords.some((variant) => Boolean(variant.color?.trim()));
+    const scopedByColor = variantColor && hasColorAwareVariants
+      ? normalizedVariantRecords.filter((variant) => (variant.color ?? "") === variantColor)
+      : normalizedVariantRecords;
 
     if (variantSize) {
       const exact = scopedByColor.find((variant) => (variant.size ?? "") === variantSize);
@@ -295,7 +424,7 @@ export default function AdminPOS() {
     }
 
     return scopedByColor.find((variant) => Number(variant.stock ?? 0) > 0) ?? scopedByColor[0] ?? null;
-  }, [selectedProductVariants, variantColor, variantProduct, variantSize]);
+  }, [normalizedVariantRecords, variantColor, variantProduct, variantSize]);
 
   useEffect(() => {
     if (!variantProduct) return;
@@ -320,20 +449,31 @@ export default function AdminPOS() {
   }, [variantProduct, variantSize, variantSizeOptions]);
 
   const openVariantSelector = (product: AdminProduct) => {
-    const variants = getProductVariants(product).filter((variant) => Number(variant.stock ?? 0) > 0);
-    if (!variants.length) {
-      toast({
-        title: "Out of stock",
-        description: `${product.name} has no available variants right now.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const defaultVariant = variants[0];
     setVariantProduct(product);
-    setVariantColor(defaultVariant.color ?? null);
-    setVariantSize(defaultVariant.size ?? null);
+    setVariantColor(null);
+    setVariantSize(null);
+    setVariantLoading(true);
+
+    void resolveProductVariants(product)
+      .then((resolvedVariants) => {
+        const variants = resolvedVariants.filter((variant) => Number(variant.stock ?? 0) > 0);
+        if (!variants.length) {
+          setVariantProduct(null);
+          toast({
+            title: "Out of stock",
+            description: `${product.name} has no available variants right now.`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const defaultVariant = variants[0];
+        setVariantColor(defaultVariant.color ?? null);
+        setVariantSize(defaultVariant.size ?? null);
+      })
+      .finally(() => {
+        setVariantLoading(false);
+      });
   };
 
   const { data: customers } = useQuery<AdminCustomer[]>({
@@ -378,8 +518,14 @@ export default function AdminPOS() {
           );
 
           if (scannedProduct) {
-            if (getProductVariants(scannedProduct).length > 0) {
-              openVariantSelector(scannedProduct);
+            const scannedLocalVariants = getProductVariants(scannedProduct);
+            const scannedCachedVariants = variantsByProductId[scannedProduct.id] ?? [];
+            const scannedHasVariantMetadata =
+              Boolean(scannedProduct.sizeOptions || scannedProduct.colorOptions) ||
+              Object.keys(scannedProduct.stockBySize ?? {}).length > 0;
+
+            if (scannedLocalVariants.length > 0 || scannedCachedVariants.length > 0 || scannedHasVariantMetadata) {
+              void openVariantSelector(scannedProduct);
               toast({ title: `Choose size and color for ${scannedProduct.name}` });
             } else {
               addToCart(scannedProduct);
@@ -398,7 +544,7 @@ export default function AdminPOS() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [products, cart]); // Add cart to dependencies for stock check in barcode scanner
+  }, [products, cart, variantsByProductId]); // Add cart to dependencies for stock check in barcode scanner
 
   // Cart calculations (VAT removed per user request)
   const subtotal = cart.reduce((s, i) => s + i.lineTotal, 0);
@@ -519,8 +665,13 @@ export default function AdminPOS() {
     lastProductClickAtRef.current[product.id] = now;
 
     const productVariants = getProductVariants(product);
-    if (productVariants.length > 0) {
-      openVariantSelector(product);
+    const cachedVariants = variantsByProductId[product.id] ?? [];
+    const hasVariantMetadata =
+      Boolean(product.sizeOptions || product.colorOptions) ||
+      Object.keys(product.stockBySize ?? {}).length > 0;
+
+    if (productVariants.length > 0 || cachedVariants.length > 0 || hasVariantMetadata) {
+      void openVariantSelector(product);
       return;
     }
 
@@ -640,6 +791,13 @@ export default function AdminPOS() {
       setSocialCustomerEmail("");
       setSocialDeliveryLocation("");
       setShowSocialCustomerDialog(false);
+
+      queryClient.invalidateQueries({ queryKey: ["admin", "products", "pos"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "bills"] });
+
       toast({ title: "Checkout successful" });
     },
 
@@ -1120,7 +1278,7 @@ export default function AdminPOS() {
                                 className="h-8 rounded-full px-3 text-[11px]"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openVariantSelector(product);
+                                  void openVariantSelector(product);
                                 }}
                               >
                                 Select
@@ -1256,7 +1414,7 @@ export default function AdminPOS() {
                                 className="h-8 rounded-full px-3 text-[11px]"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openVariantSelector(product);
+                                  void openVariantSelector(product);
                                 }}
                               >
                                 Select
@@ -1448,124 +1606,123 @@ export default function AdminPOS() {
           setVariantProduct(null);
           setVariantColor(null);
           setVariantSize(null);
+          setVariantLoading(false);
         }
       }}>
-        <DialogContent className="max-w-3xl overflow-hidden rounded-[28px] border-border/60 p-0">
+        <DialogContent className="max-w-[520px] rounded-2xl border-border/60 p-0">
           {variantProduct ? (
-            <div className="grid gap-0 md:grid-cols-[1.05fr_0.95fr]">
-              <div className="relative min-h-[320px] bg-muted/20">
-                <OptimizedImage
-                  src={getVariantPreviewImage(variantProduct, selectedVariant?.color ?? variantColor)}
-                  alt={variantProduct.name}
-                  className="h-full w-full object-cover"
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent p-5 text-white">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">Variant selector</p>
-                  <h3 className="mt-2 text-2xl font-semibold">{variantProduct.name}</h3>
-                  <p className="mt-2 max-w-sm text-sm text-white/80">
-                    Pick the exact color and size before adding this item to the POS cart.
-                  </p>
+            <div className="flex flex-col gap-4 bg-background p-5">
+              <div className="space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Select Variant</p>
+                <h3 className="text-lg font-semibold leading-tight">{variantProduct.name}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {variantLoading
+                    ? "Loading variants..."
+                    : selectedVariant
+                      ? `Stock left for this variant: ${Number(selectedVariant.stock ?? 0)}`
+                      : "Select color and size to see stock left"}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Selected price</div>
+                <div className="mt-1 text-2xl font-semibold text-[#2C3E2D] dark:text-foreground">
+                  {formatPrice(selectedVariant?.sellingPrice ?? variantProduct.price)}
                 </div>
               </div>
 
-              <div className="flex flex-col gap-5 bg-background p-6">
-                <div className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Selected price</p>
-                  <div className="text-3xl font-semibold text-[#2C3E2D] dark:text-foreground">
-                    {formatPrice(selectedVariant?.sellingPrice ?? variantProduct.price)}
+              {variantColorOptions.length > 0 ? (
+                <div className="space-y-2.5">
+                  <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Color</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {variantColorOptions.map((color) => {
+                      const isActive = variantColor === color;
+                      return (
+                        <Button
+                          key={color}
+                          type="button"
+                          variant={isActive ? "default" : "outline"}
+                          className={cn("h-8 rounded-full px-3 text-xs", !isActive && "bg-background")}
+                          onClick={() => setVariantColor(color)}
+                        >
+                          {color}
+                        </Button>
+                      );
+                    })}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Stock available: {selectedVariant ? Number(selectedVariant.stock ?? 0) : variantProduct.stock}
-                  </p>
                 </div>
+              ) : null}
 
-                {variantColorOptions.length > 0 ? (
-                  <div className="space-y-3">
-                    <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Color</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {variantColorOptions.map((color) => {
-                        const isActive = variantColor === color;
-                        return (
-                          <Button
-                            key={color}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            className={cn("rounded-full px-4", !isActive && "bg-background")}
-                            onClick={() => setVariantColor(color)}
-                          >
-                            {color}
-                          </Button>
-                        );
-                      })}
+              {variantSizeOptions.length > 0 ? (
+                <div className="space-y-2.5">
+                  <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Size</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {variantSizeOptions.map((size) => {
+                      const hasColorAwareVariants = normalizedVariantRecords.some((variant) => Boolean(variant.color?.trim()));
+                      const sizeVariant = normalizedVariantRecords.find((variant) =>
+                        (variant.size ?? "") === size &&
+                        (!variantColor || !hasColorAwareVariants || (variant.color ?? "") === variantColor)
+                      );
+                      const disabled = Number(sizeVariant?.stock ?? 0) <= 0;
+                      const isActive = variantSize === size;
+                      return (
+                        <Button
+                          key={size}
+                          type="button"
+                          variant={isActive ? "default" : "outline"}
+                          disabled={disabled}
+                          className={cn("h-8 rounded-full px-3 text-xs", !isActive && "bg-background")}
+                          onClick={() => setVariantSize(size)}
+                        >
+                          {size}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-sm text-muted-foreground">
+                {selectedVariant ? (
+                  <>
+                    <div className="font-medium text-foreground">
+                      {[selectedVariant.size, selectedVariant.color].filter(Boolean).join(" • ") || "Default variant"}
                     </div>
-                  </div>
-                ) : null}
+                    <div className="mt-1 text-xs">SKU: {selectedVariant.sku || "Not set"}</div>
+                  </>
+                ) : (
+                  <div className="text-xs">Select an available size and color to continue.</div>
+                )}
+              </div>
 
-                {variantSizeOptions.length > 0 ? (
-                  <div className="space-y-3">
-                    <Label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Size</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {variantSizeOptions.map((size) => {
-                        const sizeVariant = selectedProductVariants.find((variant) => (variant.size ?? "") === size && (!variantColor || (variant.color ?? "") === variantColor));
-                        const disabled = Number(sizeVariant?.stock ?? 0) <= 0;
-                        const isActive = variantSize === size;
-                        return (
-                          <Button
-                            key={size}
-                            type="button"
-                            variant={isActive ? "default" : "outline"}
-                            disabled={disabled}
-                            className={cn("rounded-full px-4", !isActive && "bg-background")}
-                            onClick={() => setVariantSize(size)}
-                          >
-                            {size}
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                <div className="rounded-2xl border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
-                  {selectedVariant ? (
-                    <>
-                      <div className="font-medium text-foreground">
-                        Ready to add: {[selectedVariant.size, selectedVariant.color].filter(Boolean).join(" • ") || "Default variant"}
-                      </div>
-                      <div className="mt-1">SKU: {selectedVariant.sku || "Not set"}</div>
-                    </>
-                  ) : (
-                    <div>Select a valid size and color to continue.</div>
-                  )}
-                </div>
-
-                <div className="mt-auto flex items-center justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setVariantProduct(null);
-                      setVariantColor(null);
-                      setVariantSize(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={!selectedVariant || Number(selectedVariant.stock ?? 0) <= 0}
-                    onClick={() => {
-                      if (!variantProduct || !selectedVariant) return;
-                      addToCart(variantProduct, selectedVariant);
-                      setVariantProduct(null);
-                      setVariantColor(null);
-                      setVariantSize(null);
-                      toast({ title: `${variantProduct.name} added to cart` });
-                    }}
-                  >
-                    Add Variant
-                  </Button>
-                </div>
+              <div className="mt-1 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setVariantProduct(null);
+                    setVariantColor(null);
+                    setVariantSize(null);
+                    setVariantLoading(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={variantLoading || !selectedVariant || Number(selectedVariant.stock ?? 0) <= 0}
+                  onClick={() => {
+                    if (!variantProduct || !selectedVariant) return;
+                    addToCart(variantProduct, selectedVariant);
+                    setVariantProduct(null);
+                    setVariantColor(null);
+                    setVariantSize(null);
+                    setVariantLoading(false);
+                    toast({ title: `${variantProduct.name} added to cart` });
+                  }}
+                >
+                  Add to Cart
+                </Button>
               </div>
             </div>
           ) : null}
