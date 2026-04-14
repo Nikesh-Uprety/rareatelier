@@ -13,12 +13,17 @@ export class ResendEmailService {
   constructor() {
     this.config = {
       apiKey: process.env.RESEND_API_KEY || '',
-      fromEmail: process.env.RESEND_FROM_EMAIL || 'noreply@yourdomain.com',
-      fromName: process.env.RESEND_FROM_NAME || 'Your App Name',
+      fromEmail: process.env.RESEND_FROM_EMAIL || '',
+      fromName: process.env.RESEND_FROM_NAME || 'RARE Atelier',
     };
 
     if (!this.config.apiKey) {
       console.warn('⚠️  Resend API key not configured, falling back to SMTP');
+      return;
+    }
+
+    if (!this.config.fromEmail) {
+      console.warn('⚠️  Resend from-email not configured, falling back to SMTP');
       return;
     }
 
@@ -37,6 +42,10 @@ export class ResendEmailService {
       contentType: string;
     }>;
   }): Promise<{ success: boolean; error?: string; messageId?: string }> {
+    if (!this.resend) {
+      return { success: false, error: 'Resend email not fully configured' };
+    }
+
     try {
       const { data, error } = await this.resend.emails.send({
         from: `${this.config.fromName} <${this.config.fromEmail}>`,

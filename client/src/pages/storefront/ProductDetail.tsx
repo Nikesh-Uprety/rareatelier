@@ -450,160 +450,227 @@ export default function ProductDetail() {
   };
 
   const compactBreadcrumbProductLabel = product.name.toUpperCase();
-  const purchasePanel = (
-    <>
-      <div>
-        <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Size</p>
-        <div className="mb-3 flex justify-start">
-          <button
-            onClick={() => setShowSizeGuide(true)}
-            className={`flex items-center gap-1.5 text-sm font-semibold underline underline-offset-4 transition-opacity duration-200 hover:opacity-70 ${isStuffyClone ? "text-neutral-950 decoration-neutral-950 dark:text-white dark:decoration-white" : "text-foreground decoration-foreground"}`}
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-            Size &amp; Fit Guide
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-3">
-          {availableSizes.map((size) => {
-            const sizeStock = stockBySize[size] ?? 0;
-            const isOutOfStock = sizeStock === 0;
-            const isLowStock = sizeStock > 0 && sizeStock <= 5;
-            const isSelected = selectedSize === size;
 
-            return (
-              <div key={size} className="flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => !isOutOfStock && setSelectedSize(size)}
-                  disabled={isOutOfStock}
-                  className={`relative h-12 w-12 rounded-md border text-sm font-medium transition-all duration-200 ${
-                    isSelected
-                      ? "border-foreground bg-foreground text-background"
-                      : isOutOfStock
-                        ? "cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-white/10 dark:bg-white/5 dark:text-neutral-500"
-                        : "cursor-pointer border-neutral-300 hover:border-neutral-950 dark:border-white/15 dark:hover:border-white"
-                  }`}
-                >
-                  {size}
-                  {isOutOfStock ? (
-                    <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                      <svg
-                        className={`absolute inset-0 h-full w-full ${isStuffyClone ? "text-neutral-400/40 dark:text-neutral-500/40" : "text-muted-foreground/30"}`}
-                        viewBox="0 0 48 48"
-                        preserveAspectRatio="none"
-                      >
-                        <line x1="4" y1="4" x2="44" y2="44" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                  ) : null}
-                </button>
-
-                {isOutOfStock ? (
-                  <span className={`text-center text-[10px] leading-tight ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground/60"}`}>
-                    Out of
-                    <br />
-                    stock
-                  </span>
-                ) : null}
-
-                {isLowStock && !isOutOfStock ? (
-                  <span className="text-center text-[10px] leading-tight text-amber-500">
-                    Only {sizeStock}
-                    <br />
-                    left
-                  </span>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-        {selectedSize && selectedVariantStock !== null ? (
-          <p
-            className={`mt-2 text-xs ${
-              selectedVariantStock === 0
-                ? "text-red-500"
-                : selectedVariantStock <= 5
-                  ? "text-amber-500"
-                  : "text-muted-foreground"
-            }`}
-          >
-            {selectedVariantStock === 0
-              ? "This size is not available in store"
-              : selectedVariantStock <= 5
-                ? `Only ${selectedVariantStock} units left in this size`
-                : `${selectedVariantStock} in stock`}
+  const colorSelectorBlock = colorOptions.length > 0 ? (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
+          Color
+        </p>
+        {effectiveColor ? (
+          <p className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground/80"}`}>
+            {parseColorOption(effectiveColor).label}
           </p>
         ) : null}
       </div>
-
-      <div>
-        <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Quantity</p>
-        <div className={`flex w-fit items-center rounded-sm border ${isStuffyClone ? "border-neutral-200 dark:border-white/15" : "border-gray-200 dark:border-gray-700"}`}>
-          <button
-            type="button"
-            onClick={() => setQuantity(Math.max(1, quantity - 1))}
-            className="flex h-10 w-10 items-center justify-center hover:bg-gray-50 dark:hover:bg-white/5"
-          >
-            <Minus className="h-3 w-3" />
-          </button>
-          <input
-            type="number"
-            min={1}
-            max={selectedVariantStock ?? 1}
-            value={quantity}
-            onChange={(event) => setQuantity(Math.max(1, Math.min(selectedVariantStock ?? 1, Number(event.target.value) || 1)))}
-            className={`w-12 bg-transparent text-center text-sm outline-none ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}
-          />
-          <button
-            type="button"
-            onClick={() => setQuantity(Math.min(selectedVariantStock ?? 1, quantity + 1))}
-            className="flex h-10 w-10 items-center justify-center hover:bg-gray-50 dark:hover:bg-white/5"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </div>
+      <div className="flex flex-wrap gap-2.5">
+        {colorOptions.map((color) => {
+          const isActive = normalizeColorLabel(effectiveColor ?? "") === normalizeColorLabel(color.value);
+          return (
+            <button
+              key={color.value}
+              type="button"
+              onClick={() => setSelectedColor(color.value)}
+              onMouseEnter={() => setHoveredColor(color.value)}
+              onMouseLeave={() => setHoveredColor(null)}
+              className={`relative h-7 w-7 rounded-full border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/20 focus-visible:ring-offset-2 dark:focus-visible:ring-white/30 dark:focus-visible:ring-offset-black ${
+                isActive
+                  ? "scale-105 border-neutral-950 ring-2 ring-neutral-950/20 dark:border-white dark:ring-white/20"
+                  : "border-neutral-300 hover:border-neutral-950 dark:border-white/20 dark:hover:border-white/50"
+              }`}
+              style={{
+                background:
+                  color.swatch ??
+                  "linear-gradient(135deg, rgba(120,120,120,0.18), rgba(120,120,120,0.4))",
+              }}
+              aria-label={`Select ${color.label} color`}
+            >
+              <span className="sr-only">{color.label}</span>
+            </button>
+          );
+        })}
       </div>
+    </div>
+  ) : null;
 
-      <div className="flex flex-col gap-3 pt-2">
-        <Button
-          data-testid="product-add-to-bag"
-          onClick={handleAddToCart}
-          disabled={!selectedSize || selectedVariantStock === 0}
-          className="h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"
+  const sizeSelectorBlock = (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-3">
+        <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
+          Size
+        </p>
+        <button
+          onClick={() => setShowSizeGuide(true)}
+          className={`flex items-center gap-1.5 text-[12px] font-semibold underline underline-offset-4 transition-opacity duration-200 hover:opacity-70 ${isStuffyClone ? "text-neutral-950 decoration-neutral-950 dark:text-white dark:decoration-white" : "text-foreground decoration-foreground"}`}
         >
-          {!selectedSize
-            ? "Select a size"
-            : selectedVariantStock === 0
-              ? "Out of Stock"
-              : "Add to Bag"}
-        </Button>
-        <Button
-          data-testid="product-buy-now"
-          variant="outline"
-          onClick={handleBuyNow}
-          disabled={!selectedSize || selectedVariantStock === 0}
-          className="h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"
-        >
-          Buy Now
-        </Button>
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          Size &amp; Fit Guide
+        </button>
       </div>
+      <div className={`flex flex-wrap ${isStuffyClone ? "gap-2" : "gap-3"}`}>
+        {availableSizes.map((size) => {
+          const sizeStock = stockBySize[size] ?? 0;
+          const isOutOfStock = sizeStock === 0;
+          const isLowStock = sizeStock > 0 && sizeStock <= 5;
+          const isSelected = selectedSize === size;
+
+          return (
+            <div key={size} className={`flex flex-col items-center ${isStuffyClone ? "gap-0.5" : "gap-1"}`}>
+              <button
+                type="button"
+                onClick={() => !isOutOfStock && setSelectedSize(size)}
+                disabled={isOutOfStock}
+                className={`relative ${isStuffyClone ? "h-10 w-10 text-[14px]" : "h-12 w-12 text-sm"} rounded-md border font-medium transition-all duration-200 ${
+                  isSelected
+                    ? "border-foreground bg-foreground text-background"
+                    : isOutOfStock
+                      ? "cursor-not-allowed border-neutral-200 bg-neutral-100 text-neutral-400 dark:border-white/10 dark:bg-white/5 dark:text-neutral-500"
+                      : "cursor-pointer border-neutral-300 hover:border-neutral-950 dark:border-white/15 dark:hover:border-white"
+                }`}
+              >
+                {size}
+                {isOutOfStock ? (
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <svg
+                      className={`absolute inset-0 h-full w-full ${isStuffyClone ? "text-neutral-400/40 dark:text-neutral-500/40" : "text-muted-foreground/30"}`}
+                      viewBox="0 0 48 48"
+                      preserveAspectRatio="none"
+                    >
+                      <line x1="4" y1="4" x2="44" y2="44" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                ) : null}
+              </button>
+
+              {isOutOfStock ? (
+                <span className={`text-center text-[10px] leading-tight ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground/60"}`}>
+                  Out of
+                  <br />
+                  stock
+                </span>
+              ) : null}
+
+              {isLowStock && !isOutOfStock ? (
+                <span className="text-center text-[10px] leading-tight text-amber-500">
+                  Only {sizeStock}
+                  <br />
+                  left
+                </span>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      {selectedSize && selectedVariantStock !== null ? (
+        <p
+          className={`text-xs ${
+            selectedVariantStock === 0
+              ? "text-red-500"
+              : selectedVariantStock <= 5
+                ? "text-amber-500"
+                : "text-muted-foreground"
+          }`}
+        >
+          {selectedVariantStock === 0
+            ? "This size is not available in store"
+            : selectedVariantStock <= 5
+              ? `Only ${selectedVariantStock} units left in this size`
+              : `${selectedVariantStock} in stock`}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const quantitySelectorBlock = (
+    <div className="space-y-2">
+      <p className={`text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
+        Quantity
+      </p>
+      <div className={`flex w-fit items-center rounded-sm border ${isStuffyClone ? "border-neutral-200 dark:border-white/15" : "border-gray-200 dark:border-gray-700"}`}>
+        <button
+          type="button"
+          onClick={() => setQuantity(Math.max(1, quantity - 1))}
+          className={`flex ${isStuffyClone ? "h-8 w-8" : "h-10 w-10"} items-center justify-center hover:bg-gray-50 dark:hover:bg-white/5`}
+        >
+          <Minus className="h-3 w-3" />
+        </button>
+        <input
+          type="number"
+          min={1}
+          max={selectedVariantStock ?? 1}
+          value={quantity}
+          onChange={(event) => setQuantity(Math.max(1, Math.min(selectedVariantStock ?? 1, Number(event.target.value) || 1)))}
+          className={`w-10 bg-transparent text-center text-sm outline-none ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}
+        />
+        <button
+          type="button"
+          onClick={() => setQuantity(Math.min(selectedVariantStock ?? 1, quantity + 1))}
+          className={`flex ${isStuffyClone ? "h-8 w-8" : "h-10 w-10"} items-center justify-center hover:bg-gray-50 dark:hover:bg-white/5`}
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      </div>
+    </div>
+  );
+
+  const purchaseButtonsBlock = (
+    <div className={isStuffyClone ? "flex flex-wrap gap-3 pt-1" : "flex flex-col gap-3 pt-2"}>
+      <Button
+        data-testid="product-add-to-bag"
+        onClick={handleAddToCart}
+        disabled={!selectedSize || selectedVariantStock === 0}
+        className={isStuffyClone ? "h-10 min-w-[9.25rem] rounded-full border border-neutral-950 bg-white px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-950 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:bg-transparent dark:text-white dark:hover:bg-white/10" : "h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"}
+      >
+        {!selectedSize
+          ? "Select Size"
+          : selectedVariantStock === 0
+            ? "Out of Stock"
+            : "Add to Bag"}
+      </Button>
+      <Button
+        data-testid="product-buy-now"
+        variant="outline"
+        onClick={handleBuyNow}
+        disabled={!selectedSize || selectedVariantStock === 0}
+        className={isStuffyClone ? "h-10 min-w-[9.25rem] rounded-full border border-neutral-950 bg-neutral-950 px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-white transition-all hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:bg-white dark:text-black dark:hover:bg-neutral-200" : "h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"}
+      >
+        Buy Now
+      </Button>
+    </div>
+  );
+
+  const purchasePanel = isStuffyClone ? (
+    <div className="space-y-4">
+      {colorSelectorBlock ? colorSelectorBlock : null}
+      {sizeSelectorBlock}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        {quantitySelectorBlock}
+        {purchaseButtonsBlock}
+      </div>
+    </div>
+  ) : (
+    <>
+      {sizeSelectorBlock}
+      {quantitySelectorBlock}
+      {purchaseButtonsBlock}
     </>
   );
 
+
   return (
-    <div className={`relative w-full pb-16 pt-0 ${isStuffyClone ? "min-h-screen bg-white text-neutral-950 dark:bg-[#050505] dark:text-white" : "px-3 sm:px-6 lg:px-8 xl:px-10"}`}>
+    <div className={`relative w-full pb-12 ${isStuffyClone ? "min-h-screen bg-white pt-[4.1rem] text-neutral-950 dark:bg-[#050505] dark:text-white lg:pt-[4.12rem]" : "px-3 pt-0 sm:px-6 lg:px-8 xl:px-10"}`}>
       <StorefrontSeo
         title={`${product.name} | Rare Atelier`}
         description={
@@ -639,140 +706,91 @@ export default function ProductDetail() {
         <div
           className={`grid gap-8 lg:items-start lg:gap-8 xl:gap-10 ${
             isStuffyClone
-              ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-0"
+              ? "lg:grid-cols-[minmax(0,1.01fr)_minmax(24rem,0.99fr)] lg:gap-0"
               : "lg:h-screen lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)]"
           }`}
         >
-        <aside className={`space-y-5 ${isStuffyClone ? "order-2 px-4 sm:px-5 lg:order-2 lg:col-start-2 lg:space-y-4 lg:pl-4 lg:pr-8 xl:pl-5 xl:pr-10 lg:pt-10 lg:pb-12 text-neutral-950 dark:text-white" : "lg:py-24"}`}>
-          <h1
-            style={{
-              fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-              fontWeight: 700,
-              fontSize: "24px",
-              lineHeight: "36px",
-              color: "var(--brand-product-detail)",
-            }}
-            className={`font-bold uppercase tracking-tight ${isStuffyClone ? "text-black dark:text-white" : ""}`}
-          >
-            {product.name}
-          </h1>
-
-          {!isStuffyClone && product.category ? (
-            <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
-              {product.category}
-            </p>
-          ) : null}
-
-          {product.shortDetails ? <p className={`text-sm leading-relaxed ${isStuffyClone ? "text-neutral-700 dark:text-neutral-200" : "text-muted-foreground"}`}>{product.shortDetails}</p> : null}
-
-          {isStuffyClone && product.category ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-600 dark:text-neutral-300">
-              {product.category}
-            </p>
-          ) : null}
-
+        <aside className={`space-y-4 ${isStuffyClone ? "order-2 px-4 sm:px-5 lg:order-2 lg:col-start-2 lg:self-start lg:sticky lg:top-[3.68rem] lg:space-y-2 lg:pl-5 lg:pr-6 xl:pl-6 xl:pr-8 lg:pt-0 lg:pb-5 text-neutral-950 dark:text-white" : "lg:py-24"}`}>
           {isStuffyClone ? (
-            <p
-              style={{
-                fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
-                fontWeight: 700,
-                fontSize: "24px",
-                lineHeight: "36px",
-                color: "var(--brand-product-detail)",
-              }}
-              className="flex flex-col items-start gap-1 font-bold text-black dark:text-white"
-            >
-              {product.saleActive && Number(product.salePercentage) > 0 ? (
-                <>
-                  <span className="flex items-center gap-3">
-                    <span className="font-black text-black dark:text-white">
-                      {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
-                    </span>
-                    <span className="text-base font-semibold line-through text-neutral-700 opacity-60 dark:text-neutral-400">
-                      {formatPrice(product.price)}
-                    </span>
-                  </span>
-                  <span className="mt-1 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">
-                    {product.salePercentage}% OFF SALE
-                  </span>
-                </>
-              ) : (
-                formatPrice(product.price)
-              )}
-            </p>
-          ) : null}
-
-          {colorOptions.length > 0 ? (
-            <div>
-              <p className={`mb-3 text-[10px] font-bold uppercase tracking-[0.2em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>Color</p>
-              {isStuffyClone ? (
-                <div className="flex flex-wrap gap-4">
-                  {colorOptions.map((color) => {
-                    const previewImages = normalizedColorImageMap[normalizeColorLabel(color.value)] ?? [];
-                    const previewImage = previewImages[0] ?? "";
-                    const isActive = normalizeColorLabel(effectiveColor ?? "") === normalizeColorLabel(color.value);
-                    return (
-                      <button
-                        key={color.value}
-                        type="button"
-                        onClick={() => setSelectedColor(color.value)}
-                        onMouseEnter={() => setHoveredColor(color.value)}
-                        onMouseLeave={() => setHoveredColor(null)}
-                        className={`flex flex-col items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
-                          isActive
-                            ? "border-neutral-950 bg-neutral-950/5 text-neutral-950 dark:border-white dark:bg-white/10 dark:text-white"
-                            : "border-neutral-200 text-neutral-700 hover:border-neutral-950 hover:text-neutral-950 dark:border-white/10 dark:text-neutral-300 dark:hover:border-white/50 dark:hover:text-white"
-                        }`}
-                        aria-label={`Select ${color.label} color`}
-                      >
-                        {previewImage ? (
-                          <span className={`h-12 w-12 overflow-hidden rounded-full border ${isStuffyClone ? "border-neutral-200 dark:border-white/15" : "border-border"}`}>
-                            <img src={previewImage} alt={color.label} className="h-full w-full object-cover" />
-                          </span>
-                        ) : (
-                          <span
-                            className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
-                            style={{
-                              background:
-                                color.swatch ??
-                                "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
-                            }}
-                          />
-                        )}
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.18em]">{color.label}</span>
-                      </button>
-                    );
-                  })}
+            <div className="space-y-2 border-b border-neutral-200 pb-2 dark:border-white/10">
+              <div className="space-y-2">
+                <h1
+                  style={{
+                    fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+                    fontWeight: 700,
+                    fontSize: "21px",
+                    lineHeight: "24px",
+                    color: "var(--brand-product-detail)",
+                  }}
+                  className="text-black dark:text-white"
+                >
+                  {product.name}
+                </h1>
+                <div className="space-y-2.5">
+                  <p
+                    style={{
+                      fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+                      fontWeight: 700,
+                      fontSize: "18px",
+                      lineHeight: "22px",
+                      color: "#15803d",
+                    }}
+                    className="flex flex-col items-start gap-1 font-bold text-emerald-700 dark:text-emerald-400"
+                  >
+                    {product.saleActive && Number(product.salePercentage) > 0 ? (
+                      <>
+                        <span className="font-black text-emerald-700 dark:text-emerald-400">
+                          {formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))}
+                        </span>
+                        <span className="text-[12px] font-semibold line-through text-neutral-700 opacity-60 dark:text-neutral-400">
+                          {formatPrice(product.price)}
+                        </span>
+                      </>
+                    ) : (
+                      formatPrice(product.price)
+                    )}
+                  </p>
+                  {product.category ? (
+                    <div className="pt-1">
+                      <span className="inline-flex items-center rounded-none border border-sky-200 bg-sky-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-sky-700 shadow-[0_8px_20px_rgba(14,116,144,0.08)] dark:border-sky-400/20 dark:bg-sky-500/10 dark:text-sky-300">
+                        {product.category}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {colorOptions.map((color) => (
-                    <button
-                      key={color.value}
-                      type="button"
-                      onClick={() => setSelectedColor(color.value)}
-                      className={`flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs font-medium transition-all ${
-                        effectiveColor === color.value
-                          ? "border-neutral-950 bg-neutral-950/5 text-neutral-950 dark:border-white dark:bg-white/10 dark:text-white"
-                          : "border-neutral-200 text-neutral-700 hover:border-neutral-950 hover:text-neutral-950 dark:border-white/10 dark:text-neutral-300 dark:hover:border-white/50 dark:hover:text-white"
-                      }`}
-                      aria-label={`Select ${color.label} color`}
-                    >
-                      <span
-                        className="h-5 w-5 rounded-sm border border-black/10 shadow-sm"
-                        style={{
-                          background:
-                            color.swatch ??
-                            "linear-gradient(135deg, rgba(120,120,120,0.15), rgba(120,120,120,0.35))",
-                        }}
-                      />
-                      <span>{color.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              </div>
+              {product.shortDetails ? (
+                <p className="max-w-[40ch] text-[12px] leading-[1.45] text-neutral-700 dark:text-neutral-200">
+                  {product.shortDetails}
+                </p>
+              ) : null}
             </div>
-          ) : null}
+          ) : (
+            <>
+              <h1
+                style={{
+                  fontFamily: "Roboto, ui-sans-serif, system-ui, sans-serif",
+                  fontWeight: 700,
+                  fontSize: "24px",
+                  lineHeight: "36px",
+                  color: "var(--brand-product-detail)",
+                }}
+                className={`font-bold uppercase tracking-tight ${isStuffyClone ? "text-black dark:text-white" : ""}`}
+              >
+                {product.name}
+              </h1>
+
+              {!isStuffyClone && product.category ? (
+                <p className={`text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-600 dark:text-neutral-300" : "text-muted-foreground"}`}>
+                  {product.category}
+                </p>
+              ) : null}
+
+              {product.shortDetails ? <p className={`text-sm leading-relaxed ${isStuffyClone ? "text-neutral-700 dark:text-neutral-200" : "text-muted-foreground"}`}>{product.shortDetails}</p> : null}
+            </>
+          )}
+
+          {!isStuffyClone ? colorSelectorBlock : null}
 
           {!isStuffyClone ? (
             <p
@@ -806,12 +824,12 @@ export default function ProductDetail() {
           ) : null}
 
           {isStuffyClone ? (
-            <div className="space-y-6 border-t border-neutral-200 pt-5 dark:border-white/10">
+            <div className="space-y-4 pt-2">
               {purchasePanel}
             </div>
           ) : null}
 
-          <div className={`space-y-2 border-t pt-5 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-border"}`}>
+          <div className={`space-y-1.5 border-t pt-3 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-border"}`}>
             <details open className={`group rounded-md border px-3 py-2 transition-colors duration-200 ${isStuffyClone ? "border-neutral-200 bg-white open:border-neutral-900/20 dark:border-white/10 dark:bg-[#0f0f0f] dark:open:border-white/20" : "border-border/80 bg-background/70 open:border-foreground/20"}`}>
               <summary className="list-none cursor-pointer">
                 <div className="flex items-center justify-between gap-3">
@@ -879,6 +897,9 @@ export default function ProductDetail() {
 
         <ProductMediaStage
           productName={product.name}
+          priceLabel={product.saleActive && Number(product.salePercentage) > 0
+            ? formatPrice(Number(product.price) * (1 - Number(product.salePercentage) / 100))
+            : formatPrice(product.price)}
           imageUrls={allImages}
           stock={product.stock}
           isDarkMode={isDarkMode}

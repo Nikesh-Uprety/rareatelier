@@ -1,10 +1,83 @@
 import "dotenv/config";
+import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
+import { lookup } from "node:dns/promises";
 import { emailQueue } from "./queues/emailQueue";
 import { resendEmailService } from "./resend-service";
 
 const isE2ETestMode = process.env.E2E_TEST_MODE === "1";
 const shouldLogOtpCodes =
   process.env.NODE_ENV !== "production" || process.env.LOG_OTP_CODES === "1";
+
+const SMTP_HOST = process.env.SMTP_HOST || process.env.RELAY_HOST || "";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || process.env.RELAY_PORT || "587", 10);
+const SMTP_USER = process.env.SMTP_USER || process.env.RELAY_USERNAME || "";
+const SMTP_PASS = process.env.SMTP_PASS || process.env.RELAY_PASSWORD || "";
+const SENDER_EMAIL = process.env.SENDER_EMAIL || "upretynikesh021@gmail.com";
+const SENDER_NAME = process.env.SENDER_NAME || "RARE Nepal";
+const isDirectSmtpConfigured = Boolean(SMTP_HOST && SMTP_USER && SMTP_PASS);
+
+let directTransporterPromise: Promise<nodemailer.Transporter> | null = null;
+
+async function getDirectTransporter(): Promise<nodemailer.Transporter> {
+  if (!isDirectSmtpConfigured) {
+    throw new Error("Direct SMTP is not configured");
+  }
+
+  if (!directTransporterPromise) {
+    directTransporterPromise = (async () => {
+      const resolved = await lookup(SMTP_HOST, { family: 4 });
+      const smtpOptions: SMTPTransport.Options = {
+        host: resolved.address,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+        socketTimeout: 20000,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false,
+          servername: SMTP_HOST,
+        },
+      };
+
+      return nodemailer.createTransport(smtpOptions);
+    })();
+  }
+
+  return directTransporterPromise;
+}
+
+async function sendCriticalEmailDirect(options: {
+  kind: string;
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}): Promise<boolean> {
+  if (!isDirectSmtpConfigured) {
+    return false;
+  }
+
+  try {
+    const transporter = await getDirectTransporter();
+    const info = await transporter.sendMail({
+      from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+    });
+    console.log(`[SMTP] ${options.kind} email sent directly to: ${options.to}`, info.response);
+    return true;
+  } catch (error: any) {
+    console.warn(`[SMTP] Direct ${options.kind} email failed for ${options.to}:`, error?.message || error);
+    return false;
+  }
+}
 
 function skipEmailInE2EMode(kind: string, meta: Record<string, unknown> = {}) {
   if (!isE2ETestMode) return false;
@@ -21,16 +94,39 @@ export async function sendOTPEmail(to: string, code: string, name: string) {
     console.log(`[DEV OTP] ${to} -> ${code}`);
   }
 
-  // Try Resend first, fallback to queue
+  // Try Resend first, then direct SMTP, then queue as a last resort.
   try {
     const result = await resendEmailService.sendOTPEmail(to, code, 10);
     if (result.success) {
       console.log(`[Resend] OTP email sent successfully to: ${to}`);
       return;
     }
-    console.log(`[Resend] Fallback to queue for: ${to}`);
+    console.log(`[Resend] Fallback to direct SMTP for: ${to}`);
   } catch (error) {
-    console.log(`[Resend] Error, fallback to queue for: ${to}`);
+    console.log(`[Resend] Error, fallback to direct SMTP for: ${to}`);
+  }
+
+  if (
+    await sendCriticalEmailDirect({
+      kind: "otp",
+      to,
+      subject: "Your RARE.np verification code",
+      text: `Your RARE.np verification code is ${code}. It expires in 10 minutes.`,
+      html: `
+        <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
+          <h1 style="font-size: 24px; color: #111; margin-bottom: 8px;">Verification Code</h1>
+          <p style="color: #666; margin-bottom: 32px;">Hi ${name}, use this code to complete your sign-in to RARE.np admin.</p>
+          <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px;">
+            <p style="font-size: 48px; font-weight: 700; letter-spacing: 12px; color: #2D4A35; margin: 0;">${code}</p>
+          </div>
+          <p style="color: #999; font-size: 13px;">This code expires in 10 minutes. If you didn't request this, ignore this email.</p>
+          <hr style="border: none; border-top: 1px solid #E8E4DE; margin: 24px 0;">
+          <p style="color: #bbb; font-size: 12px;">RARE Nepal · Khusibu, Nayabazar, Kathmandu</p>
+        </div>
+      `,
+    })
+  ) {
+    return;
   }
 
   try {
@@ -65,26 +161,56 @@ export async function sendOrderVerificationEmail(to: string, code: string) {
     console.log(`[DEV ORDER VERIFY] ${to} -> ${code}`);
   }
 
+  const html = `
+    <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
+      <h1 style="font-size: 24px; color: #111; margin-bottom: 10px;">Confirm your order</h1>
+      <p style="color: #666; margin-bottom: 28px;">
+        We noticed a larger first-time order on Rare Atelier. Please enter this verification code at checkout to continue.
+      </p>
+      <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 14px; padding: 32px; text-align: center; margin-bottom: 24px;">
+        <p style="font-size: 46px; font-weight: 700; letter-spacing: 12px; color: #2D4A35; margin: 0;">${code}</p>
+      </div>
+      <p style="color: #999; font-size: 13px; line-height: 1.6;">
+        This code expires in 10 minutes. If you did not request this checkout, you can ignore this email.
+      </p>
+      <hr style="border: none; border-top: 1px solid #E8E4DE; margin: 24px 0;">
+      <p style="color: #bbb; font-size: 12px;">Rare Atelier · Secure large-order verification</p>
+    </div>
+  `;
+
+  try {
+    const result = await resendEmailService.sendEmail({
+      to,
+      subject: 'Verify your large Rare Atelier order',
+      html,
+      text: `Your Rare Atelier verification code is ${code}. It expires in 10 minutes.`,
+    });
+    if (result.success) {
+      console.log(`[Resend] Order verification email sent successfully to: ${to}`);
+      return;
+    }
+    console.log(`[Resend] Fallback to direct SMTP for order verification: ${to}`);
+  } catch {
+    console.log(`[Resend] Error, fallback to direct SMTP for order verification: ${to}`);
+  }
+
+  if (
+    await sendCriticalEmailDirect({
+      kind: "order verification",
+      to,
+      subject: "Verify your large Rare Atelier order",
+      html,
+      text: `Your Rare Atelier verification code is ${code}. It expires in 10 minutes.`,
+    })
+  ) {
+    return;
+  }
+
   try {
     await emailQueue.add("order-verification", {
       to,
       subject: "Verify your large Rare Atelier order",
-      html: `
-        <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 24px; background: #FAFAF8;">
-          <h1 style="font-size: 24px; color: #111; margin-bottom: 10px;">Confirm your order</h1>
-          <p style="color: #666; margin-bottom: 28px;">
-            We noticed a larger first-time order on Rare Atelier. Please enter this verification code at checkout to continue.
-          </p>
-          <div style="background: #fff; border: 1px solid #E8E4DE; border-radius: 14px; padding: 32px; text-align: center; margin-bottom: 24px;">
-            <p style="font-size: 46px; font-weight: 700; letter-spacing: 12px; color: #2D4A35; margin: 0;">${code}</p>
-          </div>
-          <p style="color: #999; font-size: 13px; line-height: 1.6;">
-            This code expires in 10 minutes. If you did not request this checkout, you can ignore this email.
-          </p>
-          <hr style="border: none; border-top: 1px solid #E8E4DE; margin: 24px 0;">
-          <p style="color: #bbb; font-size: 12px;">Rare Atelier · Secure large-order verification</p>
-        </div>
-      `,
+      html,
     });
     console.log(`[Queue] Order verification job added for: ${to}`);
   } catch (err: any) {

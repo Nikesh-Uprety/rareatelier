@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
   fetchCategories,
@@ -209,14 +209,12 @@ export default function Products() {
   const [selectedCategoryKey, setSelectedCategoryKey] = useState(
     initialState.category,
   );
-  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [selectedCardColors, setSelectedCardColors] = useState<
     Record<string, string>
   >({});
   const [hoveredCardColors, setHoveredCardColors] = useState<
     Record<string, string | null>
   >({});
-  const categoryCloseTimerRef = useRef<number | null>(null);
   const { theme, setTheme } = useThemeStore();
   const forcedThemeRef = useRef<Parameters<typeof setTheme>[0] | null>(null);
   const isDarkTheme = theme === "dark";
@@ -376,9 +374,6 @@ export default function Products() {
 
   const desktopGridClassName =
     DESKTOP_GRID_CLASS_NAMES[desktopColumns] ?? DESKTOP_GRID_CLASS_NAMES[4];
-  const activeCategoryLabel =
-    categoryMenuOptions.find((option) => option.key === selectedCategoryKey)?.label ??
-    "All products";
 
   const shopPath = useMemo(() => {
     if (typeof window === "undefined") return "/products";
@@ -409,13 +404,6 @@ export default function Products() {
     window.history.replaceState(window.history.state, "", shopPath);
   }, [shopPath]);
 
-  useEffect(() => {
-    return () => {
-      if (categoryCloseTimerRef.current) {
-        window.clearTimeout(categoryCloseTimerRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (isRareDarkLuxury) {
@@ -434,20 +422,6 @@ export default function Products() {
       setTheme(previousTheme);
     }
   }, [isRareDarkLuxury, setTheme, theme]);
-
-  const clearCategoryCloseTimer = () => {
-    if (categoryCloseTimerRef.current) {
-      window.clearTimeout(categoryCloseTimerRef.current);
-      categoryCloseTimerRef.current = null;
-    }
-  };
-
-  const queueCategoryMenuClose = () => {
-    clearCategoryCloseTimer();
-    categoryCloseTimerRef.current = window.setTimeout(() => {
-      setCategoryMenuOpen(false);
-    }, 180);
-  };
 
   return (
     <div
@@ -609,83 +583,8 @@ export default function Products() {
       <div className="shop-page-surface w-full px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8">
         <div className="shop-page-content min-h-[400px] text-neutral-900">
           {layoutConfig.showCategoryMenu && categoryMenuOptions.length > 1 ? (
-            <div className="shop-category-divider mb-4 border-b border-neutral-200 pb-2">
-              <div className="hidden justify-center md:flex">
-                <div
-                  className="relative"
-                  onMouseEnter={() => {
-                    clearCategoryCloseTimer();
-                    setCategoryMenuOpen(true);
-                  }}
-                  onMouseLeave={queueCategoryMenuClose}
-                >
-                  <button
-                    type="button"
-                    className="shop-category-trigger flex min-w-[260px] items-center justify-between rounded-full border border-neutral-200 bg-white px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-neutral-950 transition-all duration-300 hover:border-neutral-900 hover:shadow-[0_12px_24px_rgba(17,17,17,0.08)]"
-                    onClick={() => {
-                      clearCategoryCloseTimer();
-                      setCategoryMenuOpen((current) => !current);
-                    }}
-                    aria-expanded={categoryMenuOpen}
-                  >
-                    <span>{activeCategoryLabel}</span>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform duration-300 ${
-                        categoryMenuOpen ? "rotate-180" : ""
-                      }`}
-                    />
-                  </button>
-
-                  <div
-                    className={`absolute left-1/2 top-full z-20 w-[320px] -translate-x-1/2 pt-2 transition-all duration-300 ${
-                      categoryMenuOpen
-                        ? "pointer-events-auto translate-y-0 opacity-100"
-                        : "pointer-events-none -translate-y-2 opacity-0"
-                    }`}
-                    onMouseEnter={clearCategoryCloseTimer}
-                    onMouseLeave={queueCategoryMenuClose}
-                  >
-                    <div className="shop-category-panel space-y-1 rounded-[28px] border border-neutral-200 bg-white/95 p-3 shadow-[0_24px_60px_rgba(17,17,17,0.12)] backdrop-blur-xl">
-                      {categoryMenuOptions.map((option) => {
-                        const isActive = option.key === selectedCategoryKey;
-
-                        return (
-                          <button
-                            key={option.key}
-                            type="button"
-                            data-active={isActive ? "true" : "false"}
-                            className={`shop-category-option flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-all duration-200 ${
-                              isActive
-                                ? "bg-neutral-950 text-white"
-                                : "text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950"
-                            }`}
-                            onClick={() => {
-                              clearCategoryCloseTimer();
-                              setSelectedCategoryKey(option.key);
-                              setCategoryMenuOpen(false);
-                            }}
-                          >
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">
-                              {option.label}
-                            </span>
-                            <span
-                              className={`shop-category-count rounded-full px-2.5 py-1 text-[10px] font-semibold ${
-                                isActive
-                                  ? "bg-white/14 text-white"
-                                  : "bg-neutral-100 text-neutral-500"
-                              }`}
-                            >
-                              {option.count}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
+            <div className="mb-4 md:hidden">
+              <div className="flex gap-2 overflow-x-auto pb-1">
                 {categoryMenuOptions.map((option) => {
                   const isActive = option.key === selectedCategoryKey;
 
@@ -728,7 +627,7 @@ export default function Products() {
           ) : paginatedProducts.length > 0 ? (
             <div>
               <div
-                className={`grid grid-cols-2 gap-x-2 gap-y-4 sm:grid-cols-2 sm:gap-x-3 sm:gap-y-5 ${desktopGridClassName} lg:gap-x-3 lg:gap-y-6`}
+                className={`grid grid-cols-2 gap-1 p-1 ${desktopGridClassName}`}
               >
                 {paginatedProducts.map((product, index) => {
                   const hoverImage = getHoverImage(product);
@@ -833,7 +732,7 @@ export default function Products() {
                             style={{
                               fontFamily:
                                 "Roboto, ui-sans-serif, system-ui, sans-serif",
-                              fontWeight: 700,
+                              fontWeight: 400,
                               fontSize: "18px",
                               lineHeight: "27px",
                             }}

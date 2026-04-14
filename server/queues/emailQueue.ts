@@ -1,6 +1,8 @@
 import { Queue, Worker, Job } from "bullmq";
 import { redis } from "../redis";
 import nodemailer from "nodemailer";
+import SMTPTransport from "nodemailer/lib/smtp-transport";
+import { lookup } from "node:dns/promises";
 
 // Support both direct SMTP and Railway SMTP relay (RELAY_* env vars)
 const SMTP_HOST = process.env.SMTP_HOST || process.env.RELAY_HOST || "";
@@ -10,25 +12,52 @@ const SMTP_PASS = process.env.SMTP_PASS || process.env.RELAY_PASSWORD || "";
 
 const isSMTPConfigured = SMTP_HOST && SMTP_USER && SMTP_PASS;
 
-let transporter: nodemailer.Transporter | null = null;
+let transporterPromise: Promise<nodemailer.Transporter> | null = null;
 
-if (isSMTPConfigured) {
-  const isRelay = !!process.env.RELAY_HOST;
-  console.log(`[Email] SMTP ${isRelay ? 'relay' : 'direct'} configured: ${SMTP_HOST}:${SMTP_PORT}`);
-  
-  transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_PORT === 465,
-    auth: {
-      user: SMTP_USER,
-      pass: SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false
-    },
-  });
-} else {
+async function getTransporter(): Promise<nodemailer.Transporter> {
+  if (!isSMTPConfigured) {
+    throw new Error("Transporter not configured");
+  }
+
+  if (!transporterPromise) {
+    const isRelay = !!process.env.RELAY_HOST;
+    console.log(`[Email] SMTP ${isRelay ? 'relay' : 'direct'} configured: ${SMTP_HOST}:${SMTP_PORT}`);
+
+    transporterPromise = (async () => {
+      let resolvedHost = SMTP_HOST;
+
+      try {
+        const resolved = await lookup(SMTP_HOST, { family: 4 });
+        resolvedHost = resolved.address;
+      } catch (error) {
+        console.warn(`[Email] IPv4 lookup failed for ${SMTP_HOST}, using original host`, error);
+      }
+
+      const smtpOptions: SMTPTransport.Options = {
+        host: resolvedHost,
+        port: SMTP_PORT,
+        secure: SMTP_PORT === 465,
+        connectionTimeout: 15000,
+        greetingTimeout: 10000,
+        socketTimeout: 20000,
+        auth: {
+          user: SMTP_USER,
+          pass: SMTP_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false,
+          servername: SMTP_HOST,
+        },
+      };
+
+      return nodemailer.createTransport(smtpOptions);
+    })();
+  }
+
+  return transporterPromise;
+}
+
+if (!isSMTPConfigured) {
   console.warn("[Email] No SMTP configured - emails will not be sent");
 }
 
@@ -42,13 +71,10 @@ export const emailQueue = new Queue("emailQueue", {
 export const emailWorker = new Worker(
   "emailQueue",
   async (job: Job) => {
-    if (!transporter) {
-      throw new Error("Transporter not configured");
-    }
-
     const { to, bcc, subject, html } = job.data;
 
     try {
+      const transporter = await getTransporter();
       await transporter.sendMail({
         from: `"${SENDER_NAME}" <${SENDER_EMAIL}>`,
         to,

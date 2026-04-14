@@ -83,6 +83,16 @@ function parseOrderColor(value: string): { label: string; swatch: string | null 
   };
 }
 
+function normalizeOrderDetail(order: any) {
+  if (!order || typeof order !== "object") return null;
+  return {
+    ...order,
+    email: typeof order.email === "string" ? order.email : "",
+    fullName: typeof order.fullName === "string" ? order.fullName : "Customer",
+    items: Array.isArray(order.items) ? order.items : [],
+  };
+}
+
 export default function OrderSuccess() {
   const [, newParams] = useRoute("/order-confirmation/:orderId");
   const [, legacyParams] = useRoute("/checkout/success/:id");
@@ -90,14 +100,18 @@ export default function OrderSuccess() {
   const orderId = newParams?.orderId ?? legacyParams?.id;
   const trackingToken = trackParams?.token;
   const isTrackingView = Boolean(trackingToken);
-  const cachedOrder = trackingToken ? null : getCachedLatestOrder(orderId);
+  const rawCachedOrder = trackingToken ? null : getCachedLatestOrder(orderId);
+  const cachedOrder = normalizeOrderDetail(rawCachedOrder);
+  const shouldFetchOrder =
+    (!!trackingToken || !!orderId) &&
+    (!cachedOrder || !Array.isArray((rawCachedOrder as any)?.items));
 
   const { data: fetchedOrder, isLoading } = useQuery({
     queryKey: ["order", trackingToken ?? orderId],
     queryFn: () => trackingToken ? fetchOrderByTrackingToken(trackingToken) : fetchOrderById(orderId!),
-    enabled: (!!trackingToken || !!orderId) && !cachedOrder,
+    enabled: shouldFetchOrder,
   });
-  const order = fetchedOrder ?? cachedOrder;
+  const order = normalizeOrderDetail(fetchedOrder ?? cachedOrder);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   useEffect(() => {
@@ -253,7 +267,7 @@ export default function OrderSuccess() {
             </h1>
             <p className="text-sm md:text-base text-muted-foreground leading-relaxed max-w-2xl mx-auto">
               We&apos;ve received your payment details and your order is being processed. A confirmation has been sent to{" "}
-              <span className="font-semibold text-foreground">{order.email}</span>. Keep this page as your receipt or print
+              <span className="font-semibold text-foreground">{order.email || "the contact details you provided"}</span>. Keep this page as your receipt or print
               it below.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">

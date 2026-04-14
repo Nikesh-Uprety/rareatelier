@@ -788,8 +788,8 @@ export default function Home() {
     return (
       <div className="relative h-screen h-[100svh] w-full overflow-hidden bg-black" style={{ color: landingForeground }}>
         <StorefrontSeo
-          title="Rare Atelier | Stussy Clone"
-          description="A minimal landing experience for the StuffyClone template."
+          title="Rare Atelier"
+          description="A minimal landing experience for Rare Atelier."
           canonicalPath="/"
           image={heroImages[0] || "/images/stussy.webp"}
           structuredData={{
@@ -802,7 +802,7 @@ export default function Home() {
         <div className="relative h-full w-full overflow-hidden">
           <img
             src={stuffyLandingImage}
-            alt="Stussy Clone Landing"
+            alt="Rare Atelier landing"
             className="absolute inset-0 h-full w-full object-cover"
             sizes="100vw"
             style={{ transform: "translateZ(0)" }}

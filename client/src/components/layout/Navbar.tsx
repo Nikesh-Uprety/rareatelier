@@ -11,6 +11,7 @@ import {
   Sparkles,
   ArrowRight,
   Compass,
+  ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "@/store/theme";
@@ -18,7 +19,13 @@ import { useCartStore } from "@/store/cart";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { fetchPageConfig } from "@/lib/api";
+import {
+  fetchCategories,
+  fetchPageConfig,
+  fetchProducts,
+  type CategoryApi,
+  type ProductApi,
+} from "@/lib/api";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import SearchBar from "./SearchBar";
@@ -31,6 +38,13 @@ import {
   STOREFRONT_BRANDING_QUERY_KEY,
 } from "@/lib/storefrontBranding";
 import { ThemeTogglerButton } from "@/components/ui/theme-toggler-button";
+import {
+  getStorefrontProductsCategoryLayout,
+  normalizeStorefrontProductsLayoutConfig,
+  STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY,
+} from "@shared/storefrontProductsLayout";
+
+const PRODUCT_REEL_EVENT = "ra:product-reel-state";
 
 const ANNOUNCEMENT_ITEMS = [
   "Free shipping on orders over NPR 5,000",
@@ -38,6 +52,31 @@ const ANNOUNCEMENT_ITEMS = [
   "Dragon Hoodie — Back in Stock",
   "Basics Collar Jacket — Limited Qty",
 ];
+
+function normalizeCategoryToken(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase().replace(/[_\s-]+/g, "");
+}
+
+async function fetchNavbarShopProducts(): Promise<ProductApi[]> {
+  const limit = 120;
+  const firstPage = await fetchProducts({ page: 1, limit });
+  const totalPages = Math.max(1, Math.ceil((firstPage.total ?? 0) / limit));
+
+  if (totalPages <= 1) {
+    return firstPage.products;
+  }
+
+  const remainingPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) =>
+      fetchProducts({
+        page: index + 2,
+        limit,
+      }),
+    ),
+  );
+
+  return [firstPage, ...remainingPages].flatMap((pageResult) => pageResult.products);
+}
 
 export default function Navbar() {
   const { theme, setTheme } = useThemeStore();
@@ -100,9 +139,28 @@ export default function Navbar() {
   const isLightLandingTemplate = isHomeRoute && (templateSlug === "clean-minimal" || templateSlug === "editorial-grid");
   const isStuffyProductDetail = isStuffyClone && isProductDetailRoute;
   const isStuffyProductsRoute = isStuffyClone && isProductsRoute;
-  const isHeroRoute = isHomeRoute || isAtelierRoute;
+  const isHeroRoute = isHomeRoute;
   const isInnerStorefrontRoute = isStorefront && !isHeroRoute;
+  const isStuffyInnerStorefrontRoute = isStuffyClone && isInnerStorefrontRoute;
+  const storefrontProductsLayoutConfig = useMemo(
+    () => normalizeStorefrontProductsLayoutConfig(pageConfig?.productsPageConfig ?? {}),
+    [pageConfig?.productsPageConfig],
+  );
+  const { data: storefrontCategories = [] } = useQuery<CategoryApi[]>({
+    queryKey: ["categories"],
+    queryFn: fetchCategories,
+    staleTime: 5 * 60 * 1000,
+    enabled: isStorefront,
+  });
+  const { data: storefrontCategoryProducts = [] } = useQuery<ProductApi[]>({
+    queryKey: ["products", "navbar-shop-categories"],
+    queryFn: fetchNavbarShopProducts,
+    staleTime: 5 * 60 * 1000,
+    enabled: isStuffyProductsRoute && storefrontProductsLayoutConfig.showCategoryMenu,
+  });
   const [hasScrolledPastThreshold, setHasScrolledPastThreshold] = useState(false);
+  const [productReelProgress, setProductReelProgress] = useState(0);
+  const [isProductReelActive, setIsProductReelActive] = useState(false);
   const isTransparentState = !hasScrolledPastThreshold;
   const shouldUseChrome = isProductsRoute
     ? hasScrolledPastThreshold
@@ -190,6 +248,25 @@ export default function Navbar() {
       window.removeEventListener("scroll", onScroll);
     };
   }, [isStorefront, hasScrolledPastThreshold]);
+
+  useEffect(() => {
+    if (!isProductDetailRoute) {
+      setProductReelProgress(0);
+      setIsProductReelActive(false);
+      return;
+    }
+
+    const onProductReelState = (event: Event) => {
+      const detail = (event as CustomEvent<{ progress?: number; active?: boolean }>).detail;
+      setProductReelProgress(Math.max(0, Math.min(1, detail?.progress ?? 0)));
+      setIsProductReelActive(Boolean(detail?.active));
+    };
+
+    window.addEventListener(PRODUCT_REEL_EVENT, onProductReelState as EventListener);
+    return () => {
+      window.removeEventListener(PRODUCT_REEL_EVENT, onProductReelState as EventListener);
+    };
+  }, [isProductDetailRoute]);
 
   if (!isStorefront) return null;
 
@@ -330,7 +407,18 @@ export default function Navbar() {
   const isHeroMegaOpen = isHeroRoute && !hasScrolledPastThreshold && Boolean(activeMegaNavHref);
   const isStuffyLanding = isStuffyClone && location === "/";
   const shouldUseDarkStuffyChrome = isStuffyClone && theme === "dark";
-  const navForegroundColor = isHeroMegaOpen
+  const productReelHasStarted = isProductDetailRoute && (isProductReelActive || productReelProgress > 0.01);
+  const productDetailSolidChrome = {
+    background: "#ffffff",
+    backdropFilter: "none",
+    WebkitBackdropFilter: "none",
+    borderColor: "rgba(17,17,17,0.08)",
+    boxShadow: "0 1px 0 rgba(0,0,0,0.06)",
+  };
+  const productDetailGlassChrome = getGlassChrome("light", { active: true });
+  const navForegroundColor = isProductDetailRoute
+    ? "#111111"
+    : isHeroMegaOpen
     ? "#111111"
     : forceSolidLightNavbar
     ? "#111111"
@@ -357,7 +445,11 @@ export default function Navbar() {
     : isLightLandingTemplate
     ? getGlassChrome("light", { active: true })
     : forceSolidLightNavbar
-    ? getInnerPageChrome(isDark)
+    ? isProductDetailRoute
+      ? productReelHasStarted
+        ? productDetailGlassChrome
+        : productDetailSolidChrome
+      : getInnerPageChrome(isDark)
     : getGlassChrome(isDark ? "light" : "dark", { active: shouldUseChrome });
   const navLogoVariant: "light" | "dark" = navForegroundColor === "#111111" ? "light" : "dark";
   const logoFilter = getStorefrontLogoFilter({
@@ -414,9 +506,92 @@ export default function Navbar() {
     setActiveMegaNavHref(href);
   };
 
+  const buildStorefrontHref = (
+    pathname: string,
+    extraParams?: Record<string, string | null | undefined>,
+  ) => {
+    if (typeof window === "undefined") return pathname;
+
+    const currentSearch = new URLSearchParams(window.location.search);
+    const nextParams = new URLSearchParams();
+    const previewTemplate = currentSearch.get("canvasPreviewTemplateId");
+    const previewFontPreset = currentSearch.get("canvasFontPreset");
+
+    if (previewTemplate) nextParams.set("canvasPreviewTemplateId", previewTemplate);
+    if (previewFontPreset) nextParams.set("canvasFontPreset", previewFontPreset);
+
+    Object.entries(extraParams ?? {}).forEach(([key, value]) => {
+      if (value && value.trim().length > 0) {
+        nextParams.set(key, value);
+      }
+    });
+
+    const query = nextParams.toString();
+    return query ? `${pathname}?${query}` : pathname;
+  };
+
+  const currentProductsCategoryKey =
+    typeof window === "undefined"
+      ? STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY
+      : new URLSearchParams(window.location.search).get("category")?.trim() ||
+        STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY;
+  const stuffyProductsMenuKey = "__stuffy-products-menu__";
+  const stuffyProductsMenuOpen = activeMegaNavHref === stuffyProductsMenuKey;
+  const stuffyCategoryTokensWithProducts = useMemo(() => {
+    return new Set(
+      storefrontCategoryProducts
+        .map((product) => normalizeCategoryToken(product.category))
+        .filter(Boolean),
+    );
+  }, [storefrontCategoryProducts]);
+  const stuffyProductsCategoryItems = (() => {
+    const items = [
+      {
+        key: STOREFRONT_PRODUCTS_ALL_CATEGORY_KEY,
+        label: "All Products",
+        href: buildStorefrontHref("/products"),
+      },
+    ];
+
+    if (!storefrontProductsLayoutConfig.showCategoryMenu) {
+      return items;
+    }
+
+    storefrontCategories.forEach((category) => {
+      const categoryLayout = getStorefrontProductsCategoryLayout(
+        storefrontProductsLayoutConfig,
+        category.slug,
+      );
+      if (!categoryLayout.showInMenu) return;
+
+      const hasProducts =
+        stuffyCategoryTokensWithProducts.has(
+          normalizeCategoryToken(category.slug),
+        ) ||
+        stuffyCategoryTokensWithProducts.has(
+          normalizeCategoryToken(category.name),
+        );
+      if (!hasProducts) return;
+
+      items.push({
+        key: category.slug,
+        label: category.name,
+        href: buildStorefrontHref("/products", { category: category.slug }),
+      });
+    });
+
+    return items;
+  })();
+
   const activeMegaMenu = activeMegaNavHref
     ? megaMenuContent[activeMegaNavHref as keyof typeof megaMenuContent]
     : null;
+  const productDetailDesktopLinks = [
+    { name: "Shop", href: "/products" },
+    { name: "Gallery", href: "/gallery" },
+    { name: "Atelier", href: "/atelier" },
+  ];
+
   const megaPanelTheme = {
     shellBg: isHeroMegaOpen ? "#ffffff" : theme === "dark" ? "rgba(6,6,6,0.96)" : "rgba(255,255,255,0.97)",
     shellBorder: isHeroMegaOpen ? "rgba(0,0,0,0.08)" : theme === "dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)",
@@ -613,7 +788,7 @@ export default function Navbar() {
 
   if (isStuffyClone) {
     const stuffyLogoVariant: "light" | "dark" =
-      isStuffyLanding || theme === "dark" ? "dark" : "light";
+      isStuffyInnerStorefrontRoute ? "light" : isStuffyLanding || theme === "dark" ? "dark" : "light";
     const stuffyHeaderLogo = resolveStorefrontLogo(
       storefrontBranding,
       stuffyLogoVariant,
@@ -624,15 +799,18 @@ export default function Navbar() {
         variant: stuffyLogoVariant,
         glow: stuffyLogoVariant === "dark",
       });
-    const chromeColor = isStuffyLanding
-      ? "rgba(255,255,255,0.96)"
-      : isStuffyProductsRoute
-        ? theme === "dark"
-          ? "rgba(255,255,255,0.94)"
-          : "rgba(17,17,17,0.94)"
-      : theme === "dark"
-        ? "rgba(255,255,255,0.92)"
-        : "rgba(17,17,17,0.92)";
+    const stuffyProductChrome = productReelHasStarted ? productDetailGlassChrome : productDetailSolidChrome;
+    const chromeColor = isStuffyInnerStorefrontRoute
+      ? "rgba(17,17,17,0.94)"
+      : isStuffyLanding
+        ? "rgba(255,255,255,0.96)"
+        : isStuffyProductsRoute
+          ? theme === "dark"
+            ? "rgba(255,255,255,0.94)"
+            : "rgba(17,17,17,0.94)"
+        : theme === "dark"
+          ? "rgba(255,255,255,0.92)"
+          : "rgba(17,17,17,0.92)";
     const chromeBg = isStuffyLanding
       ? "transparent"
       : isStuffyProductsRoute && !isScrolled
@@ -641,12 +819,8 @@ export default function Navbar() {
         ? theme === "dark"
           ? "linear-gradient(135deg, rgba(7,7,8,0.88) 0%, rgba(11,11,14,0.82) 50%, rgba(18,18,24,0.74) 100%)"
           : "linear-gradient(135deg, rgba(255,255,255,0.78) 0%, rgba(255,255,255,0.68) 50%, rgba(248,246,242,0.62) 100%)"
-      : isStuffyProductDetail && !isScrolled
-        ? "transparent"
       : isStuffyProductDetail
-        ? theme === "dark"
-          ? "rgba(13,17,23,0.18)"
-          : "#ffffff"
+        ? stuffyProductChrome.background
       : theme === "dark"
         ? "rgba(13,17,23,0.68)"
         : "#ffffff";
@@ -658,19 +832,28 @@ export default function Navbar() {
         ? theme === "dark"
           ? "rgba(255,255,255,0.08)"
           : "rgba(17,17,17,0.08)"
-      : isStuffyProductDetail && !isScrolled
-        ? "transparent"
       : isStuffyProductDetail
-        ? theme === "dark"
-          ? "rgba(255,255,255,0.06)"
-          : "rgba(17,17,17,0.10)"
+        ? stuffyProductChrome.borderColor
       : theme === "dark"
         ? "rgba(255,255,255,0.10)"
         : "rgba(17,17,17,0.10)";
     const chromeBackdrop =
-      isStuffyLanding || (isStuffyProductDetail && !isScrolled) || (isStuffyProductsRoute && !isScrolled)
+      isStuffyLanding || (isStuffyProductsRoute && !isScrolled)
         ? "none"
-        : "blur(18px) saturate(150%)";
+        : isStuffyProductDetail
+          ? stuffyProductChrome.backdropFilter
+          : "blur(18px) saturate(150%)";
+    const chromeShadow = isStuffyLanding
+      ? "none"
+      : isStuffyProductDetail
+        ? stuffyProductChrome.boxShadow
+      : isStuffyProductsRoute
+        ? theme === "dark"
+          ? "0 12px 32px rgba(0,0,0,0.22)"
+          : "0 10px 26px rgba(15,23,42,0.06)"
+        : theme === "dark"
+          ? "0 12px 30px rgba(0,0,0,0.18)"
+          : "0 8px 24px rgba(15,23,42,0.05)";
     const landingControlBackground = isStuffyLanding
       ? "transparent"
       : isStuffyProductsRoute
@@ -682,8 +865,8 @@ export default function Navbar() {
           ? "rgba(255,255,255,0.05)"
           : "rgba(255,255,255,0.42)"
       : isStuffyProductDetail
-      ? theme === "dark"
-        ? "rgba(15,23,42,0.18)"
+      ? productReelHasStarted
+        ? "rgba(255,255,255,0.64)"
         : "#ffffff"
       : theme === "dark"
         ? "rgba(22,27,34,0.82)"
@@ -694,11 +877,17 @@ export default function Navbar() {
         ? theme === "dark"
           ? "rgba(255,255,255,0.12)"
           : "rgba(17,17,17,0.10)"
+      : isStuffyProductDetail
+        ? "rgba(17,17,17,0.10)"
       : theme === "dark"
         ? "rgba(255,255,255,0.10)"
         : "rgba(17,17,17,0.10)";
     const landingControlShadow = isStuffyLanding
       ? "none"
+      : isStuffyProductDetail
+      ? productReelHasStarted
+        ? "0 12px 30px rgba(15,23,42,0.08)"
+        : "0 10px 24px rgba(15,23,42,0.04)"
       : isStuffyProductsRoute
       ? theme === "dark"
         ? "0 18px 48px rgba(0,0,0,0.34)"
@@ -712,24 +901,24 @@ export default function Navbar() {
         {mobileMenu}
         <header className="fixed inset-x-0 top-0 z-[110] pointer-events-auto">
           <div
-            className={`grid w-full items-center gap-3 py-4 ${isStuffyProductsRoute ? productsNavPaddingClass : "px-4 sm:px-6 md:px-8"}`}
+            className={`grid w-full items-center gap-2.5 ${isStuffyInnerStorefrontRoute ? "py-1.5" : "py-4"} ${isStuffyProductsRoute ? productsNavPaddingClass : "px-4 sm:px-6 md:px-8"}`}
             style={{
               gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)",
               background: chromeBg,
               borderBottom: `1px solid ${chromeBorder}`,
               backdropFilter: chromeBackdrop,
               WebkitBackdropFilter: chromeBackdrop,
-              paddingTop: "max(env(safe-area-inset-top), 1rem)",
-              paddingRight: "max(env(safe-area-inset-right), 2px)",
-              paddingLeft: "max(env(safe-area-inset-left), 2px)",
+              boxShadow: chromeShadow,
+              paddingTop: isStuffyInnerStorefrontRoute ? "max(env(safe-area-inset-top), 0.42rem)" : "max(env(safe-area-inset-top), 1rem)",
+              paddingRight: "max(env(safe-area-inset-right), 12px)",
+              paddingLeft: "max(env(safe-area-inset-left), 12px)",
             }}
-            
           >
-            <div className="flex items-center justify-start">
+            <div className="flex items-center justify-start gap-3">
               <button
                 type="button"
                 onClick={() => setIsMobileMenuOpen(true)}
-                className="group inline-flex min-h-11 items-center gap-3 rounded-full px-3 py-2 text-[13px] font-bold uppercase tracking-[0.28em] transition-opacity hover:opacity-80 sm:px-4 sm:text-[14px]"
+                className={`group inline-flex items-center rounded-full font-bold uppercase transition-opacity hover:opacity-80 ${isStuffyInnerStorefrontRoute ? "min-h-[32px] w-[32px] justify-center px-0 py-0.5 text-[10px] tracking-[0.22em]" : "min-h-11 gap-3 px-3 py-2 text-[13px] tracking-[0.28em] sm:px-4 sm:text-[14px]"}`}
                 style={{
                   color: chromeColor,
                   fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
@@ -744,8 +933,105 @@ export default function Navbar() {
                   <span className="h-px w-5 bg-current transition-all duration-300 ease-out" />
                   <span className="h-px w-4 self-end bg-current transition-all duration-300 ease-out group-hover:w-2" />
                 </span>
-                <span>Menu</span>
+                {isStuffyInnerStorefrontRoute ? null : <span>Menu</span>}
               </button>
+              {isStuffyInnerStorefrontRoute ? (
+                <div className="hidden items-center gap-4 pl-1.5 lg:flex">
+                  {isStuffyProductsRoute ? (
+                    <>
+                      <div
+                        className="relative -mb-4 pb-4"
+                        onMouseEnter={() => openMega(stuffyProductsMenuKey)}
+                        onMouseLeave={queueMegaClose}
+                      >
+                        <Link
+                          href={buildStorefrontHref("/products")}
+                          className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-[0.16em] transition-opacity duration-200 hover:opacity-65"
+                          style={{
+                            color: chromeColor,
+                            fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                            opacity: 1,
+                          }}
+                        >
+                          <span>All Products</span>
+                          <ChevronDown
+                            className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                              stuffyProductsMenuOpen ? "rotate-180" : ""
+                            }`}
+                          />
+                        </Link>
+
+                        <div
+                          className={`absolute left-0 top-full z-30 min-w-[236px] pt-1.5 transition-all duration-200 ${
+                            stuffyProductsMenuOpen
+                              ? "pointer-events-auto translate-y-0 opacity-100"
+                              : "pointer-events-none -translate-y-1.5 opacity-0"
+                          }`}
+                          onMouseEnter={() => openMega(stuffyProductsMenuKey)}
+                          onMouseLeave={queueMegaClose}
+                        >
+                          <div className="rounded-[20px] border border-neutral-200 bg-white/95 p-2 shadow-[0_16px_44px_rgba(17,17,17,0.10)] backdrop-blur-xl">
+                            {stuffyProductsCategoryItems.map((item) => {
+                              const isActive = currentProductsCategoryKey === item.key;
+
+                              return (
+                                <Link
+                                  key={item.key}
+                                  href={item.href}
+                                  className={`flex items-center rounded-[14px] px-3.5 py-2.5 text-[10px] font-medium uppercase tracking-[0.16em] transition-colors duration-200 ${
+                                    isActive
+                                      ? "bg-neutral-950 text-white"
+                                      : "text-neutral-700 hover:bg-neutral-100 hover:text-neutral-950"
+                                  }`}
+                                  style={{
+                                    fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                                  }}
+                                  onClick={() => setActiveMegaNavHref(null)}
+                                  aria-current={isActive ? "page" : undefined}
+                                >
+                                  {item.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      {productDetailDesktopLinks
+                        .filter((item) => item.href !== "/products")
+                        .map((item) => (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            className="text-[11px] font-semibold uppercase tracking-[0.18em] transition-opacity duration-200 hover:opacity-65"
+                            style={{
+                              color: chromeColor,
+                              fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                              opacity: location === item.href ? 1 : 0.74,
+                            }}
+                          >
+                            {item.name}
+                          </Link>
+                        ))}
+                    </>
+                  ) : (
+                    productDetailDesktopLinks.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className="text-[11px] font-semibold uppercase tracking-[0.18em] transition-opacity duration-200 hover:opacity-65"
+                        style={{
+                          color: chromeColor,
+                          fontFamily: '"Archivo Narrow", system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+                          opacity: location === item.href ? 1 : 0.74,
+                        }}
+                      >
+                        {item.name}
+                      </Link>
+                    ))
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <div className="flex items-center justify-center">
@@ -754,7 +1040,7 @@ export default function Navbar() {
                   <img
                     src={stuffyHeaderLogo.src}
                     alt="Rare Atelier"
-                    className="h-auto w-[5.7rem] object-contain sm:w-[6rem]"
+                    className={`h-auto object-contain ${isStuffyInnerStorefrontRoute ? "w-[3.9rem] sm:w-[4.15rem]" : "w-[5.7rem] sm:w-[6rem]"}`}
                     style={{
                       filter: stuffyHeaderLogoFilter,
                     }}
@@ -764,10 +1050,13 @@ export default function Navbar() {
             </div>
 
             <div className="flex items-center justify-end gap-2 sm:gap-2.5">
+              <div className={isStuffyInnerStorefrontRoute ? "origin-right scale-[0.88] [&>div>div]:border-none [&>div>div]:bg-transparent" : "[&>div>div]:border-none [&>div>div]:bg-transparent"}>
+                <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
+              </div>
               <button
                 type="button"
                 onClick={() => openCartSidebar()}
-                className="relative flex h-10 w-10 items-center justify-center rounded-full transition-opacity hover:opacity-80"
+                className={`relative flex items-center justify-center rounded-full transition-opacity hover:opacity-80 ${isStuffyInnerStorefrontRoute ? "h-[32px] w-[32px]" : "h-10 w-10"}`}
                 style={{
                   color: chromeColor,
                   background: landingControlBackground,
@@ -776,7 +1065,7 @@ export default function Navbar() {
                 }}
                 aria-label={`Open cart${cartItemsCount > 0 ? ` with ${cartItemsCount} items` : ""}`}
               >
-                <ShoppingBag className="h-4.5 w-4.5" />
+                <ShoppingBag className={isStuffyInnerStorefrontRoute ? "h-[14px] w-[14px]" : "h-4.5 w-4.5"} />
                 {cartItemsCount > 0 ? (
                   <span
                     className="absolute -right-1 -top-1 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full border border-black/10 bg-white px-1.5 text-[10px] font-black leading-none text-neutral-950 shadow-[0_8px_18px_rgba(0,0,0,0.14)]"
@@ -785,9 +1074,6 @@ export default function Navbar() {
                   </span>
                 ) : null}
               </button>
-              <div className="[&>div>div]:border-none [&>div>div]:bg-transparent">
-                <SearchBar iconColor={chromeColor} minimal={isStuffyLanding && theme !== "dark"} />
-              </div>
             </div>
           </div>
         </header>
@@ -889,6 +1175,7 @@ export default function Navbar() {
                   filter: logoFilter,
                   mixBlendMode: isProductDetailRoute ? "difference" : "normal",
                   transform: isProductDetailRoute ? "translateY(1px)" : "none",
+                  marginRight: "44px",
                 }}
               />
             </Link>
