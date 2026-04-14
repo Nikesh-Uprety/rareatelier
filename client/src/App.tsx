@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Wifi, WifiOff } from "lucide-react";
 import SentryTest from "@/components/SentryTest";
 import { StorefrontBreadcrumbs } from "@/components/product/StorefrontBreadcrumbs";
+import { cn } from "@/lib/utils";
 import {
   applyStorefrontFontPreset,
   isStorefrontFontPreset,
@@ -385,8 +386,24 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       ) : null}
-      <main className="flex-1 flex flex-col">
-        {shouldHoldHomeFirstPaint ? <BrandedLoader fullScreen variant="landing-glass" /> : children}
+      <main className="relative flex-1 overflow-hidden">
+        <div
+          className={cn(
+            "flex min-h-full flex-1 flex-col transition-[filter,transform,opacity] duration-200 ease-out",
+            shouldHoldHomeFirstPaint
+              ? "pointer-events-none select-none blur-[5px] saturate-[0.97] opacity-97 scale-[1.003]"
+              : "blur-0 saturate-100 opacity-100 scale-100",
+          )}
+        >
+          {children}
+        </div>
+        {shouldHoldHomeFirstPaint ? (
+          <BrandedLoader
+            fullScreen
+            variant="landing-glass"
+            className="absolute inset-0 z-20"
+          />
+        ) : null}
       </main>
       {shouldHoldHomeFirstPaint ? null : <CartSidebar />}
       {shouldShowFooter ? <Footer /> : null}

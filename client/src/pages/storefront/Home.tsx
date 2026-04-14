@@ -61,6 +61,8 @@ const LIFESTYLE_IMAGES_FALLBACK = [
   "/images/home-campaign-editorial.webp",
 ];
 
+const LANDING_LOADER_HERO_STORAGE_KEY = "rare-landing-loader-hero";
+
 const PREVIEW_PRODUCTS: ProductApi[] = [
   {
     id: "canvas-preview-1",
@@ -374,6 +376,21 @@ export default function Home() {
     const timeout = window.setTimeout(finish, 24);
     return () => window.clearTimeout(timeout);
   }, [heroLoadingState, pageConfigLoading]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const primaryHeroImage = heroImages[0];
+
+    try {
+      if (primaryHeroImage) {
+        window.localStorage.setItem(LANDING_LOADER_HERO_STORAGE_KEY, primaryHeroImage);
+      } else {
+        window.localStorage.removeItem(LANDING_LOADER_HERO_STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage write errors and keep the inline loader fallback
+    }
+  }, [heroImages]);
 
   // Preload static campaign images
   useEffect(() => {
