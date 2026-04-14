@@ -1,9 +1,19 @@
 import { lazy, Suspense, useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
-import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle, Trash2 } from "lucide-react";
+import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle, Trash2, Copy, ExternalLink, Link2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
@@ -47,6 +57,12 @@ function formatAdminNpr(amount: number | string): string {
   const num = typeof amount === "string" ? parseFloat(amount) : Number(amount ?? 0);
   if (Number.isNaN(num)) return "रू 0";
   return `रू ${num.toLocaleString("en-NP")}`;
+}
+
+function buildOrderTrackingUrl(trackingToken?: string | null) {
+  if (!trackingToken) return null;
+  if (typeof window === "undefined") return `/orders/track/${trackingToken}`;
+  return `${window.location.origin}/orders/track/${trackingToken}`;
 }
 
 function BillButton({ orderId }: { orderId: string }) {
@@ -94,6 +110,7 @@ export default function AdminOrders() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [timeRange, setTimeRange] = useState<"all" | "1d" | "3d" | "7d">("all");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
+  const [orderToDelete, setOrderToDelete] = useState<AdminOrder | null>(null);
   const [selectedOrderSn, setSelectedOrderSn] = useState<number | null>(null);
   const [selectedOrderItems, setSelectedOrderItems] = useState<
     Array<{
@@ -292,6 +309,9 @@ export default function AdminOrders() {
       .then((json) => {
         if (cancelled) return;
         setSelectedOrderItems(json?.data?.items ?? []);
+        if (json?.data) {
+          setSelectedOrder((prev) => (prev && prev.id === json.data.id ? { ...prev, ...json.data } : prev));
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -502,7 +522,7 @@ export default function AdminOrders() {
                         )}>{getOrderSerial(idx)}</td>
                         <td className="px-3 py-3 align-middle min-w-0">
                           <div className="font-medium text-[#2C3E2D] dark:text-foreground truncate" title={order.fullName}>{order.fullName}</div>
-                          <div className="text-muted-foreground text-xs truncate" title={order.email}>{order.email}</div>
+                          <div className="text-muted-foreground text-xs truncate" title={order.email ?? undefined}>{order.email ?? "—"}</div>
                           {order.country && (
                             <div className="text-muted-foreground text-xs mt-1 truncate" title={order.country}>{order.country}</div>
                           )}
@@ -580,8 +600,7 @@ export default function AdminOrders() {
                               className="h-7 w-7 text-red-600 hover:bg-red-50 hover:text-red-700"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                if (!window.confirm("Delete this order? This cannot be undone.")) return;
-                                deleteOrderMutation.mutate(order.id);
+                                setOrderToDelete(order);
                               }}
                               disabled={deleteOrderMutation.isPending}
                             >
@@ -623,6 +642,41 @@ export default function AdminOrders() {
           />
         </div>
       )}
+
+      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
+        <AlertDialogContent className="max-w-md rounded-[28px] border border-[#D8E4D8] bg-white/95 p-0 shadow-[0_28px_80px_rgba(21,33,24,0.22)] backdrop-blur-xl dark:border-[#2F3D33] dark:bg-[#101712]/95">
+          <div className="px-6 py-6">
+            <AlertDialogHeader className="space-y-2 text-left">
+              <AlertDialogTitle className="text-xl font-black tracking-tight text-[#142017] dark:text-[#F3FAF4]">
+                Delete this order?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-sm leading-6 text-[#4B5A4E] dark:text-[#C7D6C9]">
+                {orderToDelete
+                  ? `Order #${orderToDelete.id.slice(0, 8)} will be permanently removed. This action cannot be undone.`
+                  : "This order will be permanently removed. This action cannot be undone."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+          </div>
+          <AlertDialogFooter className="gap-2 px-6 py-5 sm:justify-end">
+            <AlertDialogCancel className="mt-0 rounded-full border-[#D0DCCF] px-5 dark:border-[#324134] dark:bg-[#141D16] dark:text-[#E3F1E5] dark:hover:bg-[#1C2820]" disabled={deleteOrderMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="mt-0 rounded-full bg-[#B42318] px-5 text-white hover:bg-[#932018] dark:bg-[#C9372C] dark:hover:bg-[#A52E24]"
+              onClick={(event) => {
+                event.preventDefault();
+                if (!orderToDelete) return;
+                deleteOrderMutation.mutate(orderToDelete.id, {
+                  onSuccess: () => setOrderToDelete(null),
+                });
+              }}
+              disabled={deleteOrderMutation.isPending}
+            >
+              {deleteOrderMutation.isPending ? "Deleting..." : "Delete Order"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
   {/* Sliding Drawer for Order Details */}
       <Sheet
@@ -722,6 +776,46 @@ export default function AdminOrders() {
                         setSelectedOrder(prev => prev ? { ...prev, paymentVerified: val } : null);
                       }}
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-white/80 p-3 shadow-sm dark:bg-muted/20">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                    <Link2 className="h-3.5 w-3.5" /> Tracking URL
+                  </div>
+                  <div className="mt-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-foreground break-all">
+                    {buildOrderTrackingUrl(selectedOrder.trackingToken) ?? "Preparing tracking link..."}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[10px] uppercase tracking-wider"
+                      onClick={() => {
+                        const url = buildOrderTrackingUrl(selectedOrder.trackingToken);
+                        if (!url) return;
+                        navigator.clipboard.writeText(url);
+                        toast({ title: "Tracking link copied" });
+                      }}
+                      disabled={!selectedOrder.trackingToken}
+                    >
+                      <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 text-[10px] uppercase tracking-wider"
+                      onClick={() => {
+                        const url = buildOrderTrackingUrl(selectedOrder.trackingToken);
+                        if (!url) return;
+                        window.open(url, "_blank", "noopener,noreferrer");
+                      }}
+                      disabled={!selectedOrder.trackingToken}
+                    >
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Open
+                    </Button>
                   </div>
                 </div>
               </div>

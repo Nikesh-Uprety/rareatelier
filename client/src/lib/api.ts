@@ -82,16 +82,17 @@ export interface OrderItemInput {
 export interface OrderInput {
   items: OrderItemInput[];
   shipping: {
-    firstName: string;
-    lastName: string;
-    email: string;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
     phone?: string;
-    address: string;
-    city: string;
-    zip: string;
-    country: string;
+    address?: string;
+    city?: string;
+    zip?: string;
+    country?: string;
     locationCoordinates?: string;
-    deliveryLocation: string;
+    deliveryLocation?: string;
   };
   paymentMethod: string;
   source?: string;
@@ -257,7 +258,7 @@ export async function createOrder(data: OrderInput) {
 }
 
 export async function requestOrderVerification(data: {
-  email: string;
+  email: string | null;
   quantity: number;
 }): Promise<
   JsonResponse<{
@@ -268,6 +269,8 @@ export async function requestOrderVerification(data: {
     limit?: number;
     orderCount?: number;
     retryAfter?: number;
+    resendCooldownSeconds?: number;
+    resendAvailableInSeconds?: number;
   }>
 > {
   const res = await postJsonAllowErrors("/api/orders/verification/request", data);
@@ -279,6 +282,8 @@ export async function requestOrderVerification(data: {
     limit?: number;
     orderCount?: number;
     retryAfter?: number;
+    resendCooldownSeconds?: number;
+    resendAvailableInSeconds?: number;
   }>;
 }
 
@@ -370,6 +375,7 @@ export interface OrderDetail {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   promoCode?: string | null;
   promoDiscountAmount?: number | null;
   createdAt: string | Date;
@@ -397,6 +403,13 @@ export interface OrderDetail {
 
 export async function fetchOrderById(id: string): Promise<OrderDetail | null> {
   const res = await fetch(`/api/orders/${id}`, { credentials: "include" });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { success: boolean; data?: OrderDetail };
+  return json.data ?? null;
+}
+
+export async function fetchOrderByTrackingToken(token: string): Promise<OrderDetail | null> {
+  const res = await fetch(`/api/orders/track/${token}`, { credentials: "include" });
   if (!res.ok) return null;
   const json = (await res.json()) as { success: boolean; data?: OrderDetail };
   return json.data ?? null;
@@ -558,6 +571,7 @@ export interface PublicBill {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   cashReceived: string | null;
   changeGiven: string | null;
   processedBy: string;

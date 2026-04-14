@@ -27,7 +27,7 @@ export interface AdminProductInput extends Omit<ProductApi, "id" | "variants"> {
 
 export interface AdminOrder {
   id: string;
-  email: string;
+  email: string | null;
   fullName: string;
   total: number;
   status: string;
@@ -52,6 +52,7 @@ export interface AdminOrder {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   items?: Array<{
     productId: string;
     quantity: number;
@@ -87,6 +88,7 @@ export interface AdminCustomerOrderHistoryItem {
   id: string;
   createdAt: string;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   items: { name: string; quantity: number; productId?: string; imageUrl?: string | null }[];
   total: string | number;
   paymentMethod: string;
@@ -784,22 +786,25 @@ export interface AdminCreateOrderInput {
     priceAtTime: number;
   }>;
   shipping: {
-    firstName: string;
-    lastName: string;
-    email: string;
+    fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
     phone?: string;
-    address: string;
-    city: string;
-    zip: string;
-    country: string;
-    deliveryLocation: string;
+    address?: string;
+    city?: string;
+    zip?: string;
+    country?: string;
+    deliveryLocation?: string;
     locationCoordinates?: string;
   };
   paymentMethod: string;
   source?: string;
+  deliveryFee?: number;
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   promoCodeId?: string;
   status?: "pending" | "processing" | "completed" | "cancelled";
 }
@@ -1007,6 +1012,7 @@ export interface AdminBill {
   deliveryRequired?: boolean;
   deliveryProvider?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   cashReceived: string | null;
   changeGiven: string | null;
   processedBy: string;
@@ -1041,6 +1047,7 @@ export async function createPosBill(data: {
   deliveryProvider?: string | null;
   deliveryLocation?: string | null;
   deliveryAddress?: string | null;
+  trackingToken?: string | null;
   cashReceived?: number | null;
   discountAmount?: number;
   notes?: string;

@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { type CartState, useCartStore } from "@/store/cart";
+import { getCartItemAvailableStock, type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles, PackageCheck, Truck, CircleX } from "lucide-react";
 import { formatPrice } from "@/lib/format";
@@ -375,7 +375,21 @@ export default function Cart() {
                           <Minus size={12} />
                         </button>
                         <span className="w-8 text-center text-[11px] font-black text-zinc-900 dark:text-zinc-100">{item.quantity}</span>
-                        <button data-testid={`cart-increment-${item.id}`} onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors">
+                        <button
+                          data-testid={`cart-increment-${item.id}`}
+                          onClick={() => {
+                            const result = updateQuantity(item.id, item.quantity + 1);
+                            if (!result.ok) {
+                              toast({
+                                title: "Stock limit reached",
+                                description: `Only ${result.maxAllowed} item${result.maxAllowed === 1 ? "" : "s"} are available for this variant.`,
+                                variant: "destructive",
+                              });
+                            }
+                          }}
+                          className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
+                          disabled={item.quantity >= getCartItemAvailableStock(item)}
+                        >
                           <Plus size={12} />
                         </button>
                       </div>

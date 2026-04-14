@@ -74,11 +74,14 @@ export default function PaymentProcess() {
   );
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
+  const [selectedProofFile, setSelectedProofFile] = useState<File | null>(null);
+  const [selectedProofPreview, setSelectedProofPreview] = useState<string | null>(null);
   const [redirectingToStripe, setRedirectingToStripe] = useState(false);
   const [simulatingPayment, setSimulatingPayment] = useState(false);
   const [downloadingQr, setDownloadingQr] = useState(false);
   const [switchingPaymentMethod, setSwitchingPaymentMethod] = useState<string | null>(null);
   const [qrPreviewOpen, setQrPreviewOpen] = useState(false);
+  const [qrImageLoading, setQrImageLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isLocalTesting =
     typeof window !== "undefined" &&
@@ -128,15 +131,24 @@ export default function PaymentProcess() {
     };
   }, [orderId, stripeStatus, toast, setLocation]);
 
+  useEffect(() => {
+    return () => {
+      if (selectedProofPreview) {
+        URL.revokeObjectURL(selectedProofPreview);
+      }
+    };
+  }, [selectedProofPreview]);
+
   const MAX_FILE_SIZE_MB = 5;
   const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       toast({ title: "Please upload an image file (PNG, JPG)", variant: "destructive" });
+      e.target.value = "";
       return;
     }
 
@@ -149,14 +161,53 @@ export default function PaymentProcess() {
       return;
     }
 
+    if (selectedProofPreview) {
+      URL.revokeObjectURL(selectedProofPreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedProofFile(file);
+    setSelectedProofPreview(previewUrl);
+    setUploaded(false);
+    toast({ title: "Screenshot selected", description: "Review the preview and confirm to complete your order." });
+    e.target.value = "";
+  };
+
+  const convertProofToBase64 = async (file: File) => {
+    const imageUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = imageUrl;
+      });
+
+      const maxDimension = 1800;
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Canvas not supported");
+      context.drawImage(image, 0, 0, width, height);
+      return canvas.toDataURL("image/jpeg", 0.86);
+    } finally {
+      URL.revokeObjectURL(imageUrl);
+    }
+  };
+
+  const handleConfirmPaymentScreenshot = async () => {
+    if (!selectedProofFile) {
+      toast({ title: "Choose a payment screenshot first.", variant: "destructive" });
+      return;
+    }
+
     setUploading(true);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await convertProofToBase64(selectedProofFile);
 
       if (!orderId) {
         if (!pendingCheckout?.orderInput?.items?.length) {
@@ -186,7 +237,6 @@ export default function PaymentProcess() {
           try {
             await cancelOrder(createdOrder.id);
           } catch {
-            // Ignore cleanup failures and keep destructive feedback below.
           }
 
           toast({
@@ -202,7 +252,6 @@ export default function PaymentProcess() {
         try {
           localStorage.removeItem(CHECKOUT_FORM_KEY);
         } catch {
-          // Ignore storage errors.
         }
 
         setOrder(createdOrder);
@@ -222,7 +271,6 @@ export default function PaymentProcess() {
         try {
           localStorage.removeItem(CHECKOUT_FORM_KEY);
         } catch {
-          // Ignore storage errors.
         }
         setUploaded(true);
         toast({ title: "Payment screenshot uploaded. We will verify shortly." });
@@ -243,7 +291,6 @@ export default function PaymentProcess() {
       });
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   };
 
@@ -502,6 +549,11 @@ export default function PaymentProcess() {
       : normalizedMethod === "fonepay"
         ? FALLBACK_PAYMENT_QR.fonepay
         : FALLBACK_PAYMENT_QR.esewa);
+
+  useEffect(() => {
+    setQrImageLoading(true);
+  }, [resolvedQrImageSrc]);
+
   const handleDownloadQr = async () => {
     setDownloadingQr(true);
     try {
@@ -583,15 +635,25 @@ export default function PaymentProcess() {
             </div>
             <div
               className="group relative h-52 w-52 cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-2 sm:h-64 sm:w-64 dark:border-zinc-700 dark:bg-zinc-950"
-              onClick={() => setQrPreviewOpen(true)}
+              onClick={() => !qrImageLoading && setQrPreviewOpen(true)}
             >
+              {qrImageLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-zinc-950/90">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="text-[11px] uppercase tracking-[0.18em]">Loading QR</span>
+                  </div>
+                </div>
+              ) : null}
               <img
                 src={resolvedQrImageSrc}
                 alt={`${paymentLabel} QR Code`}
-                className="w-full h-full object-contain"
+                className={`w-full h-full object-contain transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-100"}`}
+                onLoad={() => setQrImageLoading(false)}
+                onError={() => setQrImageLoading(false)}
               />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
-                <ZoomIn className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 drop-shadow-lg" />
+                <ZoomIn className={`w-8 h-8 text-white transition-opacity duration-200 drop-shadow-lg ${qrImageLoading ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`} />
               </div>
             </div>
             <p className="mt-2 text-[10px] text-muted-foreground text-center flex items-center justify-center gap-1">
@@ -654,34 +716,80 @@ export default function PaymentProcess() {
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none dark:border-green-900/70 dark:bg-green-950/30 dark:text-green-300">
               <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <span className="text-sm font-medium">Screenshot uploaded. Click below to confirm and complete your order.</span>
+              <span className="text-sm font-medium">Payment proof uploaded successfully. Redirecting to your order.</span>
             </div>
-            <Button
-              onClick={() => setLocation(`/order-confirmation/${confirmationOrderId}`)}
-              className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold"
-            >
-              <CheckCircle2 className="w-5 h-5 mr-2" />
-              Confirm & Complete Order
-            </Button>
           </div>
         ) : (
-          <Button
-            type="button"
-            data-testid="payment-proof-trigger"
-            variant="outline"
-            className="w-full h-14 rounded-none border-2 border-dashed border-gray-300 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-          >
-            {uploading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <>
-                <Upload className="w-5 h-5 mr-2" />
-                Choose payment screenshot
-              </>
-            )}
-          </Button>
+          <div className="space-y-4">
+            <Button
+              type="button"
+              data-testid="payment-proof-trigger"
+              variant="outline"
+              className="w-full h-14 rounded-none border-2 border-dashed border-gray-300 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Upload className="w-5 h-5 mr-2" />
+                  {selectedProofFile ? "Choose different screenshot" : "Choose payment screenshot"}
+                </>
+              )}
+            </Button>
+
+            {selectedProofPreview ? (
+              <div className="space-y-4 border border-gray-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Preview</p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{selectedProofFile?.name}</p>
+                    <p className="text-xs text-muted-foreground">Review your payment screenshot before confirming the order.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-none"
+                    onClick={() => {
+                      if (selectedProofPreview) URL.revokeObjectURL(selectedProofPreview);
+                      setSelectedProofPreview(null);
+                      setSelectedProofFile(null);
+                    }}
+                    disabled={uploading}
+                  >
+                    Remove
+                  </Button>
+                </div>
+                <div className="overflow-hidden border border-gray-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950">
+                  <img
+                    src={selectedProofPreview}
+                    alt="Payment screenshot preview"
+                    className="max-h-[420px] w-full object-contain"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold"
+                  onClick={handleConfirmPaymentScreenshot}
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Confirming payment proof...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 mr-2" />
+                      Confirm payment screenshot
+                    </>
+                  )}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         )}
       </div>
 

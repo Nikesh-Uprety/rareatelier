@@ -1,15 +1,16 @@
-import { lazy, Suspense, useState, useMemo, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useMemo, useEffect } from "react";
 import { useRoute, Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useCartStore } from "@/store/cart";
 import { useThemeStore } from "@/store/theme";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronLeft, FileText, Minus, Plus, ShieldCheck, Truck, X } from "lucide-react";
+import { ChevronDown, FileText, Minus, Plus, ShieldCheck, Truck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, fetchPageConfig, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
+import ProductMediaStage from "@/components/product/ProductMediaStage";
 const SizeFitGuide = lazy(() => import("@/components/product/SizeFitGuide"));
 
 function parseJsonArray(s: string | null | undefined): string[] {
@@ -219,26 +220,10 @@ export default function ProductDetail() {
   }, [relatedProductsRaw, product?.id]);
 
   const [quantity, setQuantity] = useState(1);
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [hoveredColor, setHoveredColor] = useState<string | null>(null);
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
-  const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [isGalleryVisible, setIsGalleryVisible] = useState(false);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [showSizeGuide, setShowSizeGuide] = useState(false);
-  const [isTinyPreviewMode, setIsTinyPreviewMode] = useState(false);
-  const [isPreviewRailExpanded, setIsPreviewRailExpanded] = useState(true);
-  const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
-  const [desktopReelProgress, setDesktopReelProgress] = useState(0);
-  const galleryCloseTimeoutRef = useRef<number | null>(null);
-  const didSwipeRef = useRef(false);
-  const productStageRef = useRef<HTMLDivElement | null>(null);
-  const galleryScrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const gallerySectionRefs = useRef<Array<HTMLElement | null>>([]);
-  const desktopReelTargetProgressRef = useRef(0);
-  const desktopRenderedProgressRef = useRef(0);
-  const desktopWheelFrameRef = useRef<number | null>(null);
 
   const colors = useMemo(() => parseJsonArray(product?.colorOptions ?? undefined), [product?.colorOptions]);
   const colorOptions = useMemo(
@@ -303,248 +288,11 @@ export default function ProductDetail() {
 
     return "/products";
   }, []);
-
-  useEffect(() => {
-    if (selectedImageIndex > allImages.length - 1) {
-      setSelectedImageIndex(0);
-    }
-  }, [allImages.length, selectedImageIndex]);
-
-  useEffect(() => {
-    desktopRenderedProgressRef.current = desktopReelProgress;
-  }, [desktopReelProgress]);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 379px)");
-    const syncPreviewRailMode = () => {
-      const isTiny = mediaQuery.matches;
-      setIsTinyPreviewMode(isTiny);
-      setIsPreviewRailExpanded(!isTiny);
-    };
-
-    syncPreviewRailMode();
-    mediaQuery.addEventListener("change", syncPreviewRailMode);
-
-    return () => {
-      mediaQuery.removeEventListener("change", syncPreviewRailMode);
-    };
-  }, []);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 1024px)");
-    const syncMobileOrTablet = () => setIsMobileOrTablet(mediaQuery.matches);
-    syncMobileOrTablet();
-    mediaQuery.addEventListener("change", syncMobileOrTablet);
-    return () => {
-      mediaQuery.removeEventListener("change", syncMobileOrTablet);
-    };
-  }, []);
-
-  useEffect(() => {
-    setSelectedImageIndex(0);
-    setDesktopReelProgress(0);
-    desktopReelTargetProgressRef.current = 0;
-    desktopRenderedProgressRef.current = 0;
-  }, [product?.id, allImages.length, isMobileOrTablet]);
-
-  useEffect(() => {
-    if (!effectiveColor) return;
-    setSelectedImageIndex(0);
-    setDesktopReelProgress(0);
-    desktopReelTargetProgressRef.current = 0;
-    desktopRenderedProgressRef.current = 0;
-  }, [effectiveColor, activeColorImages.length]);
-
-  useEffect(() => {
-    if (!isGalleryOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsGalleryVisible(false);
-      }
-      if (event.key === "ArrowRight") {
-        goToImage(selectedImageIndex + 1);
-      }
-      if (event.key === "ArrowLeft") {
-        goToImage(selectedImageIndex - 1);
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [allImages.length, isGalleryOpen, selectedImageIndex]);
-
   const isDarkMode = theme === "dark";
-
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const previousHtmlOverflow = document.documentElement.style.overflow;
-    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
-    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
-
-    const shouldLockOverflow = isGalleryOpen;
-    document.body.style.overflow = shouldLockOverflow ? "hidden" : "";
-    document.documentElement.style.overflow = shouldLockOverflow ? "hidden" : "";
-    document.body.style.overscrollBehaviorY = shouldLockOverflow ? "none" : "";
-    document.documentElement.style.overscrollBehaviorY = shouldLockOverflow ? "none" : "";
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.documentElement.style.overflow = previousHtmlOverflow;
-      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
-      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
-    };
-  }, [isGalleryOpen]);
-
-  useEffect(() => {
-    if (!isGalleryOpen) return;
-    const raf = window.requestAnimationFrame(() => setIsGalleryVisible(true));
-    return () => window.cancelAnimationFrame(raf);
-  }, [isGalleryOpen]);
-
-  useEffect(() => {
-    if (isGalleryVisible || !isGalleryOpen) return;
-    galleryCloseTimeoutRef.current = window.setTimeout(() => {
-      setIsGalleryOpen(false);
-    }, 220);
-    return () => {
-      if (galleryCloseTimeoutRef.current) {
-        window.clearTimeout(galleryCloseTimeoutRef.current);
-      }
-    };
-  }, [isGalleryOpen, isGalleryVisible]);
-
-  useEffect(() => {
-    if (!isGalleryOpen) return;
-
-    const container = galleryScrollContainerRef.current;
-    const sections = gallerySectionRefs.current.filter(
-      (section): section is HTMLElement => Boolean(section),
-    );
-    if (!container || sections.length === 0) return;
-
-    const activeSection = sections[selectedImageIndex];
-    if (!activeSection) return;
-
-    const sectionTop = activeSection.offsetTop;
-    container.scrollTo({
-      top: Math.max(0, sectionTop),
-      behavior: "auto",
-    });
-  }, [isGalleryOpen, selectedImageIndex]);
-
-  useEffect(() => {
-    if (!isGalleryOpen) return;
-
-    const sections = gallerySectionRefs.current.filter(
-      (section): section is HTMLElement => Boolean(section),
-    );
-    if (sections.length === 0) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-
-        if (!visible) return;
-        const nextIndex = Number((visible.target as HTMLElement).dataset.index ?? -1);
-        if (nextIndex >= 0 && nextIndex !== selectedImageIndex) {
-          setSelectedImageIndex(nextIndex);
-        }
-      },
-      {
-        root: galleryScrollContainerRef.current,
-        threshold: [0.3, 0.55, 0.75],
-        rootMargin: "-8% 0px -8% 0px",
-      },
-    );
-
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, [isGalleryOpen, selectedImageIndex]);
-
-  useEffect(() => {
-    if (isMobileOrTablet || isGalleryOpen) return;
-    if (allImages.length <= 1) {
-      setDesktopReelProgress(0);
-      return;
-    }
-
-    const maxProgress = allImages.length - 1;
-    const progressStep = 0.0018;
-
-    const animateReelProgress = () => {
-      const target = desktopReelTargetProgressRef.current;
-      const rendered = desktopRenderedProgressRef.current;
-      const delta = target - rendered;
-
-      if (Math.abs(delta) < 0.0008) {
-        desktopRenderedProgressRef.current = target;
-        setDesktopReelProgress(target);
-        desktopWheelFrameRef.current = null;
-        return;
-      }
-
-      const next = rendered + delta * 0.16;
-      desktopRenderedProgressRef.current = next;
-      setDesktopReelProgress(next);
-      desktopWheelFrameRef.current = window.requestAnimationFrame(animateReelProgress);
-    };
-
-    const onWheel = (event: WheelEvent) => {
-      const stage = productStageRef.current;
-      if (!stage) return;
-
-      const rect = stage.getBoundingClientRect();
-      const isStageInFocus =
-        rect.top <= 24 &&
-        rect.bottom >= window.innerHeight * 0.72;
-
-      if (!isStageInFocus) return;
-
-      const movingDown = event.deltaY > 0;
-      const movingUp = event.deltaY < 0;
-      const currentTarget = desktopReelTargetProgressRef.current;
-      const atStart = currentTarget <= 0.001;
-      const atEnd = currentTarget >= maxProgress - 0.001;
-
-      const shouldLockScroll =
-        (movingDown && !atEnd) ||
-        (movingUp && !atStart);
-
-      if (!shouldLockScroll) return;
-
-      event.preventDefault();
-
-      const next = Math.min(maxProgress, Math.max(0, currentTarget + event.deltaY * progressStep));
-      desktopReelTargetProgressRef.current = next;
-
-      if (desktopWheelFrameRef.current === null) {
-        desktopWheelFrameRef.current = window.requestAnimationFrame(animateReelProgress);
-      }
-    };
-
-    window.addEventListener("wheel", onWheel, { passive: false });
-
-    return () => {
-      if (desktopWheelFrameRef.current !== null) {
-        window.cancelAnimationFrame(desktopWheelFrameRef.current);
-        desktopWheelFrameRef.current = null;
-      }
-      window.removeEventListener("wheel", onWheel);
-    };
-  }, [allImages.length, isGalleryOpen, isMobileOrTablet]);
-
-  const desktopReelMaxProgress = Math.max(allImages.length - 1, 0);
-  const clampedDesktopReelProgress = Math.min(Math.max(desktopReelProgress, 0), desktopReelMaxProgress);
-  const activeDesktopPreviewIndex = Math.round(clampedDesktopReelProgress);
-  const desktopReelGap = isStuffyClone ? 3 : 3.5;
-
-  useEffect(() => {
-    if (isMobileOrTablet || isGalleryOpen) return;
-    if (selectedImageIndex !== activeDesktopPreviewIndex) {
-      setSelectedImageIndex(activeDesktopPreviewIndex);
-    }
-  }, [activeDesktopPreviewIndex, isGalleryOpen, isMobileOrTablet, selectedImageIndex]);
+  const mediaResetKey = useMemo(
+    () => `${product?.id ?? "product"}:${effectiveColor ?? "default"}:${allImages.length}`,
+    [allImages.length, effectiveColor, product?.id],
+  );
 
   const effectiveSize = selectedSize;
   const selectedVariant = useMemo(() => {
@@ -631,6 +379,7 @@ export default function ProductDetail() {
       id: normalizeVariantId(variant.id),
       size: variant.size,
       color: parseColorOption(variant.color ?? "Default").label,
+      stock: Number(variant.stock ?? product.stock ?? 0),
     })),
   });
 
@@ -641,11 +390,21 @@ export default function ProductDetail() {
   });
 
   const handleAddToCart = () => {
-    addItem(
+    const result = addItem(
       buildCartPayload(),
       buildVariantPayload(),
       quantity,
     );
+
+    if (!result.ok) {
+      toast({
+        title: "Stock limit reached",
+        description: `Only ${result.maxAllowed} item${result.maxAllowed === 1 ? "" : "s"} are available for this variant.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
     toast({ title: "Added to bag", duration: isMobileOrTablet ? 1500 : undefined });
     openCartSidebar();
@@ -654,70 +413,20 @@ export default function ProductDetail() {
   const handleBuyNow = () => {
     closeCartSidebar();
     clearCart();
-    addItem(
+    const result = addItem(
       buildCartPayload(),
       buildVariantPayload(),
       quantity,
     );
+    if (!result.ok) {
+      toast({
+        title: "Stock limit reached",
+        description: `Only ${result.maxAllowed} item${result.maxAllowed === 1 ? "" : "s"} are available for this variant.`,
+        variant: "destructive",
+      });
+      return;
+    }
     setLocation("/checkout");
-  };
-
-  const goToImage = (index: number) => {
-    if (!allImages.length) return;
-    const next = (index + allImages.length) % allImages.length;
-    if (next === selectedImageIndex) return;
-    setSelectedImageIndex(next);
-  };
-
-  const goToImageInModal = (targetIndex: number) => {
-    if (!allImages.length) return;
-    const next = (targetIndex + allImages.length) % allImages.length;
-    const targetSection = gallerySectionRefs.current[next];
-    if (!targetSection) return;
-    setSelectedImageIndex(next);
-
-    const container = galleryScrollContainerRef.current;
-    if (!container) {
-      targetSection.scrollIntoView({ behavior: "smooth", block: "center" });
-      return;
-    }
-
-    const sectionTop = targetSection.offsetTop;
-    container.scrollTo({
-      top: Math.max(0, sectionTop),
-      behavior: "smooth",
-    });
-  };
-
-  const goToNextImage = () => {
-    goToImage(selectedImageIndex + 1);
-  };
-
-  const goToPreviousImage = () => {
-    goToImage(selectedImageIndex - 1);
-  };
-
-  const previewImage = (index: number) => {
-    if (index === selectedImageIndex || index < 0 || index >= allImages.length) return;
-    if (!isMobileOrTablet && allImages.length > 1) {
-      desktopReelTargetProgressRef.current = index;
-      desktopRenderedProgressRef.current = index;
-      setSelectedImageIndex(index);
-      setDesktopReelProgress(index);
-      return;
-    }
-    setSelectedImageIndex(index);
-  };
-
-  const openGallery = (index?: number) => {
-    if (typeof index === "number") {
-      setSelectedImageIndex(index);
-    }
-    setIsGalleryOpen(true);
-  };
-
-  const closeGallery = () => {
-    setIsGalleryVisible(false);
   };
 
   const structuredData = {
@@ -741,13 +450,6 @@ export default function ProductDetail() {
   };
 
   const compactBreadcrumbProductLabel = product.name.toUpperCase();
-  const stuffyImageObjectPosition = isStuffyClone
-    ? isMobileOrTablet
-      ? "50% 50%"
-      : "50% 46%"
-    : undefined;
-  const stuffyImageFit = isStuffyClone && !isMobileOrTablet ? "cover" : isStuffyClone ? "contain" : "cover";
-  const stuffyForegroundScale = isStuffyClone && !isMobileOrTablet ? 1.08 : 1;
   const purchasePanel = (
     <>
       <div>
@@ -933,10 +635,7 @@ export default function ProductDetail() {
         </div>
       ) : null}
 
-      <div
-        ref={productStageRef}
-        className="relative lg:min-h-screen"
-      >
+      <div className="relative lg:min-h-screen">
         <div
           className={`grid gap-8 lg:items-start lg:gap-8 xl:gap-10 ${
             isStuffyClone
@@ -1178,212 +877,14 @@ export default function ProductDetail() {
           </div>
         </aside>
 
-        <section className={`${isStuffyClone ? "order-1 space-y-0 lg:min-w-0 lg:order-1 lg:py-0 lg:sticky lg:top-0" : "space-y-4 lg:min-w-0 lg:py-0"}`}>
-          <div className="relative min-w-0">
-            <div
-              className={`relative h-[72vh] min-h-[520px] overflow-hidden sm:h-[76vh] ${
-                isStuffyClone
-                  ? "bg-transparent lg:h-screen"
-                  : "rounded-sm border border-border/60 bg-black/5 dark:border-white/10 dark:bg-black/35"
-              }`}
-              onClick={() => {
-                if (didSwipeRef.current) {
-                  didSwipeRef.current = false;
-                  return;
-                }
-                openGallery(selectedImageIndex);
-              }}
-              onTouchStart={(event) => {
-                didSwipeRef.current = false;
-                if (event.touches[0]) {
-                  setTouchStartX(event.touches[0].clientX);
-                }
-              }}
-              onTouchEnd={(event) => {
-                if (touchStartX === null) return;
-                const deltaX = event.changedTouches[0].clientX - touchStartX;
-                if (Math.abs(deltaX) > 40) {
-                  didSwipeRef.current = true;
-                  if (deltaX < 0) goToNextImage();
-                  if (deltaX > 0) goToPreviousImage();
-                }
-                setTouchStartX(null);
-              }}
-            >
-              {product.stock === 0 ? (
-                <div className="absolute left-3 top-16 z-20 bg-black/80 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white lg:left-4 lg:top-20 lg:px-4 lg:py-2">
-                  Out of Stock
-                </div>
-              ) : null}
-
-              {!isMobileOrTablet && allImages.length > 1 ? (
-                <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-sm border border-white/20 bg-black/35 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
-                  <span>
-                    {String(activeDesktopPreviewIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
-                  </span>
-                </div>
-              ) : null}
-
-              {allImages.length > 1 && !isMobileOrTablet ? (
-                <div
-                  className={`scrollbar-hide absolute left-2 top-1/2 z-40 -translate-y-1/2 overflow-y-auto rounded-md border border-white/30 bg-black/20 backdrop-blur-sm transition-all duration-200 sm:left-3 ${
-                    isTinyPreviewMode && !isPreviewRailExpanded
-                      ? "max-h-[36%] w-[26px] p-1"
-                      : "flex max-h-[72%] w-[54px] flex-col gap-1.5 p-1.5 sm:w-[70px] sm:gap-2 sm:p-2"
-                  }`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                >
-                  {isTinyPreviewMode && !isPreviewRailExpanded ? (
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setIsPreviewRailExpanded(true);
-                      }}
-                      className="flex h-9 w-full items-center justify-center rounded-sm border border-white/40 bg-black/45 text-[10px] font-black text-white"
-                      aria-label="Expand image preview rail"
-                    >
-                      ••
-                    </button>
-                  ) : (
-                    <>
-                      {isTinyPreviewMode ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setIsPreviewRailExpanded(false);
-                          }}
-                          className="mb-1 flex h-6 w-full items-center justify-center rounded-sm border border-white/35 bg-black/45 text-[10px] font-black text-white/90"
-                          aria-label="Collapse image preview rail"
-                        >
-                          −
-                        </button>
-                      ) : null}
-                      {allImages.map((url, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            previewImage(i);
-                          }}
-                          className={`aspect-[4/5] w-full shrink-0 overflow-hidden rounded-sm border transition-all ${
-                            activeDesktopPreviewIndex === i
-                              ? "border-white opacity-100"
-                              : "border-white/30 opacity-70 hover:opacity-100"
-                          }`}
-                        >
-                          <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover" />
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </div>
-              ) : null}
-
-              {isMobileOrTablet || allImages.length <= 1 ? (
-                isStuffyClone && !isMobileOrTablet ? (
-                  <img
-                    src={allImages[selectedImageIndex] || ""}
-                    alt={`${product.name} - view ${selectedImageIndex + 1}`}
-                    loading={selectedImageIndex === 0 ? "eager" : "lazy"}
-                    className="absolute inset-0 z-20 h-full w-full select-none"
-                    style={{
-                      objectFit: stuffyImageFit,
-                      objectPosition: stuffyImageObjectPosition,
-                      transform: `scale(${stuffyForegroundScale})`,
-                      transformOrigin: "center center",
-                    }}
-                  />
-                ) : (
-                  <img
-                    src={allImages[selectedImageIndex] || ""}
-                    alt={`${product.name} - view ${selectedImageIndex + 1}`}
-                    loading={selectedImageIndex === 0 ? "eager" : "lazy"}
-                    className={`absolute inset-0 z-20 h-full w-full select-none ${
-                      isStuffyClone ? "" : "object-top"
-                    }`}
-                    style={
-                      isStuffyClone
-                        ? {
-                            objectFit: stuffyImageFit,
-                            objectPosition: stuffyImageObjectPosition,
-                          }
-                        : undefined
-                    }
-                  />
-                )
-              ) : (
-                <div className="absolute inset-0">
-                  {allImages.map((url, index) => (
-                    isStuffyClone ? (
-                      <div
-                        key={`desktop-reel-${index}`}
-                        className="absolute inset-0 overflow-hidden will-change-transform"
-                        style={{
-                          transform: `translate3d(0, calc(${(index - clampedDesktopReelProgress) * 100}% + ${(index - clampedDesktopReelProgress) * desktopReelGap}px), 0)`,
-                        }}
-                      >
-                        <img
-                          src={url || ""}
-                          alt={`${product.name} - view ${index + 1}`}
-                          loading={index === 0 ? "eager" : "lazy"}
-                          className="absolute inset-0 h-full w-full select-none"
-                          style={{
-                            objectFit: stuffyImageFit,
-                            objectPosition: stuffyImageObjectPosition,
-                            transform: `scale(${stuffyForegroundScale})`,
-                            transformOrigin: "center center",
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <img
-                        key={`desktop-reel-${index}`}
-                        src={url || ""}
-                        alt={`${product.name} - view ${index + 1}`}
-                        loading={index === 0 ? "eager" : "lazy"}
-                        className="absolute inset-0 h-full w-full select-none will-change-transform object-top"
-                        style={{
-                          transform: `translate3d(0, ${(index - clampedDesktopReelProgress) * (100 + desktopReelGap)}%, 0)`,
-                        }}
-                      />
-                    )
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {isMobileOrTablet && allImages.length > 1 ? (
-              <div className="scrollbar-hide -mt-1 overflow-x-auto">
-                <div className="flex min-w-max snap-x snap-mandatory gap-2 pb-1">
-                  {allImages.map((url, i) => (
-                    <button
-                      key={`thumb-${i}`}
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        previewImage(i);
-                      }}
-                      className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
-                        selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
-                      }`}
-                      aria-label={`View image ${i + 1}`}
-                    >
-                      <img src={url || ""} alt="" loading="lazy" className="h-full w-full object-cover object-top" />
-                    </button>
-                  ))}
-                </div>
-                <p className={`mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground"}`}>
-                  Tap a preview or swipe the image
-                </p>
-              </div>
-            ) : null}
-          </div>
-        </section>
+        <ProductMediaStage
+          productName={product.name}
+          imageUrls={allImages}
+          stock={product.stock}
+          isDarkMode={isDarkMode}
+          isStuffyClone={isStuffyClone}
+          mediaResetKey={mediaResetKey}
+        />
 
         {!isStuffyClone ? (
           <aside className="space-y-6 lg:py-24">
@@ -1406,7 +907,7 @@ export default function ProductDetail() {
         ) : null}
       </Suspense>
 
-      <div className={`mt-24 border-t pt-16 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-gray-100"}`}>
+      <div className={`mt-24 border-t pt-16 ${isStuffyClone ? "border-neutral-200 dark:border-white/10" : "border-gray-100"}`} style={{ contentVisibility: "auto", containIntrinsicSize: "1200px" }}>
         <h2 className={`mb-12 text-center text-xl font-black uppercase tracking-tighter ${isStuffyClone ? "text-neutral-950 dark:text-white" : ""}`}>
           You May Also Like
         </h2>
@@ -1454,134 +955,6 @@ export default function ProductDetail() {
         </div>
       </div>
 
-      {isGalleryOpen && (
-        <div
-          className={`fixed inset-0 z-[80] transition-[opacity] duration-200 ${
-            isGalleryVisible ? "opacity-100" : "opacity-0"
-          }`}
-          style={{ background: isDarkMode ? "#050505" : "#ffffff" }}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              closeGallery();
-            }
-          }}
-        >
-          <div
-            className={`relative flex h-full w-full items-stretch justify-center transition-transform duration-200 ${
-              isGalleryVisible ? "scale-100" : "scale-[0.985]"
-            }`}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="pointer-events-none fixed left-4 top-4 z-[120] sm:left-5 sm:top-5">
-              <div
-                className="pointer-events-none inline-flex min-w-[68px] items-center justify-center rounded-full border px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] backdrop-blur-sm"
-                style={{
-                  borderColor: isDarkMode ? "rgba(255,255,255,0.18)" : "rgba(17,17,17,0.22)",
-                  background: "transparent",
-                  color: isDarkMode ? "rgba(255,255,255,0.78)" : "rgba(17,17,17,0.8)",
-                }}
-              >
-                {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
-              </div>
-            </div>
-
-            <div
-              className="pointer-events-none fixed inset-x-0 z-[120]"
-              style={{ top: "calc(max(env(safe-area-inset-top), 0px) + 3.9rem)" }}
-            >
-              <div className="mx-auto flex w-full max-w-[1440px] justify-center px-4 sm:px-5 lg:px-8">
-                <button
-                  type="button"
-                  onClick={() => closeGallery()}
-                  className="pointer-events-auto inline-flex h-10 w-10 items-center justify-center rounded-full border bg-transparent transition-all duration-200 hover:scale-[1.04] hover:bg-black/[0.04] dark:hover:bg-white/[0.06]"
-                  style={{
-                    borderColor: isDarkMode ? "rgba(255,255,255,0.2)" : "rgba(17,17,17,0.32)",
-                    color: isDarkMode ? "#ffffff" : "#111111",
-                    backdropFilter: "none",
-                  }}
-                  aria-label="Close gallery"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex h-full w-full items-stretch gap-4 px-2 pt-0 pb-4 sm:px-4 lg:gap-6 lg:px-6">
-              {allImages.length > 1 ? (
-                <div
-                  className="hidden w-[92px] shrink-0 overflow-y-auto rounded-2xl border p-2 backdrop-blur lg:block"
-                  style={{
-                    borderColor: isDarkMode ? "rgba(255,255,255,0.10)" : "rgba(17,17,17,0.10)",
-                    background: isDarkMode ? "rgba(255,255,255,0.05)" : "rgba(17,17,17,0.03)",
-                  }}
-                >
-                  <div className="flex flex-col gap-2">
-                    {allImages.map((url, i) => (
-                      <button
-                        key={`modal-rail-${i}`}
-                        type="button"
-                        onClick={() => {
-                          goToImageInModal(i);
-                        }}
-                        className="aspect-[4/5] w-full overflow-hidden rounded-sm border transition-all"
-                        style={{
-                          borderColor:
-                            selectedImageIndex === i
-                              ? isDarkMode
-                                ? "rgba(255,255,255,0.70)"
-                                : "rgba(17,17,17,0.60)"
-                              : isDarkMode
-                                ? "rgba(255,255,255,0.12)"
-                                : "rgba(17,17,17,0.12)",
-                          opacity: selectedImageIndex === i ? 1 : 0.72,
-                        }}
-                        aria-label={`Open image ${i + 1}`}
-                      >
-                        <img
-                          src={url || ""}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-
-              <div
-                ref={galleryScrollContainerRef}
-                className="scrollbar-hide min-w-0 flex-1 overflow-y-auto"
-              >
-                <div className="mx-auto flex w-full max-w-[min(99vw,1880px)] flex-col">
-                  {allImages.map((url, index) => (
-                    <section
-                      key={`gallery-section-${index}`}
-                      ref={(element) => {
-                        gallerySectionRefs.current[index] = element;
-                      }}
-                      data-index={index}
-                      className="relative min-h-screen px-0 pb-5 sm:pb-6 lg:pb-8"
-                    >
-                      <div className="flex min-h-[calc(100vh-5.5rem)] items-start justify-center px-0">
-                        <img
-                          src={url || ""}
-                          alt={`${product.name} fullscreen view ${index + 1}`}
-                          loading={index === selectedImageIndex ? "eager" : "lazy"}
-                          decoding="async"
-                          className="h-auto w-full max-w-none object-contain"
-                          style={{ imageRendering: "auto" }}
-                        />
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

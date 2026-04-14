@@ -4,7 +4,7 @@ import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
-import { DeliveryLocationSelect, NEPAL_LOCATIONS } from "@/components/DeliveryLocationSelect";
+import { DeliveryLocationSelect } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -22,6 +22,7 @@ import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 const MAX_NEW_CUSTOMER_ITEMS = 5;
+const DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
 
 const PAYMENT_OPTIONS = [
   {
@@ -54,16 +55,6 @@ const PAYMENT_OPTIONS = [
   },
 ] as const;
 
-const NEPAL_DISTRICTS = [
-  "Achham", "Arghakhanchi", "Baglung", "Baitadi", "Bajhang", "Bajura", "Banke", "Bara", "Bardiya", "Bhaktapur",
-  "Bhojpur", "Chitwan", "Dadeldhura", "Dailekh", "Dang", "Darchula", "Dhading", "Dhankuta", "Dhanusha", "Dolakha",
-  "Dolpa", "Doti", "Gorkha", "Gulmi", "Humla", "Ilam", "Jajarkot", "Jhapa", "Jumla", "Kailali",
-  "Kalikot", "Kanchanpur", "Kapilvastu", "Kaski", "Kathmandu", "Kavrepalanchok", "Khotang", "Lalitpur", "Lamjung", "Mahottari",
-  "Makwanpur", "Manang", "Morang", "Mugu", "Mustang", "Myagdi", "Nawalpur", "Nuwakot", "Okhaldhunga", "Palpa",
-  "Panchthar", "Parasi", "Parbat", "Parsa", "Pyuthan", "Ramechhap", "Rasuwa", "Rautahat", "Rolpa", "Rukum East",
-  "Rukum West", "Rupandehi", "Salyan", "Sankhuwasabha", "Saptari", "Sarlahi", "Sindhuli", "Sindhupalchok", "Siraha", "Solukhumbu",
-  "Sunsari", "Surkhet", "Syangja", "Tanahun", "Taplejung", "Tehrathum", "Udayapur",
-] as const;
 
 export type PaymentMethodId = (typeof PAYMENT_OPTIONS)[number]["id"] | "cash_on_delivery";
 
@@ -72,14 +63,22 @@ type PendingCheckoutContinuation = {
   manualPayment: boolean;
   totalQuantity: number;
   emailVal: string;
-  firstNameVal: string;
-  lastNameVal: string;
+  fullNameVal: string;
   addressVal: string;
-  cityVal: string;
   phoneVal: string;
+  deliveryLocationVal: string;
 };
 
 const MANUAL_PAYMENT_METHODS: PaymentMethodId[] = ["esewa", "khalti", "fonepay"];
+
+function formatVerificationCountdown(totalSeconds: number) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const seconds = (safeSeconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
 
 function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
   const currentPrice = Number(price);
@@ -111,16 +110,11 @@ export default function Checkout() {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [formError, setFormError] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId>("cash_on_delivery");
-  const [deliveryRequired, setDeliveryRequired] = useState(true);
-  const [deliveryProvider, setDeliveryProvider] = useState<string>("pathao");
-  const [deliveryAddress, setDeliveryAddress] = useState<string>("");
   const [deliveryLocation, setDeliveryLocation] = useState<string>("");
 
   const [email, setEmail] = useState("");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
+  const [fullName, setFullName] = useState("");
   const [address, setAddress] = useState("");
-  const [city, setCity] = useState("");
   const [phone, setPhone] = useState("");
 
   useEffect(() => {
@@ -131,16 +125,11 @@ export default function Checkout() {
       if (saved) {
         const data = JSON.parse(saved);
         if (data.email) setEmail(data.email);
-        if (data.firstName) setFirstName(data.firstName);
-        if (data.lastName) setLastName(data.lastName);
+        if (data.fullName) setFullName(data.fullName);
         if (data.address) setAddress(data.address);
-        if (data.city) setCity(data.city);
         if (data.phone) setPhone(data.phone);
         if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
         if (data.deliveryLocation) setDeliveryLocation(data.deliveryLocation);
-        if (data.deliveryAddress !== undefined) setDeliveryAddress(data.deliveryAddress);
-        if (data.deliveryProvider) setDeliveryProvider(data.deliveryProvider);
-        if (typeof data.deliveryRequired === "boolean") setDeliveryRequired(data.deliveryRequired);
       }
     } catch { /* ignore */ }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -151,16 +140,11 @@ export default function Checkout() {
       localStorage.setItem(CHECKOUT_FORM_KEY, JSON.stringify({
         ...formData,
         email,
-        firstName,
-        lastName,
+        fullName,
         address,
-        city,
         phone,
         paymentMethod,
         deliveryLocation,
-        deliveryAddress,
-        deliveryProvider,
-        deliveryRequired,
       }));
     } catch { /* ignore */ }
   };
@@ -184,6 +168,8 @@ export default function Checkout() {
   const [isVerificationPanelOpen, setIsVerificationPanelOpen] = useState(false);
   const [isRequestingVerification, setIsRequestingVerification] = useState(false);
   const [isConfirmingVerification, setIsConfirmingVerification] = useState(false);
+  const [verificationResendAvailableAt, setVerificationResendAvailableAt] = useState<number | null>(null);
+  const [verificationTimerNow, setVerificationTimerNow] = useState(() => Date.now());
   const pendingCheckoutContinuationRef = useRef<PendingCheckoutContinuation | null>(null);
 
   const subtotal = useMemo(
@@ -217,6 +203,37 @@ export default function Checkout() {
   }, [subtotal, appliedPromo]);
 
   const total = subtotal + shipping - discountAmount;
+  const verificationResendRemainingSeconds = verificationResendAvailableAt
+    ? Math.max(0, Math.ceil((verificationResendAvailableAt - verificationTimerNow) / 1000))
+    : 0;
+
+  const startVerificationResendCooldown = (seconds?: number | null) => {
+    if (!seconds || seconds <= 0) {
+      setVerificationResendAvailableAt(null);
+      return;
+    }
+    setVerificationResendAvailableAt(Date.now() + seconds * 1000);
+  };
+
+  const applyVerificationChallenge = ({
+    challengeId,
+    nextEmail,
+    quantity,
+    resendSeconds,
+  }: {
+    challengeId: string;
+    nextEmail: string;
+    quantity: number;
+    resendSeconds?: number | null;
+  }) => {
+    setVerificationChallengeId(challengeId);
+    setVerificationCode("");
+    setVerificationToken(null);
+    setVerificationEmail(nextEmail);
+    setVerificationQuantity(quantity);
+    setIsVerificationPanelOpen(true);
+    startVerificationResendCooldown(resendSeconds ?? DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS);
+  };
 
   const handleApplyPromo = async () => {
     if (!promoCodeInput) return;
@@ -263,12 +280,10 @@ export default function Checkout() {
   
   const fieldRefs = {
     email: useRef<HTMLInputElement>(null),
-    firstName: useRef<HTMLInputElement>(null),
-    lastName: useRef<HTMLInputElement>(null),
+    fullName: useRef<HTMLInputElement>(null),
     address: useRef<HTMLInputElement>(null),
-    city: useRef<HTMLSelectElement>(null),
     phone: useRef<HTMLInputElement>(null),
-    location: useRef<HTMLDivElement>(null),
+    deliveryLocation: useRef<HTMLDivElement>(null),
   };
 
   const resetOrderVerification = () => {
@@ -277,6 +292,7 @@ export default function Checkout() {
     setVerificationToken(null);
     setVerificationEmail(null);
     setVerificationQuantity(null);
+    setVerificationResendAvailableAt(null);
     setIsVerificationPanelOpen(false);
     pendingCheckoutContinuationRef.current = null;
   };
@@ -294,29 +310,45 @@ export default function Checkout() {
   useEffect(() => {
     if (!verificationEmail && !verificationQuantity) return;
     const currentEmail = email.trim().toLowerCase();
+    if (!currentEmail) return;
     if (currentEmail === verificationEmail && totalQuantity === verificationQuantity) return;
     resetOrderVerification();
   }, [email, totalQuantity, verificationEmail, verificationQuantity]);
+
+  useEffect(() => {
+    if (!verificationResendAvailableAt) return;
+
+    setVerificationTimerNow(Date.now());
+    const interval = window.setInterval(() => {
+      setVerificationTimerNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [verificationResendAvailableAt]);
+
+  useEffect(() => {
+    if (!verificationResendAvailableAt) return;
+    if (verificationResendRemainingSeconds > 0) return;
+    setVerificationResendAvailableAt(null);
+  }, [verificationResendAvailableAt, verificationResendRemainingSeconds]);
 
   const finalizeCheckout = async ({
     orderPayload,
     manualPayment,
     totalQuantity: quantity,
     emailVal,
-    firstNameVal,
-    lastNameVal,
+    fullNameVal,
     addressVal,
-    cityVal,
     phoneVal,
+    deliveryLocationVal,
   }: PendingCheckoutContinuation) => {
     if (manualPayment) {
       saveFormData({
         email: emailVal,
-        firstName: firstNameVal,
-        lastName: lastNameVal,
+        fullName: fullNameVal,
         address: addressVal,
-        city: cityVal,
         phone: phoneVal,
+        deliveryLocation: deliveryLocationVal,
       });
 
       cachePendingCheckout({
@@ -433,6 +465,16 @@ export default function Checkout() {
         if (result.code === "ABUSE_TIMEOUT") {
           const mins = result.retryAfter || 5;
           setFormError(`Too many failed attempts. Please try again in ${mins} minute${mins > 1 ? "s" : ""}.`);
+        } else if (result.code === "VERIFICATION_RESEND_COOLDOWN" && result.challengeId) {
+          pendingCheckoutContinuationRef.current = continuation;
+          applyVerificationChallenge({
+            challengeId: result.challengeId,
+            nextEmail: normalizedEmail,
+            quantity: continuation.totalQuantity,
+            resendSeconds:
+              result.resendAvailableInSeconds ?? result.resendCooldownSeconds ?? DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+          });
+          setFormError("A verification code was already sent. Enter it to continue this order.");
         } else {
           setFormError(result.error || "Failed to start email verification.");
         }
@@ -443,13 +485,19 @@ export default function Checkout() {
         return true;
       }
 
+      if (!result.challengeId) {
+        setFormError("Failed to start email verification.");
+        return false;
+      }
+
       pendingCheckoutContinuationRef.current = continuation;
-      setVerificationChallengeId(result.challengeId ?? null);
-      setVerificationCode("");
-      setVerificationToken(null);
-      setVerificationEmail(normalizedEmail);
-      setVerificationQuantity(continuation.totalQuantity);
-      setIsVerificationPanelOpen(true);
+      applyVerificationChallenge({
+        challengeId: result.challengeId,
+        nextEmail: normalizedEmail,
+        quantity: continuation.totalQuantity,
+        resendSeconds:
+          result.resendAvailableInSeconds ?? result.resendCooldownSeconds ?? DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+      });
       setFormError("Enter the email code we sent you to continue this order.");
       toast({
         title: "Verification code sent",
@@ -490,9 +538,12 @@ export default function Checkout() {
         return;
       }
 
+      setVerificationChallengeId(null);
+      setVerificationCode("");
       setVerificationToken(result.verificationToken);
       setVerificationEmail(normalizedEmail);
       setVerificationQuantity(result.requestedQuantity ?? totalQuantity);
+      setVerificationResendAvailableAt(null);
       setIsVerificationPanelOpen(false);
       setFormError(null);
       toast({
@@ -524,29 +575,15 @@ export default function Checkout() {
     const formData = new FormData(event.currentTarget);
 
     const emailVal = email || String(formData.get("email") || "").trim();
-    const firstNameVal = firstName || String(formData.get("firstName") || "").trim();
-    const lastNameVal = lastName || String(formData.get("lastName") || "").trim();
+    const fullNameVal = fullName || String(formData.get("fullName") || "").trim();
     const addressVal = address || String(formData.get("address") || "").trim();
-    const cityVal = city || String(formData.get("city") || "").trim();
     const phoneVal = phone || String(formData.get("phone") || "").trim();
+    const deliveryLocationVal = deliveryLocation.trim() || String(formData.get("deliveryLocation") || "").trim();
 
-    if (!emailVal) newErrors.email = true;
-    if (!firstNameVal) newErrors.firstName = true;
-    if (!lastNameVal) newErrors.lastName = true;
-    if (!addressVal) newErrors.address = true;
-    if (!cityVal) newErrors.city = true;
+    if (!fullNameVal) newErrors.fullName = true;
     if (!phoneVal) newErrors.phone = true;
-
-    if (!email) newErrors.email = true;
-    if (!firstName) newErrors.firstName = true;
-    if (!lastName) newErrors.lastName = true;
-    if (!address) newErrors.address = true;
-    if (!city) newErrors.city = true;
-    if (!phone) newErrors.phone = true;
-    
-    const isLocationValid =
-      !!deliveryLocation && NEPAL_LOCATIONS.includes(deliveryLocation);
-    if (!isLocationValid) newErrors.location = true;
+    if (!deliveryLocationVal) newErrors.deliveryLocation = true;
+    if (!emailVal && totalQuantity > MAX_NEW_CUSTOMER_ITEMS) newErrors.email = true;
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -576,22 +613,21 @@ export default function Checkout() {
         priceAtTime: item.product.price,
       })),
       shipping: {
-        firstName: firstNameVal,
-        lastName: lastNameVal,
+        fullName: fullNameVal,
         email: emailVal,
         phone: phoneVal,
         address: addressVal,
-        city: cityVal,
+        city: "",
         zip: "00000",
         country: "Nepal",
-        locationCoordinates: deliveryLocation,
-        deliveryLocation,
+        locationCoordinates: deliveryLocationVal,
+        deliveryLocation: deliveryLocationVal,
       },
       paymentMethod,
       source: "website",
-      deliveryRequired,
-      deliveryProvider: deliveryRequired ? deliveryProvider : null,
-      deliveryAddress: deliveryRequired ? deliveryAddress || null : null,
+      deliveryRequired: true,
+      deliveryProvider: null,
+      deliveryAddress: null,
       promoCodeId: appliedPromo?.id,
     };
 
@@ -602,11 +638,10 @@ export default function Checkout() {
         manualPayment,
         totalQuantity,
         emailVal,
-        firstNameVal,
-        lastNameVal,
+        fullNameVal,
         addressVal,
-        cityVal,
         phoneVal,
+        deliveryLocationVal,
       };
 
       const canProceed = await ensureLargeOrderVerification(orderPayload, continuation);
@@ -643,180 +678,97 @@ export default function Checkout() {
           className="flex-1 space-y-12"
           onSubmit={handlePlaceOrder}
         >
-          <div>
-            <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Contact</h2>
-            <div className="space-y-4">
-              <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                Email Address <span className="text-red-500">*</span>
-              </label>
-              <Input
-                ref={fieldRefs.email}
-                name="email"
-                type="email"
-                placeholder="Email Address"
-                data-testid="checkout-email"
-                defaultValue={email}
-                onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
-                className={`h-14 rounded-none transition-colors ${errors.email ? "border-red-500 border-2" : "border-gray-200"}`}
-              />
-              {errors.email && <p className="text-[10px] text-red-500 uppercase font-bold">Email is required</p>}
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Shipping Address</h2>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                  First Name <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  ref={fieldRefs.firstName}
-                  name="firstName"
-                  placeholder="First name"
-                  data-testid="checkout-first-name"
-                  defaultValue={firstName}
-                  onChange={(e) => { setFirstName(e.target.value); clearError("firstName"); }}
-                  className={`h-14 rounded-none transition-colors ${errors.firstName ? "border-red-500 border-2" : "border-gray-200"}`}
-                />
-                {errors.firstName && <p className="text-[10px] text-red-500 uppercase font-bold">Required</p>}
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  ref={fieldRefs.lastName}
-                  name="lastName"
-                  placeholder="Last name"
-                  data-testid="checkout-last-name"
-                  defaultValue={lastName}
-                  onChange={(e) => { setLastName(e.target.value); clearError("lastName"); }}
-                  className={`h-14 rounded-none transition-colors ${errors.lastName ? "border-red-500 border-2" : "border-gray-200"}`}
-                />
-                {errors.lastName && <p className="text-[10px] text-red-500 uppercase font-bold">Required</p>}
-              </div>
-            </div>
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                  Address <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  ref={fieldRefs.address}
-                  name="address"
-                  placeholder="Address"
-                  data-testid="checkout-address"
-                  defaultValue={address}
-                  onChange={(e) => { setAddress(e.target.value); clearError("address"); }}
-                  className={`h-14 rounded-none transition-colors ${errors.address ? "border-red-500 border-2" : "border-gray-200"}`}
-                />
-                {errors.address && <p className="text-[10px] text-red-500 uppercase font-bold">Address is required</p>}
-              </div>
-              <div className="grid gap-4">
+          <div className="space-y-10">
+            <div>
+              <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Contact</h2>
+              <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                    District <span className="text-red-500">*</span>
+                    Full Name <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    ref={fieldRefs.city}
-                    name="city"
-                    data-testid="checkout-city"
-                    defaultValue={city}
-                    onChange={(e) => { setCity(e.target.value); clearError("city"); }}
-                    className={`h-14 w-full rounded-none border-2 bg-background px-4 text-sm transition-colors ${errors.city ? "border-red-500" : "border-gray-200"}`}
-                  >
-                    <option value="" disabled>
-                      Select District
-                    </option>
-                    {NEPAL_DISTRICTS.map((district) => (
-                      <option key={district} value={district}>
-                        {district}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.city && <p className="text-[10px] text-red-500 uppercase font-bold">City is required</p>}
+                  <Input
+                    ref={fieldRefs.fullName}
+                    name="fullName"
+                    placeholder="Full name"
+                    data-testid="checkout-full-name"
+                    defaultValue={fullName}
+                    onChange={(e) => { setFullName(e.target.value); clearError("fullName"); }}
+                    className={`h-14 rounded-none transition-colors ${errors.fullName ? "border-red-500 border-2" : "border-gray-200"}`}
+                  />
+                  {errors.fullName && <p className="text-[10px] text-red-500 uppercase font-bold">Full name is required</p>}
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Phone <span className="text-red-500">*</span>
+                  </label>
+                  <Input
+                    ref={fieldRefs.phone}
+                    name="phone"
+                    placeholder="Phone"
+                    data-testid="checkout-phone"
+                    defaultValue={phone}
+                    onChange={(e) => { setPhone(e.target.value); clearError("phone"); }}
+                    className={`h-14 rounded-none transition-colors ${errors.phone ? "border-red-500 border-2" : "border-gray-200"}`}
+                  />
+                  {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">Phone is required</p>}
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                  Phone <span className="text-red-500">*</span>
-                </label>
-                <Input
-                  ref={fieldRefs.phone}
-                  name="phone"
-                  placeholder="Phone"
-                  data-testid="checkout-phone"
-                  defaultValue={phone}
-                  onChange={(e) => { setPhone(e.target.value); clearError("phone"); }}
-                  className={`h-14 rounded-none transition-colors ${errors.phone ? "border-red-500 border-2" : "border-gray-200"}`}
-                />
-                {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">Phone is required</p>}
-              </div>
-              
-              <div className="pt-2 scroll-mt-20" ref={fieldRefs.location}>
-                <p className="text-sm font-semibold uppercase tracking-wide mb-2">
-                  Delivery Location <span className="text-red-500">*</span>
-                </p>
+            </div>
 
-                <DeliveryLocationSelect
-                  value={deliveryLocation}
-                  onChange={(next) => {
-                    setDeliveryLocation(next);
-                    clearError("location");
-                  }}
-                  error={!!errors.location}
-                />
+            <div>
+              <div className="mb-5">
+                <h2 className="text-xl font-black uppercase tracking-tighter">Additional Details</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Name, phone, and delivery location are required. Everything else is optional.</p>
               </div>
-
-              <div className="pt-2 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold uppercase tracking-wide">
-                    Delivery
-                  </p>
-                <button
-                  type="button"
-                  data-testid="checkout-toggle-delivery"
-                  onClick={() => setDeliveryRequired((v) => !v)}
-                    className={`text-[10px] uppercase font-bold underline hover:text-muted-foreground ${
-                      deliveryRequired ? "" : "opacity-70"
-                    }`}
-                  >
-                    {deliveryRequired ? "Required" : "Not required"}
-                  </button>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Email Address {totalQuantity > MAX_NEW_CUSTOMER_ITEMS ? <span className="text-red-500">*</span> : <span className="text-muted-foreground/60">(optional)</span>}
+                  </label>
+                  <Input
+                    ref={fieldRefs.email}
+                    name="email"
+                    type="email"
+                    placeholder="Email Address"
+                    data-testid="checkout-email"
+                    defaultValue={email}
+                    onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
+                    className={`h-14 rounded-none transition-colors ${errors.email ? "border-red-500 border-2" : "border-gray-200"}`}
+                  />
+                  {errors.email && <p className="text-[10px] text-red-500 uppercase font-bold">Email is required for large-order verification</p>}
                 </div>
-                {deliveryRequired && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                        Delivery Partner
-                      </label>
-                      <select
-                        data-testid="checkout-delivery-provider"
-                        value={deliveryProvider}
-                        onChange={(e) => setDeliveryProvider(e.target.value)}
-                        className="h-14 w-full rounded-none border-2 border-gray-200 bg-background px-4 text-sm"
-                      >
-                        <option value="pathao">Pathao Parcel</option>
-                        <option value="nepal_can_move">Nepal Can Move</option>
-                        <option value="yango">Yango</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                        Address (optional)
-                      </label>
-                      <Input
-                        data-testid="checkout-delivery-address"
-                        value={deliveryAddress}
-                        onChange={(e) => setDeliveryAddress(e.target.value)}
-                        placeholder="Extra address details for the rider"
-                        className="h-14 rounded-none transition-colors border-gray-200"
-                      />
-                    </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Address <span className="text-muted-foreground/60">(optional)</span>
+                  </label>
+                  <Input
+                    ref={fieldRefs.address}
+                    name="address"
+                    placeholder="Address"
+                    data-testid="checkout-address"
+                    defaultValue={address}
+                    onChange={(e) => { setAddress(e.target.value); clearError("address"); }}
+                    className={`h-14 rounded-none transition-colors ${errors.address ? "border-red-500 border-2" : "border-gray-200"}`}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Delivery Location <span className="text-red-500">*</span>
+                  </label>
+                  <div ref={fieldRefs.deliveryLocation} className="pt-1">
+                    <DeliveryLocationSelect
+                      value={deliveryLocation}
+                      onChange={(next) => {
+                        setDeliveryLocation(next);
+                        clearError("deliveryLocation");
+                      }}
+                      error={Boolean(errors.deliveryLocation)}
+                    />
                   </div>
-                )}
+                  {errors.deliveryLocation && <p className="text-[10px] text-red-500 uppercase font-bold">Delivery location is required</p>}
+                </div>
               </div>
             </div>
           </div>
@@ -935,24 +887,38 @@ export default function Checkout() {
                     type="button"
                     variant="outline"
                     className="h-14 rounded-none px-6 uppercase tracking-[0.16em] text-[10px] font-bold"
-                    disabled={isRequestingVerification}
+                    disabled={isRequestingVerification || verificationResendRemainingSeconds > 0}
                     onClick={async () => {
                       const normalizedEmail = email.trim().toLowerCase();
-                      if (!normalizedEmail || totalQuantity <= MAX_NEW_CUSTOMER_ITEMS) return;
+                      if (!normalizedEmail || totalQuantity <= MAX_NEW_CUSTOMER_ITEMS || verificationResendRemainingSeconds > 0) return;
                       setIsRequestingVerification(true);
                       try {
                         const result = await requestOrderVerification({
                           email: normalizedEmail,
                           quantity: totalQuantity,
                         });
+                        if (result.code === "VERIFICATION_RESEND_COOLDOWN" && result.challengeId) {
+                          applyVerificationChallenge({
+                            challengeId: result.challengeId,
+                            nextEmail: normalizedEmail,
+                            quantity: totalQuantity,
+                            resendSeconds:
+                              result.resendAvailableInSeconds ?? result.resendCooldownSeconds ?? DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+                          });
+                          setFormError("A verification code was already sent. Enter it to continue this order.");
+                          return;
+                        }
                         if (!result.success || !result.required || !result.challengeId) {
                           setFormError(result.error || "Failed to resend verification email.");
                           return;
                         }
-                        setVerificationChallengeId(result.challengeId);
-                        setVerificationCode("");
-                        setVerificationEmail(normalizedEmail);
-                        setVerificationQuantity(totalQuantity);
+                        applyVerificationChallenge({
+                          challengeId: result.challengeId,
+                          nextEmail: normalizedEmail,
+                          quantity: totalQuantity,
+                          resendSeconds:
+                            result.resendAvailableInSeconds ?? result.resendCooldownSeconds ?? DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS,
+                        });
                         setFormError("A fresh code was sent. Enter it to continue.");
                         toast({
                           title: "Code resent",
@@ -963,7 +929,11 @@ export default function Checkout() {
                       }
                     }}
                   >
-                    {isRequestingVerification ? "Sending..." : "Resend Code"}
+                    {isRequestingVerification
+                      ? "Sending..."
+                      : verificationResendRemainingSeconds > 0
+                        ? `Resend in ${formatVerificationCountdown(verificationResendRemainingSeconds)}`
+                        : "Resend Code"}
                   </Button>
                   <Button
                     type="button"

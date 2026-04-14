@@ -19,7 +19,7 @@ export interface CartProduct {
   stock: number;
   category: string;
   images: string[];
-  variants: { id?: number; size: string; color: string }[];
+  variants: { id?: number; size: string; color: string; stock?: number | null }[];
   description?: string;
 }
 
@@ -30,19 +30,37 @@ export interface CartItem {
   quantity: number;
 }
 
+export type CartMutationResult =
+  | {
+      ok: true;
+      quantity: number;
+      maxAllowed: number;
+    }
+  | {
+      ok: false;
+      reason: 'stock_limit';
+      quantity: number;
+      requestedQuantity: number;
+      maxAllowed: number;
+    };
+
 function normalizeCartProduct(product: Partial<Product> & Record<string, any>): CartProduct {
   const images = Array.isArray(product.images)
     ? product.images.filter((image): image is string => typeof image === 'string' && image.length > 0)
     : [];
   const variants = Array.isArray(product.variants)
     ? product.variants
-        .filter((variant): variant is { id?: number; size: string; color: string } =>
+        .filter((variant): variant is { id?: number; size: string; color: string; stock?: number | null } =>
           Boolean(variant) && typeof variant.size === 'string' && typeof variant.color === 'string',
         )
         .map((variant) => ({
           id: typeof variant.id === 'number' ? variant.id : undefined,
           size: variant.size,
           color: variant.color,
+          stock:
+            variant.stock === null || variant.stock === undefined || Number.isNaN(Number(variant.stock))
+              ? null
+              : Number(variant.stock),
         }))
     : [];
 
@@ -198,6 +216,47 @@ function normalizeCartVariant(variant: unknown): { id?: number; size: string; co
   };
 }
 
+function normalizeVariantToken(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function getFallbackProductStock(product: CartProduct): number {
+  const fallbackStock = Number(product.stock ?? 0);
+  return Number.isFinite(fallbackStock) && fallbackStock >= 0 ? fallbackStock : 0;
+}
+
+function findMatchingProductVariant(
+  product: CartProduct,
+  variant: { id?: number; size: string; color: string },
+) {
+  return product.variants.find((candidate) => {
+    if (typeof variant.id === 'number' && typeof candidate.id === 'number') {
+      return candidate.id === variant.id;
+    }
+
+    return (
+      normalizeVariantToken(candidate.size) === normalizeVariantToken(variant.size) &&
+      normalizeVariantToken(candidate.color) === normalizeVariantToken(variant.color)
+    );
+  });
+}
+
+export function getAvailableStockForVariant(
+  product: CartProduct,
+  variant: { id?: number; size: string; color: string },
+): number {
+  const matchedVariant = findMatchingProductVariant(product, variant);
+  if (matchedVariant && Number.isFinite(Number(matchedVariant.stock))) {
+    return Math.max(0, Number(matchedVariant.stock));
+  }
+
+  return getFallbackProductStock(product);
+}
+
+export function getCartItemAvailableStock(item: CartItem): number {
+  return getAvailableStockForVariant(item.product, item.variant);
+}
+
 export function normalizeCartItems(items: unknown): CartItem[] {
   if (!Array.isArray(items)) return [];
 
@@ -302,9 +361,13 @@ export interface CartState {
   items: CartItem[];
   isCartSidebarOpen: boolean;
   hasHydrated: boolean;
-  addItem: (product: CartProduct, variant: { id?: number; size: string; color: string }, quantity?: number) => void;
+  addItem: (
+    product: CartProduct,
+    variant: { id?: number; size: string; color: string },
+    quantity?: number,
+  ) => CartMutationResult;
   removeItem: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
+  updateQuantity: (id: string, quantity: number) => CartMutationResult;
   clearCart: () => void;
   openCartSidebar: () => void;
   closeCartSidebar: () => void;
@@ -325,59 +388,97 @@ export const useCartStore = create<CartState>()(
       addItem: (product, variant, quantity = 1) => {
         let shouldNotify = false;
         let notifyPayload: {
-          action: "add" | "update" | "remove";
+          action: 'add' | 'update' | 'remove';
           productName: string;
           size?: string;
           color?: string;
           quantity?: number;
         } | null = null;
         let nextItems: CartItem[] = [];
+        let mutationResult: CartMutationResult = {
+          ok: false,
+          reason: 'stock_limit',
+          quantity: 0,
+          requestedQuantity: Math.max(1, quantity),
+          maxAllowed: 0,
+        };
 
         set((state) => {
           const normalizedProduct = normalizeCartProduct(product);
           const normalizedVariant = normalizeCartVariant(variant);
           const cartItemId = `${normalizedProduct.id}-${normalizedVariant.size}-${normalizedVariant.color}`;
+          const nextRequestedQuantity = Math.max(1, quantity);
+          const maxAllowed = getAvailableStockForVariant(normalizedProduct, normalizedVariant);
 
-          const existingItem = state.items.find(item => item.id === cartItemId);
+          const existingItem = state.items.find((item) => item.id === cartItemId);
+          const existingQuantity = existingItem?.quantity ?? 0;
+          const desiredQuantity = existingQuantity + nextRequestedQuantity;
+
+          if (desiredQuantity > maxAllowed) {
+            mutationResult = {
+              ok: false,
+              reason: 'stock_limit',
+              quantity: existingQuantity,
+              requestedQuantity: desiredQuantity,
+              maxAllowed,
+            };
+            nextItems = state.items;
+            return state;
+          }
+
           if (existingItem) {
             shouldNotify = true;
             notifyPayload = {
-              action: "update",
+              action: 'update',
               productName: normalizedProduct.name,
               size: normalizedVariant.size,
               color: normalizedVariant.color,
-              quantity: existingItem.quantity + quantity,
+              quantity: desiredQuantity,
             };
-            nextItems = state.items.map(item =>
+            nextItems = state.items.map((item) =>
               item.id === cartItemId
-                ? { ...item, quantity: item.quantity + quantity }
+                ? { ...item, quantity: desiredQuantity }
                 : item,
             );
+            mutationResult = {
+              ok: true,
+              quantity: desiredQuantity,
+              maxAllowed,
+            };
             return { items: nextItems };
           }
 
           shouldNotify = true;
           notifyPayload = {
-            action: "add",
+            action: 'add',
             productName: normalizedProduct.name,
             size: normalizedVariant.size,
             color: normalizedVariant.color,
-            quantity,
+            quantity: nextRequestedQuantity,
           };
           nextItems = [
             ...state.items,
-            { id: cartItemId, product: normalizedProduct, variant: normalizedVariant, quantity },
+            { id: cartItemId, product: normalizedProduct, variant: normalizedVariant, quantity: nextRequestedQuantity },
           ];
+          mutationResult = {
+            ok: true,
+            quantity: nextRequestedQuantity,
+            maxAllowed,
+          };
           return { items: nextItems };
         });
 
-        persistGuestCartSnapshot(nextItems);
+        if (mutationResult.ok) {
+          persistGuestCartSnapshot(nextItems);
+        }
 
         if (shouldNotify && notifyPayload) {
-          void apiRequest("POST", "/api/user-activity/cart", notifyPayload).catch(() => {
+          void apiRequest('POST', '/api/user-activity/cart', notifyPayload).catch(() => {
             // Don't block cart UX if notifications fail.
           });
         }
+
+        return mutationResult;
       },
       removeItem: (id) => {
         let target: CartItem | undefined;
@@ -393,8 +494,8 @@ export const useCartStore = create<CartState>()(
         persistGuestCartSnapshot(nextItems);
 
         if (target) {
-          void apiRequest("POST", "/api/user-activity/cart", {
-            action: "remove",
+          void apiRequest('POST', '/api/user-activity/cart', {
+            action: 'remove',
             productName: target.product.name,
             size: target.variant.size,
             color: target.variant.color,
@@ -407,20 +508,49 @@ export const useCartStore = create<CartState>()(
       updateQuantity: (id, quantity) => {
         let target: CartItem | undefined;
         let nextItems: CartItem[] = [];
+        let mutationResult: CartMutationResult = {
+          ok: false,
+          reason: 'stock_limit',
+          quantity: 0,
+          requestedQuantity: Math.max(1, quantity),
+          maxAllowed: 0,
+        };
+
         set((state) => {
           nextItems = state.items.map((item) => {
             if (item.id !== id) return item;
             target = item;
-            return { ...item, quantity: Math.max(1, quantity) };
+            const nextQuantity = Math.max(1, quantity);
+            const maxAllowed = getCartItemAvailableStock(item);
+
+            if (nextQuantity > maxAllowed) {
+              mutationResult = {
+                ok: false,
+                reason: 'stock_limit',
+                quantity: item.quantity,
+                requestedQuantity: nextQuantity,
+                maxAllowed,
+              };
+              return item;
+            }
+
+            mutationResult = {
+              ok: true,
+              quantity: nextQuantity,
+              maxAllowed,
+            };
+            return { ...item, quantity: nextQuantity };
           });
           return { items: nextItems };
         });
 
-        persistGuestCartSnapshot(nextItems);
+        if (mutationResult.ok) {
+          persistGuestCartSnapshot(nextItems);
+        }
 
-        if (target) {
-          void apiRequest("POST", "/api/user-activity/cart", {
-            action: "update",
+        if (target && mutationResult.ok) {
+          void apiRequest('POST', '/api/user-activity/cart', {
+            action: 'update',
             productName: target.product.name,
             size: target.variant.size,
             color: target.variant.color,
@@ -429,6 +559,8 @@ export const useCartStore = create<CartState>()(
             // Don't block cart UX if notifications fail.
           });
         }
+
+        return mutationResult;
       },
       clearCart: () => {
         set({ items: [] });
@@ -439,7 +571,7 @@ export const useCartStore = create<CartState>()(
       toggleCartSidebar: () =>
         set((state) => ({ isCartSidebarOpen: !state.isCartSidebarOpen })),
       get subtotal() {
-        return get().items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+        return get().items.reduce((total, item) => total + item.product.price * item.quantity, 0);
       },
       get originalSubtotal() {
         return get().items.reduce(
@@ -452,7 +584,7 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: "ra-cart",
+      name: 'ra-cart',
       storage: createJSONStorage(resolveBrowserStorage),
       partialize: (state) => ({ isCartSidebarOpen: state.isCartSidebarOpen }),
       version: 3,

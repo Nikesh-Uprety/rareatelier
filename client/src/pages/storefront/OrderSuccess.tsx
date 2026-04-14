@@ -2,7 +2,7 @@ import { useRoute, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles } from "lucide-react";
-import { fetchOrderById, getCachedLatestOrder, updateCachedOrder } from "@/lib/api";
+import { fetchOrderById, fetchOrderByTrackingToken, getCachedLatestOrder, updateCachedOrder } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { formatPrice } from "@/lib/format";
@@ -86,13 +86,16 @@ function parseOrderColor(value: string): { label: string; swatch: string | null 
 export default function OrderSuccess() {
   const [, newParams] = useRoute("/order-confirmation/:orderId");
   const [, legacyParams] = useRoute("/checkout/success/:id");
+  const [, trackParams] = useRoute("/orders/track/:token");
   const orderId = newParams?.orderId ?? legacyParams?.id;
-  const cachedOrder = getCachedLatestOrder(orderId);
+  const trackingToken = trackParams?.token;
+  const isTrackingView = Boolean(trackingToken);
+  const cachedOrder = trackingToken ? null : getCachedLatestOrder(orderId);
 
   const { data: fetchedOrder, isLoading } = useQuery({
-    queryKey: ["order", orderId],
-    queryFn: () => fetchOrderById(orderId!),
-    enabled: !!orderId && !cachedOrder,
+    queryKey: ["order", trackingToken ?? orderId],
+    queryFn: () => trackingToken ? fetchOrderByTrackingToken(trackingToken) : fetchOrderById(orderId!),
+    enabled: (!!trackingToken || !!orderId) && !cachedOrder,
   });
   const order = fetchedOrder ?? cachedOrder;
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
@@ -117,9 +120,9 @@ export default function OrderSuccess() {
     return (
       <>
         <StorefrontSeo
-          title="Order Confirmed | Rare Atelier"
-          description="Your Rare Atelier order has been placed successfully."
-          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          title={isTrackingView ? "Track Order | Rare Atelier" : "Order Confirmed | Rare Atelier"}
+          description={isTrackingView ? "Track your Rare Atelier order and review its current details." : "Your Rare Atelier order has been placed successfully."}
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : isTrackingView ? "/orders/track" : "/order-confirmation"}
           noIndex
         />
         <div className="min-h-[70vh] flex items-center justify-center">
@@ -133,9 +136,9 @@ export default function OrderSuccess() {
     return (
       <>
         <StorefrontSeo
-          title="Order Confirmation | Rare Atelier"
-          description="This order confirmation page is not available."
-          canonicalPath={typeof window !== "undefined" ? window.location.pathname : "/order-confirmation"}
+          title={isTrackingView ? "Track Order | Rare Atelier" : "Order Confirmation | Rare Atelier"}
+          description={isTrackingView ? "This order tracking page is not available." : "This order confirmation page is not available."}
+          canonicalPath={typeof window !== "undefined" ? window.location.pathname : isTrackingView ? "/orders/track" : "/order-confirmation"}
           noIndex
         />
         <div className="min-h-[60vh] flex flex-col items-center justify-center p-4 text-center">
@@ -152,6 +155,7 @@ export default function OrderSuccess() {
   }
 
   const firstName = firstNameFromFull(order.fullName);
+  const pageEyebrow = isTrackingView ? "ORDER TRACKING" : "ORDER CONFIRMED";
   const orderDateLabel = new Date(order.createdAt).toLocaleDateString("en-NP", {
     year: "numeric",
     month: "long",
@@ -198,9 +202,9 @@ export default function OrderSuccess() {
   return (
     <div className="order-confirmation-page container mx-auto max-w-5xl px-4 pb-10 pt-4 sm:pt-6 lg:pb-16">
       <StorefrontSeo
-        title="Order Confirmed | Rare Atelier"
-        description={`Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
-        canonicalPath={`/order-confirmation/${order.id}`}
+        title={isTrackingView ? "Track Order | Rare Atelier" : "Order Confirmed | Rare Atelier"}
+        description={isTrackingView ? `Track order ${order.id.slice(0, 8)} and review delivery, payment, and item details.` : `Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}
+        canonicalPath={isTrackingView && order.trackingToken ? `/orders/track/${order.trackingToken}` : `/order-confirmation/${order.id}`}
         noIndex
       />
       <style>

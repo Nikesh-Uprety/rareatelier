@@ -426,7 +426,7 @@ export default function AdminLayout({
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="relative border-b border-border bg-card/50 p-4 sm:p-5">
+        <div className="relative flex h-16 items-center border-b border-border bg-card/50 px-4 sm:px-5">
           <Link
             href="/"
             className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center"
@@ -435,7 +435,7 @@ export default function AdminLayout({
             <img
               src={ADMIN_PANEL_LOGO}
               alt={ADMIN_PANEL_LOGO_ALT}
-              className="h-10 sm:h-11 w-auto object-contain brightness-0 dark:invert"
+              className="h-8 w-auto object-contain brightness-0 dark:invert"
             />
           </Link>
           <Button
@@ -539,26 +539,28 @@ export default function AdminLayout({
       >
         <SidebarHeader
           className={cn(
-            "border-b border-sidebar-border/60 px-4 py-4 transition-all duration-300 ease-out",
-            isVisuallyExpanded ? "opacity-100 max-h-24" : "max-h-0 overflow-hidden border-transparent px-0 py-0 opacity-0",
+            "flex items-center justify-center border-b border-sidebar-border/60 transition-all duration-300 ease-out",
+            isVisuallyExpanded
+              ? "h-16 px-4 sm:px-5 opacity-100"
+              : "h-0 overflow-hidden border-transparent px-0 opacity-0",
           )}
         >
           <Link
             href="/"
-            className="flex w-full items-center justify-center rounded-lg p-2 transition-colors hover:bg-muted/40"
+            className="flex h-full w-full items-center justify-center rounded-lg px-2 transition-colors hover:bg-muted/40"
             title="Open Home Page"
           >
             <img
               src={ADMIN_PANEL_LOGO}
               alt={ADMIN_PANEL_LOGO_ALT}
-              className="h-11 w-auto object-contain brightness-0 dark:invert"
+              className="h-8 w-auto object-contain brightness-0 dark:invert"
             />
           </Link>
         </SidebarHeader>
 
-        <SidebarContent className="sidebar-scrollbar p-4 group-data-[collapsible=icon]:overflow-y-auto">
+        <SidebarContent className="sidebar-scrollbar px-3 py-3.5 group-data-[collapsible=icon]:overflow-y-auto">
           <SidebarGroup className="p-0">
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1">
               {sidebarNavItems.map((item) => {
                 const isActive = pathname === item.href;
                 const isInventoryItem = item.href === "/admin/inventory";
@@ -572,8 +574,8 @@ export default function AdminLayout({
                       isActive={isActive}
                       tooltip={isVisuallyExpanded ? undefined : item.label}
                       className={cn(
-                        "h-10 rounded-lg text-[11px] font-black tracking-[0.06em] transition-all duration-300 ease-out",
-                        isVisuallyExpanded ? "px-3" : "justify-center px-2",
+                        "h-9.5 rounded-xl text-[10.5px] font-black tracking-[0.05em] transition-all duration-300 ease-out",
+                        isVisuallyExpanded ? "px-3.5" : "justify-center px-2",
                         !isVisuallyExpanded &&
                           "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
                         isActive &&
@@ -586,6 +588,7 @@ export default function AdminLayout({
                         href={item.href}
                         className={cn(
                           "flex w-full items-center",
+                          isVisuallyExpanded ? "gap-2.5" : "justify-center",
                           !isVisuallyExpanded && "text-white dark:text-[#111827]",
                           isCollapsedActive && "text-[#0f172a] dark:text-white",
                         )}
@@ -619,16 +622,11 @@ export default function AdminLayout({
                             NEW
                           </span>
                         ) : null}
-                        {count > 0 && (
-                          <span
-                            className={cn(
-                              "min-w-[18px] h-[18px] rounded-full bg-emerald-500 text-white flex items-center justify-center text-[9px] font-black px-1 transition-all duration-300 ease-out",
-                              isVisuallyExpanded ? "ml-auto opacity-100" : "ml-0 opacity-0 scale-75 pointer-events-none",
-                            )}
-                          >
+                        {count > 0 && isVisuallyExpanded ? (
+                          <span className="ml-auto inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-black text-white">
                             {count > 99 ? "99+" : count}
                           </span>
-                        )}
+                        ) : null}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -637,13 +635,13 @@ export default function AdminLayout({
             </SidebarMenu>
           </SidebarGroup>
           {adminNav.some((item) => item.page === "landing-page") ? (
-            <SidebarGroup className="mt-6 p-0">
+            <SidebarGroup className="mt-5 p-0">
               {isVisuallyExpanded ? (
-                <SidebarGroupLabel className="px-3 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">
+                <SidebarGroupLabel className="px-3.5 pb-2 text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground/85">
                   Customization
                 </SidebarGroupLabel>
               ) : null}
-              <SidebarMenu>
+              <SidebarMenu className="space-y-1">
                 {websiteNavItems.map((item) => {
                   const isActive = isCustomizationItemActive(item.href);
                   return (
@@ -652,8 +650,8 @@ export default function AdminLayout({
                         isActive={isActive}
                         tooltip={isVisuallyExpanded ? undefined : item.label}
                         className={cn(
-                          "h-10 rounded-lg text-[11px] font-black tracking-[0.06em] transition-all duration-300 ease-out",
-                          isVisuallyExpanded ? "px-3" : "justify-center px-2",
+                          "h-9.5 rounded-xl text-[10.5px] font-black tracking-[0.05em] transition-all duration-300 ease-out",
+                          isVisuallyExpanded ? "px-3.5" : "justify-center px-2",
                           !isVisuallyExpanded &&
                             "text-white hover:bg-white/12 hover:text-white dark:text-[#111827] dark:hover:bg-[#E6EBF2] dark:hover:text-[#111827]",
                           isActive &&
@@ -668,7 +666,7 @@ export default function AdminLayout({
                       >
                         <div
                           className={cn(
-                            "flex w-full items-center gap-3",
+                            "flex w-full items-center gap-2.5",
                             !isVisuallyExpanded && "justify-center",
                           )}
                         >
@@ -721,7 +719,7 @@ export default function AdminLayout({
       <SidebarInset className="admin-panel-shell flex min-w-0 h-screen overflow-visible bg-muted dark:bg-neutral-900">
         <header
           className={cn(
-            "relative sticky top-0 z-40 overflow-visible h-16 bg-background/60 dark:bg-neutral-900/55 backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 border-b border-border/60 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] flex items-center justify-between px-4 sm:px-5",
+            "relative sticky top-0 z-40 flex h-16 items-center justify-between overflow-visible border-b border-border/60 bg-background/60 px-4 shadow-[0_10px_30px_-18px_rgba(0,0,0,0.35)] backdrop-blur-xl supports-[backdrop-filter]:bg-background/45 dark:bg-neutral-900/55 sm:px-5",
             isCanvasBuilderRoute && "px-3 sm:px-4",
           )}
         >

@@ -45,6 +45,7 @@ import { and, or, asc, desc, eq, gt, gte, ilike, inArray, isNull, isNotNull, ne,
 import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { tryNormalizeStoredObjectUrl } from "./s3-upload";
 import { broadcastNotification } from "./websocket";
+import { randomBytes } from "crypto";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 const ARCHIVED_PRODUCT_CATEGORY_PREFIX = `${ARCHIVED_PRODUCT_CATEGORY}::`;
@@ -86,6 +87,23 @@ const notDeletedHistoryCategoryCondition = sql<boolean>`
   ${products.category} IS NULL
   OR ${products.category} <> ${DELETED_HISTORY_PRODUCT_CATEGORY}
 `;
+
+function generateOrderTrackingToken() {
+  return randomBytes(24).toString("hex");
+}
+
+function splitCustomerName(fullName: string) {
+  const trimmed = fullName.trim();
+  if (!trimmed) {
+    return { firstName: "Customer", lastName: "" };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0] ?? "Customer",
+    lastName: parts.slice(1).join(" "),
+  };
+}
 
 type ProductFilterInput = {
   category?: string;
@@ -209,7 +227,7 @@ export interface CreateOrderItemInput {
 
 export interface CreateOrderInput {
   userId?: string | null;
-  email: string;
+  email?: string | null;
   fullName: string;
   addressLine1: string;
   addressLine2?: string | null;
@@ -381,6 +399,8 @@ export interface IStorage {
     timeRange?: string;
   }): Promise<number>;
   getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }>;
+  getOrderByTrackingToken(token: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }>;
+  ensureOrderTrackingToken(id: string): Promise<string>;
   getOrderCountByEmail(email: string): Promise<number>;
   createOrder(data: CreateOrderInput): Promise<Order>;
   updateOrderStatus(id: string, status: string): Promise<Order>;
@@ -442,11 +462,11 @@ export interface IStorage {
   ): Promise<Customer>;
   deleteCustomer(id: string): Promise<void>;
   upsertCustomerFromOrder(
-    email: string,
+    email: string | null | undefined,
     firstName: string,
     lastName: string,
     phoneNumber?: string | null,
-  ): Promise<Customer>;
+  ): Promise<Customer | null>;
 
   // Users
   getUserByEmail(email: string): Promise<User | null>;
@@ -1238,6 +1258,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1351,7 +1372,7 @@ export class PgStorage implements IStorage {
   }
 
   async getOrderById(id: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
-    const [orderRow] = await db
+    const [orderRowRaw] = await db
       .select({
         id: orders.id,
         userId: orders.userId,
@@ -1373,6 +1394,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1391,9 +1413,12 @@ export class PgStorage implements IStorage {
       .where(eq(orders.id, id))
       .limit(1);
 
-    if (!orderRow) {
+    if (!orderRowRaw) {
       throw new Error("Order not found");
     }
+
+    const trackingToken = orderRowRaw.trackingToken ?? await this.ensureOrderTrackingToken(id);
+    const orderRow = { ...orderRowRaw, trackingToken };
 
     const items = await db
       .select({
@@ -1416,8 +1441,48 @@ export class PgStorage implements IStorage {
     return { ...orderRow, items };
   }
 
+  async getOrderByTrackingToken(token: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
+    const [row] = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(eq(orders.trackingToken, token))
+      .limit(1);
+
+    if (!row) {
+      throw new Error("Order not found");
+    }
+
+    return this.getOrderById(row.id);
+  }
+
+  async ensureOrderTrackingToken(id: string): Promise<string> {
+    const [existing] = await db
+      .select({ trackingToken: orders.trackingToken })
+      .from(orders)
+      .where(eq(orders.id, id))
+      .limit(1);
+
+    if (!existing) {
+      throw new Error("Order not found");
+    }
+
+    if (existing.trackingToken) {
+      return existing.trackingToken;
+    }
+
+    const nextToken = generateOrderTrackingToken();
+    const [updated] = await db
+      .update(orders)
+      .set({ trackingToken: nextToken, updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning({ trackingToken: orders.trackingToken });
+
+    return updated?.trackingToken ?? nextToken;
+  }
+
   async getOrderCountByEmail(email: string): Promise<number> {
     const normalizedEmail = email.toLowerCase().trim();
+    if (!normalizedEmail) return 0;
     const [result] = await db
       .select({ count: sql<number>`count(*)` })
       .from(orders)
@@ -1453,10 +1518,11 @@ export class PgStorage implements IStorage {
           "source",
           "delivery_required",
           "delivery_provider",
-          "delivery_address"
+          "delivery_address",
+          "tracking_token"
         ) VALUES (
           ${data.userId ?? null},
-          ${data.email},
+          ${data.email ?? null},
           ${data.fullName},
           ${data.addressLine1},
           ${data.addressLine2 ?? null},
@@ -1473,12 +1539,14 @@ export class PgStorage implements IStorage {
           ${data.source ?? "website"},
           ${data.deliveryRequired ?? true},
           ${data.deliveryProvider ?? null},
-          ${data.deliveryAddress ?? null}
+          ${data.deliveryAddress ?? null},
+          ${generateOrderTrackingToken()}
         )
         RETURNING
           "id",
           "email",
-          "full_name" as "fullName"
+          "full_name" as "fullName",
+          "tracking_token" as "trackingToken"
       `,
     );
 
@@ -1506,7 +1574,9 @@ export class PgStorage implements IStorage {
     });
 
     // Sync customer stats after creating order
-    await this.syncCustomerStats(orderRow.email);
+    if (orderRow.email) {
+      await this.syncCustomerStats(orderRow.email);
+    }
 
     return orderRow;
   }
@@ -1536,6 +1606,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1550,11 +1621,11 @@ export class PgStorage implements IStorage {
         updatedAt: orders.updatedAt,
       });
 
-    if (status === "completed") {
+    if (status === "completed" && row.email) {
       await this.syncCustomerStats(row.email);
     }
 
-    if (status === "cancelled") {
+    if (status === "cancelled" && row.email) {
       await this.syncCustomerStats(row.email);
       await this.createAdminNotification({
         title: "Order Cancelled",
@@ -1592,6 +1663,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1637,6 +1709,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1682,6 +1755,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -1759,6 +1833,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         deliveryLocation: orders.deliveryLocation,
@@ -1799,6 +1874,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         deliveryLocation: orders.deliveryLocation,
@@ -1839,6 +1915,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         deliveryLocation: orders.deliveryLocation,
@@ -2054,6 +2131,7 @@ export class PgStorage implements IStorage {
         promoCode: orders.promoCode,
         promoDiscountAmount: orders.promoDiscountAmount,
         source: orders.source,
+        trackingToken: orders.trackingToken,
         deliveryRequired: orders.deliveryRequired,
         deliveryProvider: orders.deliveryProvider,
         // Backward-compatible fallback: older DBs may not have `orders.delivery_location`.
@@ -2297,7 +2375,7 @@ export class PgStorage implements IStorage {
       .values({
         firstName: data.firstName,
         lastName: data.lastName,
-        email: data.email,
+        email: data.email ?? null,
         phoneNumber: data.phoneNumber,
         totalSpent: data.totalSpent,
         orderCount: data.orderCount,
@@ -2326,12 +2404,13 @@ export class PgStorage implements IStorage {
   }
 
   async upsertCustomerFromOrder(
-    email: string,
+    email: string | null | undefined,
     firstName: string,
     lastName: string,
     phoneNumber?: string | null,
-  ): Promise<Customer> {
-    const emailLower = email.toLowerCase();
+  ): Promise<Customer | null> {
+    const emailLower = email?.toLowerCase().trim();
+    if (!emailLower) return null;
     const [existing] = await db
       .select({
         id: customers.id,
@@ -3793,7 +3872,7 @@ export class MemStorage implements IStorage {
       const q = filters.search.toLowerCase();
       filtered = filtered.filter((order) =>
         [order.fullName, order.email, order.id]
-          .filter(Boolean)
+          .filter((value): value is string => typeof value === "string")
           .some((value) => value.toLowerCase().includes(q)),
       );
     }
@@ -3859,7 +3938,7 @@ export class MemStorage implements IStorage {
       const q = filters.search.toLowerCase();
       filtered = filtered.filter((order) =>
         [order.fullName, order.email, order.id]
-          .filter(Boolean)
+          .filter((value): value is string => typeof value === "string")
           .some((value) => value.toLowerCase().includes(q)),
       );
     }
@@ -3878,6 +3957,10 @@ export class MemStorage implements IStorage {
       throw new Error("Order not found");
     }
     
+    if (!order.trackingToken) {
+      order.trackingToken = generateOrderTrackingToken();
+    }
+
     const itemsWithProducts = order.items.map(item => ({
       ...item,
       variantColor: null,
@@ -3887,9 +3970,27 @@ export class MemStorage implements IStorage {
     return { ...order, items: itemsWithProducts };
   }
 
+  async getOrderByTrackingToken(token: string): Promise<Order & { items: (OrderItem & { product?: Product | null })[] }> {
+    const order = this._orders.find((o) => o.trackingToken === token);
+    if (!order) {
+      throw new Error("Order not found");
+    }
+    return this.getOrderById(order.id);
+  }
+
+  async ensureOrderTrackingToken(id: string): Promise<string> {
+    const order = this._orders.find((o) => o.id === id);
+    if (!order) throw new Error("Order not found");
+    if (!order.trackingToken) {
+      order.trackingToken = generateOrderTrackingToken();
+    }
+    return order.trackingToken ?? generateOrderTrackingToken();
+  }
+
   async getOrderCountByEmail(email: string): Promise<number> {
     const normalizedEmail = email.toLowerCase().trim();
-    return this._orders.filter((o) => o.email.toLowerCase().trim() === normalizedEmail).length;
+    if (!normalizedEmail) return 0;
+    return this._orders.filter((o) => (o.email ?? "").toLowerCase().trim() === normalizedEmail).length;
   }
 
   async createOrder(data: CreateOrderInput): Promise<Order> {
@@ -3897,7 +3998,7 @@ export class MemStorage implements IStorage {
     const order: Order & { items: OrderItem[] } = {
       id,
       userId: null,
-      email: data.email,
+      email: data.email ?? null,
       fullName: data.fullName,
       addressLine1: data.addressLine1,
       addressLine2: data.addressLine2 ?? null,
@@ -3918,6 +4019,7 @@ export class MemStorage implements IStorage {
       deliveryProvider: null,
       deliveryLocation: data.deliveryLocation ?? null,
       deliveryAddress: null,
+      trackingToken: generateOrderTrackingToken(),
       stripePaymentIntentId: null,
       stripeCheckoutSessionId: null,
       stripePaymentStatus: null,
@@ -4028,7 +4130,7 @@ export class MemStorage implements IStorage {
           customer.email,
           customer.phoneNumber ?? "",
         ]
-          .filter(Boolean)
+          .filter((value): value is string => typeof value === "string")
           .some((value) => value.toLowerCase().includes(q)),
       );
     }
@@ -4067,7 +4169,7 @@ export class MemStorage implements IStorage {
           customer.email,
           customer.phoneNumber ?? "",
         ]
-          .filter(Boolean)
+          .filter((value): value is string => typeof value === "string")
           .some((value) => value.toLowerCase().includes(q)),
       );
     }
@@ -4112,7 +4214,7 @@ export class MemStorage implements IStorage {
       id: crypto.randomUUID(),
       firstName: data.firstName,
       lastName: data.lastName,
-      email: data.email,
+      email: data.email ?? null,
       phoneNumber: data.phoneNumber || null,
       totalSpent: data.totalSpent.toString(),
       orderCount: data.orderCount,
@@ -4138,11 +4240,12 @@ export class MemStorage implements IStorage {
   }
 
   async upsertCustomerFromOrder(
-    email: string,
+    email: string | null | undefined,
     firstName: string,
     lastName: string,
     phoneNumber?: string | null,
-  ): Promise<Customer> {
+  ): Promise<Customer | null> {
+    if (!email) return null;
     const existing = this._customers.find((c) => c.email === email);
     if (existing) {
       if (phoneNumber && !existing.phoneNumber) {

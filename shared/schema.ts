@@ -163,7 +163,7 @@ export type Category = typeof categories.$inferSelect;
 export const orders = pgTable("orders", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
-  email: text("email").notNull(),
+  email: text("email"),
   fullName: text("full_name").notNull(),
   addressLine1: text("address_line1").notNull(),
   addressLine2: text("address_line2"),
@@ -187,6 +187,7 @@ export const orders = pgTable("orders", {
   // Selected delivery location name from the Nepal locations list.
   deliveryLocation: varchar("delivery_location"),
   deliveryAddress: text("delivery_address"),
+  trackingToken: text("tracking_token"),
   stripePaymentIntentId: text("stripe_payment_intent_id"),
   stripeCheckoutSessionId: text("stripe_checkout_session_id"),
   stripePaymentStatus: text("stripe_payment_status"),
@@ -242,7 +243,7 @@ export type OtpToken = typeof otpTokens.$inferSelect;
 
 export const orderVerificationChallenges = pgTable("order_verification_challenges", {
   id: varchar("id").primaryKey(),
-  email: text("email").notNull(),
+  email: text("email"),
   token: text("token").notNull(),
   verificationToken: text("verification_token"),
   requestedQuantity: integer("requested_quantity").notNull(),
@@ -270,7 +271,7 @@ export type OrderVerificationChallenge = typeof orderVerificationChallenges.$inf
 export const contactMessages = pgTable("contact_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  email: text("email").notNull(),
+  email: text("email"),
   phone: text("phone"),
   subject: text("subject").notNull(),
   message: text("message").notNull(),
@@ -303,6 +304,7 @@ export const bills = pgTable("bills", {
   deliveryRequired: boolean("delivery_required").notNull().default(false),
   deliveryProvider: text("delivery_provider"),
   deliveryAddress: text("delivery_address"),
+  trackingToken: text("tracking_token"),
   cashReceived: numeric("cash_received"),
   changeGiven: numeric("change_given"),
   processedBy: text("processed_by").notNull(),

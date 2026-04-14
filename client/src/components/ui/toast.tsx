@@ -15,9 +15,9 @@ const ToastViewport = React.forwardRef<
     ref={ref}
     className={cn(
       // Mobile: top-center, full width with small margin
-      "fixed inset-x-2 top-2 z-[100] flex max-h-screen flex-col gap-2",
+      "fixed inset-x-3 top-[calc(env(safe-area-inset-top)+5.5rem)] z-[260] flex max-h-screen flex-col gap-2 sm:inset-x-auto",
       // Desktop: top-center, constrained width
-      "sm:left-1/2 sm:top-4 sm:right-auto sm:bottom-auto sm:w-full sm:max-w-[420px] sm:-translate-x-1/2",
+      "sm:left-1/2 sm:top-[calc(env(safe-area-inset-top)+6.25rem)] sm:right-auto sm:bottom-auto sm:w-full sm:max-w-[420px] sm:-translate-x-1/2",
       className
     )}
     {...props}

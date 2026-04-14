@@ -4,7 +4,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { PriceInput } from "@/components/ui/price-input";
 import {
   Select,
@@ -44,21 +43,13 @@ export default function AdminOrdersNew() {
     { productId: "", quantity: 1, priceAtTime: 0 },
   ]);
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
-  const [deliveryRequired, setDeliveryRequired] = useState(true);
-  const [deliveryProvider, setDeliveryProvider] = useState("");
-  const [deliveryAddress, setDeliveryAddress] = useState("");
   const [status, setStatus] = useState<AdminCreateOrderInput["status"]>("pending");
+  const [deliveryFee, setDeliveryFee] = useState(100);
+  const [customerName, setCustomerName] = useState("");
   const [shipping, setShipping] = useState({
-    firstName: "",
-    lastName: "",
     email: "",
     phone: "",
-    address: "",
-    city: "",
-    zip: "",
-    country: "Nepal",
     deliveryLocation: "",
-    locationCoordinates: "",
   });
 
   const { data: productsData } = useQuery<{ products: ProductApi[]; total: number }>({
@@ -73,6 +64,7 @@ export default function AdminOrdersNew() {
   );
 
   const subtotal = items.reduce((sum, item) => sum + item.priceAtTime * item.quantity, 0);
+  const orderTotal = Math.max(0, subtotal + deliveryFee);
 
   const updateItem = (index: number, patch: Partial<OrderItemDraft>) => {
     setItems((prev) =>
@@ -120,17 +112,22 @@ export default function AdminOrdersNew() {
       return;
     }
 
+    const fullName = customerName.trim();
+    const [firstName = "", ...lastParts] = fullName.split(/\s+/).filter(Boolean);
+    const lastName = lastParts.join(" ");
+
     mutation.mutate({
       items: filteredItems,
       shipping: {
-        ...shipping,
+        fullName: fullName || undefined,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        email: shipping.email || undefined,
         phone: shipping.phone || undefined,
-        locationCoordinates: shipping.locationCoordinates || undefined,
+        deliveryLocation: shipping.deliveryLocation || undefined,
       },
       paymentMethod,
-      deliveryRequired,
-      deliveryProvider: deliveryProvider || null,
-      deliveryAddress: deliveryAddress || null,
+      deliveryFee,
       source: "admin",
       status: status || undefined,
     });
@@ -143,191 +140,12 @@ export default function AdminOrdersNew() {
           Create Order
         </h1>
         <p className="text-muted-foreground">
-          Capture customer, delivery, and product details for a new order.
+          Add products first, then capture only the essentials needed to place the order fast.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Customer</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label htmlFor="order-first-name" className="text-[11px] font-semibold text-muted-foreground">
-                  First name
-                </label>
-                <Input
-                  id="order-first-name"
-                  name="firstName"
-                  autoComplete="given-name"
-                  placeholder="First name…"
-                  value={shipping.firstName}
-                  onChange={(e) => setShipping((s) => ({ ...s, firstName: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-last-name" className="text-[11px] font-semibold text-muted-foreground">
-                  Last name
-                </label>
-                <Input
-                  id="order-last-name"
-                  name="lastName"
-                  autoComplete="family-name"
-                  placeholder="Last name…"
-                  value={shipping.lastName}
-                  onChange={(e) => setShipping((s) => ({ ...s, lastName: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-email" className="text-[11px] font-semibold text-muted-foreground">
-                  Email
-                </label>
-                <Input
-                  id="order-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Email…"
-                  value={shipping.email}
-                  onChange={(e) => setShipping((s) => ({ ...s, email: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-phone" className="text-[11px] font-semibold text-muted-foreground">
-                  Phone
-                </label>
-                <Input
-                  id="order-phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="Phone…"
-                  value={shipping.phone}
-                  onChange={(e) => setShipping((s) => ({ ...s, phone: e.target.value }))}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Delivery</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label htmlFor="order-address" className="text-[11px] font-semibold text-muted-foreground">
-                  Address
-                </label>
-                <Input
-                  id="order-address"
-                  name="address"
-                  autoComplete="street-address"
-                  placeholder="Address…"
-                  value={shipping.address}
-                  onChange={(e) => setShipping((s) => ({ ...s, address: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-city" className="text-[11px] font-semibold text-muted-foreground">
-                  City
-                </label>
-                <Input
-                  id="order-city"
-                  name="city"
-                  autoComplete="address-level2"
-                  placeholder="City…"
-                  value={shipping.city}
-                  onChange={(e) => setShipping((s) => ({ ...s, city: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-postal" className="text-[11px] font-semibold text-muted-foreground">
-                  ZIP / Postal
-                </label>
-                <Input
-                  id="order-postal"
-                  name="postalCode"
-                  autoComplete="postal-code"
-                  placeholder="ZIP / Postal…"
-                  value={shipping.zip}
-                  onChange={(e) => setShipping((s) => ({ ...s, zip: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-country" className="text-[11px] font-semibold text-muted-foreground">
-                  Country
-                </label>
-                <Input
-                  id="order-country"
-                  name="country"
-                  autoComplete="country-name"
-                  placeholder="Country…"
-                  value={shipping.country}
-                  onChange={(e) => setShipping((s) => ({ ...s, country: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-delivery-location" className="text-[11px] font-semibold text-muted-foreground">
-                  Delivery location
-                </label>
-                <Input
-                  id="order-delivery-location"
-                  name="deliveryLocation"
-                  autoComplete="address-line2"
-                  placeholder="Delivery location…"
-                  value={shipping.deliveryLocation}
-                  onChange={(e) => setShipping((s) => ({ ...s, deliveryLocation: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-location-coordinates" className="text-[11px] font-semibold text-muted-foreground">
-                  Location coordinates
-                </label>
-                <Input
-                  id="order-location-coordinates"
-                  name="locationCoordinates"
-                  autoComplete="off"
-                  placeholder="Location coordinates…"
-                  value={shipping.locationCoordinates}
-                  onChange={(e) => setShipping((s) => ({ ...s, locationCoordinates: e.target.value }))}
-                />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 p-3">
-              <div>
-                <p className="text-xs font-semibold text-muted-foreground">Delivery required</p>
-                <p className="text-[11px] text-muted-foreground">Toggle for pickup or delivery</p>
-              </div>
-              <Switch checked={deliveryRequired} onCheckedChange={setDeliveryRequired} />
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1">
-                <label htmlFor="order-delivery-provider" className="text-[11px] font-semibold text-muted-foreground">
-                  Delivery provider
-                </label>
-                <Input
-                  id="order-delivery-provider"
-                  name="deliveryProvider"
-                  autoComplete="off"
-                  placeholder="Delivery provider…"
-                  value={deliveryProvider}
-                  onChange={(e) => setDeliveryProvider(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="order-delivery-note" className="text-[11px] font-semibold text-muted-foreground">
-                  Delivery address note
-                </label>
-                <Input
-                  id="order-delivery-note"
-                  name="deliveryAddressNote"
-                  autoComplete="off"
-                  placeholder="Delivery address note…"
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
-
           <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Products</h2>
@@ -444,8 +262,67 @@ export default function AdminOrdersNew() {
               })}
             </div>
           </div>
-        </div>
 
+          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Customer</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1 sm:col-span-2">
+                <label htmlFor="order-customer-name" className="text-[11px] font-semibold text-muted-foreground">
+                  Customer name
+                </label>
+                <Input
+                  id="order-customer-name"
+                  name="fullName"
+                  autoComplete="name"
+                  placeholder="Customer name…"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="order-email" className="text-[11px] font-semibold text-muted-foreground">
+                  Email
+                </label>
+                <Input
+                  id="order-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Email…"
+                  value={shipping.email}
+                  onChange={(e) => setShipping((s) => ({ ...s, email: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="order-phone" className="text-[11px] font-semibold text-muted-foreground">
+                  Phone
+                </label>
+                <Input
+                  id="order-phone"
+                  name="phone"
+                  type="tel"
+                  autoComplete="tel"
+                  placeholder="Phone…"
+                  value={shipping.phone}
+                  onChange={(e) => setShipping((s) => ({ ...s, phone: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label htmlFor="order-delivery-location" className="text-[11px] font-semibold text-muted-foreground">
+                  Delivery location
+                </label>
+                <Input
+                  id="order-delivery-location"
+                  name="deliveryLocation"
+                  autoComplete="off"
+                  placeholder="Delivery location…"
+                  value={shipping.deliveryLocation}
+                  onChange={(e) => setShipping((s) => ({ ...s, deliveryLocation: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="space-y-6">
           <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Payment</h2>
@@ -474,9 +351,33 @@ export default function AdminOrdersNew() {
                   <SelectItem value="cancelled">Cancelled</SelectItem>
                 </SelectContent>
               </Select>
-              <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Subtotal</p>
-                <p className="mt-2 text-lg font-semibold text-foreground">{formatPrice(subtotal)}</p>
+              <div className="space-y-1">
+                <label htmlFor="order-delivery-fee" className="text-[11px] font-semibold text-muted-foreground">
+                  Delivery charge
+                </label>
+                <PriceInput
+                  aria-label="Delivery charge"
+                  id="order-delivery-fee"
+                  min={0}
+                  value={deliveryFee}
+                  onChange={(val) => setDeliveryFee(Math.max(0, val))}
+                  placeholder="Delivery charge"
+                />
+              </div>
+              <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Products subtotal</span>
+                  <span className="font-medium text-foreground">{formatPrice(subtotal)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>Delivery charge</span>
+                  <span className="font-medium text-foreground">{formatPrice(deliveryFee)}</span>
+                </div>
+                <div className="h-px bg-border/70" />
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Order total</p>
+                  <p className="text-lg font-semibold text-foreground">{formatPrice(orderTotal)}</p>
+                </div>
               </div>
             </div>
           </div>

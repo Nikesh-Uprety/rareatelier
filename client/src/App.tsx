@@ -145,6 +145,7 @@ function isCommerceFlowPath(pathname: string): boolean {
     pathname === "/checkout" ||
     pathname === "/checkout/payment" ||
     pathname.startsWith("/order-confirmation/") ||
+    pathname.startsWith("/orders/track/") ||
     pathname.startsWith("/checkout/success/")
   );
 }
@@ -198,7 +199,7 @@ function getCommerceBreadcrumb(pathname: string): {
     };
   }
 
-  if (pathname.startsWith("/order-confirmation/") || pathname.startsWith("/checkout/success/")) {
+  if (pathname.startsWith("/order-confirmation/") || pathname.startsWith("/checkout/success/") || pathname.startsWith("/orders/track/")) {
     return {
       items: [
         { label: "Home", href: "/" },
@@ -225,7 +226,7 @@ function preloadRouteModule(path: string): Promise<unknown> {
   if (cleanPath === "/cart") return loadCartPage();
   if (cleanPath === "/checkout") return loadCheckoutPage();
   if (cleanPath === "/checkout/payment") return loadPaymentProcessPage();
-  if (cleanPath.startsWith("/order-confirmation/") || cleanPath.startsWith("/checkout/success/")) {
+  if (cleanPath.startsWith("/order-confirmation/") || cleanPath.startsWith("/checkout/success/") || cleanPath.startsWith("/orders/track/")) {
     return loadOrderSuccessPage();
   }
   if (cleanPath === "/admin") return loadAdminDashboardPage();
@@ -671,6 +672,11 @@ function AppRoutes() {
         </StorefrontLayout>
       </Route>
       <Route path="/order-confirmation/:orderId">
+        <StorefrontLayout>
+          <OrderSuccess />
+        </StorefrontLayout>
+      </Route>
+      <Route path="/orders/track/:token">
         <StorefrontLayout>
           <OrderSuccess />
         </StorefrontLayout>

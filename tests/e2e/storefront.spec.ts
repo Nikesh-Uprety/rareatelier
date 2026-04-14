@@ -144,6 +144,52 @@ test("new customer can verify a large order by email and complete checkout", asy
   expect(body.data?.order?.id).toBeTruthy();
 });
 
+test("large-order verification resend is rate limited with a cooldown", async ({ request }) => {
+  const email = `resend-limit-${Date.now()}@example.com`;
+
+  const firstRequest = await request.post("/api/orders/verification/request", {
+    data: {
+      email,
+      quantity: 6,
+    },
+  });
+
+  expect(firstRequest.ok(), await firstRequest.text()).toBeTruthy();
+  const firstBody = (await firstRequest.json()) as {
+    success?: boolean;
+    challengeId?: string;
+    resendCooldownSeconds?: number;
+    resendAvailableInSeconds?: number;
+  };
+  expect(firstBody.success).toBe(true);
+  expect(firstBody.challengeId).toBeTruthy();
+  expect(firstBody.resendCooldownSeconds).toBeGreaterThan(0);
+  expect(firstBody.resendAvailableInSeconds).toBeGreaterThan(0);
+
+  const secondRequest = await request.post("/api/orders/verification/request", {
+    data: {
+      email,
+      quantity: 6,
+    },
+  });
+
+  expect(secondRequest.status()).toBe(429);
+  const secondBody = (await secondRequest.json()) as {
+    success?: boolean;
+    required?: boolean;
+    code?: string;
+    challengeId?: string;
+    resendCooldownSeconds?: number;
+    resendAvailableInSeconds?: number;
+  };
+  expect(secondBody.success).toBe(false);
+  expect(secondBody.required).toBe(true);
+  expect(secondBody.code).toBe("VERIFICATION_RESEND_COOLDOWN");
+  expect(secondBody.challengeId).toBe(firstBody.challengeId);
+  expect(secondBody.resendCooldownSeconds).toBe(60);
+  expect(secondBody.resendAvailableInSeconds).toBeGreaterThan(0);
+});
+
 test("customer with at least 5 prior orders can place order above 5 items", async ({ request }) => {
   const { productId, priceAtTime } = await getSampleProduct(request);
   const email = `trusted-limit-${Date.now()}@example.com`;
@@ -163,6 +209,43 @@ test("customer with at least 5 prior orders can place order above 5 items", asyn
   const body = (await largeRes.json()) as { success?: boolean; data?: { order?: { id?: string } } };
   expect(body.success).toBe(true);
   expect(body.data?.order?.id).toBeTruthy();
+});
+
+test("cart quantity controls stop at the available variant stock", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("ra-guest-id", `test-guest-${Date.now()}`);
+    window.localStorage.setItem(
+      "ra-guest-cart-items",
+      JSON.stringify([
+        {
+          id: "stock-test-product-M-Black",
+          product: {
+            id: "stock-test-product",
+            name: "Stock Test Tee",
+            sku: "stock-test-product",
+            price: 2400,
+            stock: 2,
+            category: "Tees",
+            images: [],
+            variants: [
+              { size: "M", color: "Black", stock: 2 },
+            ],
+          },
+          variant: { size: "M", color: "Black" },
+          quantity: 1,
+        },
+      ]),
+    );
+  });
+
+  await page.goto("/cart");
+  const incrementButton = page.getByTestId("cart-increment-stock-test-product-M-Black");
+  await expect(incrementButton).toBeVisible();
+  await expect(incrementButton).toBeEnabled();
+
+  await incrementButton.click();
+  await expect(page.getByText("2").first()).toBeVisible();
+  await expect(incrementButton).toBeDisabled();
 });
 
 test("guest order details stay scoped to the buyer session", async ({ request }) => {

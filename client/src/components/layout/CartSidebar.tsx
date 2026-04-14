@@ -4,7 +4,8 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatPrice } from "@/lib/format";
-import { useCartStore } from "@/store/cart";
+import { useToast } from "@/hooks/use-toast";
+import { getCartItemAvailableStock, useCartStore } from "@/store/cart";
 
 const SHIPPING_FEE = 100;
 
@@ -17,6 +18,7 @@ export default function CartSidebar() {
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const removeItem = useCartStore((state) => state.removeItem);
   const openCartSidebar = useCartStore((state) => state.openCartSidebar);
+  const { toast } = useToast();
 
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
   const total = subtotal + (items.length > 0 ? SHIPPING_FEE : 0);
@@ -125,8 +127,18 @@ export default function CartSidebar() {
                             <span className="w-8 text-center text-xs font-semibold">{item.quantity}</span>
                             <button
                               type="button"
-                              onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                              onClick={() => {
+                                const result = updateQuantity(item.id, item.quantity + 1);
+                                if (!result.ok) {
+                                  toast({
+                                    title: "Stock limit reached",
+                                    description: `Only ${result.maxAllowed} item${result.maxAllowed === 1 ? "" : "s"} are available for this variant.`,
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
                               className="flex h-8 w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+                              disabled={item.quantity >= getCartItemAvailableStock(item)}
                             >
                               <Plus className="h-3.5 w-3.5" />
                             </button>

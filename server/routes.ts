@@ -130,9 +130,54 @@ const MIN_ORDERS_FOR_UNLIMITED = 5;
 const MAX_FAILED_ORDER_ATTEMPTS = 30;
 const ABUSE_TIMEOUT_MS = 5 * 60 * 1000;
 const ORDER_VERIFICATION_CODE_TTL_MS = 10 * 60 * 1000;
+const ORDER_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const ORDER_VERIFICATION_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_VERIFICATION_CODE_ATTEMPTS = 5;
 const MAX_GUEST_ORDER_IDS = 24;
+
+const STOREFRONT_IMAGE_REMOTE_HOSTS = new Set([
+  "rare.t3.tigrisfiles.io",
+  "cdn2.blanxer.com",
+  "wsrv.nl",
+]);
+
+function isAllowedStorefrontImageSource(src: string): boolean {
+  if (src.startsWith("/uploads/")) {
+    return true;
+  }
+
+  if (!(src.startsWith("http://") || src.startsWith("https://"))) {
+    return false;
+  }
+
+  try {
+    const url = new URL(src);
+    return STOREFRONT_IMAGE_REMOTE_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+async function loadStorefrontImageBuffer(src: string): Promise<Buffer> {
+  if (src.startsWith("/uploads/")) {
+    const relativePath = src.slice("/uploads/".length);
+    const absolutePath = path.resolve(UPLOADS_DIR, relativePath);
+    const uploadsRoot = path.resolve(UPLOADS_DIR);
+
+    if (!(absolutePath === uploadsRoot || absolutePath.startsWith(`${uploadsRoot}${path.sep}`))) {
+      throw new Error("Invalid local image path");
+    }
+
+    return fs.promises.readFile(absolutePath);
+  }
+
+  const response = await fetch(src, { signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch remote image: ${response.status}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
 
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
 const abuseAttempts = new Map<string, { count: number; blockedAt: number }>();
@@ -178,6 +223,7 @@ const CANVAS_TEMPLATE_OVERRIDES = {
 let siteSettingsHasFontPresetColumnCache: boolean | null = null;
 let mediaAssetsCompatEnsured: Promise<void> | null = null;
 let orderVerificationChallengesEnsured: Promise<void> | null = null;
+let orderTrackingCompatEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
   if (siteSettingsHasFontPresetColumnCache !== null) {
@@ -713,6 +759,68 @@ function registerAbuseFailure(abuseKey: string) {
   return nextEntry;
 }
 
+async function ensureOrderTrackingCompatibility() {
+  if (orderTrackingCompatEnsured) return orderTrackingCompatEnsured;
+
+  orderTrackingCompatEnsured = (async () => {
+    try {
+      await db.execute(sql`
+        alter table orders
+        alter column email drop not null
+      `);
+    } catch (error) {
+      console.warn("Unable to relax orders.email constraint automatically", error);
+    }
+
+    try {
+      await db.execute(sql`
+        alter table orders
+        add column if not exists tracking_token text
+      `);
+      await db.execute(sql`
+        create unique index if not exists orders_tracking_token_idx
+        on orders (tracking_token)
+        where tracking_token is not null
+      `);
+    } catch (error) {
+      console.warn("Unable to ensure order tracking token compatibility", error);
+    }
+  })().catch((error) => {
+    orderTrackingCompatEnsured = null;
+    throw error;
+  });
+
+  return orderTrackingCompatEnsured;
+}
+
+function trimOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeOrderShipping(shipping: Record<string, unknown>) {
+  const fullName = trimOptionalString(shipping.fullName);
+  const firstName = trimOptionalString(shipping.firstName);
+  const lastName = trimOptionalString(shipping.lastName);
+  const derivedFullName = fullName ?? [firstName, lastName].filter(Boolean).join(" ").trim();
+  const nameParts = derivedFullName ? derivedFullName.split(/\s+/) : [];
+
+  return {
+    fullName: derivedFullName || undefined,
+    firstName: firstName ?? nameParts[0] ?? undefined,
+    lastName: lastName ?? (nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined),
+    email: trimOptionalString(shipping.email)?.toLowerCase(),
+    phone: trimOptionalString(shipping.phone),
+    address: trimOptionalString(shipping.address),
+    city: trimOptionalString(shipping.city),
+    zip: trimOptionalString(shipping.zip),
+    country: trimOptionalString(shipping.country),
+    deliveryLocation: trimOptionalString(shipping.deliveryLocation),
+    locationCoordinates: trimOptionalString(shipping.locationCoordinates),
+  };
+}
+
 async function getLargeOrderGate(req: Request, email: string, totalQuantity: number) {
   const customerEmail = normalizeCustomerEmail(email);
   const abuseKey = getAbuseKey(req, customerEmail);
@@ -859,6 +967,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   await ensureMediaAssetsCompatibility();
   await ensureOrderVerificationChallengesTable();
+  await ensureOrderTrackingCompatibility();
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
@@ -2901,6 +3010,53 @@ ${Array.from(uniqueEntries.entries())
     }
   });
 
+  app.get("/api/public/image", async (req: Request, res: Response) => {
+    try {
+      const srcParam = typeof req.query.src === "string" ? req.query.src.trim() : "";
+      const widthParam = typeof req.query.w === "string" ? Number.parseInt(req.query.w, 10) : NaN;
+      const heightParam = typeof req.query.h === "string" ? Number.parseInt(req.query.h, 10) : NaN;
+      const fitParam = typeof req.query.fit === "string" ? req.query.fit : "inside";
+      const qualityParam = typeof req.query.q === "string" ? Number.parseInt(req.query.q, 10) : 84;
+
+      if (!srcParam) {
+        return res.status(400).json({ success: false, error: "Missing image source" });
+      }
+
+      if (!isAllowedStorefrontImageSource(srcParam)) {
+        return res.status(400).json({ success: false, error: "Unsupported image source" });
+      }
+
+      const width = Number.isFinite(widthParam) ? Math.min(Math.max(widthParam, 16), 2400) : 1600;
+      const height = Number.isFinite(heightParam) ? Math.min(Math.max(heightParam, 16), 3200) : undefined;
+      const fit: "cover" | "contain" | "inside" =
+        fitParam === "cover" || fitParam === "contain" ? fitParam : "inside";
+      const quality = Number.isFinite(qualityParam) ? Math.min(Math.max(qualityParam, 40), 92) : 84;
+
+      const inputBuffer = await loadStorefrontImageBuffer(srcParam);
+      const outputBuffer = await sharp(inputBuffer, { failOn: "none" })
+        .rotate()
+        .resize({
+          width,
+          height,
+          fit,
+          withoutEnlargement: true,
+        })
+        .webp({
+          quality,
+          effort: 4,
+          smartSubsample: true,
+        })
+        .toBuffer();
+
+      res.setHeader("Content-Type", "image/webp");
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      return res.send(outputBuffer);
+    } catch (err) {
+      console.error("Error in GET /api/public/image", err);
+      return res.status(500).json({ success: false, error: "Failed to process image" });
+    }
+  });
+
   app.get("/api/public/sitemap.xml", async (_req: Request, res: Response) => {
     try {
       const baseUrl = process.env.SITE_URL || "https://rare-np-production.up.railway.app";
@@ -3299,17 +3455,21 @@ ${Array.from(uniqueEntries.entries())
     priceAtTime: z.number().nonnegative(),
   });
 
+  const optionalTrimmedString = z.preprocess((value) => trimOptionalString(value), z.string().min(1).optional());
+  const optionalEmailString = z.preprocess((value) => trimOptionalString(value)?.toLowerCase(), z.string().email().optional());
+
   const shippingSchema = z.object({
-    firstName: z.string().min(1),
-    lastName: z.string().min(1),
-    email: z.string().email(),
-    phone: z.string().optional(),
-    address: z.string().min(1),
-    city: z.string().min(1),
-    zip: z.string().min(1),
-    country: z.string().min(1),
-    deliveryLocation: z.string().min(1),
-    locationCoordinates: z.string().optional(),
+    fullName: optionalTrimmedString,
+    firstName: optionalTrimmedString,
+    lastName: optionalTrimmedString,
+    email: optionalEmailString,
+    phone: optionalTrimmedString,
+    address: optionalTrimmedString,
+    city: optionalTrimmedString,
+    zip: optionalTrimmedString,
+    country: optionalTrimmedString,
+    deliveryLocation: optionalTrimmedString,
+    locationCoordinates: optionalTrimmedString,
   });
 
   const createOrderSchema = z.object({
@@ -3322,6 +3482,7 @@ ${Array.from(uniqueEntries.entries())
     deliveryAddress: z.string().optional().nullable(),
     promoCodeId: z.string().optional(),
     orderVerificationToken: z.string().optional(),
+    deliveryFee: z.number().min(0).optional(),
   });
   const adminCreateOrderSchema = createOrderSchema.extend({
     status: z.enum(["pending", "processing", "completed", "cancelled"]).optional(),
@@ -3365,11 +3526,49 @@ ${Array.from(uniqueEntries.entries())
           });
         }
 
+        const now = new Date();
+        const [pendingChallenge] = await db
+          .select()
+          .from(orderVerificationChallenges)
+          .where(
+            and(
+              eq(sql`lower(${orderVerificationChallenges.email})`, gate.customerEmail),
+              eq(orderVerificationChallenges.status, "pending"),
+              gte(orderVerificationChallenges.expiresAt, now),
+            ),
+          )
+          .orderBy(desc(orderVerificationChallenges.createdAt))
+          .limit(1);
+
+        if (pendingChallenge) {
+          const challengeTimestamp = new Date(
+            pendingChallenge.updatedAt ?? pendingChallenge.createdAt ?? now,
+          ).getTime();
+          const resendAvailableInMs =
+            ORDER_VERIFICATION_RESEND_COOLDOWN_MS - (now.getTime() - challengeTimestamp);
+
+          if (resendAvailableInMs > 0) {
+            return res.status(429).json({
+              success: false,
+              required: true,
+              code: "VERIFICATION_RESEND_COOLDOWN",
+              error: "A verification code was already sent recently. Please wait before requesting another one.",
+              challengeId: pendingChallenge.id,
+              email: gate.customerEmail,
+              expiresInMinutes: Math.ceil(ORDER_VERIFICATION_CODE_TTL_MS / 1000 / 60),
+              limit: MAX_ITEMS_NEW_CUSTOMER,
+              orderCount: gate.orderCount,
+              resendCooldownSeconds: Math.ceil(ORDER_VERIFICATION_RESEND_COOLDOWN_MS / 1000),
+              resendAvailableInSeconds: Math.ceil(resendAvailableInMs / 1000),
+            });
+          }
+        }
+
         await db
           .update(orderVerificationChallenges)
           .set({
             status: "expired",
-            updatedAt: new Date(),
+            updatedAt: now,
           })
           .where(
             and(
@@ -3383,7 +3582,6 @@ ${Array.from(uniqueEntries.entries())
 
         const challengeId = crypto.randomUUID();
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const now = new Date();
         const expiresAt = new Date(now.getTime() + ORDER_VERIFICATION_CODE_TTL_MS);
 
         await db.insert(orderVerificationChallenges).values({
@@ -3409,6 +3607,8 @@ ${Array.from(uniqueEntries.entries())
           expiresInMinutes: Math.ceil(ORDER_VERIFICATION_CODE_TTL_MS / 1000 / 60),
           limit: MAX_ITEMS_NEW_CUSTOMER,
           orderCount: gate.orderCount,
+          resendCooldownSeconds: Math.ceil(ORDER_VERIFICATION_RESEND_COOLDOWN_MS / 1000),
+          resendAvailableInSeconds: Math.ceil(ORDER_VERIFICATION_RESEND_COOLDOWN_MS / 1000),
         });
       } catch (err) {
         console.error("Error in POST /api/orders/verification/request", err);
@@ -3536,10 +3736,31 @@ ${Array.from(uniqueEntries.entries())
           orderVerificationToken,
         } = req.body;
 
+      const normalizedShipping = normalizeOrderShipping(shipping);
       const totalQuantity = items.reduce((acc: number, item: any) => acc + Number(item.quantity), 0);
-      const gate = await getLargeOrderGate(req, shipping.email, totalQuantity);
 
-      if (gate.abuseEntry?.blockedAt) {
+      if (!normalizedShipping.fullName) {
+        return res.status(400).json({ success: false, error: "Full name is required" });
+      }
+
+      if (!normalizedShipping.phone) {
+        return res.status(400).json({ success: false, error: "Phone number is required" });
+      }
+
+      if (totalQuantity > MAX_ITEMS_NEW_CUSTOMER && !normalizedShipping.email) {
+        return res.status(400).json({
+          success: false,
+          error: `Email is required to verify large orders above ${MAX_ITEMS_NEW_CUSTOMER} items.`,
+          code: "ORDER_VERIFICATION_REQUIRED",
+          limit: MAX_ITEMS_NEW_CUSTOMER,
+        });
+      }
+
+      const gate = normalizedShipping.email
+        ? await getLargeOrderGate(req, normalizedShipping.email, totalQuantity)
+        : null;
+
+      if (gate?.abuseEntry?.blockedAt) {
         const remaining = getRemainingAbuseMinutes(gate.abuseEntry);
         return res.status(429).json({
           success: false,
@@ -3551,7 +3772,7 @@ ${Array.from(uniqueEntries.entries())
 
       let verifiedChallengeId: string | null = null;
 
-      if (gate.requiresVerification) {
+      if (gate?.requiresVerification) {
         if (!orderVerificationToken) {
           const nextEntry = registerAbuseFailure(gate.abuseKey);
           return res.status(400).json({
@@ -3654,10 +3875,10 @@ ${Array.from(uniqueEntries.entries())
       const orderNumber = `UX-${year}-${sequence.toString().padStart(4, "0")}`;
 
       await storage.upsertCustomerFromOrder(
-        shipping.email,
-        shipping.firstName,
-        shipping.lastName,
-        shipping.phone ?? null,
+        normalizedShipping.email,
+        normalizedShipping.firstName ?? "Customer",
+        normalizedShipping.lastName ?? "",
+        normalizedShipping.phone ?? null,
       );
 
       const resolvedItems = await Promise.all(
@@ -3715,16 +3936,16 @@ ${Array.from(uniqueEntries.entries())
 
       const order = await storage.createOrder({
         userId: (req.user as Express.User | undefined)?.id ?? null,
-        email: shipping.email,
-        fullName: `${shipping.firstName} ${shipping.lastName}`,
-        addressLine1: shipping.address,
+        email: normalizedShipping.email ?? null,
+        fullName: normalizedShipping.fullName ?? "Customer",
+        addressLine1: normalizedShipping.address ?? "",
         addressLine2: undefined,
-        city: shipping.city,
+        city: normalizedShipping.city ?? "",
         region: "", // state removed
-        locationCoordinates: (shipping.locationCoordinates ?? shipping.deliveryLocation) as string,
-        deliveryLocation: shipping.deliveryLocation,
-        postalCode: shipping.zip,
-        country: shipping.country,
+        locationCoordinates: normalizedShipping.locationCoordinates ?? normalizedShipping.deliveryLocation ?? "",
+        deliveryLocation: normalizedShipping.deliveryLocation ?? null,
+        postalCode: normalizedShipping.zip ?? "",
+        country: normalizedShipping.country ?? "",
         total: orderTotal,
         paymentMethod,
         source: source || "website",
@@ -3754,7 +3975,9 @@ ${Array.from(uniqueEntries.entries())
       }
 
       // Successful order clears any previous abuse tracking for this key.
-      abuseAttempts.delete(gate.abuseKey);
+      if (gate) {
+        abuseAttempts.delete(gate.abuseKey);
+      }
       grantGuestOrderAccess(req, order.id);
 
       for (const item of resolvedItems) {
@@ -3884,6 +4107,21 @@ ${Array.from(uniqueEntries.entries())
       });
     } catch (err) {
       handleApiError(res, err, "orders/create", 500);
+    }
+  });
+
+  app.get("/api/orders/track/:token", async (req: Request, res: Response) => {
+    try {
+      const token = getQueryParam(req.params.token);
+      if (!token) {
+        return res.status(400).json({ success: false, error: "Tracking token is required" });
+      }
+
+      const order = await storage.getOrderByTrackingToken(token);
+      return res.json({ success: true, data: order });
+    } catch (err) {
+      console.error("Error in GET /api/orders/track/:token", err);
+      return res.status(404).json({ success: false, error: "Order not found" });
     }
   });
 
@@ -4097,7 +4335,7 @@ ${Array.from(uniqueEntries.entries())
         orderId,
         amountCents,
         currency: "usd",
-        customerEmail: order.email,
+        customerEmail: order.email ?? "",
         successUrl: `${host}/order-confirmation/${orderId}?stripe_status=success`,
         cancelUrl: `${host}/order-confirmation/${orderId}?stripe_status=cancelled`,
       });
@@ -6355,13 +6593,14 @@ ${Array.from(uniqueEntries.entries())
           deliveryProvider,
           deliveryAddress,
           status,
+          deliveryFee,
         } = req.body;
 
         const orderSubtotal = items.reduce(
           (acc: number, item: any) => acc + item.priceAtTime * item.quantity,
           0,
         );
-        const shippingFee = 100;
+        const shippingFee = Math.max(0, Number(deliveryFee ?? 100) || 0);
 
         let promoCode: string | undefined;
         let promoDiscountAmount = 0;
@@ -6415,11 +6654,13 @@ ${Array.from(uniqueEntries.entries())
         const sequence = Math.floor(now.getTime() / 1000) % 10000;
         const orderNumber = `UX-${year}-${sequence.toString().padStart(4, "0")}`;
 
+        const normalizedShipping = normalizeOrderShipping(shipping);
+
         await storage.upsertCustomerFromOrder(
-          shipping.email,
-          shipping.firstName,
-          shipping.lastName,
-          shipping.phone ?? null,
+          normalizedShipping.email,
+          normalizedShipping.firstName ?? "Customer",
+          normalizedShipping.lastName ?? "",
+          normalizedShipping.phone ?? null,
         );
 
         const resolvedItems = await Promise.all(
@@ -6477,16 +6718,16 @@ ${Array.from(uniqueEntries.entries())
 
         const order = await storage.createOrder({
           userId: (req.user as Express.User | undefined)?.id ?? null,
-          email: shipping.email,
-          fullName: `${shipping.firstName} ${shipping.lastName}`,
-          addressLine1: shipping.address,
+          email: normalizedShipping.email ?? null,
+          fullName: (normalizedShipping.fullName ?? [normalizedShipping.firstName, normalizedShipping.lastName].filter(Boolean).join(" ").trim()) || "Customer",
+          addressLine1: normalizedShipping.address ?? "",
           addressLine2: undefined,
-          city: shipping.city,
+          city: normalizedShipping.city ?? "",
           region: "",
-          locationCoordinates: (shipping.locationCoordinates ?? shipping.deliveryLocation) as string,
-          deliveryLocation: shipping.deliveryLocation,
-          postalCode: shipping.zip,
-          country: shipping.country,
+          locationCoordinates: normalizedShipping.locationCoordinates ?? normalizedShipping.deliveryLocation ?? "",
+          deliveryLocation: normalizedShipping.deliveryLocation ?? null,
+          postalCode: normalizedShipping.zip ?? "",
+          country: normalizedShipping.country ?? "",
           total: orderTotal,
           paymentMethod,
           source: source || "admin",
