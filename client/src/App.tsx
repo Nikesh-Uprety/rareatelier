@@ -386,7 +386,7 @@ function StorefrontLayout({ children }: { children: React.ReactNode }) {
         </div>
       ) : null}
       <main className="flex-1 flex flex-col">
-        {shouldHoldHomeFirstPaint ? <BrandedLoader fullScreen /> : children}
+        {shouldHoldHomeFirstPaint ? <BrandedLoader fullScreen variant="landing-glass" /> : children}
       </main>
       {shouldHoldHomeFirstPaint ? null : <CartSidebar />}
       {shouldShowFooter ? <Footer /> : null}
