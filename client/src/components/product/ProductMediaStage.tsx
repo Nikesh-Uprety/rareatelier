@@ -530,6 +530,7 @@ function ProductMediaStage({
                 fetchPriority={selectedImageIndex === 0 ? "high" : "auto"}
                 width={1600}
                 height={2000}
+                sizes={isMobileOrTablet ? "100vw" : "58vw"}
                 className={`absolute inset-0 z-20 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
                 style={
                   isStuffyClone
@@ -559,6 +560,7 @@ function ProductMediaStage({
                       fetchPriority={index === selectedImageIndex || index === 0 ? "high" : "auto"}
                       width={1600}
                       height={2000}
+                      sizes="58vw"
                       className={`absolute inset-0 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
                       style={
                         isStuffyClone
@@ -598,6 +600,7 @@ function ProductMediaStage({
                       decoding="async"
                       width={120}
                       height={150}
+                      sizes="80px"
                       className="h-full w-full object-cover object-top"
                     />
                   </button>
@@ -677,6 +680,7 @@ function ProductMediaStage({
                       decoding="async"
                       width={140}
                       height={175}
+                      sizes="68px"
                       className="h-full w-full object-cover"
                     />
                   </button>
@@ -731,6 +735,7 @@ function ProductMediaStage({
                     fetchPriority={index === gallerySelectedImageIndex ? "high" : "auto"}
                     width={2200}
                     height={2800}
+                    sizes="100vw"
                     className="block h-auto w-full select-none"
                     style={{ imageRendering: "auto" }}
                   />

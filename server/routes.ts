@@ -18,7 +18,7 @@ import {
 import { storage } from "./storage";
 import { logger } from "./logger";
 import passport from "passport";
-import { processAndStoreImage, deleteLocalImage } from "./lib/imageService";
+import { deleteLocalImage } from "./lib/imageService";
 import { resolveUploadsDir } from "./uploads";
 import { storageService } from "./storage-service";
 import {
@@ -83,9 +83,11 @@ import {
   loginSchema, 
   verify2FASchema 
 } from "./authHandlers";
-import { generateBillFromOrder, generateBillNumber } from "./services/billService";
+import { generateBillFromOrder } from "./services/billService";
+import { createPosOrderSession, issuePosBillFromOrder } from "./services/posBillService";
 import { getUsdToNprRate, convertNprToUsdCents } from "./lib/exchangeRate";
 import { stripe, createCheckoutSession, constructWebhookEvent } from "./lib/stripe";
+import { fonepayService } from "./lib/fonepay";
 import type Stripe from "stripe";
 import { cartService } from "./services/cartService";
 import { ensureAdminProfileAccessStorage, getAdminPageAccessOverrides, getEffectiveAdminPageAccess } from "./adminPageAccess";
@@ -140,6 +142,7 @@ const STOREFRONT_IMAGE_REMOTE_HOSTS = new Set([
   "rare.t3.tigrisfiles.io",
   "cdn2.blanxer.com",
   "wsrv.nl",
+  "res.cloudinary.com",
 ]);
 
 function isAllowedStorefrontImageSource(src: string): boolean {
@@ -178,6 +181,61 @@ async function loadStorefrontImageBuffer(src: string): Promise<Buffer> {
   }
 
   return Buffer.from(await response.arrayBuffer());
+}
+
+function resolveForwardedRequestBaseUrl(req: Request): string {
+  const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = req.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const protocol = forwardedProto || req.protocol || "http";
+  const host = forwardedHost || req.get("host") || `localhost:${process.env.PORT || 5000}`;
+  return `${protocol}://${host}`;
+}
+
+function resolveServerBaseUrl(req: Request): string {
+  const explicitBaseUrl = process.env.APP_URL?.trim() || process.env.SITE_URL?.trim();
+  if (explicitBaseUrl) {
+    return explicitBaseUrl.replace(/\/+$/, "");
+  }
+
+  return resolveForwardedRequestBaseUrl(req);
+}
+
+function resolveClientBaseUrl(req: Request): string {
+  const explicitBaseUrl =
+    process.env.CLIENT_URL?.trim() ||
+    process.env.APP_URL?.trim() ||
+    process.env.SITE_URL?.trim();
+
+  if (explicitBaseUrl) {
+    return explicitBaseUrl.replace(/\/+$/, "");
+  }
+
+  return resolveForwardedRequestBaseUrl(req);
+}
+
+function resolveFonepayCallbackUrl(req: Request): string {
+  const configuredCallbackUrl = process.env.FONEPAY_PG_CALLBACK_URL?.trim();
+  if (configuredCallbackUrl) {
+    return configuredCallbackUrl;
+  }
+
+  return `${resolveServerBaseUrl(req)}/api/payments/fonepay/callback`;
+}
+
+function buildClientRedirectUrl(
+  req: Request,
+  pathname: string,
+  params?: Record<string, string | null | undefined>,
+): string {
+  const url = new URL(pathname, `${resolveClientBaseUrl(req)}/`);
+
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value) {
+      url.searchParams.set(key, value);
+    }
+  }
+
+  return url.toString();
 }
 
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
@@ -4338,12 +4396,349 @@ ${Array.from(uniqueEntries.entries())
         return res.json({ success: true, data: updated });
       } catch (err) {
         console.error("Error in PATCH /api/orders/:id/payment-method", err);
-        return res
+      return res
           .status(500)
           .json({ success: false, error: "Failed to update payment method" });
       }
     },
   );
+
+  const fonepayCheckoutSchema = z.object({
+    orderId: z.string().min(1),
+    remarks1: z.string().trim().max(100).optional(),
+    remarks2: z.string().trim().max(100).optional(),
+  });
+
+  const posBillRequestSchema = z.object({
+    customerName: z.string().optional(),
+    customerEmail: z.string().email().optional().nullable(),
+    customerPhone: z.string().optional().nullable(),
+    items: z.array(z.any()).min(1),
+    source: z.string().optional(),
+    paymentMethod: z.string().min(1),
+    isPaid: z.boolean().optional(),
+    deliveryRequired: z.boolean().optional(),
+    deliveryProvider: z.string().optional().nullable(),
+    deliveryLocation: z.string().optional().nullable(),
+    deliveryAddress: z.string().optional().nullable(),
+    cashReceived: z.number().optional().nullable(),
+    discountAmount: z.number().optional(),
+    notes: z.string().optional(),
+  });
+  const posFonepaySessionSchema = posBillRequestSchema.extend({
+    orderId: z.string().min(1).optional(),
+  });
+
+  app.post(
+    "/api/payments/fonepay/web/initiate",
+    validateRequest(fonepayCheckoutSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { orderId, remarks1, remarks2 } = req.body as z.infer<typeof fonepayCheckoutSchema>;
+        const order = await storage.getOrderById(orderId);
+
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (!canAccessOrderRecord(req, order)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
+
+        if (order.paymentMethod !== "fonepay") {
+          return res.status(400).json({ success: false, error: "Order is not a Fonepay payment" });
+        }
+
+        if (order.paymentVerified === "verified") {
+          return res.status(400).json({ success: false, error: "Order has already been paid" });
+        }
+
+        const result = fonepayService.generateWebPaymentUrl({
+          orderId: order.id,
+          amount: order.total,
+          remarks1: remarks1 ?? `Order ${order.id.slice(-8).toUpperCase()}`,
+          remarks2: remarks2 ?? "RARE Atelier",
+          callbackUrl: resolveFonepayCallbackUrl(req),
+        });
+
+        return res.json({ success: true, data: result });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/payments/fonepay/web/initiate");
+      }
+    },
+  );
+
+  app.get("/api/payments/fonepay/callback", async (req: Request, res: Response) => {
+    const prn = getQueryParam(req.query.PRN);
+    const orderId = prn ? fonepayService.extractOrderIdFromPrn(prn) : null;
+
+    if (!prn || !orderId) {
+      return res.redirect(
+        buildClientRedirectUrl(req, "/checkout/payment", {
+          method: "fonepay",
+          fonepay_status: "error",
+          message: "Invalid Fonepay callback payload.",
+        }),
+      );
+    }
+
+    try {
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.redirect(
+          buildClientRedirectUrl(req, "/checkout/payment", {
+            method: "fonepay",
+            fonepay_status: "error",
+            message: "Associated order was not found.",
+          }),
+        );
+      }
+
+      grantGuestOrderAccess(req, order.id);
+
+      if (order.paymentMethod !== "fonepay") {
+        return res.redirect(
+          buildClientRedirectUrl(req, "/checkout/payment", {
+            orderId: order.id,
+            method: "fonepay",
+            fonepay_status: "error",
+            message: "Order is no longer set to use Fonepay.",
+          }),
+        );
+      }
+
+      fonepayService.validateWebResponse({
+        PRN: prn,
+        PID: getQueryParam(req.query.PID),
+        PS: getQueryParam(req.query.PS),
+        RC: getQueryParam(req.query.RC),
+        UID: getQueryParam(req.query.UID),
+        BC: getQueryParam(req.query.BC),
+        INI: getQueryParam(req.query.INI),
+        P_AMT: getQueryParam(req.query.P_AMT),
+        R_AMT: getQueryParam(req.query.R_AMT),
+        DV: getQueryParam(req.query.DV),
+      });
+
+      const verification = await fonepayService.verifyWebPayment({
+        prn,
+        uid: getQueryParam(req.query.UID) ?? "",
+        amount: getQueryParam(req.query.P_AMT) ?? order.total,
+        pid: getQueryParam(req.query.PID) ?? undefined,
+        bankCode: getQueryParam(req.query.BC) ?? undefined,
+      });
+
+      if (verification.success) {
+        if (order.paymentVerified !== "verified") {
+          await storage.updateOrderPaymentVerified(order.id, "verified");
+        }
+
+        if (order.status === "pending") {
+          await storage.updateOrderStatus(order.id, "processing");
+        }
+
+        return res.redirect(buildClientRedirectUrl(req, `/order-confirmation/${order.id}`));
+      }
+
+      return res.redirect(
+        buildClientRedirectUrl(req, "/checkout/payment", {
+          orderId: order.id,
+          method: "fonepay",
+          fonepay_status: "failed",
+          message: verification.message || "Payment could not be verified.",
+        }),
+      );
+    } catch (err) {
+      logger.error("Fonepay callback verification failed", { source: "FONEPAY" }, err);
+
+      return res.redirect(
+        buildClientRedirectUrl(req, "/checkout/payment", {
+          orderId,
+          method: "fonepay",
+          fonepay_status: "error",
+          message: err instanceof Error ? err.message : "Fonepay verification failed.",
+        }),
+      );
+    }
+  });
+
+  app.post(
+    "/api/payments/fonepay/qr",
+    validateRequest(fonepayCheckoutSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const { orderId, remarks1, remarks2 } = req.body as z.infer<typeof fonepayCheckoutSchema>;
+        const order = await storage.getOrderById(orderId);
+
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        if (!canAccessOrderRecord(req, order)) {
+          return res.status(403).json({ success: false, error: "Forbidden" });
+        }
+
+        if (order.paymentMethod !== "fonepay") {
+          return res.status(400).json({ success: false, error: "Order is not a Fonepay payment" });
+        }
+
+        const result = await fonepayService.generateQrPayment({
+          orderId: order.id,
+          amount: order.total,
+          remarks1: remarks1 ?? `Order ${order.id.slice(-8).toUpperCase()}`,
+          remarks2: remarks2 ?? "RARE Atelier",
+        });
+
+        return res.json({ success: true, data: result });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/payments/fonepay/qr");
+      }
+    },
+  );
+
+  app.get("/api/payments/fonepay/qr/:prn", async (req: Request, res: Response) => {
+    try {
+      const prn = getQueryParam(req.params.prn);
+      if (!prn) {
+        return res.status(400).json({ success: false, error: "PRN is required" });
+      }
+
+      const orderId = fonepayService.extractOrderIdFromPrn(prn);
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: "Invalid PRN" });
+      }
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      if (!canAccessOrderRecord(req, order)) {
+        return res.status(403).json({ success: false, error: "Forbidden" });
+      }
+
+      const verification = await fonepayService.verifyQrPayment(prn);
+
+      if (verification.success) {
+        if (order.paymentVerified !== "verified") {
+          await storage.updateOrderPaymentVerified(order.id, "verified");
+        }
+
+        if (order.status === "pending") {
+          await storage.updateOrderStatus(order.id, "processing");
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          status: verification.status,
+          paymentStatus: verification.success,
+          raw: verification.data,
+        },
+      });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/payments/fonepay/qr/:prn");
+    }
+  });
+
+  app.post(
+    "/api/admin/payments/fonepay/pos/initiate",
+    requireAdmin,
+    validateRequest(posFonepaySessionSchema),
+    async (req: Request, res: Response) => {
+      try {
+        const payload = req.body as z.infer<typeof posFonepaySessionSchema>;
+        const existingOrder = payload.orderId ? await storage.getOrderById(payload.orderId) : null;
+
+        if (existingOrder && existingOrder.paymentMethod !== "fonepay") {
+          return res.status(400).json({ success: false, error: "Order is not a Fonepay POS payment" });
+        }
+
+        const posOrder = existingOrder
+          ? existingOrder
+          : (await createPosOrderSession({
+            ...payload,
+            paymentMethod: "fonepay",
+          })).order;
+
+        const result = await fonepayService.generateQrPayment({
+          orderId: posOrder.id,
+          amount: posOrder.total,
+          remarks1: `POS ${posOrder.id.slice(-8).toUpperCase()}`,
+          remarks2: "RARE Atelier POS",
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            orderId: posOrder.id,
+            ...result,
+          },
+        });
+      } catch (err) {
+        handleApiError(res, err, "POST /api/admin/payments/fonepay/pos/initiate");
+      }
+    },
+  );
+
+  app.get("/api/admin/payments/fonepay/pos/:prn", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const prn = getQueryParam(req.params.prn);
+      if (!prn) {
+        return res.status(400).json({ success: false, error: "PRN is required" });
+      }
+
+      const orderId = fonepayService.extractOrderIdFromPrn(prn);
+      if (!orderId) {
+        return res.status(400).json({ success: false, error: "Invalid PRN" });
+      }
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ success: false, error: "Order not found" });
+      }
+
+      const verification = await fonepayService.verifyQrPayment(prn);
+      if (!verification.success) {
+        return res.json({
+          success: true,
+          data: {
+            orderId,
+            status: verification.status,
+            paymentStatus: false,
+            raw: verification.data,
+            bill: null,
+          },
+        });
+      }
+
+      if (order.paymentVerified !== "verified") {
+        await storage.updateOrderPaymentVerified(order.id, "verified");
+      }
+
+      const adminUser = req.user as Express.User | undefined;
+      const bill = await issuePosBillFromOrder({
+        orderId: order.id,
+        processedById: adminUser?.id ?? null,
+        processedByName: adminUser?.name ?? adminUser?.email ?? "Admin",
+        isPaid: true,
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          orderId,
+          status: verification.status,
+          paymentStatus: true,
+          raw: verification.data,
+          bill,
+        },
+      });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/admin/payments/fonepay/pos/:prn");
+    }
+  });
 
   app.get("/api/uploads/payment-proofs/:filename", (req: Request, res: Response) => {
     const filename = req.params.filename as string;
@@ -4787,11 +5182,9 @@ ${Array.from(uniqueEntries.entries())
           });
         }
 
-        // Use unified local WebP service
-        const asset = await processAndStoreImage(
+        const asset = await uploadToCloudinary(
           req.file.buffer,
           section,
-          req.file.originalname || "image.jpg"
         );
 
         const [{ max }] = await db
@@ -4811,7 +5204,7 @@ ${Array.from(uniqueEntries.entries())
           .values({
             section,
             imageUrl: asset.url,
-            cloudinaryPublicId: null, // No longer using Cloudinary for new uploads
+            cloudinaryPublicId: asset.publicId,
             altText,
             deviceTarget,
             assetType: "image",
@@ -9992,268 +10385,28 @@ ${Array.from(uniqueEntries.entries())
   app.post(
     "/api/admin/bills/pos",
     requireAdmin,
-    validateRequest(z.object({
-      customerName: z.string().optional(),
-      customerEmail: z.string().email().optional().nullable(),
-      customerPhone: z.string().optional().nullable(),
-      items: z.array(z.any()).min(1),
-      source: z.string().optional(),
-      paymentMethod: z.string().min(1),
-      isPaid: z.boolean().optional(),
-      deliveryRequired: z.boolean().optional(),
-      deliveryProvider: z.string().optional().nullable(),
-      deliveryLocation: z.string().optional().nullable(),
-      deliveryAddress: z.string().optional().nullable(),
-      cashReceived: z.number().optional().nullable(),
-      discountAmount: z.number().optional(),
-      notes: z.string().optional(),
-    })),
+    validateRequest(posBillRequestSchema),
     async (req: Request, res: Response) => {
       try {
-        const {
-          customerName,
-          customerEmail,
-          customerPhone,
-          items,
-          source,
-          paymentMethod,
-          isPaid,
-          deliveryRequired,
-          deliveryProvider,
-          deliveryLocation,
-          deliveryAddress,
-          cashReceived,
-          discountAmount,
-          notes,
-        } = req.body;
+        const payload = req.body as z.infer<typeof posBillRequestSchema>;
+        const { order } = await createPosOrderSession(payload);
+        const adminUser = req.user as Express.User | undefined;
+        const bill = await issuePosBillFromOrder({
+          orderId: order.id,
+          processedById: adminUser?.id ?? null,
+          processedByName: adminUser?.name ?? adminUser?.email ?? "Admin",
+          isPaid: payload.isPaid,
+          cashReceived: payload.cashReceived,
+          notes: payload.notes ?? null,
+        });
 
-      const normalizedSource = (source || "pos").toLowerCase();
-      const isSocialSource = !["pos", "website", "store"].includes(normalizedSource);
-
-      if (isSocialSource) {
-        if (!customerName?.trim() || !customerPhone?.trim() || !deliveryProvider?.trim() || !deliveryLocation?.trim()) {
-          return res.status(400).json({
-            success: false,
-            error: "Customer name, phone, delivery partner and delivery location are required for social orders.",
-          });
-        }
+        res.json({ success: true, data: bill });
+      } catch (err) {
+        console.error("Error in POST /api/admin/bills/pos", err);
+        res.status(500).json({ success: false, error: "Failed to create POS bill" });
       }
-
-      const subtotal = items.reduce((s: number, i: any) => s + i.lineTotal, 0);
-      const taxAmount = Math.round(subtotal * 0.13);
-      const discount = discountAmount ?? 0;
-      const total = subtotal + taxAmount - discount;
-      const change = paymentMethod === "cash" ? ((cashReceived ?? 0) - total) : 0;
-
-      const billNumber = await generateBillNumber();
-      const user = req.user as any;
-      const effectiveCustomerName = customerName || "Walk-in Customer";
-      const effectiveCustomerEmail =
-        customerEmail?.trim().toLowerCase() ||
-        `pos-${Date.now()}-${Math.round(Math.random() * 1_000_000)}@local.rare`;
-
-      await storage.upsertCustomerFromOrder(
-        effectiveCustomerEmail,
-        effectiveCustomerName.split(" ").slice(0, 1).join(" ") || "Walk-in",
-        effectiveCustomerName.split(" ").slice(1).join(" ") || "Customer",
-        customerPhone || null,
-      );
-
-      const createdOrder = await storage.createOrder({
-        email: effectiveCustomerEmail,
-        fullName: effectiveCustomerName,
-        addressLine1: deliveryAddress || deliveryLocation || "POS Counter",
-        addressLine2: null,
-        city: deliveryLocation || "POS",
-        region: deliveryLocation || "POS",
-        postalCode: "00000",
-        country: "Nepal",
-        total,
-        paymentMethod,
-        source: normalizedSource,
-        deliveryRequired: isSocialSource ? true : (deliveryRequired ?? false),
-        deliveryProvider: deliveryProvider ?? null,
-        deliveryLocation: deliveryLocation ?? null,
-        deliveryAddress: deliveryAddress ?? null,
-        items: items.map((item: any) => ({
-          productId: String(item.productId),
-          variantId: item.variantId ? Number(item.variantId) : null,
-          size: item.size || item.selectedSize || "",
-          color: item.variantColor || item.color || null,
-          quantity: Number(item.quantity ?? 0),
-          unitPrice: Number(item.unitPrice ?? 0),
-        })),
-      });
-
-      // Keep POS-created orders visually distinguishable in Orders page.
-      await db
-        .update(orders)
-        .set({ status: "pos" })
-        .where(eq(orders.id, createdOrder.id));
-
-      const billId = crypto.randomUUID();
-      await db.execute(sql`
-        insert into bills (
-          id,
-          bill_number,
-          order_id,
-          customer_name,
-          customer_email,
-          customer_phone,
-          items,
-          subtotal,
-          tax_rate,
-          tax_amount,
-          discount_amount,
-          total_amount,
-          payment_method,
-          source,
-          is_paid,
-          delivery_required,
-          delivery_provider,
-          delivery_address,
-          cash_received,
-          change_given,
-          processed_by,
-          processed_by_id,
-          notes,
-          bill_type,
-          status
-        ) values (
-          ${billId},
-          ${billNumber},
-          ${createdOrder.id},
-          ${effectiveCustomerName},
-          ${customerEmail || null},
-          ${customerPhone || null},
-          ${JSON.stringify(items)}::jsonb,
-          ${String(subtotal)},
-          ${"13"},
-          ${String(taxAmount)},
-          ${String(discount)},
-          ${String(total)},
-          ${paymentMethod},
-          ${normalizedSource},
-          ${isPaid ?? true},
-          ${isSocialSource ? true : (deliveryRequired ?? false)},
-          ${deliveryProvider ?? null},
-          ${deliveryLocation
-            ? [deliveryLocation, deliveryAddress].filter(Boolean).join(" — ")
-            : (deliveryAddress ?? null)},
-          ${cashReceived ? String(cashReceived) : null},
-          ${change > 0 ? String(change) : null},
-          ${user?.name ?? user?.email ?? "Admin"},
-          ${user?.id ?? null},
-          ${notes ?? null},
-          ${"pos"},
-          ${"issued"}
-        )
-      `);
-
-      const [bill] = await db
-        .select(billSelectColumns)
-        .from(bills)
-        .where(eq(bills.id, billId))
-        .limit(1);
-
-      if (!bill) {
-        throw new Error(`Failed to load generated POS bill ${billId}`);
-      }
-
-      for (const item of items) {
-        const productId = String(item.productId);
-        const size = item.size || item.selectedSize || null;
-        const color = (item.variantColor || item.color || null) as string | null;
-        const requestedVariantId = item.variantId ? Number(item.variantId) : null;
-
-        let variantToUpdate:
-          | { id: number; stock: number | null }
-          | undefined;
-
-        if (requestedVariantId) {
-          [variantToUpdate] = await db
-            .select({ id: productVariants.id, stock: productVariants.stock })
-            .from(productVariants)
-            .where(eq(productVariants.id, requestedVariantId))
-            .limit(1);
-        }
-
-        if (!variantToUpdate && size) {
-          if (color) {
-            [variantToUpdate] = await db
-              .select({ id: productVariants.id, stock: productVariants.stock })
-              .from(productVariants)
-              .where(and(
-                eq(productVariants.productId, productId),
-                eq(productVariants.size, size),
-                eq(productVariants.color, color),
-              ))
-              .limit(1);
-          }
-
-          if (!variantToUpdate) {
-            [variantToUpdate] = await db
-              .select({ id: productVariants.id, stock: productVariants.stock })
-              .from(productVariants)
-              .where(and(
-                eq(productVariants.productId, productId),
-                eq(productVariants.size, size),
-              ))
-              .limit(1);
-          }
-        }
-
-        if (variantToUpdate) {
-          const newStock = Math.max(0, (variantToUpdate.stock ?? 0) - Number(item.quantity ?? 0));
-          await db
-            .update(productVariants)
-            .set({ stock: newStock, updatedAt: new Date() })
-            .where(eq(productVariants.id, variantToUpdate.id));
-        }
-
-        const allVariants = await db
-          .select()
-          .from(productVariants)
-          .where(eq(productVariants.productId, productId));
-
-        if (allVariants.length > 0) {
-          const totalStock = allVariants.reduce((sum, variant) => sum + (variant.stock ?? 0), 0);
-
-          await db
-            .update(products)
-            .set({
-              stock: totalStock,
-              isActive: totalStock > 0 ? sql`${products.isActive}` : false,
-              updatedAt: new Date(),
-            })
-            .where(eq(products.id, productId));
-        } else {
-          const existingProduct = await db
-            .select({ stock: products.stock })
-            .from(products)
-            .where(eq(products.id, productId))
-            .limit(1);
-
-          if (existingProduct.length > 0) {
-            const newStock = Math.max(0, (existingProduct[0].stock ?? 0) - Number(item.quantity ?? 0));
-            await db
-              .update(products)
-              .set({
-                stock: newStock,
-                isActive: newStock > 0 ? sql`${products.isActive}` : false,
-                updatedAt: new Date(),
-              })
-              .where(eq(products.id, productId));
-          }
-        }
-      }
-
-      res.json({ success: true, data: bill });
-    } catch (err) {
-      console.error("Error in POST /api/admin/bills/pos", err);
-      res.status(500).json({ success: false, error: "Failed to create POS bill" });
-    }
-  });
+    },
+  );
 
   // PUT /api/admin/bills/:id/void — void a bill
   app.put("/api/admin/bills/:id/void", requireAdmin, async (req: Request, res: Response) => {
@@ -10822,6 +10975,9 @@ ${Array.from(uniqueEntries.entries())
     try {
       const category = getQueryParam(req.query.category);
       const provider = getQueryParam(req.query.provider);
+      if (provider === "local") {
+        return res.json({ success: true, data: [], total: 0 });
+      }
       const search = getQueryParam(req.query.search)?.trim() ?? "";
       const folderPathParam = getQueryParam(req.query.folderPath);
       const assetTypeParam = getQueryParam(req.query.assetType);
@@ -10850,7 +11006,7 @@ ${Array.from(uniqueEntries.entries())
 
       const conditions = [
         categoryCondition,
-        provider ? eq(mediaAssets.provider, provider) : sql`true`,
+        provider ? eq(mediaAssets.provider, provider) : sql`${mediaAssets.provider} <> 'local'`,
         assetType ? eq(mediaAssets.assetType, assetType) : sql`true`,
         normalizedFolderPath === null
           ? sql`true`
@@ -10928,34 +11084,22 @@ ${Array.from(uniqueEntries.entries())
     }
   });
 
-  // ── Dev / local image library (no upload) ─────────────────────────────
-  // Lists images currently present in the server's local uploads directory.
-  // Useful when uploads are not persistent on Railway free plans.
+  // ── Legacy local storefront image library (disabled) ───────────────────
   app.get("/api/admin/storefront-image-library", requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const images = listImagesInUploadsDir({ maxDepth: 5, maxFiles: 800 });
-      // Return only a clean subset for thumbnails
-      return res.json({
-        success: true,
-        data: images.map((img) => ({
-          filename: img.filename,
-          url: img.url,
-          relPath: img.relPath,
-        })),
-      });
-    } catch (err) {
-      handleApiError(res, err, "GET /api/admin/storefront-image-library");
-    }
+    return res.json({ success: true, data: [] });
   });
 
   app.get("/api/admin/folders", requireAdmin, async (req: Request, res: Response) => {
     try {
       const category = getQueryParam(req.query.category);
       const provider = getQueryParam(req.query.provider);
+      if (provider === "local") {
+        return res.json({ success: true, data: [], total: 0 });
+      }
 
       const baseConditions = [
         category ? eq(mediaAssets.category, category) : sql`true`,
-        provider ? eq(mediaAssets.provider, provider) : sql`true`,
+        provider ? eq(mediaAssets.provider, provider) : sql`${mediaAssets.provider} <> 'local'`,
       ];
 
       const fileRows = await db
@@ -11086,32 +11230,11 @@ ${Array.from(uniqueEntries.entries())
     }
   });
 
-  app.delete("/api/admin/storefront-image-library", requireAdmin, async (req: Request, res: Response) => {
-    try {
-      const relPath = typeof req.body?.relPath === "string" ? req.body.relPath : "";
-      if (!relPath) {
-        return sendError(res, "Missing relPath", undefined, 400);
-      }
-
-      const normalizedRelPath = relPath.replace(/^\/+/, "");
-      const path = await import("path");
-      const fs = await import("fs");
-      const resolvedUploadsDir = path.resolve(UPLOADS_DIR);
-      const targetPath = path.resolve(UPLOADS_DIR, normalizedRelPath);
-
-      if (!targetPath.startsWith(resolvedUploadsDir)) {
-        return sendError(res, "Invalid image path", undefined, 400);
-      }
-
-      if (!fs.existsSync(targetPath)) {
-        return res.status(404).json({ success: false, error: "Image not found" });
-      }
-
-      fs.unlinkSync(targetPath);
-      return res.json({ success: true });
-    } catch (err) {
-      handleApiError(res, err, "DELETE /api/admin/storefront-image-library");
-    }
+  app.delete("/api/admin/storefront-image-library", requireAdmin, async (_req: Request, res: Response) => {
+    return res.status(410).json({
+      success: false,
+      error: "Local storefront uploads are disabled. Use cloud-backed admin images instead.",
+    });
   });
 
   app.post(
@@ -11152,7 +11275,7 @@ ${Array.from(uniqueEntries.entries())
     async (req: Request, res: Response) => {
       try {
         const category = String((req.body as any)?.category || "product");
-        const provider = String((req.body as any)?.provider || "local");
+        const provider = String((req.body as any)?.provider || "cloudinary");
         const folderPathRaw = String((req.body as any)?.folderPath || "");
         const expiresAtRaw = (req.body as any)?.expiresAt;
         const qualityMode = String((req.body as any)?.qualityMode || "").toLowerCase();
@@ -11164,27 +11287,18 @@ ${Array.from(uniqueEntries.entries())
           return sendError(res, "Missing images", undefined, 400);
         }
 
+        if (provider === "local") {
+          return res.status(410).json({
+            success: false,
+            error: "Local uploads are disabled. Upload to Cloudinary or Tigris instead.",
+          });
+        }
+
         const results = [];
 
         for (const file of files) {
           const cleanedName = sanitizeUploadFilename(file.originalname || "image.jpg");
-          if (provider === "local") {
-            const asset = await processAndStoreImage(
-              file.buffer,
-              category,
-              cleanedName
-            );
-            const [row] = await db
-              .update(mediaAssets)
-              .set({
-                folderPath: normalizedFolderPath,
-                assetType: "file",
-                expiresAt,
-              })
-              .where(eq(mediaAssets.id, asset.id))
-              .returning();
-            results.push(row ?? asset);
-          } else if (provider === "tigris") {
+          if (provider === "tigris") {
             const folderPrefix = normalizedFolderPath ? `${normalizedFolderPath}/` : "";
             const fileName = `media/${category}/${folderPrefix}${Date.now()}_${cleanedName.replace(/\.[^.]+$/, "")}.webp`;
             const webpBuffer = await sharp(file.buffer)

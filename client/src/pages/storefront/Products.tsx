@@ -11,6 +11,7 @@ import {
   type ProductApi,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { useThemeStore } from "@/store/theme";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
@@ -650,6 +651,21 @@ export default function Products() {
                   const primaryImage = activeColorImages[0] ?? mainImage;
                   const secondaryImage =
                     activeColorImages[1] ?? hoverImage ?? primaryImage;
+                  const optimizedPrimaryImage =
+                    buildStorefrontImageUrl(primaryImage, {
+                      width: isStuffyClone ? 960 : 720,
+                      height: isStuffyClone ? 1152 : 1200,
+                      fit: "cover",
+                      quality: 82,
+                    }) || primaryImage;
+                  const optimizedSecondaryImage =
+                    buildStorefrontImageUrl(secondaryImage, {
+                      width: isStuffyClone ? 960 : 720,
+                      height: isStuffyClone ? 1152 : 1200,
+                      fit: "cover",
+                      quality: 82,
+                    }) || secondaryImage;
+                  const hasHoverImage = Boolean(secondaryImage && secondaryImage !== primaryImage);
                   const hasSaleBadge = Boolean(
                     product.saleActive && Number(product.salePercentage) > 0,
                   );
@@ -703,25 +719,37 @@ export default function Products() {
                             </div>
                           ) : null}
                           <img
-                            src={primaryImage}
+                            src={optimizedPrimaryImage}
                             alt={product.name}
                             loading="lazy"
+                            decoding="async"
+                            width={720}
+                            height={1200}
+                            sizes={isStuffyClone ? "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 20vw" : "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"}
                             className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                              hasHoverImage
+                                ? isStuffyClone
+                                  ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                                : ""
                             }`}
                           />
-                          <img
-                            src={secondaryImage}
-                            alt={product.name}
-                            loading="lazy"
-                            className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                            }`}
-                          />
+                          {hasHoverImage ? (
+                            <img
+                              src={optimizedSecondaryImage}
+                              alt={product.name}
+                              loading="lazy"
+                              decoding="async"
+                              width={720}
+                              height={1200}
+                              sizes={isStuffyClone ? "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 20vw" : "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"}
+                              className={`absolute inset-0 h-full w-full object-cover ${
+                                isStuffyClone
+                                  ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                              }`}
+                            />
+                          ) : null}
                         </div>
                       </div>
 

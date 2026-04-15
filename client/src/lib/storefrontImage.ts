@@ -2,6 +2,7 @@ const ALLOWED_REMOTE_IMAGE_HOSTS = [
   "rare.t3.tigrisfiles.io",
   "cdn2.blanxer.com",
   "wsrv.nl",
+  "res.cloudinary.com",
 ];
 
 function isRemoteImageAllowed(src: string): boolean {

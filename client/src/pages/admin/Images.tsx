@@ -57,7 +57,7 @@ const MAX_IMAGE_SIZE_LABEL = "30MB";
 export default function AdminImagesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<"local" | "cloudinary" | "tigris">("tigris");
+  const [provider, setProvider] = useState<"cloudinary" | "tigris">("tigris");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");

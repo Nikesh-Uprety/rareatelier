@@ -1,5 +1,5 @@
 import { apiRequest } from "./queryClient";
-import type { ProductApi, CategoryApi } from "./api";
+import type { CategoryApi, FonepayQrPayload, ProductApi } from "./api";
 import {
   normalizeStorefrontProductsLayoutConfig,
   type StorefrontProductsLayoutConfig,
@@ -436,7 +436,7 @@ function uploadWithProgress<T>(options: {
 export async function uploadAdminImage(input: {
   file: File;
   category: string;
-  provider: "local" | "cloudinary" | "tigris";
+  provider: "cloudinary" | "tigris";
   folderPath?: string | null;
   expiresAt?: string | null;
   qualityMode?: "medium" | "high";
@@ -1028,6 +1028,30 @@ export interface AdminBill {
   createdAt: string;
 }
 
+export interface AdminPosFonepaySessionInit {
+  success: boolean;
+  data?: {
+    orderId: string;
+    prn: string;
+    amount: string;
+    qrPayload: FonepayQrPayload;
+    qrData: unknown;
+  };
+  error?: string;
+}
+
+export interface AdminPosFonepaySessionVerification {
+  success: boolean;
+  data?: {
+    orderId: string;
+    status: string;
+    paymentStatus: boolean;
+    raw: unknown;
+    bill: AdminBill | null;
+  };
+  error?: string;
+}
+
 export async function fetchBills(): Promise<AdminBill[]> {
   const res = await apiRequest("GET", "/api/admin/bills");
   const json = (await res.json()) as { success: boolean; data: AdminBill[] };
@@ -1060,6 +1084,34 @@ export async function createPosBill(data: {
   const res = await apiRequest("POST", "/api/admin/bills/pos", data);
   const json = (await res.json()) as { success: boolean; data: AdminBill };
   return json.data;
+}
+
+export async function initiateAdminPosFonepaySession(data: {
+  orderId?: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  items: any[];
+  source?: string;
+  paymentMethod: string;
+  isPaid?: boolean;
+  deliveryRequired?: boolean;
+  deliveryProvider?: string | null;
+  deliveryLocation?: string | null;
+  deliveryAddress?: string | null;
+  cashReceived?: number | null;
+  discountAmount?: number;
+  notes?: string;
+}): Promise<AdminPosFonepaySessionInit> {
+  const res = await apiRequest("POST", "/api/admin/payments/fonepay/pos/initiate", data);
+  return (await res.json()) as AdminPosFonepaySessionInit;
+}
+
+export async function verifyAdminPosFonepaySession(
+  prn: string,
+): Promise<AdminPosFonepaySessionVerification> {
+  const res = await apiRequest("GET", `/api/admin/payments/fonepay/pos/${encodeURIComponent(prn)}`);
+  return (await res.json()) as AdminPosFonepaySessionVerification;
 }
 
 export async function voidBill(id: string): Promise<AdminBill> {

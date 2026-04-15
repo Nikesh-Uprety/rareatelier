@@ -3,17 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+
 import { cn } from "@/lib/utils";
-import { deleteAdminImage, deleteAdminStorefrontImage, fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
+import { deleteAdminImage, fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Image as ImageIcon, Loader2, RefreshCcw, Trash2, Eye, CheckCircle2 } from "lucide-react";
-
-type StorefrontImageEntry = {
-  filename: string;
-  url: string;
-  relPath: string;
-};
 
 type StorefrontLibraryEntry = {
   key: string;
@@ -21,9 +15,8 @@ type StorefrontLibraryEntry = {
   url: string;
   thumbnailUrl?: string;
   previewUrl?: string;
-  provider: "local" | "cloudinary";
-  relPath?: string;
-  id?: string;
+  provider: "cloudinary" | "tigris";
+  id: string;
   category?: string;
 };
 
@@ -55,7 +48,7 @@ export default function StorefrontImagePicker() {
   );
   const [exploreImage, setExploreImage] = useState<string>(EXPLORE_COLLECTION_IMAGE_DEFAULT);
   const [search, setSearch] = useState("");
-  const [providerFilter, setProviderFilter] = useState<"all" | "local" | "cloudinary">("all");
+  const [providerFilter, setProviderFilter] = useState<"all" | "cloudinary" | "tigris">("all");
   const [imageToDelete, setImageToDelete] = useState<StorefrontLibraryEntry | null>(null);
 
   useEffect(() => {
@@ -74,52 +67,32 @@ export default function StorefrontImagePicker() {
   }, []);
 
   const imagesQuery = useQuery<StorefrontLibraryEntry[]>({
-    queryKey: ["admin", "storefront-image-library"],
+    queryKey: ["admin", "storefront-image-library", "cloud-only"],
     queryFn: async (): Promise<StorefrontLibraryEntry[]> => {
-      const [localImages, cloudinaryImages] = await Promise.all([
-        apiRequest("GET", "/api/admin/storefront-image-library")
-          .then((res) => res.json())
-          .then((json) => ((json.data as StorefrontImageEntry[]) ?? []).map((img) => ({
-            key: `local:${img.relPath}`,
-            filename: img.filename,
-            url: img.url,
-            thumbnailUrl: img.url,
-            previewUrl: img.url,
-            relPath: img.relPath,
-            provider: "local" as const,
-          }))),
-        fetchAdminImages({ provider: "cloudinary", limit: 120 }).then((assets) =>
-          assets
-            .filter((asset: AdminImageAsset): asset is AdminImageAsset & { url: string } => Boolean(asset.url))
-            .map((asset) => ({
-              key: `cloudinary:${asset.id}`,
-              id: asset.id,
-              filename: asset.filename || asset.publicId || `cloudinary-${asset.id.slice(0, 8)}`,
-              url: asset.url,
-              thumbnailUrl: asset.thumbnailUrl ?? asset.url,
-              previewUrl: asset.previewUrl ?? asset.url,
-              provider: "cloudinary" as const,
-              category: asset.category,
-            })),
-        ),
-      ]);
-
-      return [...cloudinaryImages, ...localImages];
+      const assets = await fetchAdminImages({ limit: 120 });
+      return assets
+        .filter(
+          (asset): asset is AdminImageAsset & { url: string } =>
+            Boolean(asset.url) && (asset.provider === "cloudinary" || asset.provider === "tigris"),
+        )
+        .map((asset) => ({
+          key: `${asset.provider}:${asset.id}`,
+          id: asset.id,
+          filename: asset.filename || asset.publicId || `${asset.provider}-${asset.id.slice(0, 8)}`,
+          url: asset.url,
+          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+          previewUrl: asset.previewUrl ?? asset.url,
+          provider: asset.provider as "cloudinary" | "tigris",
+          category: asset.category,
+        }));
     },
     staleTime: 60 * 1000,
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (entry: StorefrontLibraryEntry) => {
-      if (entry.provider === "cloudinary" && entry.id) {
-        await deleteAdminImage(entry.id);
-        return entry;
-      }
-      if (entry.relPath) {
-        await deleteAdminStorefrontImage(entry.relPath);
-        return entry;
-      }
-      throw new Error("Missing image identifier");
+      await deleteAdminImage(entry.id);
+      return entry;
     },
     onSuccess: (deletedEntry) => {
       const deletedUrl = deletedEntry?.url;
@@ -140,7 +113,7 @@ export default function StorefrontImagePicker() {
       queryClient.invalidateQueries({ queryKey: ["admin", "images"] });
       setImageToDelete(null);
       toast({
-        title: deletedEntry.provider === "cloudinary" ? "Cloudinary image deleted" : "Storefront image deleted",
+        title: `${deletedEntry.provider === "cloudinary" ? "Cloudinary" : "Tigris"} image deleted`,
         description: deletedUrl
           ? "Any slot using that image was reset to its default visual."
           : "The image was removed from the library.",
@@ -170,9 +143,9 @@ export default function StorefrontImagePicker() {
   }, [imagesQuery.data, providerFilter, search]);
 
   const groupedImages = useMemo(() => {
-    const local = filtered.filter((img) => img.provider === "local");
     const cloudinary = filtered.filter((img) => img.provider === "cloudinary");
-    return { cloudinary, local };
+    const tigris = filtered.filter((img) => img.provider === "tigris");
+    return { cloudinary, tigris };
   }, [filtered]);
 
   const libraryByUrl = useMemo(
@@ -252,8 +225,8 @@ export default function StorefrontImagePicker() {
             Storefront Images
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Pick local images from the server&apos;s <code>uploads/</code> folder. We store your mapping in
-            <code> localStorage</code> for now (upload is not available on Railway free plans).
+            Pick from your cloud-backed admin image library. We still store the slot mapping in
+            <code> localStorage</code> for now, but the images themselves now come from Cloudinary or Tigris.
           </p>
         </div>
       </div>
@@ -320,8 +293,8 @@ export default function StorefrontImagePicker() {
                 />
               </div>
               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
-                Local delete flow:
-                remove an uploaded image from the server, automatically reset any storefront slot using it back to the default image, then save again if you want to keep the updated slot mapping in this browser.
+                Cloud asset delete flow:
+                removing an image from the admin library will automatically reset any storefront slot using it back to the default image, then you can save again if you want to keep the updated slot mapping in this browser.
               </div>
             </div>
           </div>
@@ -348,7 +321,7 @@ export default function StorefrontImagePicker() {
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div>
             <h2 className="text-base font-black uppercase tracking-wider">Storefront image library</h2>
-            <p className="text-muted-foreground mt-1 text-sm">Browse both local uploads and Cloudinary assets in one place, then assign them to the active storefront slot.</p>
+            <p className="text-muted-foreground mt-1 text-sm">Browse cloud-backed admin images, then assign them to the active storefront slot.</p>
           </div>
           <div className="flex items-center gap-2">
             <Input
@@ -365,7 +338,7 @@ export default function StorefrontImagePicker() {
             [
               { key: "all" as const, label: "All images" },
               { key: "cloudinary" as const, label: "Cloudinary" },
-              { key: "local" as const, label: "Local uploads" },
+              { key: "tigris" as const, label: "Tigris" },
             ] as const
           ).map((option) => (
             <Button
@@ -389,7 +362,7 @@ export default function StorefrontImagePicker() {
           <div className="py-12 text-center text-sm text-muted-foreground">No images found.</div>
         ) : (
           <div className="space-y-8">
-            {(["cloudinary", "local"] as const).map((provider) => {
+            {(["cloudinary", "tigris"] as const).map((provider) => {
               const items = groupedImages[provider];
               if (items.length === 0) return null;
 
@@ -398,12 +371,12 @@ export default function StorefrontImagePicker() {
                   <div className="flex items-center justify-between">
                     <div>
                       <h3 className="text-sm font-black uppercase tracking-[0.22em]">
-                        {provider === "cloudinary" ? "Cloudinary Library" : "Local Uploads"}
+                        {provider === "cloudinary" ? "Cloudinary Library" : "Tigris Library"}
                       </h3>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {provider === "cloudinary"
                           ? "Reusable hosted images from your Cloudinary-backed media library."
-                          : "Files currently available inside local uploads for storefront mapping."}
+                          : "Optimized object-storage assets from your Tigris-backed media library."}
                       </p>
                     </div>
                     <span className="rounded-full border border-border/60 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -444,7 +417,7 @@ export default function StorefrontImagePicker() {
                                 "rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em]",
                                 provider === "cloudinary"
                                   ? "bg-sky-500/85 text-white"
-                                  : "bg-black/70 text-white",
+                                  : "bg-emerald-600/85 text-white",
                               )}>
                                 {provider}
                               </span>
@@ -464,7 +437,7 @@ export default function StorefrontImagePicker() {
                           </button>
                           <div className="flex items-center justify-between gap-2 border-t border-border/50 bg-background/90 px-3 py-2">
                             <span className="truncate text-[11px] text-muted-foreground">
-                              {img.provider === "local" ? img.relPath : img.filename}
+                              {img.filename}
                             </span>
                             <Button
                               type="button"
@@ -499,7 +472,7 @@ export default function StorefrontImagePicker() {
             <DialogDescription>
               {imageToDelete?.provider === "cloudinary"
                 ? "This removes the selected image from Cloudinary-backed admin media."
-                : "This removes the file from the local uploads folder used by the storefront image picker."}
+                : "This removes the selected image from Tigris-backed admin media."}
             </DialogDescription>
           </DialogHeader>
           {imageToDelete ? (
@@ -515,9 +488,7 @@ export default function StorefrontImagePicker() {
               <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm">
                 <p className="font-medium">{imageToDelete.filename}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {imageToDelete.provider === "cloudinary"
-                    ? `${imageToDelete.provider} • ${imageToDelete.category ?? "uncategorized"}`
-                    : imageToDelete.relPath}
+                  {`${imageToDelete.provider} • ${imageToDelete.category ?? "uncategorized"}`}
                 </p>
               </div>
               {currentlySelectedUrls.has(imageToDelete.url) && (

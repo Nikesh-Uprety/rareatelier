@@ -455,7 +455,10 @@ export default function Checkout() {
       setStep(2);
       toast({
         title: "Proceed to payment",
-        description: "Upload your payment screenshot to complete and create the order.",
+        description:
+          paymentMethod === "fonepay"
+            ? "Continue to Fonepay to authorize the payment securely."
+            : "Upload your payment screenshot to complete and create the order.",
       });
       setLocation(`/checkout/payment?method=${paymentMethod}`);
       return;

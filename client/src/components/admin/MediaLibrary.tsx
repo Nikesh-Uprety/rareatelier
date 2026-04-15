@@ -5,11 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, ImageIcon, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  fetchAdminImages,
-  fetchAdminStorefrontImageLibrary,
-  type AdminImageAsset,
-} from "@/lib/adminApi";
+import { fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
 
 /**
  * Stacking: admin full-screen overlays + layout use z-40–z-70. Radix Dialog defaults to z-50,
@@ -41,7 +37,7 @@ export function MediaLibrary({
   mode = "single",
   category,
 }: MediaLibraryProps) {
-  type ProviderFilter = "all" | "cloudinary" | "tigris" | "local";
+  type ProviderFilter = "all" | "cloudinary" | "tigris";
   const [mounted, setMounted] = React.useState(false);
   const [offset, setOffset] = React.useState(0);
   const [accumulated, setAccumulated] = React.useState<AdminImageAsset[]>([]);
@@ -76,50 +72,13 @@ export function MediaLibrary({
     queryKey: ["admin", "images", { category: category ?? "all", provider: providerFilter, limit: pageSize, offset }],
     queryFn: async () => {
       try {
-        const assets = await fetchAdminImages({
+        return await fetchAdminImages({
           ...(category && category !== "all" ? { category } : {}),
           ...(providerFilter !== "all" ? { provider: providerFilter } : {}),
           limit: pageSize,
           offset,
         });
-
-        if (assets.length === 0 && offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
-          const local = await fetchAdminStorefrontImageLibrary();
-          return local.map((item) => ({
-            id: item.relPath,
-            url: item.url,
-            thumbnailUrl: item.url,
-            previewUrl: item.url,
-            provider: "local",
-            category: "local",
-            publicId: null,
-            filename: item.filename,
-            bytes: null,
-            width: null,
-            height: null,
-            createdAt: "",
-          }));
-        }
-
-        return assets;
       } catch {
-        if (offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
-          const local = await fetchAdminStorefrontImageLibrary();
-          return local.map((item) => ({
-            id: item.relPath,
-            url: item.url,
-            thumbnailUrl: item.url,
-            previewUrl: item.url,
-            provider: "local",
-            category: "local",
-            publicId: null,
-            filename: item.filename,
-            bytes: null,
-            width: null,
-            height: null,
-            createdAt: "",
-          }));
-        }
         throw new Error("Failed to load media library");
       }
     },
@@ -227,7 +186,7 @@ export function MediaLibrary({
             Select an image from previously uploaded assets.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {(["all", "cloudinary", "tigris", "local"] as const).map((provider) => (
+            {(["all", "cloudinary", "tigris"] as const).map((provider) => (
               <Button
                 key={provider}
                 type="button"

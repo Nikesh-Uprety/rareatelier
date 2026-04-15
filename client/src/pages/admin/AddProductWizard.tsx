@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Upload, X, Plus, Palette, Ruler,
-  FolderInput, ImageIcon, FileText, Tag, Percent, Cloud, HardDrive,
+  FolderInput, ImageIcon, FileText, Tag, Percent, Cloud,
 } from "lucide-react";
 import { Legend, Pie, PieChart as RechartsPieChart, ResponsiveContainer, Cell, Tooltip } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -35,8 +35,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/format";
-import { compressImageFile } from "@/lib/imageUtils";
-import { uploadProductImageFile, uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
+import { uploadAdminImage, fetchAdminAttributes, type ProductAttribute } from "@/lib/adminApi";
 import { QuantityInput } from "@/components/ui/quantity-input";
 import { PriceInput } from "@/components/ui/price-input";
 import { UploadProgress } from "@/components/ui/upload-progress";
@@ -257,7 +256,6 @@ export default function AddProductWizard({
   galleryInputRef,
   pendingGalleryImages,
   setPendingGalleryImages,
-  setUploadingImage,
   toast,
   onMediaLibraryOpen,
   galleryUploadStatus,
@@ -278,13 +276,13 @@ export default function AddProductWizard({
   }
 
   // Image upload state
-  const [uploadMode, setUploadMode] = useState<"cloudinary" | "tigris" | "local">("cloudinary");
+  const [uploadMode, setUploadMode] = useState<"cloudinary" | "tigris">("cloudinary");
   const [imageCategory, setImageCategory] = useState("product");
   const [mainUploading, setMainUploading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [mainUploadProgress, setMainUploadProgress] = useState(0);
   const [galleryUploadProgress, setGalleryUploadProgress] = useState(0);
-  const [galleryUploadMode, setGalleryUploadMode] = useState<"cloudinary" | "tigris" | "local">("cloudinary");
+  const [galleryUploadMode, setGalleryUploadMode] = useState<"cloudinary" | "tigris">("cloudinary");
   const [galleryImageCategory, setGalleryImageCategory] = useState("product");
 
   // Attributes from DB
@@ -608,10 +606,9 @@ export default function AddProductWizard({
     { num: 3, label: "Media", icon: ImageIcon },
   ];
 
-  const getProviderLabel = (provider: "cloudinary" | "tigris" | "local") => {
+  const getProviderLabel = (provider: "cloudinary" | "tigris") => {
     if (provider === "cloudinary") return "Cloudinary";
-    if (provider === "tigris") return "Tigris";
-    return "Local";
+    return "Tigris";
   };
 
   // Remote provider upload handler (Cloudinary/Tigris)
@@ -670,52 +667,6 @@ export default function AddProductWizard({
     }
   };
 
-  // Local upload handler
-  const handleLocalUpload = async (file: File, target: "main" | "gallery") => {
-    setUploadingImage(true);
-    if (target === "main") {
-      setMainUploading(true);
-      setMainUploadProgress(0);
-    } else {
-      setGalleryUploading(true);
-      setGalleryUploadProgress(0);
-    }
-    try {
-      const compressedFile = await compressImageFile(file);
-      const url = await uploadProductImageFile(compressedFile, (value) => {
-        if (target === "main") {
-          setMainUploadProgress(value);
-        } else {
-          setGalleryUploadProgress(value);
-        }
-      });
-      if (target === "main") {
-        addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
-      } else {
-        const currentText = addForm.getValues("galleryUrlsText") || "";
-        const current = currentText.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
-        addForm.setValue("galleryUrlsText", [...current, url].join("\n"), { shouldValidate: true, shouldDirty: true });
-      }
-      toast({ title: "Image uploaded locally" });
-    } catch (error) {
-      toast({
-        title: "Upload failed",
-        description: getErrorMessage(error, "Please try a different image or upload again."),
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingImage(false);
-      if (target === "main") {
-        setMainUploadProgress(100);
-        setTimeout(() => setMainUploadProgress(0), 600);
-        setMainUploading(false);
-      } else {
-        setGalleryUploadProgress(100);
-        setTimeout(() => setGalleryUploadProgress(0), 600);
-        setGalleryUploading(false);
-      }
-    }
-  };
 
   const pieChartData = useMemo(() => {
     const data: { name: string; value: number; fill: string }[] = [];
@@ -1586,36 +1537,21 @@ export default function AddProductWizard({
                       >
                         <Cloud className="w-4 h-4" /> Tigris
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setUploadMode("local")}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                          uploadMode === "local"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-background text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        <HardDrive className="w-4 h-4" /> Local
-                      </button>
                     </div>
 
-                    {/* Category selector for cloud */}
-                    {uploadMode !== "local" && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
-                        <Select value={imageCategory} onValueChange={setImageCategory}>
-                          <SelectTrigger className="h-9 flex-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {IMAGE_CATEGORIES.map(cat => (
-                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
+                      <Select value={imageCategory} onValueChange={setImageCategory}>
+                        <SelectTrigger className="h-9 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IMAGE_CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <div
                       className="aspect-[4/5] max-w-xs bg-muted/30 hover:bg-muted/50 transition-colors overflow-hidden rounded-xl relative group cursor-pointer border-2 border-dashed border-border flex items-center justify-center p-4 text-center mx-auto"
@@ -1669,11 +1605,7 @@ export default function AddProductWizard({
                       onChange={async (e) => {
                         const file = e.target.files?.[0];
                         if (!file) return;
-                        if (uploadMode === "local") {
-                          await handleLocalUpload(file, "main");
-                        } else {
-                          await handleRemoteUpload(uploadMode, file, "main");
-                        }
+                        await handleRemoteUpload(uploadMode, file, "main");
                         e.target.value = "";
                       }}
                     />
@@ -1710,36 +1642,21 @@ export default function AddProductWizard({
                       >
                         <Cloud className="w-4 h-4" /> Tigris
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setGalleryUploadMode("local")}
-                        className={cn(
-                          "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all",
-                          galleryUploadMode === "local"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-background text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        <HardDrive className="w-4 h-4" /> Local
-                      </button>
                     </div>
 
-                    {/* Category selector for gallery cloud */}
-                    {galleryUploadMode !== "local" && (
-                      <div className="flex items-center gap-2">
-                        <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
-                        <Select value={galleryImageCategory} onValueChange={setGalleryImageCategory}>
-                          <SelectTrigger className="h-9 flex-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {IMAGE_CATEGORIES.map(cat => (
-                              <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider">Category</Label>
+                      <Select value={galleryImageCategory} onValueChange={setGalleryImageCategory}>
+                        <SelectTrigger className="h-9 flex-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {IMAGE_CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
                     <div className="flex gap-2">
                       <Button
@@ -1777,11 +1694,7 @@ export default function AddProductWizard({
                         const files = Array.from(e.target.files ?? []);
                         if (!files.length) return;
                         for (const file of files) {
-                          if (galleryUploadMode === "local") {
-                            await handleLocalUpload(file, "gallery");
-                          } else {
-                            await handleRemoteUpload(galleryUploadMode, file, "gallery");
-                          }
+                          await handleRemoteUpload(galleryUploadMode, file, "gallery");
                         }
                         e.target.value = "";
                       }}
