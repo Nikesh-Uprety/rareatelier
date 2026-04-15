@@ -1,5 +1,10 @@
 import { apiRequest } from "./queryClient";
-import type { CategoryApi, FonepayQrPayload, ProductApi } from "./api";
+import type {
+  CategoryApi,
+  FonepayQrPayload,
+  FonepayStatusResponse,
+  ProductApi,
+} from "./api";
 import {
   normalizeStorefrontProductsLayoutConfig,
   type StorefrontProductsLayoutConfig,
@@ -62,6 +67,35 @@ export interface AdminOrder {
     productColorOptions?: string | null;
     name: string;
   }>;
+}
+
+export interface AdminFonepayAuditEvent {
+  id: string;
+  orderId: string | null;
+  prn: string | null;
+  flow: string;
+  stage: string;
+  status: string;
+  callbackUrl: string | null;
+  uid: string | null;
+  bankCode: string | null;
+  message: string | null;
+  payloadText: string | null;
+  createdAt: string | null;
+}
+
+export interface AdminOrderFonepayAudit {
+  order: {
+    id: string;
+    paymentMethod?: string;
+    paymentVerified?: string | null;
+    status: string;
+    total: number;
+    createdAt: string;
+  };
+  runtimeStatus: NonNullable<FonepayStatusResponse["data"]>;
+  latestPrn: string | null;
+  events: AdminFonepayAuditEvent[];
 }
 
 export interface AdminCustomer {
@@ -767,6 +801,17 @@ export async function fetchAdminOrders(filters?: {
 }): Promise<AdminOrder[]> {
   const { data } = await fetchAdminOrdersPage(filters);
   return data;
+}
+
+export async function fetchAdminOrderFonepayAudit(
+  id: string,
+): Promise<AdminOrderFonepayAudit> {
+  const res = await apiRequest("GET", `/api/admin/orders/${encodeURIComponent(id)}/payment-audit`);
+  const json = (await res.json()) as {
+    success: boolean;
+    data: AdminOrderFonepayAudit;
+  };
+  return json.data;
 }
 
 export async function updateOrderStatus(

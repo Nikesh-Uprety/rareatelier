@@ -4695,6 +4695,8 @@ export class MemStorage implements IStorage {
       id: crypto.randomUUID(),
       category: data.category,
       url: data.url ?? null,
+      thumbnailUrl: data.thumbnailUrl ?? null,
+      previewUrl: data.previewUrl ?? null,
       provider: data.provider,
       assetType: data.assetType ?? "file",
       publicId: data.publicId ?? null,

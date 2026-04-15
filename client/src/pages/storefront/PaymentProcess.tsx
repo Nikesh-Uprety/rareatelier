@@ -3,6 +3,8 @@ import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
   cacheLatestOrder,
@@ -13,6 +15,7 @@ import {
   createCheckoutSession,
   createOrder,
   fetchOrderById,
+  fetchFonepayStatus,
   fetchPaymentQrConfig,
   getCachedLatestOrder,
   getPendingCheckout,
@@ -22,7 +25,15 @@ import {
   uploadPaymentProof,
   verifyFonepayQrPayment,
 } from "@/lib/api";
-import { getFonepayQrPreviewSource, resolveFonepayQrPreviewSource } from "@/lib/fonepay";
+import {
+  FONEPAY_PROVIDER_CHARGE_NOTE,
+  FONEPAY_QR_BENEFIT_RATE,
+  FONEPAY_QR_PROMO_CEILING_RATE,
+  FONEPAY_RARE_ATELIER_FEE_NPR,
+  getFonepayEstimatedQrSavings,
+  getFonepayQrPreviewSource,
+  resolveFonepayQrPreviewSource,
+} from "@/lib/fonepay";
 import { formatPrice } from "@/lib/format";
 import {
   Upload,
@@ -192,6 +203,18 @@ export default function PaymentProcess() {
     queryFn: fetchPaymentQrConfig,
     staleTime: 30_000,
   });
+  const fonepayStatusQuery = useQuery({
+    queryKey: ["payments", "fonepay", "status"],
+    queryFn: fetchFonepayStatus,
+    staleTime: 30_000,
+    enabled: method === "fonepay",
+  });
+  const fonepayGateway = fonepayStatusQuery.data?.data;
+  const fonepayWebAvailable = Boolean(fonepayGateway?.web.available);
+  const fonepayQrAvailable = Boolean(fonepayGateway?.qr.available);
+  const fonepayAnyAvailable = fonepayWebAvailable || fonepayQrAvailable;
+  const activeFonepayStatus =
+    fonepayMode === "qr" ? fonepayGateway?.qr : fonepayGateway?.web;
 
   useEffect(() => {
     if (!orderId) return;
@@ -265,6 +288,20 @@ export default function PaymentProcess() {
       setFonepayMode("redirect");
     }
   }, [method]);
+
+  useEffect(() => {
+    if (method !== "fonepay") return;
+
+    if (fonepayMode === "redirect" && !fonepayWebAvailable && fonepayQrAvailable) {
+      setFonepayMode("qr");
+      return;
+    }
+
+    if (fonepayMode === "qr" && !fonepayQrAvailable && fonepayWebAvailable) {
+      clearFonepayQrSession();
+      setFonepayMode("redirect");
+    }
+  }, [fonepayMode, fonepayQrAvailable, fonepayWebAvailable, method]);
 
   useEffect(() => {
     if (!fonepayQrPrn || !fonepayQrMeta?.orderId) return;
@@ -528,6 +565,11 @@ export default function PaymentProcess() {
     setPollingFonepayQr(false);
   };
 
+  const getLatestFonepayStatus = async () => {
+    const latest = await fonepayStatusQuery.refetch();
+    return latest.data?.data ?? fonepayGateway ?? null;
+  };
+
   const ensureFonepayOrder = async () => {
     if (order) {
       return order;
@@ -567,9 +609,24 @@ export default function PaymentProcess() {
     setRedirectingToFonepay(true);
 
     try {
+      const latestStatus = await getLatestFonepayStatus();
+      if (!latestStatus?.web.available) {
+        toast({
+          title: latestStatus?.web.issues[0] || "Fonepay hosted checkout is unavailable right now.",
+          variant: "destructive",
+        });
+        if (latestStatus?.qr.available) {
+          setFonepayMode("qr");
+        }
+        return;
+      }
+
       clearFonepayQrSession();
       const nextOrder = await ensureFonepayOrder();
       if (!nextOrder) return;
+      if (!orderId) {
+        setLocation(`/checkout/payment?orderId=${nextOrder.id}&method=fonepay`);
+      }
 
       const shortOrderId = nextOrder.id.slice(-8).toUpperCase();
       const result = await createFonepayWebPayment(nextOrder.id, {
@@ -602,8 +659,23 @@ export default function PaymentProcess() {
     setGeneratingFonepayQr(true);
 
     try {
+      const latestStatus = await getLatestFonepayStatus();
+      if (!latestStatus?.qr.available) {
+        toast({
+          title: latestStatus?.qr.issues[0] || "Fonepay dynamic QR is unavailable right now.",
+          variant: "destructive",
+        });
+        if (latestStatus?.web.available) {
+          setFonepayMode("redirect");
+        }
+        return;
+      }
+
       const nextOrder = await ensureFonepayOrder();
       if (!nextOrder) return;
+      if (!orderId) {
+        setLocation(`/checkout/payment?orderId=${nextOrder.id}&method=fonepay`);
+      }
 
       const shortOrderId = nextOrder.id.slice(-8).toUpperCase();
       const result = await createFonepayQrPayment(nextOrder.id, {
@@ -695,7 +767,16 @@ export default function PaymentProcess() {
   };
 
   const orderTotal = Number(order?.total ?? pendingCheckout?.total ?? 0);
+  const fonepayEstimatedSavings = getFonepayEstimatedQrSavings(orderTotal);
   const confirmationOrderId = order?.id ?? orderId;
+  const hasInlineCheckoutContext = Boolean(
+    order || fonepayQrMeta || generatingFonepayQr || redirectingToFonepay || pollingFonepayQr,
+  );
+  const fonepayModeUnavailable =
+    method === "fonepay" &&
+    (fonepayMode === "redirect" ? !fonepayWebAvailable : !fonepayQrAvailable);
+  const activeFonepayIssues = activeFonepayStatus?.issues ?? [];
+  const activeFonepayWarnings = activeFonepayStatus?.warnings ?? [];
   const normalizedMethod =
     method === "esewa" || method === "khalti" || method === "fonepay" || method === "bank"
       ? method
@@ -738,7 +819,7 @@ export default function PaymentProcess() {
     setQrImageLoading(true);
   }, [resolvedQrImageSrc]);
 
-  if (!orderId && !hasPendingManualOrder) {
+  if (!orderId && !hasPendingManualOrder && !hasInlineCheckoutContext) {
     return (
       <div className="container mx-auto px-4 py-12 text-center sm:py-16">
         <p className="text-muted-foreground">Invalid payment link.</p>
@@ -902,8 +983,86 @@ export default function PaymentProcess() {
           Pay with Fonepay
         </h1>
         <p className="mb-8 text-sm text-muted-foreground">
-          Order total: {formatPrice(orderTotal)}. Choose the handoff that fits the shopper best.
+          Order total: {formatPrice(orderTotal)}. Choose between hosted bank selection and a live exact-amount QR handoff.
         </p>
+
+        <section
+          data-testid="fonepay-value-strip"
+          className="mb-6 overflow-hidden border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950"
+        >
+          <div className="grid gap-0 md:grid-cols-[1.2fr_auto_1fr_auto_1fr]">
+            <div className="flex flex-col gap-3 p-4 md:p-5">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">
+                  {Math.round(FONEPAY_QR_BENEFIT_RATE * 100)}% QR benefit live
+                </Badge>
+                <Badge variant="outline">
+                  Promo windows up to {Math.round(FONEPAY_QR_PROMO_CEILING_RATE * 100)}%
+                </Badge>
+              </div>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                  Estimated QR savings
+                </p>
+                <p className="mt-2 text-2xl font-black tracking-tight text-zinc-950 dark:text-zinc-50">
+                  NPR {fonepayEstimatedSavings}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Estimated shopper benefit when the current Fonepay QR offer is active for this order.
+                </p>
+              </div>
+            </div>
+
+            <Separator orientation="vertical" className="hidden h-full md:block" />
+
+            <div className="flex flex-col justify-center gap-2 p-4 md:p-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                Rare Atelier charge
+              </p>
+              <p className="text-2xl font-black tracking-tight text-zinc-950 dark:text-zinc-50">
+                NPR {FONEPAY_RARE_ATELIER_FEE_NPR}
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                We do not add any extra platform fee on the Fonepay handoff.
+              </p>
+            </div>
+
+            <Separator orientation="vertical" className="hidden h-full md:block" />
+
+            <div className="flex flex-col justify-center gap-2 p-4 md:p-5">
+              <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                Provider charge
+              </p>
+              <p className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                Usually minimal
+              </p>
+              <p className="text-xs leading-5 text-muted-foreground">
+                {FONEPAY_PROVIDER_CHARGE_NOTE}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {!fonepayStatusQuery.isPending && !fonepayAnyAvailable ? (
+          <div className="mb-6 border border-red-200 bg-red-50 p-4 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-200">
+            <p className="font-semibold uppercase tracking-[0.16em] text-[10px]">Fonepay unavailable</p>
+            <p className="mt-2">
+              {fonepayStatusQuery.isError
+                ? "We could not confirm the Fonepay gateway status for this store."
+                : fonepayGateway?.web.issues[0] || fonepayGateway?.qr.issues[0] || "The gateway is not ready for checkout right now."}
+            </p>
+            <p className="mt-2 text-xs leading-6">
+              Switch to eSewa, Khalti, card, or cash while the callback URL or merchant credentials are fixed.
+            </p>
+          </div>
+        ) : null}
+
+        {fonepayAnyAvailable && activeFonepayWarnings.length > 0 ? (
+          <div className="mb-6 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+            <p className="font-semibold uppercase tracking-[0.16em] text-[10px]">Gateway note</p>
+            <p className="mt-2">{activeFonepayWarnings[0]}</p>
+          </div>
+        ) : null}
 
         <div className="mb-8 border border-gray-200 bg-gradient-to-br from-[#f7faf8] to-[#eef5f0] p-5 sm:p-8 dark:border-zinc-700 dark:from-zinc-900 dark:to-zinc-950">
           <div className="flex items-center gap-3 mb-6">
@@ -919,7 +1078,7 @@ export default function PaymentProcess() {
                 Secure Fonepay Payment
               </p>
               <p className="text-xs text-muted-foreground">
-                Redirect or dynamic QR, depending on how the shopper wants to pay
+                Hosted bank selection for desktop or a live QR for mobile-first checkout
               </p>
             </div>
           </div>
@@ -928,40 +1087,70 @@ export default function PaymentProcess() {
             <button
               type="button"
               className={`rounded-2xl border p-4 text-left transition-colors ${
-                fonepayMode === "redirect"
+                !fonepayWebAvailable
+                  ? "cursor-not-allowed border-dashed border-zinc-300 bg-white/50 opacity-60 dark:border-zinc-700 dark:bg-zinc-950/30"
+                  : fonepayMode === "redirect"
                   ? "border-[#1c8f4d] bg-white shadow-sm dark:bg-zinc-900"
                   : "border-gray-200 bg-white/70 hover:border-[#1c8f4d] dark:border-zinc-700 dark:bg-zinc-950/40"
               }`}
-              onClick={() => setFonepayMode("redirect")}
+              onClick={() => {
+                if (!fonepayWebAvailable) return;
+                setFonepayMode("redirect");
+              }}
+              disabled={!fonepayWebAvailable}
             >
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Redirect
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Redirect
+                </p>
+                {!fonepayWebAvailable ? (
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">
+                    Unavailable
+                  </span>
+                ) : null}
+              </div>
               <p className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                 Open Fonepay checkout
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Best for desktop and standard web checkout. The shopper authorizes directly on Fonepay.
+                Best for desktop and standard web checkout. Fonepay shows the supported banks, and the shopper signs in on the hosted banking page there.
               </p>
             </button>
 
             <button
               type="button"
               className={`rounded-2xl border p-4 text-left transition-colors ${
-                fonepayMode === "qr"
+                !fonepayQrAvailable
+                  ? "cursor-not-allowed border-dashed border-zinc-300 bg-white/50 opacity-60 dark:border-zinc-700 dark:bg-zinc-950/30"
+                  : fonepayMode === "qr"
                   ? "border-[#1c8f4d] bg-white shadow-sm dark:bg-zinc-900"
                   : "border-gray-200 bg-white/70 hover:border-[#1c8f4d] dark:border-zinc-700 dark:bg-zinc-950/40"
               }`}
-              onClick={() => setFonepayMode("qr")}
+              onClick={() => {
+                if (!fonepayQrAvailable) return;
+                setFonepayMode("qr");
+              }}
+              disabled={!fonepayQrAvailable}
             >
-              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                Dynamic QR
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                  Dynamic QR
+                </p>
+                {fonepayQrAvailable ? (
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#1c8f4d]">
+                    Recommended
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-red-600">
+                    Unavailable
+                  </span>
+                )}
+              </div>
               <p className="mt-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                 Scan and confirm instantly
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Best for Nepal mobile-first checkout. The order updates automatically once the QR payment clears.
+                Best for Nepal mobile-first checkout. The QR keeps the exact order amount locked and updates the order automatically once payment clears.
               </p>
             </button>
           </div>
@@ -976,15 +1165,33 @@ export default function PaymentProcess() {
                   <span className="text-lg font-black">{formatPrice(orderTotal)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  We&apos;ll redirect you to Fonepay&apos;s secure payment page. After payment, you&apos;ll return to your order automatically.
+                  We&apos;ll redirect you to Fonepay&apos;s hosted page. The shopper chooses Mobile Banking or Internet Banking there, signs in there, and returns to the order automatically after payment.
                 </p>
               </div>
 
-              <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/70">
-                <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
-                <p className="text-xs text-emerald-800 dark:text-emerald-300">
-                  Use a public callback URL for local testing. If you are running on localhost, expose the app with ngrok before attempting a sandbox payment.
-                </p>
+              <div className="space-y-3">
+                <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-900/70">
+                  <AlertCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                  <p className="text-xs text-emerald-800 dark:text-emerald-300">
+                    Fonepay handles the bank list and Internet Banking or Mobile Banking login on its own hosted page. Rare Atelier never asks for bank usernames or passwords.
+                  </p>
+                </div>
+                {activeFonepayIssues.length > 0 ? (
+                  <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 dark:bg-red-950/30 dark:border-red-900/70">
+                    <AlertCircle className="w-4 h-4 text-red-700 shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-800 dark:text-red-300">
+                      {activeFonepayIssues[0]}
+                    </p>
+                  </div>
+                ) : null}
+                {isLocalTesting ? (
+                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/70">
+                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-800 dark:text-amber-300">
+                      Localhost cannot receive hosted Fonepay callbacks. Expose the backend on a public HTTPS URL with ngrok or a tunnel before testing the redirect flow.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </>
           ) : (
@@ -996,7 +1203,7 @@ export default function PaymentProcess() {
                       Dynamic QR checkout
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Generate a live Fonepay QR, have the shopper scan it, and we&apos;ll move the order forward automatically once the gateway confirms payment.
+                      Generate a live Fonepay QR, have the shopper scan it in a supported Fonepay or mobile banking app, and we&apos;ll move the order forward automatically once the gateway confirms payment.
                     </p>
                     {fonepayQrMeta ? (
                       <div className="space-y-1 text-xs text-muted-foreground">
@@ -1014,6 +1221,11 @@ export default function PaymentProcess() {
                         {fonepayQrMeta.expiresAt ? (
                           <p>
                             Valid until: <span className="font-semibold text-zinc-950 dark:text-zinc-50">{fonepayQrMeta.expiresAt}</span>
+                          </p>
+                        ) : null}
+                        {fonepayQrMeta.rawQrText ? (
+                          <p className="break-all">
+                            QR payload: <span className="font-semibold text-zinc-950 dark:text-zinc-50">{fonepayQrMeta.rawQrText}</span>
                           </p>
                         ) : null}
                       </div>
@@ -1080,8 +1292,18 @@ export default function PaymentProcess() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-xs leading-6 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300">
-                We&apos;ll keep checking the gateway every few seconds. As soon as Fonepay reports success, we&apos;ll redirect you to the order confirmation automatically.
+              <div className="space-y-3">
+                {activeFonepayIssues.length > 0 ? (
+                  <div className="rounded-2xl border border-red-200 bg-red-50/80 p-4 text-xs leading-6 text-red-900 dark:border-red-900/60 dark:bg-red-950/20 dark:text-red-300">
+                    {activeFonepayIssues[0]}
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-xs leading-6 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300">
+                  We&apos;ll keep checking the gateway every few seconds. As soon as Fonepay reports success, we&apos;ll redirect you to the order confirmation automatically.
+                </div>
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-4 text-xs leading-6 text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950/40 dark:text-zinc-300">
+                  The exact amount is locked to this order. Cross-wallet scanning such as eSewa depends on your acquiring bank&apos;s interoperability settings, so use a supported Fonepay or mobile banking app unless your bank confirms broader QR compatibility.
+                </div>
               </div>
             </div>
           )}
@@ -1091,17 +1313,29 @@ export default function PaymentProcess() {
           type="button"
           onClick={fonepayMode === "redirect" ? handleFonepayCheckout : handleGenerateFonepayQr}
           disabled={
-            fonepayMode === "redirect"
+            fonepayStatusQuery.isPending ||
+            fonepayModeUnavailable ||
+            (fonepayMode === "redirect"
               ? redirectingToFonepay
-              : generatingFonepayQr || pollingFonepayQr
+              : generatingFonepayQr || pollingFonepayQr)
           }
           className="w-full h-14 bg-[#1c8f4d] text-white rounded-none uppercase tracking-widest text-xs font-bold hover:bg-[#177742] transition-colors"
         >
-          {fonepayMode === "redirect" ? (
+          {fonepayStatusQuery.isPending ? (
+            <>
+              <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+              Checking Fonepay...
+            </>
+          ) : fonepayMode === "redirect" ? (
             redirectingToFonepay ? (
               <>
                 <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                 Redirecting to Fonepay...
+              </>
+            ) : !fonepayWebAvailable ? (
+              <>
+                <AlertCircle className="w-5 h-5 mr-2" />
+                Redirect unavailable
               </>
             ) : (
               <>
@@ -1113,6 +1347,11 @@ export default function PaymentProcess() {
             <>
               <Loader2 className="w-5 h-5 mr-2 animate-spin" />
               Generating dynamic QR...
+            </>
+          ) : !fonepayQrAvailable ? (
+            <>
+              <AlertCircle className="w-5 h-5 mr-2" />
+              Dynamic QR unavailable
             </>
           ) : fonepayQrPrn ? (
             <>

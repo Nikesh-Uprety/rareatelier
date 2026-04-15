@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db";
 import { categories, mediaAssets, products } from "@shared/schema";
 import { storageService } from "../storage-service";
+import { uploadTigrisMediaRenditions } from "./mediaAssetRenditions";
 
 type DriveEntry = {
   id: string;
@@ -489,6 +490,8 @@ async function ensureFolderMarkers(folderPaths: string[], category: string) {
   await db.insert(mediaAssets).values(
     missingPaths.map((folderPath) => ({
       url: null,
+      thumbnailUrl: null,
+      previewUrl: null,
       provider: "tigris",
       category,
       publicId: null,
@@ -586,26 +589,23 @@ export async function importPublicDriveFolderToTigris(input: {
 
     try {
       const downloaded = await downloadDriveImage(file.id);
-      const webpBuffer = await sharp(downloaded.buffer)
-        .rotate()
-        .webp({ quality: 92, effort: 4 })
-        .toBuffer();
-
-      const uploadedUrl = await storageService.uploadFile(
-        webpBuffer,
-        file.objectKey,
-        "image/webp",
-      );
+      const uploaded = await uploadTigrisMediaRenditions({
+        sourceBuffer: downloaded.buffer,
+        objectKey: file.objectKey,
+        qualityMode: "high",
+      });
 
       await db.insert(mediaAssets).values({
-        url: uploadedUrl,
+        url: uploaded.url,
+        thumbnailUrl: uploaded.thumbnailUrl,
+        previewUrl: uploaded.previewUrl,
         provider: "tigris",
         category: input.category,
         publicId: file.objectKey,
         filename: file.name,
-        bytes: webpBuffer.byteLength,
-        width: null,
-        height: null,
+        bytes: uploaded.bytes,
+        width: uploaded.width,
+        height: uploaded.height,
         folderPath: file.folderPath,
         assetType: "file",
         expiresAt: null,
@@ -738,26 +738,24 @@ export async function importPublicDriveProductsToCatalog(input: {
         if (uploadedUrl) {
           reusedAssetCount += 1;
         } else {
-          const webpBuffer = await sharp(downloaded.buffer)
-            .rotate()
-            .webp({ quality: 92, effort: 4 })
-            .toBuffer();
-
-          uploadedUrl = await storageService.uploadFile(
-            webpBuffer,
-            file.objectKey,
-            "image/webp",
-          );
+          const uploaded = await uploadTigrisMediaRenditions({
+            sourceBuffer: downloaded.buffer,
+            objectKey: file.objectKey,
+            qualityMode: "high",
+          });
+          uploadedUrl = uploaded.url;
 
           await db.insert(mediaAssets).values({
-            url: uploadedUrl,
+            url: uploaded.url,
+            thumbnailUrl: uploaded.thumbnailUrl,
+            previewUrl: uploaded.previewUrl,
             provider: "tigris",
             category: "product",
             publicId: file.objectKey,
             filename: file.name,
-            bytes: webpBuffer.byteLength,
-            width: null,
-            height: null,
+            bytes: uploaded.bytes,
+            width: uploaded.width,
+            height: uploaded.height,
             folderPath: file.folderPath,
             assetType: "file",
             expiresAt: null,

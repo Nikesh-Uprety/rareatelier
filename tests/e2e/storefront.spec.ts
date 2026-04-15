@@ -1,5 +1,5 @@
 import { test, expect, request as playwrightRequest } from "@playwright/test";
-import { openFirstProduct } from "./helpers";
+import { fillMinimalCheckoutForm, openFirstProduct } from "./helpers";
 import { waitForLatestOrderVerificationCodeByEmail } from "./db";
 
 async function getSampleProduct(request: import("@playwright/test").APIRequestContext) {
@@ -51,46 +51,118 @@ test("home page loads and storefront shoppers can reach a purchasable product", 
   await page.goto("/");
   await expect(page.getByRole("main").first()).toBeVisible({ timeout: 10_000 });
 
-  // Navigate to products and find one that's in stock
-  await page.goto("/products");
-  await expect(page.locator('a[href^="/product/"]').first()).toBeVisible({ timeout: 10_000 });
-
-  // Find a product link that's not out of stock (look for products without "Out of Stock" badge)
-  const productLinks = page.locator('a[href^="/product/"]');
-  const count = await productLinks.count();
-
-  let foundInStockProduct = false;
-  for (let i = 0; i < count; i++) {
-    await productLinks.nth(i).click();
-    await page.waitForURL(/\/product\//);
-
-    // Wait for product detail to load
-    await page.waitForTimeout(1000);
-
-    // Check if there's an enabled size button. We don't need to force a new
-    // selection here because some products already preselect the default size.
-    const enabledSizeBtn = page.locator("button.h-12.w-12:not([disabled])").first();
-    const hasEnabledSize = await enabledSizeBtn.isVisible({ timeout: 3000 }).catch(() => false);
-
-    if (hasEnabledSize) {
-      foundInStockProduct = true;
-      break;
-    } else {
-      // Go back to products list
-      await page.goBack();
-      await page.waitForURL(/\/products/);
-      await page.waitForTimeout(500);
-    }
-  }
-
-  if (!foundInStockProduct) {
-    // If no in-stock product found, skip this test gracefully
-    test.skip(true, "No in-stock products available for testing");
-    return;
-  }
-
+  await openFirstProduct(page);
   await expect(page.getByTestId("product-add-to-bag")).toBeVisible({ timeout: 5_000 });
+  await expect(page.getByTestId("product-buy-now")).toBeEnabled();
   await expect(pageErrors, pageErrors.join("\n")).toEqual([]);
+});
+
+test("landing newsletter popup can be dismissed and collection nav routes to the new collection page", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.sessionStorage.removeItem("rare-premium-newsletter-dialog-dismissed");
+  });
+
+  await page.goto("/");
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: "Subscribe for early access." })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close newsletter popup" })).toBeVisible();
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  await page.goto("/products");
+  const collectionLink = page.getByRole("link", { name: "Collection" }).first();
+  await expect(collectionLink).toBeVisible();
+  await collectionLink.click();
+  await expect(page).toHaveURL(/\/new-collection$/);
+});
+
+test("online payment checkout accepts name and phone only and reaches order confirmation", async ({ page }) => {
+  await openFirstProduct(page);
+  await page.getByRole("button", { name: "Buy Now" }).click();
+  await expect(page).toHaveURL(/\/checkout$/);
+
+  await fillMinimalCheckoutForm(page);
+  await page.getByTestId("checkout-payment-esewa").click();
+  await page.getByTestId("checkout-submit").click();
+  await expect(page).toHaveURL(/\/checkout\/payment/);
+
+  const createOrderResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return pathname === "/api/orders" && response.request().method() === "POST";
+  });
+  const uploadResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return /\/api\/orders\/[^/]+\/payment-proof$/.test(pathname) && response.request().method() === "POST";
+  });
+
+  await page.getByTestId("payment-proof-input").setInputFiles({
+    name: "payment-proof.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn4s1sAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  await page.getByRole("button", { name: /Confirm Payment/i }).click();
+
+  const createOrderResponse = await createOrderResponsePromise;
+  expect(createOrderResponse.ok(), await createOrderResponse.text()).toBeTruthy();
+
+  const uploadResponse = await uploadResponsePromise;
+  expect(uploadResponse.ok(), await uploadResponse.text()).toBeTruthy();
+
+  await page.waitForURL(/\/order-confirmation\/[^/?]+/, { timeout: 15_000 });
+  await expect(page.getByText("Payment Proof Under Review")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download as PDF" })).toBeVisible();
+});
+
+test("Fonepay checkout shows QR benefits and completes the simulated QR flow", async ({ page }) => {
+  await openFirstProduct(page);
+  await page.getByRole("button", { name: "Buy Now" }).click();
+  await expect(page).toHaveURL(/\/checkout$/);
+
+  await fillMinimalCheckoutForm(page);
+  await page.getByTestId("checkout-payment-fonepay").click();
+  await expect(page.getByTestId("checkout-fonepay-benefits")).toBeVisible();
+  await expect(page.getByText("1% QR benefit")).toBeVisible();
+  await expect(page.getByText("Rare Atelier fee NPR 0")).toBeVisible();
+
+  await page.getByTestId("checkout-submit").click();
+  await expect(page).toHaveURL(/\/checkout\/payment\?method=fonepay/);
+
+  await expect(page.getByRole("heading", { name: "Pay with Fonepay" })).toBeVisible();
+  await expect(page.getByTestId("fonepay-value-strip")).toBeVisible();
+  await expect(page.getByText("Estimated QR savings")).toBeVisible();
+  await expect(page.getByText("Usually minimal")).toBeVisible();
+  await expect(
+    page.getByText("E2E mode uses a simulated Fonepay QR confirmation loop."),
+  ).toBeVisible();
+
+  const createOrderResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return pathname === "/api/orders" && response.request().method() === "POST";
+  });
+  const qrResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return pathname === "/api/payments/fonepay/qr" && response.request().method() === "POST";
+  });
+
+  await page.getByRole("button", { name: /Generate Dynamic QR/i }).click();
+
+  const createOrderResponse = await createOrderResponsePromise;
+  expect(createOrderResponse.ok(), await createOrderResponse.text()).toBeTruthy();
+
+  const qrResponse = await qrResponsePromise;
+  expect(qrResponse.ok(), await qrResponse.text()).toBeTruthy();
+
+  await expect(page.getByText("Session ref:")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("QR payload:")).toBeVisible();
+
+  await page.waitForURL(/\/order-confirmation\/[^/?]+/, { timeout: 20_000 });
+  await expect(page.getByText("Payment Proof Under Review")).toHaveCount(0);
+  await expect(page.getByText("Fonepay payment confirmed", { exact: true }).first()).toBeVisible();
 });
 
 test("new customer can verify a large order by email and complete checkout", async ({ request }) => {

@@ -146,4 +146,47 @@ describe("FonepayService", () => {
     expect(result.qrPayload.merchantName).toBe("RARE Atelier");
     expect(result.qrPayload.expiresAt).toBe("2026-04-15T12:30:00+05:45");
   });
+
+  it("ignores a storefront localhost callback and falls back to the backend callback route", () => {
+    const service = new FonepayService(baseConfig);
+
+    const status = service.getRuntimeStatus({
+      configuredCallbackUrl: "http://localhost:3000/payment/fonepay/verify-web",
+      fallbackCallbackUrl: "https://rare.test/api/payments/fonepay/callback",
+      clientUrl: "https://rare.test",
+    });
+
+    expect(status.callbackUrl).toBe("https://rare.test/api/payments/fonepay/callback");
+    expect(status.callbackUrlSource).toBe("derived");
+    expect(status.web.available).toBe(true);
+    expect(status.web.warnings.join(" ")).toMatch(/Ignoring configured callback URL/i);
+  });
+
+  it("marks localhost callbacks as unavailable for hosted redirect flows", () => {
+    const service = new FonepayService(baseConfig);
+
+    const status = service.getRuntimeStatus({
+      fallbackCallbackUrl: "http://localhost:5000/api/payments/fonepay/callback",
+      clientUrl: "http://localhost:5000",
+    });
+
+    expect(status.web.available).toBe(false);
+    expect(status.web.issues.join(" ")).toMatch(/cannot return to localhost/i);
+  });
+
+  it("flags placeholder dynamic QR credentials before checkout starts", () => {
+    const service = new FonepayService({
+      ...baseConfig,
+      username: "your_merchant_panel_username",
+      password: "your_merchant_panel_password",
+    });
+
+    const status = service.getRuntimeStatus({
+      fallbackCallbackUrl: "https://rare.test/api/payments/fonepay/callback",
+      clientUrl: "https://rare.test",
+    });
+
+    expect(status.qr.available).toBe(false);
+    expect(status.qr.issues.join(" ")).toMatch(/placeholder/i);
+  });
 });
