@@ -17,7 +17,7 @@
   <meta name="twitter:image" content="https://cdn2.blanxer.com/favicon/67cd36dcf133882caba612b4/692dcfc911060a551836d675.webp" />
 
   <link rel="icon" type="image/webp" href="https://cdn2.blanxer.com/favicon/67cd36dcf133882caba612b4/692dcfc911060a551836d675.webp" />
-  <link id="landing-loader-preload" rel="preload" as="image" href="/images/stussy.webp" fetchpriority="high" />
+  <link id="landing-loader-preload" rel="preload" as="image" href="/images/updatedlogo.png" fetchpriority="high" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600&family=Roboto+Slab:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -59,18 +59,22 @@
         var root = document.documentElement;
         root.setAttribute("data-initial-route", route);
         if (route === "landing") {
-          var fallbackHero = "/images/stussy.webp";
-          var cachedHero = fallbackHero;
+          var cachedHero = null;
 
           try {
             var storedHero = window.localStorage.getItem("rare-landing-loader-hero");
-            if (storedHero && /^https?:\/\//.test(storedHero) || (storedHero && storedHero.startsWith("/"))) {
+            if (storedHero && (/^https?:\/\//.test(storedHero) || storedHero.startsWith("/"))) {
               cachedHero = storedHero;
             }
           } catch (storageError) {}
 
           root.style.setProperty("--landing-loader-lqip", 'url("data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAADwAwCdASowABsAPuVgp004paOiMBqqqxAciWUAw6wcsT2+ZF/YKHlwAP7uh2krnVxfYRdAQqyN52KfJGgSjXeZVxUqdIW3XL2K4aBbeWD4Rl1jgAAAAA==")');
-          root.style.setProperty("--landing-loader-hero", 'url("' + cachedHero.replace(/"/g, '%22') + '")');
+          if (cachedHero) {
+            root.style.setProperty("--landing-loader-hero", 'url("' + cachedHero.replace(/"/g, '%22') + '")');
+          } else {
+            root.style.removeProperty("--landing-loader-hero");
+            root.classList.remove("landing-loader-image-ready");
+          }
           root.style.backgroundColor = "#d8d1c5";
           root.style.backgroundImage = "radial-gradient(circle at top, rgba(255,255,255,0.52), rgba(239,233,224,0.78) 48%, rgba(215,209,197,0.96) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(222,216,205,0.16) 100%), var(--landing-loader-lqip)";
           root.style.backgroundPosition = "center, center, center";
@@ -78,17 +82,19 @@
           root.style.backgroundRepeat = "no-repeat, no-repeat, no-repeat";
 
           var preloadLink = document.getElementById("landing-loader-preload");
-          if (preloadLink) {
+          if (preloadLink && cachedHero) {
             preloadLink.setAttribute("href", cachedHero);
           }
 
-          var loaderImage = new Image();
-          loaderImage.decoding = "async";
-          loaderImage.fetchPriority = "high";
-          loaderImage.src = cachedHero;
-          loaderImage.onload = function () {
-            root.classList.add("landing-loader-image-ready");
-          };
+          if (cachedHero) {
+            var loaderImage = new Image();
+            loaderImage.decoding = "async";
+            loaderImage.fetchPriority = "high";
+            loaderImage.src = cachedHero;
+            loaderImage.onload = function () {
+              root.classList.add("landing-loader-image-ready");
+            };
+          }
         } else {
           root.style.backgroundColor = "#000000";
           root.style.backgroundImage = "none";

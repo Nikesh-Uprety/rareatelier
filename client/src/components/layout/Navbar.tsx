@@ -280,7 +280,7 @@ export default function Navbar() {
 
   const navLinks = useMemo(() => {
     if (isStuffyClone) {
-      return [
+      const stuffyLinks = [
         { name: "Shop", href: "/products" },
         { name: "Gallery", href: "/gallery" },
         { name: "Our Services", href: "/atelier" },
@@ -289,15 +289,22 @@ export default function Navbar() {
         { name: "Contact", href: "/atelier#contact" },
         { name: "Cart", href: "/cart" },
       ];
+
+      if (!isHomeRoute) {
+        stuffyLinks.splice(2, 0, { name: "Collection", href: "/new-collection" });
+      }
+
+      return stuffyLinks;
     }
 
     return [
       { name: "Home", href: "/" },
       { name: "Shop", href: "/products" },
+      { name: "Collection", href: "/new-collection" },
       { name: "Gallery", href: "/gallery" },
       { name: "Atelier", href: "/atelier" },
     ];
-  }, [isStuffyClone]);
+  }, [isHomeRoute, isStuffyClone]);
 
   const sidebarNavLinks = useMemo(() => {
     if (!isStuffyClone) return navLinks;
@@ -326,6 +333,15 @@ export default function Navbar() {
           { label: "All Products", href: "/products", description: "Complete catalog", icon: Compass },
           { label: "Brand Gallery", href: "/gallery", description: "Campaign and collab imagery", icon: Sparkles },
           { label: "Go To Cart", href: "/cart", description: "Continue checkout journey", icon: ShoppingBag },
+        ],
+      },
+      "/new-collection": {
+        title: "Collection",
+        subtitle: "The current seasonal story, editorial direction, and release moodboard in one place.",
+        links: [
+          { label: "Open Collection", href: "/new-collection", description: "View the current collection page", icon: Sparkles },
+          { label: "Shop Products", href: "/products", description: "Browse the full catalog", icon: Shirt },
+          { label: "Editorial Gallery", href: "/gallery", description: "See campaign visuals", icon: Layers },
         ],
       },
       "/gallery": {
@@ -595,6 +611,7 @@ export default function Navbar() {
     : null;
   const productDetailDesktopLinks = [
     { name: "Shop", href: "/products" },
+    { name: "Collection", href: "/new-collection" },
     { name: "Gallery", href: "/gallery" },
     { name: "Atelier", href: "/atelier" },
   ];
