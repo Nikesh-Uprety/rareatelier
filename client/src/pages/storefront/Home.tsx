@@ -778,6 +778,12 @@ export default function Home() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
           >
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22),transparent_40%,rgba(185,147,86,0.12))]" />
             <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[rgba(226,190,123,0.16)] blur-3xl" />
@@ -786,7 +792,10 @@ export default function Home() {
             <button
               type="button"
               onClick={handlePremiumDialogClose}
-              className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/52 text-neutral-600 backdrop-blur-sm transition-all duration-300 hover:bg-white/72 hover:text-neutral-950"
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/52 text-neutral-600 backdrop-blur-sm transition-all duration-300 hover:bg-white/72 hover:text-neutral-950"
               aria-label="Close newsletter popup"
             >
               <X className="h-4 w-4" />
