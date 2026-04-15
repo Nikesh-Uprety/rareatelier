@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { fetchHomeFeaturedProducts, fetchPageConfig, fetchProducts, type ProductApi } from "@/lib/api";
 import { useScroll, useTransform, motion, AnimatePresence } from "framer-motion";
-import { ArrowUp, ArrowUpRight, Facebook, Instagram, Mail, Sparkles, X } from "lucide-react";
+import { ArrowRight, ArrowUp, ArrowUpRight, Facebook, Instagram, Sparkles, X } from "lucide-react";
 import HeroSection from "@/components/home/HeroSection";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
@@ -752,6 +752,106 @@ export default function Home() {
     };
   }, [handlePremiumDialogClose, isPremiumDialogOpen]);
 
+  const premiumNewsletterDialog = (
+    <AnimatePresence>
+      {isPremiumDialogOpen ? (
+        <motion.div
+          className="fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-6 lg:p-8"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              handlePremiumDialogClose();
+            }
+          }}
+        >
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,244,221,0.24),transparent_26%),linear-gradient(180deg,rgba(255,251,245,0.08),rgba(232,214,184,0.16))] backdrop-blur-[3px]" />
+          <motion.section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="premium-newsletter-title"
+            aria-describedby="premium-newsletter-description"
+            className="relative w-full max-w-[760px] overflow-hidden rounded-[34px] border border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.94),rgba(244,240,234,0.90)_35%,rgba(234,228,220,0.94)_100%)] px-5 py-6 text-neutral-950 shadow-[0_28px_90px_rgba(76,55,24,0.12)] sm:px-7 sm:py-7"
+            initial={{ opacity: 0, y: 18, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            onMouseDown={(event) => {
+              event.stopPropagation();
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.22),transparent_40%,rgba(185,147,86,0.12))]" />
+            <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-[rgba(226,190,123,0.16)] blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-12 left-8 h-28 w-28 rounded-full bg-black/6 blur-3xl" />
+
+            <button
+              type="button"
+              onClick={handlePremiumDialogClose}
+              onMouseDown={(event) => {
+                event.stopPropagation();
+              }}
+              className="absolute right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-black/8 bg-white/52 text-neutral-600 backdrop-blur-sm transition-all duration-300 hover:bg-white/72 hover:text-neutral-950"
+              aria-label="Close newsletter popup"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 rounded-full border border-black/8 bg-white/62 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-700 backdrop-blur-sm">
+                <Sparkles className="h-3.5 w-3.5" />
+                Newsletter
+              </div>
+              <h2
+                id="premium-newsletter-title"
+                className="mt-6 max-w-[12ch] text-[clamp(2.4rem,4.4vw,4rem)] font-semibold leading-[0.96] tracking-[-0.06em] text-neutral-950"
+              >
+                Subscribe for early access.
+              </h2>
+              <p
+                id="premium-newsletter-description"
+                className="mt-4 max-w-[34rem] text-[15px] leading-8 text-neutral-600"
+              >
+                Get new-collection previews, atelier stories, and drop alerts before everyone else.
+              </p>
+
+              <form onSubmit={handlePremiumNewsletterSubmit} className="mt-8 space-y-4">
+                <div className="group flex items-center gap-3 rounded-2xl border border-black/8 bg-white/76 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.4)] backdrop-blur-sm">
+                  <input
+                    id="premium-newsletter-email"
+                    type="email"
+                    required
+                    autoFocus
+                    value={premiumEmail}
+                    onChange={(event) => setPremiumEmail(event.target.value)}
+                    placeholder="Enter your email"
+                    className="h-12 flex-1 bg-transparent px-4 text-sm text-neutral-950 outline-none placeholder:text-neutral-500/80"
+                  />
+                  <button
+                    type="submit"
+                    disabled={newsletterMutation.isPending}
+                    className="inline-flex h-12 items-center gap-2 rounded-[18px] bg-black px-5 text-[11px] font-semibold uppercase tracking-[0.22em] text-white transition-all duration-300 hover:translate-x-0.5 hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {newsletterMutation.isPending ? "Joining" : "Join"}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-4 text-[11px] text-neutral-500">
+                  <span>Thoughtful updates only. No spam.</span>
+                  <span className="uppercase tracking-[0.2em]">Rare Atelier</span>
+                </div>
+              </form>
+            </div>
+          </motion.section>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
+
   function renderSection(section: any) {
     switch (section.sectionType) {
       case "hero":
@@ -1073,6 +1173,7 @@ export default function Home() {
             </div>
           </div>
         </div>
+        {premiumNewsletterDialog}
       </div>
     );
   }
@@ -1130,128 +1231,7 @@ export default function Home() {
         )}
       </main>
 
-      <AnimatePresence>
-        {isPremiumDialogOpen ? (
-          <motion.div
-            className="fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-6 lg:p-8"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) {
-                handlePremiumDialogClose();
-              }
-            }}
-          >
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_28%),linear-gradient(180deg,rgba(2,6,23,0.68),rgba(2,6,23,0.88))] backdrop-blur-xl" />
-            <motion.section
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="premium-newsletter-title"
-              aria-describedby="premium-newsletter-description"
-              className="relative w-full max-w-[44rem] overflow-hidden rounded-[30px] bg-[linear-gradient(135deg,rgba(255,255,255,0.2),rgba(59,130,246,0.18),rgba(255,255,255,0.08))] p-[1px] shadow-[0_32px_120px_rgba(2,6,23,0.62)]"
-              initial={{ opacity: 0, y: 20, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 18, scale: 0.97 }}
-              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-            >
-              <div className="relative overflow-hidden rounded-[29px] bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_32%),linear-gradient(145deg,rgba(6,10,20,0.96),rgba(10,15,28,0.92))] px-5 py-6 text-white sm:px-7 sm:py-7 lg:px-8 lg:py-8">
-                <div className="pointer-events-none absolute -left-14 top-10 h-28 w-28 rounded-full bg-sky-400/20 blur-3xl" />
-                <div className="pointer-events-none absolute -right-12 bottom-4 h-36 w-36 rounded-full bg-blue-500/16 blur-[96px]" />
-
-                <button
-                  type="button"
-                  onClick={handlePremiumDialogClose}
-                  className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/12 bg-white/6 text-white/78 backdrop-blur-md transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:text-white sm:right-5 sm:top-5"
-                  aria-label="Close newsletter popup"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-
-                <div className="relative grid gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
-                  <div className="flex flex-col justify-between gap-6 pr-0 lg:pr-3">
-                    <div className="space-y-4">
-                      <span className="inline-flex w-fit items-center gap-2 rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.28em] text-sky-100">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Premium Access
-                      </span>
-
-                      <div className="space-y-3">
-                        <h2
-                          id="premium-newsletter-title"
-                          className="max-w-[16ch] text-3xl font-semibold leading-[1.02] tracking-[-0.04em] text-white sm:text-[2.5rem]"
-                        >
-                          Join the rare side of the drop.
-                        </h2>
-                        <p
-                          id="premium-newsletter-description"
-                          className="max-w-[34rem] text-sm leading-6 text-white/68 sm:text-[15px]"
-                        >
-                          Get first access to limited releases, private edits, and early store notes before the collection opens to everyone else.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-md transition-shadow duration-300 hover:shadow-[0_18px_48px_rgba(56,189,248,0.12)]">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Early Access</p>
-                        <p className="mt-2 text-sm leading-6 text-white/82">Be first in line for new drops, restocks, and release-day reminders.</p>
-                      </div>
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 backdrop-blur-md transition-shadow duration-300 hover:shadow-[0_18px_48px_rgba(56,189,248,0.12)]">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Private Notes</p>
-                        <p className="mt-2 text-sm leading-6 text-white/82">Receive editorial previews, styling cues, and insider collection updates.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.05] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl sm:p-6">
-                    <div className="mb-5 flex items-start gap-3">
-                      <div className="mt-0.5 inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-400/10 text-sky-100">
-                        <Mail className="h-5 w-5" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[11px] uppercase tracking-[0.24em] text-white/42">Newsletter</p>
-                        <p className="text-base font-medium text-white">Premium updates, without the clutter.</p>
-                      </div>
-                    </div>
-
-                    <form className="space-y-4" onSubmit={handlePremiumNewsletterSubmit}>
-                      <div className="space-y-2">
-                        <label htmlFor="premium-newsletter-email" className="text-[11px] uppercase tracking-[0.22em] text-white/50">
-                          Email Address
-                        </label>
-                        <input
-                          id="premium-newsletter-email"
-                          type="email"
-                          required
-                          autoFocus
-                          value={premiumEmail}
-                          onChange={(event) => setPremiumEmail(event.target.value)}
-                          placeholder="Enter your email"
-                          className="h-14 w-full rounded-2xl border border-white/12 bg-black/25 px-4 text-sm text-white placeholder:text-white/30 outline-none transition-all duration-300 focus:border-sky-400/45 focus:bg-black/35 focus:ring-2 focus:ring-sky-400/20"
-                        />
-                      </div>
-
-                      <p className="text-sm leading-6 text-white/56">
-                        Expect early access alerts, limited release notes, and occasional private collection previews.
-                      </p>
-
-                      <button
-                        type="submit"
-                        disabled={newsletterMutation.isPending}
-                        className="inline-flex h-14 w-full items-center justify-center rounded-2xl bg-white px-5 text-sm font-semibold text-slate-950 transition-all duration-300 hover:-translate-y-0.5 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {newsletterMutation.isPending ? "Joining Rare Insider..." : "Join Rare Insider"}
-                      </button>
-                    </form>
-                  </div>
-                </div>
-              </div>
-            </motion.section>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+      {premiumNewsletterDialog}
     </div>
   );
 }

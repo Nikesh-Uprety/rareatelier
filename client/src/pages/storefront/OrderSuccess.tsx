@@ -612,7 +612,7 @@ export default function OrderSuccess() {
       </div>
 
       <div id="order-confirmation-export" className="order-confirmation-bill relative overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-black dark:text-zinc-100 shadow-[0_30px_80px_-35px_rgba(0,0,0,0.45)] dark:shadow-[0_30px_80px_-35px_rgba(0,0,0,0.6)]">
-        {(order.paymentMethod === "esewa" || order.paymentMethod === "khalti" || order.paymentMethod === "fonepay") && order.paymentVerified !== "verified" && (
+        {(order.paymentMethod === "esewa" || order.paymentMethod === "khalti") && order.paymentVerified !== "verified" && (
           <div className="no-print rounded-none border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 px-6 py-5">
             <div className="flex gap-3">
               <Check className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
@@ -620,6 +620,19 @@ export default function OrderSuccess() {
                 <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Payment Proof Under Review</p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
                   Thank you for uploading your payment proof. Our team will review it and contact you very soon. Your order is being processed in the meantime.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        {order.paymentMethod === "fonepay" && order.paymentVerified === "verified" && (
+          <div className="no-print rounded-none border-b border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-6 py-5">
+            <div className="flex gap-3">
+              <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <div>
+                <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Fonepay payment confirmed</p>
+                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                  Your exact-amount Fonepay payment was verified successfully. We&apos;ve moved the order straight into processing.
                 </p>
               </div>
             </div>

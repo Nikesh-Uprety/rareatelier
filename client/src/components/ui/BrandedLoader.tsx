@@ -16,7 +16,7 @@ export function BrandedLoader({
   const isLandingGlass = fullScreen && variant === "landing-glass";
   const landingHeroStyle = {
     backgroundImage:
-      "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(12,16,20,0.2) 100%), var(--landing-loader-hero, var(--landing-loader-lqip, url('/images/stussy.webp')))",
+      "linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(12,16,20,0.2) 100%), var(--landing-loader-hero, var(--landing-loader-lqip, none))",
     backgroundSize: "cover",
     backgroundPosition: "center",
     backgroundRepeat: "no-repeat",

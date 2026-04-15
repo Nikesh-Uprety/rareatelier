@@ -11,6 +11,35 @@ type FonepayConfig = {
   password: string;
 };
 
+type FonepayRuntimeStatusInput = {
+  configuredCallbackUrl?: string | null;
+  fallbackCallbackUrl: string;
+  clientUrl?: string | null;
+};
+
+type FonepayFlowStatus = {
+  available: boolean;
+  issues: string[];
+  warnings: string[];
+};
+
+export type FonepayRuntimeStatus = {
+  merchantCode: string | null;
+  environment: "sandbox" | "live" | "unknown";
+  callbackUrl: string | null;
+  callbackUrlSource: "env" | "derived";
+  clientUrl: string | null;
+  shopperAction: "hosted_bank_selection";
+  recommendedMode: "redirect" | "qr" | null;
+  web: FonepayFlowStatus & {
+    requiresPublicCallback: boolean;
+    hostedLogin: boolean;
+  };
+  qr: FonepayFlowStatus & {
+    exactAmountLocked: boolean;
+  };
+};
+
 export type FonepayWebPaymentResult = {
   success: true;
   prn: string;
@@ -126,6 +155,58 @@ function normalizeBaseUrl(value: string): string {
 function sanitizeRemark(value: string, fallback: string): string {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function dedupeMessages(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
+
+function isLocalHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized.endsWith(".local")
+  );
+}
+
+function looksLikeFrontendCallbackPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, "");
+  return (
+    normalized.endsWith("/payment/fonepay/verify-web") ||
+    normalized.endsWith("/checkout/payment") ||
+    normalized.endsWith("/payment-success") ||
+    normalized.endsWith("/payment-failed")
+  );
+}
+
+function parseAbsoluteUrl(value: string): URL | null {
+  try {
+    return new URL(value);
+  } catch {
+    return null;
+  }
+}
+
+function isPlaceholderCredential(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return true;
+
+  return (
+    normalized.includes("your_merchant_panel_") ||
+    normalized.includes("placeholder") ||
+    normalized.includes("changeme") ||
+    normalized === "username" ||
+    normalized === "password"
+  );
+}
+
+function resolveFonepayEnvironment(pgBaseUrl: string, dynamicQrUrl: string): "sandbox" | "live" | "unknown" {
+  const combined = `${pgBaseUrl} ${dynamicQrUrl}`.toLowerCase();
+  if (!combined.trim()) return "unknown";
+  if (combined.includes("dev-") || combined.includes("sandbox")) return "sandbox";
+  return "live";
 }
 
 type NamedStringEntry = {
@@ -284,6 +365,95 @@ export class FonepayService {
 
   getMerchantCode(): string {
     return this.config.merchantCode;
+  }
+
+  getRuntimeStatus(input: FonepayRuntimeStatusInput): FonepayRuntimeStatus {
+    const webIssues: string[] = [];
+    const webWarnings: string[] = [];
+    const qrIssues: string[] = [];
+    const qrWarnings: string[] = [];
+
+    if (!this.isWebConfigured()) {
+      webIssues.push("Fonepay web redirect is missing the merchant code, secret, or gateway URL.");
+    }
+
+    const configuredCallbackUrl = input.configuredCallbackUrl?.trim() || null;
+    const fallbackCallbackUrl = input.fallbackCallbackUrl.trim();
+    const clientUrl = input.clientUrl?.trim() || null;
+    let resolvedCallbackUrl = fallbackCallbackUrl || null;
+    let callbackUrlSource: "env" | "derived" = "derived";
+
+    if (configuredCallbackUrl) {
+      const configuredIssues = this.inspectCallbackUrl(configuredCallbackUrl);
+      if (configuredIssues.length === 0) {
+        resolvedCallbackUrl = configuredCallbackUrl;
+        callbackUrlSource = "env";
+      } else {
+        webWarnings.push(
+          `Ignoring configured callback URL because it is invalid for hosted Fonepay: ${configuredIssues.join(" ")}`,
+        );
+      }
+    }
+
+    if (!resolvedCallbackUrl) {
+      webIssues.push("Fonepay callback URL could not be resolved for the current request.");
+    } else {
+      webIssues.push(...this.inspectCallbackUrl(resolvedCallbackUrl));
+    }
+
+    if (!this.isDynamicQrConfigured()) {
+      qrIssues.push("Fonepay dynamic QR is missing the merchant code, secret, gateway URL, username, or password.");
+    }
+
+    if (this.config.dynamicQrUrl && !parseAbsoluteUrl(this.config.dynamicQrUrl)) {
+      qrIssues.push("Fonepay dynamic QR URL is not a valid absolute URL.");
+    }
+
+    if (this.config.username && isPlaceholderCredential(this.config.username)) {
+      qrIssues.push("Fonepay dynamic QR username still uses a placeholder value.");
+    }
+
+    if (this.config.password && isPlaceholderCredential(this.config.password)) {
+      qrIssues.push("Fonepay dynamic QR password still uses a placeholder value.");
+    }
+
+    const parsedClientUrl = clientUrl ? parseAbsoluteUrl(clientUrl) : null;
+    if (clientUrl && !parsedClientUrl) {
+      webWarnings.push("CLIENT_URL is not a valid absolute URL. Post-payment redirects may be inconsistent.");
+    }
+    if (parsedClientUrl && parsedClientUrl.protocol !== "https:" && !isLocalHostname(parsedClientUrl.hostname)) {
+      webWarnings.push("CLIENT_URL should use HTTPS in production so payment return pages stay on a secure origin.");
+    }
+
+    const normalizedWebIssues = dedupeMessages(webIssues);
+    const normalizedWebWarnings = dedupeMessages(webWarnings);
+    const normalizedQrIssues = dedupeMessages(qrIssues);
+    const normalizedQrWarnings = dedupeMessages(qrWarnings);
+    const webAvailable = normalizedWebIssues.length === 0;
+    const qrAvailable = normalizedQrIssues.length === 0;
+
+    return {
+      merchantCode: this.config.merchantCode || null,
+      environment: resolveFonepayEnvironment(this.config.pgBaseUrl, this.config.dynamicQrUrl),
+      callbackUrl: resolvedCallbackUrl,
+      callbackUrlSource,
+      clientUrl,
+      shopperAction: "hosted_bank_selection",
+      recommendedMode: qrAvailable ? "qr" : webAvailable ? "redirect" : null,
+      web: {
+        available: webAvailable,
+        issues: normalizedWebIssues,
+        warnings: normalizedWebWarnings,
+        requiresPublicCallback: true,
+        hostedLogin: true,
+      },
+      qr: {
+        available: qrAvailable,
+        issues: normalizedQrIssues,
+        warnings: normalizedQrWarnings,
+        exactAmountLocked: true,
+      },
+    };
   }
 
   extractOrderIdFromPrn(prn: string): string | null {
@@ -504,6 +674,33 @@ export class FonepayService {
     if (!this.isDynamicQrConfigured()) {
       throw new Error("Fonepay dynamic QR is not configured");
     }
+  }
+
+  private inspectCallbackUrl(callbackUrl: string): string[] {
+    const trimmed = callbackUrl.trim();
+    if (!trimmed) {
+      return ["Fonepay callback URL is missing."];
+    }
+
+    const parsed = parseAbsoluteUrl(trimmed);
+    if (!parsed) {
+      return ["Fonepay callback URL must be an absolute URL."];
+    }
+
+    const issues: string[] = [];
+    if (looksLikeFrontendCallbackPath(parsed.pathname)) {
+      issues.push("The callback must target the backend route /api/payments/fonepay/callback, not a storefront page.");
+    } else if (parsed.pathname.replace(/\/+$/, "") !== "/api/payments/fonepay/callback") {
+      issues.push("The callback path must be exactly /api/payments/fonepay/callback.");
+    }
+
+    if (isLocalHostname(parsed.hostname)) {
+      issues.push("Hosted Fonepay cannot return to localhost. Expose the backend on a public HTTPS URL.");
+    } else if (parsed.protocol !== "https:") {
+      issues.push("Public Fonepay callbacks must use HTTPS.");
+    }
+
+    return issues;
   }
 }
 

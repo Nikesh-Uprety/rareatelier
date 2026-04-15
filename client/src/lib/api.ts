@@ -161,6 +161,33 @@ export interface FonepayQrVerification {
   error?: string;
 }
 
+export interface FonepayStatusResponse {
+  success: boolean;
+  data?: {
+    merchantCode: string | null;
+    environment: "sandbox" | "live" | "unknown";
+    callbackUrl: string | null;
+    callbackUrlSource: "env" | "derived";
+    clientUrl: string | null;
+    shopperAction: "hosted_bank_selection";
+    recommendedMode: "redirect" | "qr" | null;
+    web: {
+      available: boolean;
+      issues: string[];
+      warnings: string[];
+      requiresPublicCallback: boolean;
+      hostedLogin: boolean;
+    };
+    qr: {
+      available: boolean;
+      issues: string[];
+      warnings: string[];
+      exactAmountLocked: boolean;
+    };
+  };
+  error?: string;
+}
+
 type JsonResponse<T> = T & {
   success: boolean;
   error?: string;
@@ -581,6 +608,11 @@ export async function createFonepayQrPayment(
 export async function verifyFonepayQrPayment(prn: string): Promise<FonepayQrVerification> {
   const res = await apiRequest("GET", `/api/payments/fonepay/qr/${encodeURIComponent(prn)}`);
   return (await res.json()) as FonepayQrVerification;
+}
+
+export async function fetchFonepayStatus(): Promise<FonepayStatusResponse> {
+  const res = await apiRequest("GET", "/api/payments/fonepay/status");
+  return (await res.json()) as FonepayStatusResponse;
 }
 
 export async function simulateStripePaymentSuccess(orderId: string): Promise<{

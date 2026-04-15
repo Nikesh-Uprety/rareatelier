@@ -87,7 +87,7 @@ import { generateBillFromOrder } from "./services/billService";
 import { createPosOrderSession, issuePosBillFromOrder } from "./services/posBillService";
 import { getUsdToNprRate, convertNprToUsdCents } from "./lib/exchangeRate";
 import { stripe, createCheckoutSession, constructWebhookEvent } from "./lib/stripe";
-import { fonepayService } from "./lib/fonepay";
+import { fonepayService, type FonepayRuntimeStatus } from "./lib/fonepay";
 import type Stripe from "stripe";
 import { cartService } from "./services/cartService";
 import { ensureAdminProfileAccessStorage, getAdminPageAccessOverrides, getEffectiveAdminPageAccess } from "./adminPageAccess";
@@ -104,6 +104,11 @@ import {
 } from "./lib/publicGoogleDrive";
 import { tryNormalizeStoredObjectUrl } from "./s3-upload";
 import { billSelectColumns } from "./billSelect";
+import {
+  buildTigrisDerivedObjectKeys,
+  extractTigrisObjectKeyFromUrl,
+  uploadTigrisMediaRenditions,
+} from "./lib/mediaAssetRenditions";
 
 const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -137,6 +142,8 @@ const ORDER_VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000;
 const ORDER_VERIFICATION_TOKEN_TTL_MS = 2 * 60 * 60 * 1000;
 const MAX_VERIFICATION_CODE_ATTEMPTS = 5;
 const MAX_GUEST_ORDER_IDS = 24;
+const IS_E2E_TEST_MODE = process.env.E2E_TEST_MODE === "1";
+const e2eFonepayQrPollCounts = new Map<string, number>();
 
 const STOREFRONT_IMAGE_REMOTE_HOSTS = new Set([
   "rare.t3.tigrisfiles.io",
@@ -214,12 +221,10 @@ function resolveClientBaseUrl(req: Request): string {
 }
 
 function resolveFonepayCallbackUrl(req: Request): string {
-  const configuredCallbackUrl = process.env.FONEPAY_PG_CALLBACK_URL?.trim();
-  if (configuredCallbackUrl) {
-    return configuredCallbackUrl;
-  }
-
-  return `${resolveServerBaseUrl(req)}/api/payments/fonepay/callback`;
+  return (
+    getFonepayRuntimeStatus(req).callbackUrl ||
+    `${resolveServerBaseUrl(req)}/api/payments/fonepay/callback`
+  );
 }
 
 function buildClientRedirectUrl(
@@ -236,6 +241,105 @@ function buildClientRedirectUrl(
   }
 
   return url.toString();
+}
+
+function getFonepayRuntimeStatus(req: Request): FonepayRuntimeStatus {
+  return fonepayService.getRuntimeStatus({
+    configuredCallbackUrl: process.env.FONEPAY_PG_CALLBACK_URL?.trim() ?? null,
+    fallbackCallbackUrl: `${resolveServerBaseUrl(req)}/api/payments/fonepay/callback`,
+    clientUrl: resolveClientBaseUrl(req),
+  });
+}
+
+function getFonepayUnavailableMessage(status: FonepayRuntimeStatus, flow: "web" | "qr"): string {
+  const flowStatus = flow === "web" ? status.web : status.qr;
+  if (flowStatus.issues.length > 0) {
+    return flowStatus.issues[0];
+  }
+
+  return flow === "web"
+    ? "Fonepay web checkout is temporarily unavailable."
+    : "Fonepay dynamic QR is temporarily unavailable.";
+}
+
+function shouldPersistFonepayQrVerificationStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "success" || normalized === "pending" || normalized === "processing") {
+    return false;
+  }
+
+  return (
+    normalized.includes("fail") ||
+    normalized.includes("cancel") ||
+    normalized.includes("error") ||
+    normalized.includes("expire") ||
+    normalized.includes("timeout") ||
+    normalized.includes("reject")
+  );
+}
+
+function stringifyFonepayPayload(payload: unknown): string | null {
+  if (payload === undefined || payload === null) return null;
+
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
+}
+
+type FonepayPaymentAuditInput = {
+  orderId?: string | null;
+  prn?: string | null;
+  flow: "web" | "qr";
+  stage: string;
+  status: string;
+  callbackUrl?: string | null;
+  uid?: string | null;
+  bankCode?: string | null;
+  message?: string | null;
+  payload?: unknown;
+};
+
+function buildE2EFonepayStatus(req: Request): FonepayRuntimeStatus {
+  const baseStatus = getFonepayRuntimeStatus(req);
+  return {
+    ...baseStatus,
+    recommendedMode: "qr",
+    web: {
+      ...baseStatus.web,
+      available: false,
+      issues: ["Hosted redirect is skipped in E2E mode. Use the simulated dynamic QR flow instead."],
+      warnings: dedupeStrings([
+        ...baseStatus.web.warnings,
+        "E2E mode uses a simulated Fonepay QR confirmation loop.",
+      ]),
+    },
+    qr: {
+      ...baseStatus.qr,
+      available: true,
+      issues: [],
+      warnings: dedupeStrings([
+        ...baseStatus.qr.warnings,
+        "E2E mode uses a simulated Fonepay QR confirmation loop.",
+      ]),
+    },
+  };
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
+
+function buildE2EFonepayQrPayload(prn: string, amount: string) {
+  return {
+    imageUrl: null,
+    imageDataUrl: null,
+    rawQrText: `fonepay://pay?prn=${encodeURIComponent(prn)}&amt=${encodeURIComponent(amount)}`,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    merchantName: "RARE Atelier E2E",
+  };
 }
 
 // Abuse prevention: tracks IPs/emails that repeatedly exceed new customer limits
@@ -285,6 +389,7 @@ let orderVerificationChallengesEnsured: Promise<void> | null = null;
 let orderTrackingCompatEnsured: Promise<void> | null = null;
 let billTrackingCompatEnsured: Promise<void> | null = null;
 let orderItemsColorCompatEnsured: Promise<void> | null = null;
+let fonepayPaymentAuditEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
   if (siteSettingsHasFontPresetColumnCache !== null) {
@@ -651,6 +756,8 @@ async function ensureMediaAssetsCompatibility() {
       !columns.has("folder_path") ? "folder_path" : null,
       !columns.has("asset_type") ? "asset_type" : null,
       !columns.has("expires_at") ? "expires_at" : null,
+      !columns.has("thumbnail_url") ? "thumbnail_url" : null,
+      !columns.has("preview_url") ? "preview_url" : null,
     ].filter((value): value is string => Boolean(value));
 
     if (missingColumns.length > 0) {
@@ -665,7 +772,9 @@ async function ensureMediaAssetsCompatibility() {
         alter table media_assets
         add column if not exists folder_path text,
         add column if not exists asset_type text default 'file',
-        add column if not exists expires_at timestamp with time zone
+        add column if not exists expires_at timestamp with time zone,
+        add column if not exists thumbnail_url text,
+        add column if not exists preview_url text
       `);
       await db.execute(sql`
         update media_assets
@@ -907,6 +1016,80 @@ async function ensureOrderItemsColorCompatibility() {
   return orderItemsColorCompatEnsured;
 }
 
+async function ensureFonepayPaymentAuditCompatibility() {
+  if (fonepayPaymentAuditEnsured) return fonepayPaymentAuditEnsured;
+
+  fonepayPaymentAuditEnsured = (async () => {
+    await db.execute(sql`
+      create table if not exists fonepay_payment_events (
+        id bigserial primary key,
+        order_id varchar,
+        prn text,
+        flow text not null,
+        stage text not null,
+        status text not null,
+        callback_url text,
+        uid text,
+        bank_code text,
+        message text,
+        payload_text text,
+        created_at timestamp with time zone not null default now()
+      )
+    `);
+    await db.execute(sql`
+      create index if not exists fonepay_payment_events_order_idx
+      on fonepay_payment_events (order_id, created_at desc)
+    `);
+    await db.execute(sql`
+      create index if not exists fonepay_payment_events_prn_idx
+      on fonepay_payment_events (prn, created_at desc)
+    `);
+  })().catch((error) => {
+    fonepayPaymentAuditEnsured = null;
+    throw error;
+  });
+
+  return fonepayPaymentAuditEnsured;
+}
+
+async function recordFonepayPaymentEvent(input: FonepayPaymentAuditInput) {
+  try {
+    await ensureFonepayPaymentAuditCompatibility();
+    await db.execute(sql`
+      insert into fonepay_payment_events (
+        order_id,
+        prn,
+        flow,
+        stage,
+        status,
+        callback_url,
+        uid,
+        bank_code,
+        message,
+        payload_text
+      ) values (
+        ${input.orderId ?? null},
+        ${input.prn ?? null},
+        ${input.flow},
+        ${input.stage},
+        ${input.status},
+        ${input.callbackUrl ?? null},
+        ${input.uid ?? null},
+        ${input.bankCode ?? null},
+        ${input.message ?? null},
+        ${stringifyFonepayPayload(input.payload)}
+      )
+    `);
+  } catch (error) {
+    logger.warn(
+      "Unable to persist Fonepay payment audit event",
+      { source: "FONEPAY" },
+      error,
+      { stage: input.stage, flow: input.flow },
+    );
+  }
+}
+
 function trimOptionalString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -998,6 +1181,8 @@ function sanitizeUploadFilename(name: string) {
 type AdminMediaAssetRecord = {
   id: string;
   url: string | null;
+  thumbnailUrl: string | null;
+  previewUrl: string | null;
   provider: string;
   category: string;
   publicId: string | null;
@@ -1017,6 +1202,7 @@ function normalizeAdminMediaAssetUrl(url: string | null): string | null {
 }
 
 function buildAdminMediaAssetThumbnailUrl(asset: AdminMediaAssetRecord): string | null {
+  const normalizedThumbnailUrl = normalizeAdminMediaAssetUrl(asset.thumbnailUrl);
   const normalizedUrl = normalizeAdminMediaAssetUrl(asset.url);
   if (asset.provider === "cloudinary" && asset.publicId) {
     return (
@@ -1026,14 +1212,17 @@ function buildAdminMediaAssetThumbnailUrl(asset: AdminMediaAssetRecord): string 
         crop: "fill",
         gravity: "auto",
         quality: "auto:good",
-      }) ?? normalizedUrl
+      }) ??
+      normalizedThumbnailUrl ??
+      normalizedUrl
     );
   }
 
-  return normalizedUrl;
+  return normalizedThumbnailUrl ?? normalizedUrl;
 }
 
 function buildAdminMediaAssetPreviewUrl(asset: AdminMediaAssetRecord): string | null {
+  const normalizedPreviewUrl = normalizeAdminMediaAssetUrl(asset.previewUrl);
   const normalizedUrl = normalizeAdminMediaAssetUrl(asset.url);
   if (asset.provider === "cloudinary" && asset.publicId) {
     return (
@@ -1041,11 +1230,13 @@ function buildAdminMediaAssetPreviewUrl(asset: AdminMediaAssetRecord): string | 
         width: 1400,
         crop: "limit",
         quality: "auto:good",
-      }) ?? normalizedUrl
+      }) ??
+      normalizedPreviewUrl ??
+      normalizedUrl
     );
   }
 
-  return normalizedUrl;
+  return normalizedPreviewUrl ?? normalizedUrl;
 }
 
 function serializeAdminMediaAsset(asset: AdminMediaAssetRecord) {
@@ -1084,6 +1275,7 @@ export async function registerRoutes(
   await ensureOrderTrackingCompatibility();
   await ensureBillTrackingCompatibility();
   await ensureOrderItemsColorCompatibility();
+  await ensureFonepayPaymentAuditCompatibility();
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
@@ -4429,6 +4621,17 @@ ${Array.from(uniqueEntries.entries())
     orderId: z.string().min(1).optional(),
   });
 
+  app.get("/api/payments/fonepay/status", async (req: Request, res: Response) => {
+    try {
+      const status = IS_E2E_TEST_MODE
+        ? buildE2EFonepayStatus(req)
+        : getFonepayRuntimeStatus(req);
+      return res.json({ success: true, data: status });
+    } catch (err) {
+      handleApiError(res, err, "GET /api/payments/fonepay/status");
+    }
+  });
+
   app.post(
     "/api/payments/fonepay/web/initiate",
     validateRequest(fonepayCheckoutSchema),
@@ -4453,12 +4656,43 @@ ${Array.from(uniqueEntries.entries())
           return res.status(400).json({ success: false, error: "Order has already been paid" });
         }
 
+        const fonepayStatus = getFonepayRuntimeStatus(req);
+        if (!fonepayStatus.web.available || !fonepayStatus.callbackUrl) {
+          await recordFonepayPaymentEvent({
+            orderId: order.id,
+            flow: "web",
+            stage: "web_init_blocked",
+            status: "error",
+            callbackUrl: fonepayStatus.callbackUrl,
+            message: getFonepayUnavailableMessage(fonepayStatus, "web"),
+            payload: fonepayStatus,
+          });
+          return res.status(503).json({
+            success: false,
+            error: getFonepayUnavailableMessage(fonepayStatus, "web"),
+          });
+        }
+
         const result = fonepayService.generateWebPaymentUrl({
           orderId: order.id,
           amount: order.total,
           remarks1: remarks1 ?? `Order ${order.id.slice(-8).toUpperCase()}`,
           remarks2: remarks2 ?? "RARE Atelier",
-          callbackUrl: resolveFonepayCallbackUrl(req),
+          callbackUrl: fonepayStatus.callbackUrl,
+        });
+
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn: result.prn,
+          flow: "web",
+          stage: "web_initiated",
+          status: "pending",
+          callbackUrl: fonepayStatus.callbackUrl,
+          message: "Hosted Fonepay redirect created.",
+          payload: {
+            amount: result.amount,
+            callbackUrlSource: fonepayStatus.callbackUrlSource,
+          },
         });
 
         return res.json({ success: true, data: result });
@@ -4473,6 +4707,15 @@ ${Array.from(uniqueEntries.entries())
     const orderId = prn ? fonepayService.extractOrderIdFromPrn(prn) : null;
 
     if (!prn || !orderId) {
+      await recordFonepayPaymentEvent({
+        prn,
+        flow: "web",
+        stage: "callback_invalid",
+        status: "error",
+        callbackUrl: resolveFonepayCallbackUrl(req),
+        message: "Callback arrived without a valid PRN or order reference.",
+        payload: req.query,
+      });
       return res.redirect(
         buildClientRedirectUrl(req, "/checkout/payment", {
           method: "fonepay",
@@ -4507,6 +4750,19 @@ ${Array.from(uniqueEntries.entries())
         );
       }
 
+      await recordFonepayPaymentEvent({
+        orderId: order.id,
+        prn,
+        flow: "web",
+        stage: "callback_received",
+        status: "pending",
+        callbackUrl: resolveFonepayCallbackUrl(req),
+        uid: getQueryParam(req.query.UID) ?? null,
+        bankCode: getQueryParam(req.query.BC) ?? null,
+        message: "Hosted callback received from Fonepay.",
+        payload: req.query,
+      });
+
       fonepayService.validateWebResponse({
         PRN: prn,
         PID: getQueryParam(req.query.PID),
@@ -4537,8 +4793,34 @@ ${Array.from(uniqueEntries.entries())
           await storage.updateOrderStatus(order.id, "processing");
         }
 
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn,
+          flow: "web",
+          stage: "callback_verified",
+          status: "success",
+          callbackUrl: resolveFonepayCallbackUrl(req),
+          uid: verification.uniqueId || getQueryParam(req.query.UID) || null,
+          bankCode: getQueryParam(req.query.BC) ?? null,
+          message: verification.message || "Fonepay payment verified successfully.",
+          payload: verification.raw,
+        });
+
         return res.redirect(buildClientRedirectUrl(req, `/order-confirmation/${order.id}`));
       }
+
+      await recordFonepayPaymentEvent({
+        orderId: order.id,
+        prn,
+        flow: "web",
+        stage: "callback_verified",
+        status: "failed",
+        callbackUrl: resolveFonepayCallbackUrl(req),
+        uid: verification.uniqueId || getQueryParam(req.query.UID) || null,
+        bankCode: getQueryParam(req.query.BC) ?? null,
+        message: verification.message || "Fonepay payment was not confirmed.",
+        payload: verification.raw,
+      });
 
       return res.redirect(
         buildClientRedirectUrl(req, "/checkout/payment", {
@@ -4550,6 +4832,18 @@ ${Array.from(uniqueEntries.entries())
       );
     } catch (err) {
       logger.error("Fonepay callback verification failed", { source: "FONEPAY" }, err);
+      await recordFonepayPaymentEvent({
+        orderId,
+        prn,
+        flow: "web",
+        stage: "callback_error",
+        status: "error",
+        callbackUrl: resolveFonepayCallbackUrl(req),
+        uid: getQueryParam(req.query.UID) ?? null,
+        bankCode: getQueryParam(req.query.BC) ?? null,
+        message: err instanceof Error ? err.message : "Fonepay verification failed.",
+        payload: req.query,
+      });
 
       return res.redirect(
         buildClientRedirectUrl(req, "/checkout/payment", {
@@ -4582,11 +4876,75 @@ ${Array.from(uniqueEntries.entries())
           return res.status(400).json({ success: false, error: "Order is not a Fonepay payment" });
         }
 
+        if (IS_E2E_TEST_MODE) {
+          const prn = `QR_${order.id}_${Date.now()}`;
+          const amount = String(order.total);
+          e2eFonepayQrPollCounts.set(prn, 0);
+          const qrPayload = buildE2EFonepayQrPayload(prn, amount);
+
+          await recordFonepayPaymentEvent({
+            orderId: order.id,
+            prn,
+            flow: "qr",
+            stage: "qr_generated",
+            status: "pending",
+            message: "Simulated Fonepay QR generated for E2E mode.",
+            payload: {
+              amount,
+              qrPayload,
+              mode: "e2e",
+            },
+          });
+
+          return res.json({
+            success: true,
+            data: {
+              success: true,
+              prn,
+              amount,
+              qrPayload,
+              qrData: {
+                mode: "e2e",
+                qrText: qrPayload.rawQrText,
+              },
+            },
+          });
+        }
+
+        const fonepayStatus = getFonepayRuntimeStatus(req);
+        if (!fonepayStatus.qr.available) {
+          await recordFonepayPaymentEvent({
+            orderId: order.id,
+            flow: "qr",
+            stage: "qr_init_blocked",
+            status: "error",
+            message: getFonepayUnavailableMessage(fonepayStatus, "qr"),
+            payload: fonepayStatus,
+          });
+          return res.status(503).json({
+            success: false,
+            error: getFonepayUnavailableMessage(fonepayStatus, "qr"),
+          });
+        }
+
         const result = await fonepayService.generateQrPayment({
           orderId: order.id,
           amount: order.total,
           remarks1: remarks1 ?? `Order ${order.id.slice(-8).toUpperCase()}`,
           remarks2: remarks2 ?? "RARE Atelier",
+        });
+
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn: result.prn,
+          flow: "qr",
+          stage: "qr_generated",
+          status: "pending",
+          message: "Dynamic QR generated for shopper scan.",
+          payload: {
+            amount: result.amount,
+            qrPayload: result.qrPayload,
+          },
         });
 
         return res.json({ success: true, data: result });
@@ -4617,6 +4975,51 @@ ${Array.from(uniqueEntries.entries())
         return res.status(403).json({ success: false, error: "Forbidden" });
       }
 
+      if (IS_E2E_TEST_MODE) {
+        const nextPollCount = (e2eFonepayQrPollCounts.get(prn) ?? 0) + 1;
+        e2eFonepayQrPollCounts.set(prn, nextPollCount);
+
+        if (nextPollCount < 2) {
+          return res.json({
+            success: true,
+            data: {
+              status: "pending",
+              paymentStatus: false,
+              raw: { mode: "e2e", pollCount: nextPollCount },
+            },
+          });
+        }
+
+        if (order.paymentVerified !== "verified") {
+          await storage.updateOrderPaymentVerified(order.id, "verified");
+        }
+
+        if (order.status === "pending") {
+          await storage.updateOrderStatus(order.id, "processing");
+        }
+
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn,
+          flow: "qr",
+          stage: "qr_verified",
+          status: "success",
+          message: "Simulated Fonepay QR payment verified in E2E mode.",
+          payload: { mode: "e2e", pollCount: nextPollCount },
+        });
+
+        e2eFonepayQrPollCounts.delete(prn);
+
+        return res.json({
+          success: true,
+          data: {
+            status: "success",
+            paymentStatus: true,
+            raw: { mode: "e2e", pollCount: nextPollCount },
+          },
+        });
+      }
+
       const verification = await fonepayService.verifyQrPayment(prn);
 
       if (verification.success) {
@@ -4627,6 +5030,26 @@ ${Array.from(uniqueEntries.entries())
         if (order.status === "pending") {
           await storage.updateOrderStatus(order.id, "processing");
         }
+
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn,
+          flow: "qr",
+          stage: "qr_verified",
+          status: "success",
+          message: "Dynamic QR payment verified successfully.",
+          payload: verification.data,
+        });
+      } else if (shouldPersistFonepayQrVerificationStatus(verification.status)) {
+        await recordFonepayPaymentEvent({
+          orderId: order.id,
+          prn,
+          flow: "qr",
+          stage: "qr_verified",
+          status: verification.status || "failed",
+          message: "Dynamic QR did not complete successfully.",
+          payload: verification.data,
+        });
       }
 
       return res.json({
@@ -4653,6 +5076,14 @@ ${Array.from(uniqueEntries.entries())
 
         if (existingOrder && existingOrder.paymentMethod !== "fonepay") {
           return res.status(400).json({ success: false, error: "Order is not a Fonepay POS payment" });
+        }
+
+        const fonepayStatus = getFonepayRuntimeStatus(req);
+        if (!fonepayStatus.qr.available) {
+          return res.status(503).json({
+            success: false,
+            error: getFonepayUnavailableMessage(fonepayStatus, "qr"),
+          });
         }
 
         const posOrder = existingOrder
@@ -7398,6 +7829,110 @@ ${Array.from(uniqueEntries.entries())
         return res
           .status(500)
           .json({ success: false, error: "Failed to delete order" });
+      }
+    },
+  );
+
+  app.get(
+    "/api/admin/orders/:id/payment-audit",
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        if (typeof id !== "string" || !id.trim()) {
+          return res.status(400).json({ success: false, error: "Invalid ID" });
+        }
+
+        const order = await storage.getOrderById(id);
+        if (!order) {
+          return res.status(404).json({ success: false, error: "Order not found" });
+        }
+
+        const runtimeStatus = IS_E2E_TEST_MODE
+          ? buildE2EFonepayStatus(req)
+          : getFonepayRuntimeStatus(req);
+
+        const result = await db.execute(sql`
+          select
+            id::text as id,
+            order_id,
+            prn,
+            flow,
+            stage,
+            status,
+            callback_url,
+            uid,
+            bank_code,
+            message,
+            payload_text,
+            created_at
+          from fonepay_payment_events
+          where order_id = ${id}
+          order by created_at desc
+          limit 20
+        `);
+
+        const events = result.rows.map((row) => {
+          const record = row as {
+            id?: unknown;
+            order_id?: unknown;
+            prn?: unknown;
+            flow?: unknown;
+            stage?: unknown;
+            status?: unknown;
+            callback_url?: unknown;
+            uid?: unknown;
+            bank_code?: unknown;
+            message?: unknown;
+            payload_text?: unknown;
+            created_at?: unknown;
+          };
+
+          return {
+            id: typeof record.id === "string" ? record.id : String(record.id ?? ""),
+            orderId: typeof record.order_id === "string" ? record.order_id : null,
+            prn: typeof record.prn === "string" ? record.prn : null,
+            flow: typeof record.flow === "string" ? record.flow : "unknown",
+            stage: typeof record.stage === "string" ? record.stage : "unknown",
+            status: typeof record.status === "string" ? record.status : "unknown",
+            callbackUrl:
+              typeof record.callback_url === "string" ? record.callback_url : null,
+            uid: typeof record.uid === "string" ? record.uid : null,
+            bankCode:
+              typeof record.bank_code === "string" ? record.bank_code : null,
+            message:
+              typeof record.message === "string" ? record.message : null,
+            payloadText:
+              typeof record.payload_text === "string" ? record.payload_text : null,
+            createdAt:
+              record.created_at instanceof Date
+                ? record.created_at.toISOString()
+                : typeof record.created_at === "string"
+                  ? record.created_at
+                  : null,
+          };
+        });
+
+        const latestEventWithPrn = events.find((event) => typeof event.prn === "string" && event.prn);
+
+        return res.json({
+          success: true,
+          data: {
+            order: {
+              id: order.id,
+              paymentMethod: order.paymentMethod,
+              paymentVerified: order.paymentVerified,
+              status: order.status,
+              total: order.total,
+              createdAt: order.createdAt,
+            },
+            runtimeStatus,
+            latestPrn: latestEventWithPrn?.prn ?? null,
+            events,
+          },
+        });
+      } catch (err) {
+        handleApiError(res, err, "GET /api/admin/orders/:id/payment-audit");
       }
     },
   );
@@ -10837,6 +11372,8 @@ ${Array.from(uniqueEntries.entries())
           id: mediaAssets.id,
           category: mediaAssets.category,
           url: mediaAssets.url,
+          thumbnailUrl: mediaAssets.thumbnailUrl,
+          previewUrl: mediaAssets.previewUrl,
           provider: mediaAssets.provider,
           publicId: mediaAssets.publicId,
           filename: mediaAssets.filename,
@@ -10948,6 +11485,8 @@ ${Array.from(uniqueEntries.entries())
           .insert(mediaAssets)
           .values({
             url: source.url,
+            thumbnailUrl: source.thumbnailUrl,
+            previewUrl: source.previewUrl,
             provider: source.provider,
             category,
             publicId: source.publicId,
@@ -10955,6 +11494,9 @@ ${Array.from(uniqueEntries.entries())
             bytes: source.bytes,
             width: source.width,
             height: source.height,
+            folderPath: source.folderPath,
+            assetType: source.assetType ?? "file",
+            expiresAt: source.expiresAt,
           })
           .returning({
             id: mediaAssets.id,
@@ -11049,6 +11591,8 @@ ${Array.from(uniqueEntries.entries())
       const mediaAssetSelection = {
         id: mediaAssets.id,
         url: mediaAssets.url,
+        thumbnailUrl: mediaAssets.thumbnailUrl,
+        previewUrl: mediaAssets.previewUrl,
         provider: mediaAssets.provider,
         category: mediaAssets.category,
         publicId: mediaAssets.publicId,
@@ -11172,6 +11716,8 @@ ${Array.from(uniqueEntries.entries())
           .insert(mediaAssets)
           .values({
             url: null,
+            thumbnailUrl: null,
+            previewUrl: null,
             provider: provider ?? "folder",
             category,
             publicId: null,
@@ -11301,26 +11847,24 @@ ${Array.from(uniqueEntries.entries())
           if (provider === "tigris") {
             const folderPrefix = normalizedFolderPath ? `${normalizedFolderPath}/` : "";
             const fileName = `media/${category}/${folderPrefix}${Date.now()}_${cleanedName.replace(/\.[^.]+$/, "")}.webp`;
-            const webpBuffer = await sharp(file.buffer)
-              .webp({
-                quality: qualityMode === "high" ? 92 : 85,
-                effort: 4,
-              })
-              .toBuffer();
-            const uploadedUrl = await storageService.uploadFile(
-              webpBuffer,
-              fileName,
-              "image/webp",
-            );
+            const uploaded = await uploadTigrisMediaRenditions({
+              sourceBuffer: file.buffer,
+              objectKey: fileName,
+              qualityMode: qualityMode === "medium" ? "medium" : "high",
+            });
             const [row] = await db
               .insert(mediaAssets)
               .values({
-                url: uploadedUrl,
+                url: uploaded.url,
+                thumbnailUrl: uploaded.thumbnailUrl,
+                previewUrl: uploaded.previewUrl,
                 provider: "tigris",
                 category,
                 publicId: fileName,
                 filename: cleanedName,
-                bytes: webpBuffer.byteLength,
+                bytes: uploaded.bytes,
+                width: uploaded.width,
+                height: uploaded.height,
                 folderPath: normalizedFolderPath,
                 assetType: "file",
                 expiresAt,
@@ -11336,6 +11880,8 @@ ${Array.from(uniqueEntries.entries())
               .insert(mediaAssets)
               .values({
                 url: uploaded.url,
+                thumbnailUrl: null,
+                previewUrl: null,
                 provider: "cloudinary",
                 category,
                 publicId: uploaded.publicId,
@@ -11394,16 +11940,23 @@ ${Array.from(uniqueEntries.entries())
       } else if (asset.provider === "tigris") {
         const key =
           asset.publicId ||
-          (() => {
-            try {
-              const u = new URL(asset.url ?? "");
-              return u.pathname.split("/").slice(2).join("/");
-            } catch {
-              return "";
-            }
-          })();
+          extractTigrisObjectKeyFromUrl(asset.url) ||
+          "";
         if (key) {
-          await storageService.deleteFile(key);
+          const derivativeKeys = buildTigrisDerivedObjectKeys(key);
+          const deleteKeys = Array.from(
+            new Set(
+              [
+                key,
+                extractTigrisObjectKeyFromUrl(asset.thumbnailUrl),
+                extractTigrisObjectKeyFromUrl(asset.previewUrl),
+                derivativeKeys.thumbnailKey,
+                derivativeKeys.previewKey,
+              ].filter((value): value is string => Boolean(value)),
+            ),
+          );
+
+          await Promise.all(deleteKeys.map((entry) => storageService.deleteFile(entry)));
         }
       }
 

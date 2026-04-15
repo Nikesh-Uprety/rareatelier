@@ -337,6 +337,8 @@ export type NewPlatform = typeof platforms.$inferInsert;
 export const mediaAssets = pgTable("media_assets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   url: text("url"),
+  thumbnailUrl: text("thumbnail_url"),
+  previewUrl: text("preview_url"),
   provider: text("provider").notNull(), // cloudinary | local
   category: text("category").notNull(), // product | model | website | landing_page | collection_page
   publicId: text("public_id"), // for cloudinary deletes
