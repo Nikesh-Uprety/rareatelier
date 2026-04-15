@@ -172,6 +172,14 @@ export default function AdminImagesPage() {
     }
   };
 
+  const getAssetThumbnailUrl = (
+    asset?: Pick<AdminImageAsset, "thumbnailUrl" | "url"> | null,
+  ) => asset?.thumbnailUrl ?? asset?.url ?? "";
+
+  const getAssetPreviewUrl = (
+    asset?: Pick<AdminImageAsset, "previewUrl" | "url"> | null,
+  ) => asset?.previewUrl ?? asset?.url ?? "";
+
   const sanitizeFilename = (value: string) => {
     const base = value.split("/").pop() || value;
     const decoded = (() => {
@@ -536,7 +544,12 @@ export default function AdminImagesPage() {
                 return (
                   <div key={provider.key} className="rounded-lg border border-border bg-background p-2 flex items-center gap-3">
                     {active?.url ? (
-                      <img src={active.url} alt={`${provider.label} active QR`} className="h-12 w-12 rounded object-cover border border-border" />
+                      <img
+                        src={active.thumbnailUrl ?? active.url}
+                        alt={`${provider.label} active QR`}
+                        className="h-12 w-12 rounded object-cover border border-border"
+                        decoding="async"
+                      />
                     ) : (
                       <div className="h-12 w-12 rounded border border-border bg-muted" />
                     )}
@@ -695,6 +708,7 @@ export default function AdminImagesPage() {
             {filtered.map((item: AdminImageAsset, index) => {
               const id = item.id;
               const url = item.url ?? "";
+              const thumbnailUrl = getAssetThumbnailUrl(item);
               const absoluteUrl = getAbsoluteAssetUrl(url);
               const displayName = getDisplayName(item.filename ?? url);
               const isSelected = selectedIds.has(id);
@@ -706,6 +720,10 @@ export default function AdminImagesPage() {
                     "group relative rounded-2xl border bg-white dark:bg-card overflow-hidden shadow-sm transition-shadow hover:shadow-xl",
                     isSelected ? "border-primary ring-2 ring-primary/40" : "border-muted/40",
                   )}
+                  style={{
+                    contentVisibility: "auto",
+                    containIntrinsicSize: "260px 320px",
+                  }}
                 >
                   <div
                     className="relative aspect-square cursor-pointer"
@@ -720,10 +738,11 @@ export default function AdminImagesPage() {
                     }}
                   >
                     <img
-                      src={url}
+                      src={thumbnailUrl}
                       alt={displayName ?? ""}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                       loading="lazy"
+                      decoding="async"
                     />
                     <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
                       <p className="text-[10px] text-white truncate" title={displayName}>
@@ -871,9 +890,10 @@ export default function AdminImagesPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <img
-                  src={previewAsset.url ?? undefined}
+                  src={getAssetPreviewUrl(previewAsset) || undefined}
                   alt={previewAsset.filename ?? "Preview"}
                   className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"
+                  decoding="async"
                 />
                 <button
                   type="button"
@@ -948,9 +968,10 @@ export default function AdminImagesPage() {
             <div className="space-y-4 py-2">
               <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
                 <img
-                  src={assetToDelete.url ?? undefined}
+                  src={getAssetThumbnailUrl(assetToDelete) || undefined}
                   alt={assetToDelete.filename ?? "Delete image"}
                   className="h-48 w-full object-cover"
+                  decoding="async"
                 />
               </div>
               <div className="rounded-2xl border border-border bg-muted/10 px-4 py-3 text-sm">

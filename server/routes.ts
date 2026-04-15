@@ -10684,6 +10684,15 @@ ${Array.from(uniqueEntries.entries())
           id: mediaAssets.id,
           category: mediaAssets.category,
           url: mediaAssets.url,
+          provider: mediaAssets.provider,
+          publicId: mediaAssets.publicId,
+          filename: mediaAssets.filename,
+          bytes: mediaAssets.bytes,
+          width: mediaAssets.width,
+          height: mediaAssets.height,
+          folderPath: mediaAssets.folderPath,
+          assetType: mediaAssets.assetType,
+          expiresAt: mediaAssets.expiresAt,
           createdAt: mediaAssets.createdAt,
         })
         .from(mediaAssets)
@@ -10698,14 +10707,23 @@ ${Array.from(uniqueEntries.entries())
 
       const latestByCategory = new Map<
         string,
-        { id: string; url: string; createdAt: Date | null }
+        {
+          id: string | null;
+          url: string;
+          thumbnailUrl: string;
+          previewUrl: string;
+          createdAt: Date | null;
+        }
       >();
       for (const row of rows) {
         if (!row.url) continue;
         if (!latestByCategory.has(row.category)) {
+          const serialized = serializeAdminMediaAsset(row as AdminMediaAssetRecord);
           latestByCategory.set(row.category, {
             id: row.id,
-            url: row.url,
+            url: serialized.url ?? row.url,
+            thumbnailUrl: serialized.thumbnailUrl ?? serialized.url ?? row.url,
+            previewUrl: serialized.previewUrl ?? serialized.url ?? row.url,
             createdAt: row.createdAt ?? null,
           });
         }
@@ -10717,16 +10735,22 @@ ${Array.from(uniqueEntries.entries())
           esewa: latestByCategory.get(PAYMENT_QR_CATEGORIES.esewa) ?? {
             id: null,
             url: DEFAULT_PAYMENT_QR_URLS.esewaQrUrl,
+            thumbnailUrl: DEFAULT_PAYMENT_QR_URLS.esewaQrUrl,
+            previewUrl: DEFAULT_PAYMENT_QR_URLS.esewaQrUrl,
             createdAt: null,
           },
           khalti: latestByCategory.get(PAYMENT_QR_CATEGORIES.khalti) ?? {
             id: null,
             url: DEFAULT_PAYMENT_QR_URLS.khaltiQrUrl,
+            thumbnailUrl: DEFAULT_PAYMENT_QR_URLS.khaltiQrUrl,
+            previewUrl: DEFAULT_PAYMENT_QR_URLS.khaltiQrUrl,
             createdAt: null,
           },
           fonepay: latestByCategory.get(PAYMENT_QR_CATEGORIES.fonepay) ?? {
             id: null,
             url: DEFAULT_PAYMENT_QR_URLS.fonepayQrUrl,
+            thumbnailUrl: DEFAULT_PAYMENT_QR_URLS.fonepayQrUrl,
+            previewUrl: DEFAULT_PAYMENT_QR_URLS.fonepayQrUrl,
             createdAt: null,
           },
         },

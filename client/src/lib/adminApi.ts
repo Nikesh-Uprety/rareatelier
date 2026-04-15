@@ -250,6 +250,8 @@ export type PaymentQrProvider = "esewa" | "khalti" | "fonepay";
 export interface AdminPaymentQrSelection {
   id: string | null;
   url: string;
+  thumbnailUrl?: string | null;
+  previewUrl?: string | null;
   createdAt: string | null;
 }
 

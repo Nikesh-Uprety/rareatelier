@@ -19,6 +19,8 @@ type StorefrontLibraryEntry = {
   key: string;
   filename: string;
   url: string;
+  thumbnailUrl?: string;
+  previewUrl?: string;
   provider: "local" | "cloudinary";
   relPath?: string;
   id?: string;
@@ -81,6 +83,8 @@ export default function StorefrontImagePicker() {
             key: `local:${img.relPath}`,
             filename: img.filename,
             url: img.url,
+            thumbnailUrl: img.url,
+            previewUrl: img.url,
             relPath: img.relPath,
             provider: "local" as const,
           }))),
@@ -92,6 +96,8 @@ export default function StorefrontImagePicker() {
               id: asset.id,
               filename: asset.filename || asset.publicId || `cloudinary-${asset.id.slice(0, 8)}`,
               url: asset.url,
+              thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+              previewUrl: asset.previewUrl ?? asset.url,
               provider: "cloudinary" as const,
               category: asset.category,
             })),
@@ -168,6 +174,29 @@ export default function StorefrontImagePicker() {
     const cloudinary = filtered.filter((img) => img.provider === "cloudinary");
     return { cloudinary, local };
   }, [filtered]);
+
+  const libraryByUrl = useMemo(
+    () => new Map((imagesQuery.data ?? []).map((img) => [img.url, img])),
+    [imagesQuery.data],
+  );
+
+  const getLibraryThumbnailUrl = (
+    entry?: Pick<StorefrontLibraryEntry, "thumbnailUrl" | "url"> | null,
+  ) => entry?.thumbnailUrl ?? entry?.url ?? "";
+
+  const getLibraryPreviewUrl = (
+    entry?: Pick<StorefrontLibraryEntry, "previewUrl" | "url"> | null,
+  ) => entry?.previewUrl ?? entry?.url ?? "";
+
+  const getResolvedThumbnailUrl = (url?: string | null) => {
+    if (!url) return "";
+    return getLibraryThumbnailUrl(libraryByUrl.get(url) ?? { url });
+  };
+
+  const getResolvedPreviewUrl = (url?: string | null) => {
+    if (!url) return "";
+    return getLibraryPreviewUrl(libraryByUrl.get(url) ?? { url });
+  };
 
   const slotPreview = useMemo(() => {
     if (activeSlot === "feature1") return featureImages[0] ?? FEATURE_COLLECTION_IMAGE_SLOTS_DEFAULT[0];
@@ -267,7 +296,12 @@ export default function StorefrontImagePicker() {
                     <span className="text-xs font-black uppercase tracking-widest">{slot.label}</span>
                     <div className="w-14 h-14 rounded-lg overflow-hidden border border-border/60 bg-muted shrink-0">
                       {preview ? (
-                        <img src={preview} alt={slot.label} className="w-full h-full object-cover" />
+                        <img
+                          src={getResolvedThumbnailUrl(preview)}
+                          alt={slot.label}
+                          className="w-full h-full object-cover"
+                          decoding="async"
+                        />
                       ) : null}
                     </div>
                   </button>
@@ -278,7 +312,12 @@ export default function StorefrontImagePicker() {
             <div className="mt-4 text-sm text-muted-foreground">
               Active slot preview:
               <div className="mt-2 w-full max-w-2xl rounded-xl overflow-hidden border border-border/60 bg-muted">
-                <img src={slotPreview} alt="Active slot preview" className="w-full h-56 object-cover" />
+                <img
+                  src={getResolvedPreviewUrl(slotPreview)}
+                  alt="Active slot preview"
+                  className="w-full h-56 object-cover"
+                  decoding="async"
+                />
               </div>
               <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
                 Local delete flow:
@@ -382,6 +421,10 @@ export default function StorefrontImagePicker() {
                             "group overflow-hidden rounded-2xl border border-border/60 bg-muted/40 transition-colors",
                             isSelected ? "ring-2 ring-emerald-500/30 border-emerald-400/50" : "hover:border-black/30 dark:hover:border-white/20",
                           )}
+                          style={{
+                            contentVisibility: "auto",
+                            containIntrinsicSize: "220px 270px",
+                          }}
                         >
                           <button
                             type="button"
@@ -389,7 +432,13 @@ export default function StorefrontImagePicker() {
                             className="relative block w-full"
                             aria-label={`Pick ${img.filename}`}
                           >
-                            <img src={img.url} alt={img.filename} className="h-36 w-full object-cover transition-transform duration-200 group-hover:scale-105" />
+                            <img
+                              src={getLibraryThumbnailUrl(img)}
+                              alt={img.filename}
+                              className="h-36 w-full object-cover transition-transform duration-200 group-hover:scale-105"
+                              loading="lazy"
+                              decoding="async"
+                            />
                             <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3 py-2">
                               <span className={cn(
                                 "rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em]",
@@ -456,7 +505,12 @@ export default function StorefrontImagePicker() {
           {imageToDelete ? (
             <div className="space-y-4 py-2">
               <div className="overflow-hidden rounded-2xl border border-border bg-muted/30">
-                <img src={imageToDelete.url} alt={imageToDelete.filename} className="h-48 w-full object-cover" />
+                <img
+                  src={getLibraryPreviewUrl(imageToDelete)}
+                  alt={imageToDelete.filename}
+                  className="h-48 w-full object-cover"
+                  decoding="async"
+                />
               </div>
               <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm">
                 <p className="font-medium">{imageToDelete.filename}</p>
