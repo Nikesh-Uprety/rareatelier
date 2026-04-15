@@ -115,6 +115,26 @@ describe("Checkout", () => {
     expect(createOrderMock).not.toHaveBeenCalled();
   });
 
+  it("shows live phone validation feedback while the customer types", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<Checkout />);
+    const phoneInput = screen.getByTestId("checkout-phone");
+
+    await user.type(phoneInput, "9800");
+    expect(screen.getByText("Add 6 more digits to complete your mobile number.")).toBeInTheDocument();
+
+    await user.clear(phoneInput);
+    await user.type(phoneInput, "1234567890");
+    expect(screen.getByText("Use a valid Nepal mobile number starting with 9.")).toBeInTheDocument();
+
+    await user.clear(phoneInput);
+    await user.type(phoneInput, "9800000000");
+    expect(
+      screen.getByText("Nepal mobile number only. The +977 country code is already added for you."),
+    ).toBeInTheDocument();
+  });
+
   it("applies promo codes and shows success feedback", async () => {
     const user = userEvent.setup();
     validatePromoCodeMock.mockResolvedValueOnce({
@@ -203,19 +223,31 @@ describe("Checkout", () => {
     });
   });
 
-  it("routes online payment orders to the payment page without creating order", async () => {
+  it("lets shoppers continue to online payment with only name and phone", async () => {
     const user = userEvent.setup();
 
-    const esewaData = { ...SAVED_FORM_DATA, paymentMethod: "esewa" };
-    localStorage.setItem("ra-checkout-form-data", JSON.stringify(esewaData));
     renderWithProviders(<Checkout />);
 
+    await user.type(screen.getByTestId("checkout-full-name"), "Nikesh Uprety");
+    await user.type(screen.getByTestId("checkout-phone"), "9800000000");
     await user.click(screen.getByTestId("checkout-payment-esewa"));
     await user.click(screen.getByTestId("checkout-submit"));
 
     await waitFor(() => {
       expect(createOrderMock).not.toHaveBeenCalled();
       expect(cachePendingCheckoutMock).toHaveBeenCalled();
+      const [pendingPayload] = cachePendingCheckoutMock.mock.calls[0] ?? [];
+      expect(pendingPayload).toEqual(
+        expect.objectContaining({
+          orderInput: expect.objectContaining({
+            shipping: expect.objectContaining({
+              fullName: "Nikesh Uprety",
+              phone: "+9779800000000",
+              deliveryLocation: undefined,
+            }),
+          }),
+        }),
+      );
       expect(setLocationMock).toHaveBeenCalledWith("/checkout/payment?method=esewa");
     });
   });

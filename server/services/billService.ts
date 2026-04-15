@@ -2,6 +2,7 @@ import { db } from "../db";
 import { bills, orders, orderItems, products, productVariants, customers } from "../../shared/schema";
 import { eq, sql } from "drizzle-orm";
 import type { Bill } from "../../shared/schema";
+import { billSelectColumns } from "../billSelect";
 
 // Generates next bill number: RARE-INV-000123
 async function generateBillNumber(): Promise<string> {
@@ -50,7 +51,7 @@ export async function generateBillFromOrder(
 
   // Check if bill already exists for this order
   const [existing] = await db
-    .select()
+    .select(billSelectColumns)
     .from(bills)
     .where(eq(bills.orderId, orderId))
     .limit(1);
@@ -112,27 +113,61 @@ export async function generateBillFromOrder(
 
   const billNumber = await generateBillNumber();
 
-  const [newBill] = await db.insert(bills).values({
-    id: crypto.randomUUID(),
-    billNumber,
-    orderId,
-    customerId: order.userId ?? null,
-    customerName,
-    customerEmail: order.email ?? null,
-    customerPhone: customerPhone ?? null,
-    items: billItems,
-    subtotal: String(subtotal),
-    taxRate: String(taxRate),
-    taxAmount: String(taxAmount),
-    discountAmount: String(discountAmount),
-    totalAmount: String(totalAmount),
-    paymentMethod: order.paymentMethod ?? "card",
-    source: order.source ?? "website",
-    processedBy: processedByName,
-    processedById,
-    billType: "sale",
-    status: "issued",
-  }).returning();
+  const billId = crypto.randomUUID();
+
+  await db.execute(sql`
+    insert into bills (
+      id,
+      bill_number,
+      order_id,
+      customer_id,
+      customer_name,
+      customer_email,
+      customer_phone,
+      items,
+      subtotal,
+      tax_rate,
+      tax_amount,
+      discount_amount,
+      total_amount,
+      payment_method,
+      source,
+      processed_by,
+      processed_by_id,
+      bill_type,
+      status
+    ) values (
+      ${billId},
+      ${billNumber},
+      ${orderId},
+      ${order.userId ?? null},
+      ${customerName},
+      ${order.email ?? null},
+      ${customerPhone ?? null},
+      ${JSON.stringify(billItems)}::jsonb,
+      ${String(subtotal)},
+      ${String(taxRate)},
+      ${String(taxAmount)},
+      ${String(discountAmount)},
+      ${String(totalAmount)},
+      ${order.paymentMethod ?? "card"},
+      ${order.source ?? "website"},
+      ${processedByName},
+      ${processedById},
+      ${"sale"},
+      ${"issued"}
+    )
+  `);
+
+  const [newBill] = await db
+    .select(billSelectColumns)
+    .from(bills)
+    .where(eq(bills.id, billId))
+    .limit(1);
+
+  if (!newBill) {
+    throw new Error(`Failed to load generated bill ${billId}`);
+  }
 
   return newBill;
 }

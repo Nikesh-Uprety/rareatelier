@@ -136,13 +136,17 @@ function getEmailError(value: string, required: boolean) {
   return undefined;
 }
 
-function getPhoneError(value: string) {
+function getPhoneError(value: string, options?: { live?: boolean }) {
   const localDigits = normalizeNepalPhoneLocal(value);
   if (!localDigits) {
-    return "Phone number is required.";
+    return options?.live ? undefined : "Enter your 10-digit Nepal mobile number.";
   }
-  if (localDigits.length !== NEPAL_PHONE_LOCAL_LENGTH) {
-    return "Enter a valid 10-digit Nepal mobile number.";
+  if (localDigits.length < NEPAL_PHONE_LOCAL_LENGTH) {
+    const remainingDigits = NEPAL_PHONE_LOCAL_LENGTH - localDigits.length;
+    return `Add ${remainingDigits} more digit${remainingDigits === 1 ? "" : "s"} to complete your mobile number.`;
+  }
+  if (!/^9\d{9}$/.test(localDigits)) {
+    return "Use a valid Nepal mobile number starting with 9.";
   }
   return undefined;
 }
@@ -380,6 +384,18 @@ export default function Checkout() {
         return newErrors;
       });
     }
+  };
+
+  const setFieldError = (field: string, message?: string) => {
+    setErrors((prev) => {
+      const next = { ...prev };
+      if (message) {
+        next[field] = message;
+      } else {
+        delete next[field];
+      }
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -664,8 +680,6 @@ export default function Checkout() {
     const phoneError = getPhoneError(phoneLocalVal);
     if (phoneError) newErrors.phone = phoneError;
 
-    if (!deliveryLocationVal) newErrors.deliveryLocation = "Delivery location is required.";
-
     const emailError = getEmailError(emailVal, totalQuantity > MAX_NEW_CUSTOMER_ITEMS);
     if (emailError) newErrors.email = emailError;
 
@@ -697,14 +711,14 @@ export default function Checkout() {
       })),
       shipping: {
         fullName: fullNameVal,
-        email: emailVal,
+        email: emailVal || undefined,
         phone: phoneVal,
-        address: addressVal,
+        address: addressVal || undefined,
         city: "",
         zip: "00000",
         country: "Nepal",
-        locationCoordinates: deliveryLocationVal,
-        deliveryLocation: deliveryLocationVal,
+        locationCoordinates: deliveryLocationVal || undefined,
+        deliveryLocation: deliveryLocationVal || undefined,
       },
       paymentMethod,
       source: "website",
@@ -810,14 +824,26 @@ export default function Checkout() {
                       data-testid="checkout-phone"
                       value={phone}
                       onChange={(e) => {
-                        setPhone(normalizeNepalPhoneLocal(e.target.value));
-                        clearError("phone");
+                        const nextPhone = normalizeNepalPhoneLocal(e.target.value);
+                        setPhone(nextPhone);
+                        setFieldError("phone", getPhoneError(nextPhone, { live: true }));
+                      }}
+                      onBlur={(e) => {
+                        setFieldError("phone", getPhoneError(e.target.value));
                       }}
                       className="h-full rounded-none border-0 px-4 shadow-none focus-visible:ring-0"
                       maxLength={NEPAL_PHONE_LOCAL_LENGTH}
+                      aria-describedby="checkout-phone-feedback"
+                      aria-invalid={Boolean(errors.phone)}
                     />
                   </div>
-                  {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">{errors.phone}</p>}
+                  <p
+                    id="checkout-phone-feedback"
+                    aria-live="polite"
+                    className={errors.phone ? "text-[11px] font-medium text-red-600" : "text-[11px] text-muted-foreground"}
+                  >
+                    {errors.phone || "Nepal mobile number only. The +977 country code is already added for you."}
+                  </p>
                 </div>
               </div>
             </div>
@@ -889,7 +915,7 @@ export default function Checkout() {
 
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                    Delivery Location <span className="text-red-500">*</span>
+                    Delivery Location
                   </label>
                   <div ref={fieldRefs.deliveryLocation} className="pt-1">
                     <DeliveryLocationSelect

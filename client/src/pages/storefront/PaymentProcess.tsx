@@ -843,31 +843,31 @@ export default function PaymentProcess() {
                     </div>
                   </div>
 
-                  <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-3 lg:grid-cols-2">
                     <Button
                       type="button"
                       variant="outline"
-                      className="h-11 rounded-none text-xs uppercase tracking-widest"
+                      className="group relative h-12 w-full overflow-hidden rounded-none border-zinc-200 bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-900 transition-colors duration-200 hover:border-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-900 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
                       onClick={() => setQrPreviewOpen(true)}
                     >
-                      <ZoomIn className="mr-2 h-4 w-4" />
-                      View full QR
+                      <ZoomIn className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">Preview Full QR</span>
                     </Button>
                     <Button
                       type="button"
-                      className="h-11 rounded-none text-xs uppercase tracking-widest"
+                      className="group relative h-12 w-full overflow-hidden rounded-none bg-black px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition-colors duration-200 hover:bg-zinc-800 disabled:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
                       onClick={handleDownloadQr}
                       disabled={downloadingQr}
                     >
                       {downloadingQr ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Downloading...
+                          <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                          <span className="truncate">Saving JPG...</span>
                         </>
                       ) : (
                         <>
-                          <Download className="mr-2 h-4 w-4" />
-                          Download QR
+                          <Download className="mr-2 h-4 w-4 shrink-0" />
+                          <span className="truncate">Download JPG</span>
                         </>
                       )}
                     </Button>
@@ -966,32 +966,32 @@ export default function PaymentProcess() {
                   </div>
 
                   <div className="border border-zinc-200 bg-white/90 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
-                    <div className="flex flex-wrap items-center justify-end gap-3">
+                    <div className="grid gap-3 lg:grid-cols-2">
                       <Button
                         type="button"
                         variant="outline"
-                        className="group h-10 w-full rounded-none px-4 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-900 hover:bg-zinc-50 active:scale-[0.98] sm:w-auto"
+                        className="group relative h-11 w-full overflow-hidden rounded-none px-6 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors duration-200 hover:border-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-900 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={uploading}
                       >
-                        <Upload className="mr-2 h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95" />
-                        Choose another screenshot
+                        <Upload className="mr-2 h-4 w-4 shrink-0" />
+                        <span className="truncate">Choose Another Screenshot</span>
                       </Button>
                       <Button
                         type="button"
-                        className="group h-11 w-full rounded-none bg-black px-5 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-zinc-800 active:scale-[0.98] sm:w-auto"
+                        className="group relative h-11 w-full overflow-hidden rounded-none bg-black px-6 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors duration-200 hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
                         onClick={handleConfirmPaymentScreenshot}
                         disabled={uploading}
                       >
                         {uploading ? (
                           <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Confirming proof...
+                            <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                            <span className="truncate">Confirming Proof...</span>
                           </>
                         ) : (
                           <>
-                            <CheckCircle2 className="mr-2 h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-active:scale-95" />
-                            Confirm payment
+                            <CheckCircle2 className="mr-2 h-4 w-4 shrink-0" />
+                            <span className="truncate">Confirm Payment</span>
                           </>
                         )}
                       </Button>

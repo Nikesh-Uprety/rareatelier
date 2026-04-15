@@ -46,6 +46,7 @@ import { meiliClient, PRODUCT_INDEX } from "./lib/meilisearch";
 import { tryNormalizeStoredObjectUrl } from "./s3-upload";
 import { broadcastNotification } from "./websocket";
 import { randomBytes } from "crypto";
+import { billSelectColumns } from "./billSelect";
 
 const ARCHIVED_PRODUCT_CATEGORY = "__archived__";
 const ARCHIVED_PRODUCT_CATEGORY_PREFIX = `${ARCHIVED_PRODUCT_CATEGORY}::`;
@@ -711,7 +712,7 @@ export class PgStorage implements IStorage {
   }
 
   async getBills(): Promise<Bill[]> {
-    return db.select().from(bills).orderBy(desc(bills.createdAt));
+    return db.select(billSelectColumns).from(bills).orderBy(desc(bills.createdAt));
   }
 
   async getProducts(filters?: {

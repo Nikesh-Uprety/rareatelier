@@ -28,8 +28,9 @@ export async function loginAsSuperadmin(page: Page) {
 
 export async function openFirstProduct(page: Page) {
   await page.goto("/products");
-  await expect(page.getByRole("heading", { name: "All Products" })).toBeVisible();
-  await page.locator('a[href^="/product/"]').first().click();
+  const firstProductLink = page.locator('a[href^="/product/"]').first();
+  await expect(firstProductLink).toBeVisible();
+  await firstProductLink.click();
   await expect(page).toHaveURL(/\/product\//);
 }
 
@@ -50,15 +51,16 @@ export async function placeOnlineOrder(page: Page, email: string) {
   await fillCheckoutForm(page, email);
   await page.getByTestId("checkout-payment-esewa").click();
   await page.getByTestId("checkout-submit").click();
-  await expect(page).toHaveURL(/\/checkout\/payment\?/);
+  await expect(page).toHaveURL(/\/checkout\/payment/);
 
-  const url = new URL(page.url());
-  const orderId = url.searchParams.get("orderId");
-  expect(orderId).toBeTruthy();
-
-  const uploadResponsePromise = page.waitForResponse((response) =>
-    response.url().includes(`/api/orders/${orderId}/payment-proof`) && response.request().method() === "POST",
-  );
+  const createOrderResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return pathname === "/api/orders" && response.request().method() === "POST";
+  });
+  const uploadResponsePromise = page.waitForResponse((response) => {
+    const pathname = new URL(response.url()).pathname;
+    return /\/api\/orders\/[^/]+\/payment-proof$/.test(pathname) && response.request().method() === "POST";
+  });
 
   await page.getByTestId("payment-proof-input").setInputFiles({
     name: "payment-proof.png",
@@ -68,10 +70,23 @@ export async function placeOnlineOrder(page: Page, email: string) {
       "base64",
     ),
   });
+  await page.getByRole("button", { name: "Confirm payment" }).click();
+
+  const createOrderResponse = await createOrderResponsePromise;
+  expect(createOrderResponse.ok(), await createOrderResponse.text()).toBeTruthy();
+  const createOrderJson = (await createOrderResponse.json()) as {
+    success?: boolean;
+    data?: { order?: { id?: string | null } | null } | null;
+  };
+  const orderId = createOrderJson.data?.order?.id ?? null;
+  expect(orderId).toBeTruthy();
 
   const uploadResponse = await uploadResponsePromise;
   expect(uploadResponse.ok(), await uploadResponse.text()).toBeTruthy();
-  await expect(page.getByText("Screenshot uploaded. We will verify your payment shortly.")).toBeVisible();
+  await expect(
+    page.getByText("Payment screenshot uploaded. Order created successfully.", { exact: true }),
+  ).toBeVisible();
+  await page.waitForURL(/\/order-confirmation\/[^/?]+/);
 
   return orderId as string;
 }

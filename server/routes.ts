@@ -101,6 +101,7 @@ import {
   importPublicDriveProductsToCatalog,
 } from "./lib/publicGoogleDrive";
 import { tryNormalizeStoredObjectUrl } from "./s3-upload";
+import { billSelectColumns } from "./billSelect";
 
 const UPLOADS_DIR = resolveUploadsDir();
 const PAYMENT_PROOFS_DIR = path.join(UPLOADS_DIR, "payment-proofs");
@@ -224,6 +225,7 @@ let siteSettingsHasFontPresetColumnCache: boolean | null = null;
 let mediaAssetsCompatEnsured: Promise<void> | null = null;
 let orderVerificationChallengesEnsured: Promise<void> | null = null;
 let orderTrackingCompatEnsured: Promise<void> | null = null;
+let billTrackingCompatEnsured: Promise<void> | null = null;
 let orderItemsColorCompatEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
@@ -794,6 +796,26 @@ async function ensureOrderTrackingCompatibility() {
   return orderTrackingCompatEnsured;
 }
 
+async function ensureBillTrackingCompatibility() {
+  if (billTrackingCompatEnsured) return billTrackingCompatEnsured;
+
+  billTrackingCompatEnsured = (async () => {
+    try {
+      await db.execute(sql`
+        alter table bills
+        add column if not exists tracking_token text
+      `);
+    } catch (error) {
+      console.warn("Unable to ensure bills.tracking_token compatibility", error);
+    }
+  })().catch((error) => {
+    billTrackingCompatEnsured = null;
+    throw error;
+  });
+
+  return billTrackingCompatEnsured;
+}
+
 async function ensureOrderItemsColorCompatibility() {
   if (orderItemsColorCompatEnsured) return orderItemsColorCompatEnsured;
 
@@ -1002,6 +1024,7 @@ export async function registerRoutes(
   await ensureMediaAssetsCompatibility();
   await ensureOrderVerificationChallengesTable();
   await ensureOrderTrackingCompatibility();
+  await ensureBillTrackingCompatibility();
   await ensureOrderItemsColorCompatibility();
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
@@ -1489,7 +1512,7 @@ ${Array.from(uniqueEntries.entries())
   app.get("/api/public/bills/:billNumber", async (req: Request, res: Response) => {
     try {
       const [bill] = await db
-        .select()
+        .select(billSelectColumns)
         .from(bills)
         .where(eq(bills.billNumber, req.params.billNumber as string))
         .limit(1);
@@ -6786,6 +6809,20 @@ ${Array.from(uniqueEntries.entries())
           await storage.updateOrderStatus(order.id, status);
         }
 
+        if (status === "completed") {
+          try {
+            const user = req.user as any;
+            await generateBillFromOrder(
+              order.id,
+              user?.id ?? "system",
+              user?.name ?? user?.email ?? "Admin",
+            );
+            console.log(`✅ Bill auto-generated for admin-created completed order ${order.id}`);
+          } catch (billErr) {
+            console.error("Bill generation failed for admin-created completed order (non-critical):", billErr);
+          }
+        }
+
         for (const item of resolvedItems) {
           const productId = item.productId;
           const size = item.normalizedSize || null;
@@ -7114,21 +7151,18 @@ ${Array.from(uniqueEntries.entries())
           req.body.status,
         );
 
-        // Auto-generate bill only when order is completed AND payment is verified
+        // Auto-generate bill whenever an order is marked completed.
+        // `generateBillFromOrder` is idempotent, so re-completing or later
+        // payment verification is safe and won't create duplicates.
         if (req.body.status === "completed") {
           try {
-            const orderDetails = await storage.getOrderById(id);
-            if (orderDetails.paymentVerified === "verified") {
-              const user = req.user as any;
-              await generateBillFromOrder(
-                id,
-                user?.id ?? "system",
-                user?.name ?? user?.email ?? "Admin"
-              );
-              console.log(`✅ Bill auto-generated for order ${id} (completed + paid)`);
-            } else {
-              console.log(`⏳ Bill deferred for order ${id} — payment not yet verified`);
-            }
+            const user = req.user as any;
+            await generateBillFromOrder(
+              id,
+              user?.id ?? "system",
+              user?.name ?? user?.email ?? "Admin",
+            );
+            console.log(`✅ Bill auto-generated for order ${id} (completed)`);
           } catch (billErr) {
             console.error("Bill generation failed (non-critical):", billErr);
           }
@@ -9873,7 +9907,7 @@ ${Array.from(uniqueEntries.entries())
   app.get("/api/admin/bills", requireAdmin, async (_req: Request, res: Response) => {
     try {
       const allBills = await db
-        .select()
+        .select(billSelectColumns)
         .from(bills)
         .orderBy(desc(bills.createdAt));
       res.json({ success: true, data: allBills });
@@ -9927,7 +9961,7 @@ ${Array.from(uniqueEntries.entries())
   app.get("/api/admin/bills/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const [bill] = await db
-        .select()
+        .select(billSelectColumns)
         .from(bills)
         .where(eq(bills.id, req.params.id as string))
         .limit(1);
@@ -9943,7 +9977,7 @@ ${Array.from(uniqueEntries.entries())
   app.get("/api/admin/bills/by-order/:orderId", requireAdmin, async (req: Request, res: Response) => {
     try {
       const [bill] = await db
-        .select()
+        .select(billSelectColumns)
         .from(bills)
         .where(eq(bills.orderId, req.params.orderId as string))
         .limit(1);
@@ -10057,35 +10091,74 @@ ${Array.from(uniqueEntries.entries())
         .set({ status: "pos" })
         .where(eq(orders.id, createdOrder.id));
 
-      const [bill] = await db.insert(bills).values({
-        id: crypto.randomUUID(),
-        billNumber,
-        orderId: createdOrder.id,
-        customerName: effectiveCustomerName,
-        customerEmail: customerEmail || null,
-        customerPhone: customerPhone || null,
-        items,
-        subtotal: String(subtotal),
-        taxRate: "13",
-        taxAmount: String(taxAmount),
-        discountAmount: String(discount),
-        totalAmount: String(total),
-        paymentMethod,
-        source: normalizedSource,
-        isPaid: isPaid ?? true,
-        deliveryRequired: isSocialSource ? true : (deliveryRequired ?? false),
-        deliveryProvider: deliveryProvider ?? null,
-        deliveryAddress: deliveryLocation
-          ? [deliveryLocation, deliveryAddress].filter(Boolean).join(" — ")
-          : (deliveryAddress ?? null),
-        cashReceived: cashReceived ? String(cashReceived) : null,
-        changeGiven: change > 0 ? String(change) : null,
-        processedBy: user?.name ?? user?.email ?? "Admin",
-        processedById: user?.id ?? null,
-        notes: notes ?? null,
-        billType: "pos",
-        status: "issued",
-      }).returning();
+      const billId = crypto.randomUUID();
+      await db.execute(sql`
+        insert into bills (
+          id,
+          bill_number,
+          order_id,
+          customer_name,
+          customer_email,
+          customer_phone,
+          items,
+          subtotal,
+          tax_rate,
+          tax_amount,
+          discount_amount,
+          total_amount,
+          payment_method,
+          source,
+          is_paid,
+          delivery_required,
+          delivery_provider,
+          delivery_address,
+          cash_received,
+          change_given,
+          processed_by,
+          processed_by_id,
+          notes,
+          bill_type,
+          status
+        ) values (
+          ${billId},
+          ${billNumber},
+          ${createdOrder.id},
+          ${effectiveCustomerName},
+          ${customerEmail || null},
+          ${customerPhone || null},
+          ${JSON.stringify(items)}::jsonb,
+          ${String(subtotal)},
+          ${"13"},
+          ${String(taxAmount)},
+          ${String(discount)},
+          ${String(total)},
+          ${paymentMethod},
+          ${normalizedSource},
+          ${isPaid ?? true},
+          ${isSocialSource ? true : (deliveryRequired ?? false)},
+          ${deliveryProvider ?? null},
+          ${deliveryLocation
+            ? [deliveryLocation, deliveryAddress].filter(Boolean).join(" — ")
+            : (deliveryAddress ?? null)},
+          ${cashReceived ? String(cashReceived) : null},
+          ${change > 0 ? String(change) : null},
+          ${user?.name ?? user?.email ?? "Admin"},
+          ${user?.id ?? null},
+          ${notes ?? null},
+          ${"pos"},
+          ${"issued"}
+        )
+      `);
+
+      const [bill] = await db
+        .select(billSelectColumns)
+        .from(bills)
+        .where(eq(bills.id, billId))
+        .limit(1);
+
+      if (!bill) {
+        throw new Error(`Failed to load generated POS bill ${billId}`);
+      }
 
       for (const item of items) {
         const productId = String(item.productId);
@@ -10189,7 +10262,7 @@ ${Array.from(uniqueEntries.entries())
         .update(bills)
         .set({ status: "void" })
         .where(eq(bills.id, req.params.id as string))
-        .returning();
+        .returning(billSelectColumns);
       if (!updated) return res.status(404).json({ success: false, error: "Bill not found" });
       res.json({ success: true, data: updated });
     } catch (err) {

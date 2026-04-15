@@ -990,7 +990,7 @@ export default function AddProductWizard({
                         <FormItem>
                           <FormLabel>Product Name *</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g. Two-Way Zip Hoodie" {...field} />
+                            <Input data-testid="admin-product-name" placeholder="e.g. Two-Way Zip Hoodie" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1003,7 +1003,11 @@ export default function AddProductWizard({
                         <FormItem>
                           <FormLabel>Short tagline</FormLabel>
                           <FormControl>
-                            <Input placeholder="Brief tagline or key features" {...field} />
+                            <Input
+                              data-testid="admin-product-short-details"
+                              placeholder="Brief tagline or key features"
+                              {...field}
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1031,7 +1035,7 @@ export default function AddProductWizard({
                           <div className="flex gap-2">
                             <Select onValueChange={field.onChange} value={field.value || categories[0]?.slug || ""}>
                               <FormControl>
-                                <SelectTrigger className="flex-1">
+                                <SelectTrigger data-testid="admin-product-category" className="flex-1">
                                   <SelectValue placeholder="Select category" />
                                 </SelectTrigger>
                               </FormControl>
@@ -1113,6 +1117,7 @@ export default function AddProductWizard({
                           <FormLabel>Price (NPR) *</FormLabel>
                           <FormControl>
                             <PriceInput
+                              data-testid="admin-product-price"
                               min={1}
                               value={field.value}
                               onChange={(val) => field.onChange(val)}
@@ -1156,6 +1161,7 @@ export default function AddProductWizard({
                           </Button>
                           <Button
                             type="button"
+                            data-testid="admin-product-next-details"
                             className="rounded-2xl"
                             disabled={!canProceedStep1}
                             onClick={() => setStep(2)}
@@ -1285,6 +1291,7 @@ export default function AddProductWizard({
                                     <button
                                       key={size}
                                       type="button"
+                                      data-testid={`admin-product-size-${size}`}
                                       onClick={() => toggleSize(size)}
                                       className={cn(
                                         "rounded-full border px-3 py-2 text-xs font-bold uppercase transition-all",
@@ -1430,6 +1437,7 @@ export default function AddProductWizard({
                                         <div key={size} className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-border/50 bg-background/70 p-4 text-center">
                                           <Label className="text-sm font-bold">{size}</Label>
                                           <QuantityInput
+                                            data-testid={`admin-product-stock-${size}`}
                                             min={0}
                                             step={1}
                                             value={currentStock}
@@ -1526,6 +1534,7 @@ export default function AddProductWizard({
                           </Button>
                           <Button
                             type="button"
+                            data-testid="admin-product-next-attributes"
                             className="rounded-2xl"
                             disabled={!canProceedStep2}
                             onClick={() => setStep(3)}
@@ -1913,6 +1922,7 @@ export default function AddProductWizard({
                           <Button
                             type="submit"
                             form="add-product-form"
+                            data-testid="admin-product-save"
                             loading={addMutation.isPending}
                             loadingText="Saving..."
                             className="rounded-2xl"
