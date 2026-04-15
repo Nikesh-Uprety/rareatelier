@@ -2,25 +2,105 @@ const ALLOWED_REMOTE_IMAGE_HOSTS = [
   "rare.t3.tigrisfiles.io",
   "cdn2.blanxer.com",
   "wsrv.nl",
-];
+  "res.cloudinary.com",
+] as const;
+
+export const STOREFRONT_IMAGE_REMOTE_ORIGINS = ALLOWED_REMOTE_IMAGE_HOSTS.map(
+  (host) => `https://${host}`,
+);
+
+export type StorefrontImageFit = "cover" | "contain" | "inside";
+
+export type StorefrontImageOptions = {
+  width: number;
+  height?: number;
+  fit?: StorefrontImageFit;
+  quality?: number;
+};
+
+export type StorefrontImagePreset =
+  | "productCardPrimary"
+  | "productCardSecondary"
+  | "collectionCard"
+  | "pdpStageMobile"
+  | "pdpStageDesktop"
+  | "galleryThumb"
+  | "galleryFullscreen"
+  | "relatedProduct";
+
+const STOREFRONT_IMAGE_PRESETS: Record<StorefrontImagePreset, StorefrontImageOptions> = {
+  productCardPrimary: {
+    width: 560,
+    height: 760,
+    fit: "cover",
+    quality: 68,
+  },
+  productCardSecondary: {
+    width: 560,
+    height: 760,
+    fit: "cover",
+    quality: 64,
+  },
+  collectionCard: {
+    width: 760,
+    height: 950,
+    fit: "cover",
+    quality: 68,
+  },
+  pdpStageMobile: {
+    width: 1280,
+    height: 1600,
+    fit: "contain",
+    quality: 74,
+  },
+  pdpStageDesktop: {
+    width: 1680,
+    height: 2200,
+    fit: "cover",
+    quality: 78,
+  },
+  galleryThumb: {
+    width: 160,
+    height: 200,
+    fit: "cover",
+    quality: 58,
+  },
+  galleryFullscreen: {
+    width: 1800,
+    height: 2400,
+    fit: "inside",
+    quality: 82,
+  },
+  relatedProduct: {
+    width: 720,
+    height: 960,
+    fit: "cover",
+    quality: 70,
+  },
+};
 
 function isRemoteImageAllowed(src: string): boolean {
   try {
     const url = new URL(src);
-    return ALLOWED_REMOTE_IMAGE_HOSTS.includes(url.hostname);
+    return ALLOWED_REMOTE_IMAGE_HOSTS.includes(url.hostname as (typeof ALLOWED_REMOTE_IMAGE_HOSTS)[number]);
   } catch {
     return false;
   }
 }
 
+export function getStorefrontImagePresetOptions(
+  preset: StorefrontImagePreset,
+  overrides?: Partial<StorefrontImageOptions>,
+): StorefrontImageOptions {
+  return {
+    ...STOREFRONT_IMAGE_PRESETS[preset],
+    ...overrides,
+  };
+}
+
 export function buildStorefrontImageUrl(
   src: string | null | undefined,
-  options: {
-    width: number;
-    height?: number;
-    fit?: "cover" | "contain" | "inside";
-    quality?: number;
-  },
+  options: StorefrontImageOptions,
 ): string {
   if (!src) return "";
   const trimmed = src.trim();
@@ -52,4 +132,42 @@ export function buildStorefrontImageUrl(
   }
 
   return "/api/public/image?" + params.toString();
+}
+
+export function buildStorefrontPresetImageUrl(
+  src: string | null | undefined,
+  preset: StorefrontImagePreset,
+  overrides?: Partial<StorefrontImageOptions>,
+): string {
+  return buildStorefrontImageUrl(src, getStorefrontImagePresetOptions(preset, overrides));
+}
+
+export function parseStorefrontGalleryUrls(value: string | null | undefined): string[] {
+  if (!value?.trim()) return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function getStorefrontProductImageSources(
+  primarySrc: string | null | undefined,
+  galleryValue?: string | null,
+): string[] {
+  const candidates = [primarySrc, ...parseStorefrontGalleryUrls(galleryValue)];
+  const seen = new Set<string>();
+
+  return candidates.reduce<string[]>((acc, candidate) => {
+    if (typeof candidate !== "string") return acc;
+    const normalized = candidate.trim();
+    if (!normalized || seen.has(normalized)) return acc;
+    seen.add(normalized);
+    acc.push(normalized);
+    return acc;
+  }, []);
 }
