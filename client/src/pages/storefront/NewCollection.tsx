@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Link } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { fetchProducts, fetchCategories, type ProductApi } from "@/lib/api";
+import { fetchProducts, type ProductApi } from "@/lib/api";
 import { ArrowRight, ArrowUpRight, Sparkles } from "lucide-react";
-import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
 import ThreeDHoverGallery from "@/components/ui/3d-hover-gallery";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 
 type SiteAsset = {
   id: string;
@@ -19,44 +19,20 @@ type SiteAsset = {
   active: boolean | null;
 };
 
-// Scroll-reveal hook using IntersectionObserver
-function useScrollReveal() {
-  const ref = useRef<HTMLDivElement>(null);
-  const [isVisible, setIsVisible] = useState(false);
+const COLLECTION_CARD_ASPECT = "aspect-[4/5]";
+const COLLECTION_IMAGE_SIZES =
+  "(max-width: 768px) 48vw, (max-width: 1280px) 31vw, (max-width: 1600px) 23vw, 18vw";
 
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsVisible(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -40px 0px" }
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, isVisible };
-}
-
-// Masonry aspect ratio patterns
-const ASPECT_PATTERNS = [
-  "aspect-[3/4]",
-  "aspect-[4/5]",
-  "aspect-square",
-  "aspect-[3/4]",
-  "aspect-[4/5]",
-  "aspect-[3/4]",
-  "aspect-square",
-  "aspect-[4/5]",
-];
-
-function getAspect(index: number) {
-  return ASPECT_PATTERNS[index % ASPECT_PATTERNS.length];
+function parseGalleryUrls(value?: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+      : [];
+  } catch {
+    return [];
+  }
 }
 
 function RevealImage({
@@ -68,21 +44,28 @@ function RevealImage({
   index: number;
   isDark: boolean;
 }) {
-  const { ref, isVisible } = useScrollReveal();
-  const aspect = getAspect(index);
   const [isHovered, setIsHovered] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const [autoPlayIndex, setAutoPlayIndex] = useState(0);
 
-  const gallery = useMemo(() => {
-    try {
-      return product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
-    } catch (e) {
-      return [];
-    }
-  }, [product.galleryUrls]);
-
+  const gallery = useMemo(() => parseGalleryUrls(product.galleryUrls), [product.galleryUrls]);
+  const primaryImage = product.imageUrl ?? gallery[0] ?? "";
   const secondaryImage = gallery.length > 1 ? gallery[1] : null;
+  const optimizedPrimaryImage =
+    buildStorefrontImageUrl(primaryImage, {
+      width: 760,
+      height: 950,
+      fit: "cover",
+      quality: 70,
+    }) || primaryImage;
+  const optimizedSecondaryImage =
+    secondaryImage
+      ? buildStorefrontImageUrl(secondaryImage, {
+          width: 760,
+          height: 950,
+          fit: "cover",
+          quality: 70,
+        }) || secondaryImage
+      : null;
+  const shouldPrioritize = index < 6;
 
   const salePercentage = useMemo(() => {
     if (!product.originalPrice || Number(product.originalPrice) <= product.price) return null;
@@ -93,63 +76,81 @@ function RevealImage({
 
   return (
     <div
-      ref={ref}
-      className={`transition-all duration-700 ease-out ${
-        isVisible
-          ? "opacity-100 translate-y-0"
-          : "opacity-0 translate-y-8"
-      }`}
-      style={{ transitionDelay: `${(index % 4) * 80}ms` }}
+      className="group"
+      style={
+        index > 7
+          ? { contentVisibility: "auto", containIntrinsicSize: "520px" }
+          : undefined
+      }
     >
-      <Link 
-        href={`/product/${product.id}`} 
-        className="group block relative overflow-hidden rounded-sm"
+      <Link
+        href={`/product/${product.id}`}
+        className="group block overflow-hidden rounded-sm"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <div className={`${aspect} overflow-hidden bg-neutral-100 dark:bg-neutral-800 relative`}>
+        <div className={`${COLLECTION_CARD_ASPECT} relative overflow-hidden bg-neutral-100 dark:bg-neutral-800`}>
           <img
-            src={product.imageUrl ?? ""}
+            src={optimizedPrimaryImage}
             alt={product.name}
-            className={`w-full h-full object-cover transition-all duration-1000 ease-out ${
-              isHovered && secondaryImage ? "opacity-0 scale-110" : "opacity-100 scale-100"
+            loading={shouldPrioritize ? "eager" : "lazy"}
+            fetchPriority={shouldPrioritize ? "high" : "auto"}
+            decoding="async"
+            sizes={COLLECTION_IMAGE_SIZES}
+            width={760}
+            height={950}
+            className={`h-full w-full object-cover transition-[transform,opacity] duration-500 ease-out ${
+              isHovered && optimizedSecondaryImage ? "scale-[1.035] opacity-0" : "scale-100 opacity-100"
             }`}
             style={{
-              filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.14) contrast(1.06) brightness(1.02)",
+              filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.08) contrast(1.03) brightness(1.01)",
             }}
           />
-          
-          {secondaryImage && (
+
+          {optimizedSecondaryImage ? (
             <img
-              src={secondaryImage}
+              src={optimizedSecondaryImage}
               alt={`${product.name} alternate view`}
-              className={`absolute inset-0 w-full h-full object-cover transition-all duration-1000 ease-out ${
-                isHovered ? "opacity-100 scale-110" : "opacity-0 scale-100"
+              loading="lazy"
+              decoding="async"
+              sizes={COLLECTION_IMAGE_SIZES}
+              width={760}
+              height={950}
+              className={`absolute inset-0 h-full w-full object-cover transition-[transform,opacity] duration-500 ease-out ${
+                isHovered ? "scale-[1.035] opacity-100" : "scale-100 opacity-0"
               }`}
               style={{
-                filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.14) contrast(1.06) brightness(1.02)",
+                filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.08) contrast(1.03) brightness(1.01)",
               }}
             />
-          )}
+          ) : null}
 
-          {salePercentage && (
-            <div className="absolute top-3 left-3 px-3 py-1.5 bg-red-600 border border-red-500 rounded-sm z-10 shadow-lg shadow-red-900/40">
-              <span className="text-xs font-black tracking-widest text-white uppercase italic">
+          {salePercentage ? (
+            <div className="absolute left-3 top-3 z-10 rounded-sm border border-red-500 bg-red-600 px-3 py-1.5 shadow-lg shadow-red-900/30">
+              <span className="text-xs font-black uppercase italic tracking-widest text-white">
                 -{salePercentage}% OFF
               </span>
             </div>
-          )}
+          ) : null}
 
-          <div className={`absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent w-full h-full transition-all duration-700 ${isHovered ? "opacity-100" : "opacity-0"}`}>
-            <div className="absolute bottom-0 left-0 right-0 p-8 translate-y-4 group-hover:translate-y-0 transition-transform duration-500">
-                <div className="flex flex-col gap-2">
-                    <span className="text-xs uppercase tracking-[0.4em] text-white/90 font-bold drop-shadow-md">View Collection</span>
-                    <h3 className="text-xl font-bold text-white tracking-tight leading-tight drop-shadow-lg">{product.name}</h3>
-                </div>
+          <div
+            className={`absolute inset-0 bg-gradient-to-t from-black/85 via-black/22 to-transparent transition-opacity duration-300 ${
+              isHovered ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            <div className="absolute bottom-0 left-0 right-0 translate-y-3 p-6 transition-transform duration-300 group-hover:translate-y-0 sm:p-7">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-[0.34em] text-white/88 drop-shadow-md">
+                  View Collection
+                </span>
+                <h3 className="text-lg font-bold leading-tight tracking-tight text-white drop-shadow-lg sm:text-xl">
+                  {product.name}
+                </h3>
+              </div>
             </div>
-            
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-500 shadow-xl">
-              <ArrowUpRight className="w-4 h-4 text-black" />
+
+            <div className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 scale-75 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-xl transition-all duration-300 group-hover:scale-100 group-hover:opacity-100">
+              <ArrowUpRight className="h-4 w-4 text-black" />
             </div>
           </div>
         </div>
@@ -160,12 +161,12 @@ function RevealImage({
 
 function GallerySkeleton() {
   return (
-    <div className="py-20 md:py-24 container mx-auto px-4 md:px-6 max-w-7xl">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
+    <div className="mx-auto w-full max-w-[1540px] px-3 py-14 md:px-6 md:py-20 xl:px-8">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4 xl:gap-5 2xl:grid-cols-5">
+        {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
-            className={`${getAspect(i)} bg-neutral-100 dark:bg-neutral-800 rounded-sm animate-pulse break-inside-avoid`}
+            className={`${COLLECTION_CARD_ASPECT} rounded-sm bg-neutral-100 animate-pulse dark:bg-neutral-800`}
           />
         ))}
       </div>
@@ -195,15 +196,11 @@ export default function NewCollection() {
     },
   });
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ["categories"],
-    queryFn: fetchCategories,
-  });
 
   const sortedProducts = useMemo(() => {
     if (!products) return [];
     return [...products]
-      .filter((p) => !!p.imageUrl)
+      .filter((product) => Boolean(product.imageUrl || parseGalleryUrls(product.galleryUrls)[0]))
       .sort((a, b) => {
         const rankA = a.ranking ?? 999;
         const rankB = b.ranking ?? 999;
@@ -399,18 +396,18 @@ export default function NewCollection() {
       </section>
 
       {/* Gallery */}
-      <section className="pb-16 pt-0 md:pb-24 container mx-auto px-4 md:px-6 max-w-7xl">
+      <section className="pb-16 pt-0 md:pb-24">
         {isLoading ? (
-          <div className="py-20 flex items-center justify-center">
-            <BrandedLoader />
-          </div>
+          <GallerySkeleton />
         ) : (
-          <div className="columns-2 md:columns-3 xl:columns-4 gap-3 md:gap-4">
-            {sortedProducts.map((product, i) => (
-              <div key={product.id} className="break-inside-avoid mb-3 md:mb-4">
-                <RevealImage product={product} index={i} isDark={isDark} />
-              </div>
-            ))}
+          <div className="mx-auto w-full max-w-[1540px] px-3 md:px-6 xl:px-8">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4 xl:gap-5 2xl:grid-cols-5">
+              {sortedProducts.map((product, i) => (
+                <div key={product.id}>
+                  <RevealImage product={product} index={i} isDark={isDark} />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
