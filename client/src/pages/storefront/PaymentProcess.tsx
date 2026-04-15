@@ -31,6 +31,8 @@ import {
   ZoomIn,
   Download,
   Phone,
+  ScanLine,
+  Wallet,
 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { useCartStore } from "@/store/cart";
@@ -657,48 +659,94 @@ export default function PaymentProcess() {
     }
   };
 
+  const manualPaymentSteps = isBankTransfer
+    ? [
+        {
+          icon: Wallet,
+          title: "Open your banking app",
+          description: "Use the account details below to begin the transfer.",
+        },
+        {
+          icon: CreditCard,
+          title: "Pay exact amount",
+          description: "Transfer the exact order total and complete the payment.",
+        },
+        {
+          icon: CheckCircle2,
+          title: "Save screenshot",
+          description: "Take a clear screenshot of the successful transfer confirmation.",
+        },
+      ]
+    : [
+        {
+          icon: ScanLine,
+          title: `Open ${paymentLabel} app`,
+          description: "Scan the QR code.",
+        },
+        {
+          icon: Wallet,
+          title: "Pay exact amount",
+          description: "Enter exact amount and complete payment.",
+        },
+        {
+          icon: CheckCircle2,
+          title: "Save screenshot",
+          description: "Take clear screenshot of confirmation.",
+        },
+      ];
+  const uploadPanelDescription = isBankTransfer
+    ? "Upload the bank transfer confirmation screenshot so we can verify the payment quickly."
+    : `Upload the ${paymentLabel} payment screenshot so we can verify the payment quickly.`;
+
   return (
-    <div className="container mx-auto max-w-6xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
-      <div className="space-y-12">
-        <div className="flex flex-col gap-6 border-b border-zinc-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto max-w-[1200px] px-4 pb-16 pt-6 sm:pt-8">
+      <div className="space-y-8">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
               Payment Confirmation
             </p>
-            <h1 className="text-3xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
-              {title}
+            <h1 className="text-3xl font-black uppercase tracking-tight text-zinc-950 dark:text-zinc-50 sm:text-[2.35rem]">
+              Complete your payment
             </h1>
             <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
               {isBankTransfer
-                ? "Finish this order in two simple steps: make the transfer, then upload the proof so we can verify it quickly."
-                : `Finish this order in two simple steps: pay in ${paymentLabel}, then upload the proof so we can verify it quickly.`}
+                ? "Transfer the order amount, then upload the confirmation so we can verify the payment quickly."
+                : `Scan the ${paymentLabel} QR, complete the exact payment, and upload one clean screenshot to finish your order.`}
             </p>
           </div>
 
-          <div className="grid min-w-full gap-2 border-t border-zinc-200 pt-4 text-sm sm:min-w-[300px] sm:border-t-0 sm:pt-0 lg:max-w-[340px]">
-            <div className="flex items-center justify-between border-b border-zinc-200 pb-2">
+          <div className="grid gap-3 rounded-[24px] border border-zinc-200/80 bg-white/85 p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)] backdrop-blur-sm sm:min-w-[320px]">
+            <div className="flex items-center justify-between gap-4">
               <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                 Order total
               </span>
-              <span className="text-lg font-black text-zinc-950 dark:text-zinc-50">{formatPrice(orderTotal)}</span>
+              <span className="text-xl font-black text-zinc-950 dark:text-zinc-50">{formatPrice(orderTotal)}</span>
             </div>
             {confirmationOrderId ? (
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
                 <span className="uppercase tracking-[0.18em]">Order ref</span>
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">{confirmationOrderId.slice(-8).toUpperCase()}</span>
+                <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                  {confirmationOrderId.slice(-8).toUpperCase()}
+                </span>
               </div>
             ) : (
               <p className="text-xs leading-5 text-muted-foreground">
-                Your order will be created as soon as the payment screenshot is confirmed.
+                Your order will be created as soon as the payment proof is confirmed.
               </p>
             )}
           </div>
         </div>
 
-        <div className="space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
-            Change Payment Method
-          </p>
+        <div className="flex flex-col gap-3 rounded-[24px] border border-zinc-200/80 bg-zinc-50/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+              Payment method
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Switch method before you upload proof if you need a different payment route.
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             {PAYMENT_METHOD_SWITCH_OPTIONS.map((option) => {
               const isCurrent = option.id === method;
@@ -708,10 +756,10 @@ export default function PaymentProcess() {
                   type="button"
                   disabled={isCurrent || switchingPaymentMethod !== null}
                   onClick={() => handleChangePaymentMethod(option.id)}
-                  className={`h-10 border px-4 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                  className={`h-10 rounded-full border px-4 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors ${
                     isCurrent
                       ? "border-zinc-900 bg-zinc-900 text-white"
-                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-900 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
                   }`}
                 >
                   {switchingPaymentMethod === option.id
@@ -722,54 +770,72 @@ export default function PaymentProcess() {
                 </button>
               );
             })}
-            <Button asChild variant="ghost" className="h-10 rounded-none px-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <Button asChild variant="ghost" className="h-10 rounded-full px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               <Link href="/checkout?returning=1">Back to Checkout</Link>
             </Button>
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-          <section className="border border-zinc-200 bg-zinc-50/70 p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/40">
-            <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Step 1</p>
-                <h2 className="mt-2 text-xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
-                  {isBankTransfer ? "Transfer the amount" : `Pay with ${paymentLabel}`}
-                </h2>
-              </div>
-              <span className="max-w-[180px] text-right text-xs leading-5 text-muted-foreground">
-                {isBankTransfer ? "Use the account details exactly as shown." : "Use the QR below and pay the exact amount shown above."}
-              </span>
+        <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] xl:gap-12">
+          <motion.section
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="space-y-6 rounded-[30px] border border-zinc-200/80 bg-zinc-50/80 p-6 shadow-[0_24px_80px_rgba(15,23,42,0.06)] sm:p-8"
+          >
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                STEP 1
+              </p>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-zinc-950 dark:text-zinc-50">
+                {isBankTransfer ? "TRANSFER THE AMOUNT" : `PAY WITH ${paymentLabel.toUpperCase()}`}
+              </h2>
+              <p className="text-sm leading-6 text-muted-foreground">
+                {isBankTransfer
+                  ? "Use the transfer details below, pay the exact amount, and keep the confirmation visible for the final upload step."
+                  : `Use the QR card below, pay the exact order amount, and keep the confirmation screen ready for upload.`}
+              </p>
             </div>
 
             {isBankTransfer ? (
-              <div className="mt-8 space-y-6">
-                <div className="border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
-                  <div className="grid gap-5 sm:grid-cols-3">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Bank Name</p>
-                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.bankName}</p>
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Bank name
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{PAYMENT_RECEIVER.bankName}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Account Name</p>
-                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.name}</p>
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Account name
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{PAYMENT_RECEIVER.name}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Account No.</p>
-                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.accountNumber}</p>
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Account number
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{PAYMENT_RECEIVER.accountNumber}</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Exact amount
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{formatPrice(orderTotal)}</p>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-4 border-t border-dashed border-zinc-200 pt-5 sm:grid-cols-2 dark:border-zinc-800">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Primary contact</p>
-                      <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <div className="mt-4 rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      Contact numbers
+                    </p>
+                    <div className="mt-3 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-zinc-500" />
                         <span>{PAYMENT_RECEIVER.primaryPhone}</span>
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Alternate contact</p>
-                      <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      <div className="flex items-center gap-2">
                         <Phone className="h-4 w-4 text-zinc-500" />
                         <span>{PAYMENT_RECEIVER.alternatePhone}</span>
                       </div>
@@ -777,263 +843,304 @@ export default function PaymentProcess() {
                   </div>
                 </div>
 
-                <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>Transfer exactly {formatPrice(orderTotal)} and keep the completed payment screen visible.</p>
-                  <p>Upload one clear confirmation screenshot in the next step so we can verify the payment quickly.</p>
+                <div className="space-y-4">
+                  {manualPaymentSteps.map((step, index) => {
+                    const Icon = step.icon;
+                    return (
+                      <motion.div
+                        key={step.title}
+                        whileHover={{ y: -2 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="flex items-start gap-4 rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4 transition-shadow duration-300 hover:shadow-lg"
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            Step {index + 1}
+                          </p>
+                          <h3 className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">{step.title}</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </div>
             ) : (
-              <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(250px,320px)_1fr] lg:items-start">
-                <div className="mx-auto w-full max-w-[320px]">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900 dark:text-zinc-100">{paymentLabel} QR</p>
-                      <p className="mt-1 text-xs text-muted-foreground">Open the full-size QR if you need a cleaner scan.</p>
-                    </div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Exact amount</p>
-                  </div>
-
-                  <div
-                    className="group relative aspect-square w-full cursor-pointer overflow-hidden border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
-                    onClick={() => !qrImageLoading && setQrPreviewOpen(true)}
-                  >
-                    {qrImageLoading ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-zinc-950/90">
-                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                          <span className="text-[11px] uppercase tracking-[0.18em]">Loading QR</span>
-                        </div>
-                      </div>
-                    ) : null}
-                    <img
-                      src={resolvedQrImageSrc}
-                      alt={`${paymentLabel} QR Code`}
-                      className={`h-full w-full object-contain transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-100"}`}
-                      onLoad={() => setQrImageLoading(false)}
-                      onError={() => setQrImageLoading(false)}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/10">
-                      <ZoomIn className={`h-8 w-8 text-white drop-shadow-lg transition-opacity duration-200 ${qrImageLoading ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`} />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="space-y-4">
-                    <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">1</span>
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Open {paymentLabel}</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Scan the QR and complete the payment with the exact order amount.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">2</span>
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Save the confirmation screen</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Keep the amount, payment app, and successful status visible in one clean screenshot.</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">3</span>
-                      <div>
-                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Upload it on this page</p>
-                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Once you confirm the screenshot, we verify the payment and move you to the order page.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <Button
+              <div className="space-y-6">
+                <div className="rounded-[28px] border border-zinc-200 bg-white p-5 shadow-sm sm:p-6">
+                  <div className="mx-auto max-w-[320px] space-y-4">
+                    <button
                       type="button"
-                      variant="outline"
-                      className="group relative h-12 w-full overflow-hidden rounded-none border-zinc-200 bg-white px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-zinc-900 transition-colors duration-200 hover:border-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-900 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
-                      onClick={() => setQrPreviewOpen(true)}
+                      onClick={() => !qrImageLoading && setQrPreviewOpen(true)}
+                      className="group relative block w-full overflow-hidden rounded-2xl border border-zinc-200 bg-white p-4 shadow-[0_14px_35px_rgba(15,23,42,0.06)] transition-shadow duration-300 hover:shadow-lg"
                     >
-                      <ZoomIn className="mr-2 h-4 w-4 shrink-0" />
-                      <span className="truncate">Preview Full QR</span>
-                    </Button>
+                      {qrImageLoading ? (
+                        <div className="absolute inset-0 flex items-center justify-center bg-white/92 dark:bg-zinc-950/92">
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.18em]">Loading QR</span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <img
+                        src={resolvedQrImageSrc}
+                        alt={`${paymentLabel} QR Code`}
+                        className={`aspect-square w-full object-contain transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-100"}`}
+                        onLoad={() => setQrImageLoading(false)}
+                        onError={() => setQrImageLoading(false)}
+                      />
+                      <div className="absolute inset-x-0 bottom-3 flex justify-center">
+                        <span className={`rounded-full bg-black/75 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`}>
+                          Tap to preview
+                        </span>
+                      </div>
+                    </button>
+
                     <Button
                       type="button"
-                      className="group relative h-12 w-full overflow-hidden rounded-none bg-black px-6 text-[11px] font-semibold uppercase tracking-[0.12em] text-white transition-colors duration-200 hover:bg-zinc-800 disabled:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
                       onClick={handleDownloadQr}
                       disabled={downloadingQr}
+                      className="h-11 w-full rounded-xl bg-black text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
                     >
                       {downloadingQr ? (
                         <>
-                          <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
-                          <span className="truncate">Saving JPG...</span>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Downloading...
                         </>
                       ) : (
                         <>
-                          <Download className="mr-2 h-4 w-4 shrink-0" />
-                          <span className="truncate">Download JPG</span>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download QR
                         </>
                       )}
                     </Button>
                   </div>
 
-                  <div className="border-t border-dashed border-zinc-200 pt-5 dark:border-zinc-800">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Receiver</p>
-                    <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.name}</p>
-                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-zinc-500" />
-                        <span>{PAYMENT_RECEIVER.primaryPhone}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-zinc-500" />
-                        <span>Alternate: {PAYMENT_RECEIVER.alternatePhone}</span>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Exact amount
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{formatPrice(orderTotal)}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">Enter this amount exactly while paying.</p>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                        Receiver
+                      </p>
+                      <p className="mt-2 text-base font-semibold text-zinc-950 dark:text-zinc-50">{PAYMENT_RECEIVER.name}</p>
+                      <div className="mt-3 space-y-2 text-sm text-zinc-700 dark:text-zinc-300">
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-zinc-500" />
+                          <span>{PAYMENT_RECEIVER.primaryPhone}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4 text-zinc-500" />
+                          <span>{PAYMENT_RECEIVER.alternatePhone}</span>
+                        </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {manualPaymentSteps.map((step, index) => {
+                    const Icon = step.icon;
+                    return (
+                      <motion.div
+                        key={step.title}
+                        whileHover={{ y: -2 }}
+                        transition={{ duration: 0.18, ease: "easeOut" }}
+                        className="flex items-start gap-4 rounded-2xl border border-zinc-200/80 bg-zinc-50 p-4 transition-shadow duration-300 hover:shadow-lg"
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            Step {index + 1}
+                          </p>
+                          <h3 className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">{step.title}</h3>
+                          <p className="mt-1 text-sm text-muted-foreground">{step.description}</p>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </motion.section>
+
+          <motion.section
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.05, ease: "easeOut" }}
+            className="rounded-[32px] border border-zinc-200 bg-white p-6 shadow-[0_30px_100px_rgba(15,23,42,0.1)] sm:p-8"
+          >
+            <div className="space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">
+                STEP 2
+              </p>
+              <h2 className="text-2xl font-black uppercase tracking-tight text-zinc-950 dark:text-zinc-50">
+                UPLOAD PAYMENT PROOF
+              </h2>
+              <p className="max-w-lg text-sm leading-6 text-muted-foreground">{uploadPanelDescription}</p>
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              data-testid="payment-proof-input"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={uploading || uploaded}
+            />
+
+            {uploaded ? (
+              <div className="mt-8 rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 text-emerald-800 shadow-sm dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">Payment proof uploaded successfully.</p>
+                    <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+                      We&apos;re redirecting you to your order now.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 space-y-5">
+                <div className="rounded-[28px] border border-zinc-200 bg-zinc-50/60 p-4 sm:p-5">
+                  {selectedProofPreview ? (
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                            Selected screenshot
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                            {selectedProofFile?.name}
+                          </p>
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            Review the preview below and make sure the confirmation is clearly readable.
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="rounded-full px-4"
+                          onClick={() => {
+                            if (selectedProofPreview) URL.revokeObjectURL(selectedProofPreview);
+                            setSelectedProofPreview(null);
+                            setSelectedProofFile(null);
+                          }}
+                          disabled={uploading}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+
+                      <button
+                        type="button"
+                        data-testid="payment-proof-trigger"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        className="group block w-full overflow-hidden rounded-2xl border-2 border-dashed border-zinc-300 bg-white p-3 transition-all duration-300 hover:scale-[1.01] hover:border-zinc-900 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-950"
+                      >
+                        <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
+                          <img
+                            src={selectedProofPreview}
+                            alt="Payment screenshot preview"
+                            className="max-h-[420px] w-full object-contain"
+                          />
+                        </div>
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      data-testid="payment-proof-trigger"
+                      className="group flex min-h-[360px] w-full flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed border-zinc-300 bg-white px-8 text-center transition-all duration-300 hover:scale-[1.01] hover:border-zinc-900 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-950"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      <span className="flex h-16 w-16 items-center justify-center rounded-full bg-black text-white shadow-sm transition-transform duration-300 group-hover:-translate-y-1 dark:bg-white dark:text-black">
+                        {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+                      </span>
+                      <div className="space-y-2">
+                        <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+                          Choose Payment Screenshot
+                        </h3>
+                        <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                          Upload one clear screenshot after payment. The amount, payment app, and success state should all be visible.
+                        </p>
+                      </div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                        PNG / JPG / WEBP • MAX 5MB
+                      </p>
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {selectedProofPreview ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mx-auto h-11 w-full max-w-md rounded-xl border-zinc-200 text-[11px] font-semibold uppercase tracking-[0.16em] transition-colors hover:border-zinc-900 hover:bg-zinc-50"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Choose Another Screenshot
+                    </Button>
+                  ) : null}
+
+                  <Button
+                    type="button"
+                    onClick={handleConfirmPaymentScreenshot}
+                    disabled={!selectedProofPreview || uploading}
+                    className="mx-auto h-12 w-full max-w-md rounded-xl bg-black text-xs font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:bg-zinc-800 disabled:bg-zinc-300 disabled:text-zinc-500 dark:bg-white dark:text-black dark:hover:bg-zinc-200 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Confirming Payment...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Confirm Payment
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-4 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/20 dark:text-emerald-300">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>
+                      A clean screenshot speeds up verification. We only use it to confirm your payment and complete the order.
+                    </p>
                   </div>
                 </div>
               </div>
             )}
-          </section>
-
-          <section className="border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-950/60">
-            <div className="space-y-6">
-              <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Step 2</p>
-                  <h2 className="mt-2 text-xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
-                    Upload payment proof
-                  </h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    Upload one clear screenshot with the amount, payment app, and successful status visible. PNG, JPG, or WEBP up to 5 MB.
-                  </p>
-                </div>
-                <span className="max-w-[150px] text-right text-xs leading-5 text-muted-foreground">
-                  Final step: once confirmed, we&apos;ll redirect you to the order page.
-                </span>
-              </div>
-
-              <input
-                ref={fileInputRef}
-                type="file"
-                data-testid="payment-proof-input"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChange}
-                disabled={uploading || uploaded}
-              />
-
-              {uploaded ? (
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
-                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold">Payment proof uploaded successfully.</p>
-                      <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">We&apos;re redirecting you to your order now.</p>
-                    </div>
-                  </div>
-                </div>
-              ) : selectedProofPreview ? (
-                <div className="space-y-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Selected file</p>
-                      <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selectedProofFile?.name}</p>
-                      <p className="text-xs text-muted-foreground">Make sure everything is readable before you confirm.</p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="rounded-none"
-                      onClick={() => {
-                        if (selectedProofPreview) URL.revokeObjectURL(selectedProofPreview);
-                        setSelectedProofPreview(null);
-                        setSelectedProofFile(null);
-                      }}
-                      disabled={uploading}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-
-                  <div className="overflow-hidden border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
-                    <img
-                      src={selectedProofPreview}
-                      alt="Payment screenshot preview"
-                      className="max-h-[460px] w-full object-contain"
-                    />
-                  </div>
-
-                  <div className="rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-muted-foreground dark:border-zinc-800 dark:bg-zinc-900/40">
-                    A clean screenshot helps us verify your payment faster.
-                  </div>
-
-                  <div className="border border-zinc-200 bg-white/90 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
-                    <div className="grid gap-3 lg:grid-cols-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="group relative h-11 w-full overflow-hidden rounded-none px-6 text-[11px] font-semibold uppercase tracking-[0.12em] transition-colors duration-200 hover:border-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-900 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                      >
-                        <Upload className="mr-2 h-4 w-4 shrink-0" />
-                        <span className="truncate">Choose Another Screenshot</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        className="group relative h-11 w-full overflow-hidden rounded-none bg-black px-6 text-[11px] font-bold uppercase tracking-[0.12em] text-white transition-colors duration-200 hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-full after:origin-left after:scale-x-0 after:bg-current after:transition-transform after:duration-300 hover:after:scale-x-100"
-                        onClick={handleConfirmPaymentScreenshot}
-                        disabled={uploading}
-                      >
-                        {uploading ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
-                            <span className="truncate">Confirming Proof...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="mr-2 h-4 w-4 shrink-0" />
-                            <span className="truncate">Confirm Payment</span>
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  data-testid="payment-proof-trigger"
-                  className="group flex min-h-[280px] w-full flex-col items-center justify-center gap-5 border border-dashed border-zinc-300 bg-zinc-50/70 px-6 text-center transition-all duration-200 hover:border-zinc-500 hover:bg-zinc-50 active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900/30 dark:hover:border-zinc-500 dark:hover:bg-zinc-900/40"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  <span className="flex h-16 w-16 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-900 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
-                    {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
-                  </span>
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900 dark:text-zinc-100">
-                      {uploading ? "Preparing upload..." : "Choose payment screenshot"}
-                    </p>
-                    <p className="max-w-sm text-sm leading-6 text-muted-foreground">
-                      After payment, choose one clean screenshot from your gallery. One clear image is enough.
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                    <span className="border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">PNG / JPG / WEBP</span>
-                    <span className="border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">Max 5 MB</span>
-                  </div>
-                </button>
-              )}
-            </div>
-          </section>
+          </motion.section>
         </div>
 
         <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Exact amount</span>
-            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Readable proof</span>
-            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Fast verification</span>
+          <div className="flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="rounded-full border border-zinc-200 px-3 py-2 dark:border-zinc-800">Exact amount</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-2 dark:border-zinc-800">Readable proof</span>
+            <span className="rounded-full border border-zinc-200 px-3 py-2 dark:border-zinc-800">Fast verification</span>
           </div>
-          <Button asChild variant="outline" className="h-11 rounded-none">
+          <Button asChild variant="outline" className="h-11 rounded-full px-5">
             <Link href="/checkout?returning=1">Back to Checkout</Link>
           </Button>
         </div>
