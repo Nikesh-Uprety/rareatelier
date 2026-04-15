@@ -217,13 +217,13 @@ export default function ViewBill() {
                 <tr key={i}>
                   <td>
                     <div>{item.productName}</div>
-                    {item.variantColor && (
+                    {(item.variantColor || item.color) && (
                       <div style={{ fontSize: "11px", color: "#666" }}>
-                        {item.variantColor}
+                        {item.variantColor || item.color}
                         {item.size ? ` · ${item.size}` : ""}
                       </div>
                     )}
-                    {!item.variantColor && item.size && (
+                    {!(item.variantColor || item.color) && item.size && (
                       <div style={{ fontSize: "11px", color: "#666" }}>{item.size}</div>
                     )}
                   </td>

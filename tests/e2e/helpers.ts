@@ -35,10 +35,9 @@ export async function openFirstProduct(page: Page) {
 
 export async function fillCheckoutForm(page: Page, email: string) {
   await page.getByTestId("checkout-email").fill(email);
-  await page.getByTestId("checkout-first-name").fill("Nikesh");
-  await page.getByTestId("checkout-last-name").fill("Uprety");
+  await page.getByTestId("checkout-full-name").fill("Nikesh Uprety");
   await page.getByTestId("checkout-address").fill("Lazimpat");
-  await page.getByTestId("checkout-city").fill("Kathmandu");
+  await page.getByTestId("checkout-landmark").fill("Near Durbar Marg");
   await page.getByTestId("checkout-phone").fill("9800000000");
   await page.getByTestId("checkout-delivery-location").fill("Kathmandu");
   await page.getByRole("button", { name: "Kathmandu Inside Ring Road" }).click();

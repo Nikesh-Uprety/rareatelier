@@ -2,7 +2,7 @@ import { useRoute, Link } from "wouter";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Sparkles } from "lucide-react";
-import { fetchOrderById, fetchOrderByTrackingToken, getCachedLatestOrder, updateCachedOrder } from "@/lib/api";
+import { fetchOrderById, fetchOrderByTrackingToken, getCachedLatestOrder, updateCachedOrder, type OrderDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { formatPrice } from "@/lib/format";
@@ -37,15 +37,22 @@ function parseJsonArray(raw: string | null | undefined): string[] {
   }
 }
 
+function meaningfulOrderColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") return null;
+  return trimmed;
+}
+
 function selectedColorLabel(item: any): string {
-  const variantColor = String(item?.variantColor ?? "").trim();
+  const variantColor = meaningfulOrderColor(item?.variantColor);
   if (variantColor) return variantColor;
 
-  const color = String(item?.color ?? "").trim();
+  const color = meaningfulOrderColor(item?.color);
   if (color) return color;
 
   const options = parseJsonArray(item?.product?.colorOptions);
-  return options.length === 1 ? options[0] : "-";
+  return options[0] ?? "-";
 }
 
 const ORDER_COLOR_NAME_SWATCHES: Record<string, string> = {
@@ -83,14 +90,267 @@ function parseOrderColor(value: string): { label: string; swatch: string | null 
   };
 }
 
-function normalizeOrderDetail(order: any) {
+function normalizeOrderDetail(order: unknown): OrderDetail | null {
   if (!order || typeof order !== "object") return null;
+  const candidate = order as Partial<OrderDetail>;
   return {
-    ...order,
-    email: typeof order.email === "string" ? order.email : "",
-    fullName: typeof order.fullName === "string" ? order.fullName : "Customer",
-    items: Array.isArray(order.items) ? order.items : [],
+    ...candidate,
+    id: typeof candidate.id === "string" ? candidate.id : "",
+    email: typeof candidate.email === "string" ? candidate.email : "",
+    fullName: typeof candidate.fullName === "string" ? candidate.fullName : "Customer",
+    addressLine1: typeof candidate.addressLine1 === "string" ? candidate.addressLine1 : "",
+    addressLine2: typeof candidate.addressLine2 === "string" ? candidate.addressLine2 : null,
+    city: typeof candidate.city === "string" ? candidate.city : "",
+    region: typeof candidate.region === "string" ? candidate.region : "",
+    postalCode: typeof candidate.postalCode === "string" ? candidate.postalCode : "",
+    country: typeof candidate.country === "string" ? candidate.country : "",
+    total: Number(candidate.total ?? 0),
+    status: typeof candidate.status === "string" ? candidate.status : "pending",
+    paymentMethod: typeof candidate.paymentMethod === "string" ? candidate.paymentMethod : "cash_on_delivery",
+    paymentProofUrl: typeof candidate.paymentProofUrl === "string" ? candidate.paymentProofUrl : null,
+    paymentVerified: typeof candidate.paymentVerified === "string" ? candidate.paymentVerified : null,
+    locationCoordinates: typeof candidate.locationCoordinates === "string" ? candidate.locationCoordinates : null,
+    deliveryLocation: typeof candidate.deliveryLocation === "string" ? candidate.deliveryLocation : null,
+    deliveryRequired: typeof candidate.deliveryRequired === "boolean" ? candidate.deliveryRequired : true,
+    deliveryProvider: typeof candidate.deliveryProvider === "string" ? candidate.deliveryProvider : null,
+    deliveryAddress: typeof candidate.deliveryAddress === "string" ? candidate.deliveryAddress : null,
+    trackingToken: typeof candidate.trackingToken === "string" ? candidate.trackingToken : null,
+    promoCode: typeof candidate.promoCode === "string" ? candidate.promoCode : null,
+    promoDiscountAmount: typeof candidate.promoDiscountAmount === "number" ? candidate.promoDiscountAmount : null,
+    createdAt: candidate.createdAt ?? new Date().toISOString(),
+    items: Array.isArray(candidate.items) ? candidate.items : [],
   };
+}
+
+type OrderLineItem = OrderDetail["items"][number];
+
+function orderItemVariantLabel(item: OrderLineItem): string {
+  const sizeLabel = String(item.size ?? "").trim();
+  const colorLabel = selectedColorLabel(item);
+  const parts = [
+    sizeLabel ? `Size ${sizeLabel}` : "",
+    colorLabel !== "-" ? `Color ${parseOrderColor(colorLabel).label}` : "",
+  ].filter(Boolean);
+  return parts.join(" / ") || "Standard";
+}
+
+function orderReceiptCustomerLines(order: OrderDetail): string[] {
+  return [order.fullName, order.email].filter((value): value is string => Boolean(value && value.trim()));
+}
+
+function orderReceiptDeliveryLines(order: OrderDetail): string[] {
+  const locationLine = [order.deliveryLocation, order.locationCoordinates].find(
+    (value): value is string => Boolean(value && value.trim()),
+  );
+  const addressLine = [order.addressLine1, order.addressLine2]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(", ");
+  const localityLine = [order.city, order.region, order.postalCode]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .join(", ");
+  const lines = [
+    locationLine,
+    addressLine,
+    localityLine,
+    order.country,
+    order.deliveryAddress ? `Landmark: ${order.deliveryAddress}` : null,
+  ].filter((value): value is string => Boolean(value && value.trim()));
+  return Array.from(new Set(lines));
+}
+
+function buildOrderPdfFileName(order: OrderDetail): string {
+  return `rare-order-${order.id.slice(0, 8)}.pdf`;
+}
+
+async function downloadOrderReceiptPdf(params: {
+  order: OrderDetail;
+  orderDateLabel: string;
+  itemsSubtotal: number;
+  shippingFee: number;
+  promoDiscountAmount: number;
+}) {
+  const { order, orderDateLabel, itemsSubtotal, shippingFee, promoDiscountAmount } = params;
+  const { jsPDF } = await import("jspdf");
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 16;
+  const rightEdge = pageWidth - margin;
+  const contentWidth = pageWidth - margin * 2;
+  const itemWidth = 68;
+  const variantWidth = 44;
+  const qtyWidth = 12;
+  const unitWidth = 24;
+  const totalWidth = contentWidth - itemWidth - variantWidth - qtyWidth - unitWidth;
+  const tableStartX = margin;
+  const tableVariantX = tableStartX + itemWidth;
+  const tableQtyX = tableVariantX + variantWidth;
+  const tableUnitX = tableQtyX + qtyWidth;
+  const tableTotalX = tableUnitX + unitWidth;
+  let y = margin;
+
+  const ensureSpace = (spaceNeeded: number, onPageBreak?: () => void) => {
+    if (y + spaceNeeded <= pageHeight - margin) return;
+    doc.addPage();
+    y = margin;
+    onPageBreak?.();
+  };
+
+  const drawRule = () => {
+    doc.setDrawColor(229, 231, 235);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y, rightEdge, y);
+    y += 5;
+  };
+
+  const drawSectionHeading = (title: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(title.toUpperCase(), margin, y);
+    y += 5;
+  };
+
+  const drawInfoColumn = (x: number, width: number, title: string, lines: string[]) => {
+    let localY = y;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(107, 114, 128);
+    doc.text(title.toUpperCase(), x, localY);
+    localY += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(17, 24, 39);
+    const resolvedLines = lines.length ? lines : ["-"];
+    for (const line of resolvedLines) {
+      const wrapped = doc.splitTextToSize(line, width);
+      doc.text(wrapped, x, localY);
+      localY += wrapped.length * 4.4 + 1.2;
+    }
+    return localY;
+  };
+
+  const drawTableHeader = () => {
+    doc.setFillColor(244, 244, 245);
+    doc.rect(margin, y - 3.5, contentWidth, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text("Item", tableStartX, y + 1.5);
+    doc.text("Variant", tableVariantX, y + 1.5);
+    doc.text("Qty", tableQtyX + qtyWidth / 2, y + 1.5, { align: "center" });
+    doc.text("Unit", tableUnitX + unitWidth, y + 1.5, { align: "right" });
+    doc.text("Subtotal", tableTotalX + totalWidth, y + 1.5, { align: "right" });
+    y += 8;
+  };
+
+  doc.setProperties({
+    title: `Order ${order.id}`,
+    subject: "Rare Atelier order receipt",
+    author: "RARE.NP",
+    creator: "RARE.NP storefront",
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(17, 24, 39);
+  doc.text("RARE.NP", margin, y);
+  doc.setFontSize(10);
+  doc.setTextColor(90, 90, 90);
+  doc.text("Official Order Receipt", rightEdge, y, { align: "right" });
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(55, 65, 81);
+  doc.text(`Order ID: ${order.id}`, margin, y);
+  doc.text(orderDateLabel, rightEdge, y, { align: "right" });
+  y += 5;
+  doc.text(`Payment: ${paymentMethodLabel(order.paymentMethod)}`, margin, y);
+  const statusLabel = order.paymentVerified === "verified" ? "Paid" : order.status;
+  doc.text(`Status: ${statusLabel}`, rightEdge, y, { align: "right" });
+  y += 4;
+  drawRule();
+
+  ensureSpace(34);
+  const columnGap = 12;
+  const columnWidth = (contentWidth - columnGap) / 2;
+  const customerEndY = drawInfoColumn(margin, columnWidth, "Customer", orderReceiptCustomerLines(order));
+  const deliveryEndY = drawInfoColumn(margin + columnWidth + columnGap, columnWidth, "Delivery", orderReceiptDeliveryLines(order));
+  y = Math.max(customerEndY, deliveryEndY) + 2;
+  drawRule();
+
+  drawSectionHeading("Items");
+  drawTableHeader();
+
+  for (const item of order.items) {
+    const itemName = item.product?.name || "Product";
+    const nameLines = doc.splitTextToSize(itemName, itemWidth - 4);
+    const variantLines = doc.splitTextToSize(orderItemVariantLabel(item), variantWidth - 4);
+    const rowHeight = Math.max(nameLines.length, variantLines.length) * 4.6 + 3;
+    ensureSpace(rowHeight + 3, drawTableHeader);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(17, 24, 39);
+    doc.text(nameLines, tableStartX, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(75, 85, 99);
+    doc.text(variantLines, tableVariantX, y);
+    doc.text(String(item.quantity), tableQtyX + qtyWidth / 2, y, { align: "center" });
+    doc.text(formatPrice(item.unitPrice), tableUnitX + unitWidth, y, { align: "right" });
+    doc.text(formatPrice(Number(item.unitPrice) * item.quantity), tableTotalX + totalWidth, y, { align: "right" });
+
+    y += rowHeight;
+    doc.setDrawColor(236, 236, 236);
+    doc.line(margin, y - 1.5, rightEdge, y - 1.5);
+  }
+
+  y += 3;
+  ensureSpace(30);
+  const totalsLabelX = rightEdge - 70;
+  const totalsValueX = rightEdge;
+  const writeTotalRow = (label: string, value: string, isGrand = false) => {
+    doc.setFont("helvetica", isGrand ? "bold" : "normal");
+    doc.setFontSize(isGrand ? 11 : 10);
+    doc.setTextColor(17, 24, 39);
+    doc.text(label, totalsLabelX, y);
+    doc.text(value, totalsValueX, y, { align: "right" });
+    y += isGrand ? 7 : 5.5;
+  };
+
+  writeTotalRow("Subtotal", formatPrice(itemsSubtotal));
+  if (promoDiscountAmount > 0) {
+    writeTotalRow(order.promoCode ? `Discount (${order.promoCode})` : "Discount", `- ${formatPrice(promoDiscountAmount)}`);
+  }
+  writeTotalRow("Shipping", formatPrice(shippingFee));
+  doc.setDrawColor(209, 213, 219);
+  doc.line(totalsLabelX, y - 2, totalsValueX, y - 2);
+  y += 2;
+  writeTotalRow("Grand Total", formatPrice(order.total), true);
+
+  ensureSpace(18);
+  drawRule();
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  const footerLines = [
+    "Thank you for shopping with RARE.NP.",
+    order.paymentVerified === "verified"
+      ? "Your payment has been confirmed and the order is moving to fulfillment."
+      : "If your payment is still under review, our team will verify it shortly.",
+    "For delivery or order questions, please contact the store support team.",
+  ];
+  for (const line of footerLines) {
+    const wrapped = doc.splitTextToSize(line, contentWidth);
+    doc.text(wrapped, margin, y);
+    y += wrapped.length * 4.2 + 1;
+  }
+
+  doc.save(buildOrderPdfFileName(order));
 }
 
 export default function OrderSuccess() {
@@ -102,16 +362,14 @@ export default function OrderSuccess() {
   const isTrackingView = Boolean(trackingToken);
   const rawCachedOrder = trackingToken ? null : getCachedLatestOrder(orderId);
   const cachedOrder = normalizeOrderDetail(rawCachedOrder);
-  const shouldFetchOrder =
-    (!!trackingToken || !!orderId) &&
-    (!cachedOrder || !Array.isArray((rawCachedOrder as any)?.items));
 
   const { data: fetchedOrder, isLoading } = useQuery({
     queryKey: ["order", trackingToken ?? orderId],
     queryFn: () => trackingToken ? fetchOrderByTrackingToken(trackingToken) : fetchOrderById(orderId!),
-    enabled: shouldFetchOrder,
+    enabled: Boolean(trackingToken || orderId),
+    initialData: cachedOrder ?? undefined,
   });
-  const order = normalizeOrderDetail(fetchedOrder ?? cachedOrder);
+  const order = normalizeOrderDetail(fetchedOrder) ?? cachedOrder;
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
 
   useEffect(() => {
@@ -119,6 +377,13 @@ export default function OrderSuccess() {
       updateCachedOrder(fetchedOrder);
     }
   }, [fetchedOrder]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [orderId, trackingToken]);
 
   const itemsSubtotal = order
     ? order.items.reduce(
@@ -177,44 +442,26 @@ export default function OrderSuccess() {
   });
 
   const handleDownloadPdf = async () => {
-    const target = document.getElementById("order-confirmation-export");
-    if (!target || !order) return;
+    if (!order) return;
     setIsDownloadingPdf(true);
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-
-      const canvas = await html2canvas(target, {
-        backgroundColor: "#ffffff",
-        scale: 2,
-        useCORS: true,
-        onclone: (doc) => {
-          doc.documentElement.classList.remove("dark");
-          doc.body.classList.remove("dark");
-          doc.body.style.background = "#ffffff";
-          const cloned = doc.getElementById("order-confirmation-export");
-          if (cloned) {
-            cloned.style.background = "#ffffff";
-            cloned.style.color = "#111111";
-          }
-        },
+      await downloadOrderReceiptPdf({
+        order,
+        orderDateLabel,
+        itemsSubtotal,
+        shippingFee,
+        promoDiscountAmount,
       });
-
-      const imageData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-      pdf.addImage(imageData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`rare-order-${order.id.slice(0, 8)}.pdf`);
     } finally {
       setIsDownloadingPdf(false);
     }
   };
 
   return (
-    <div className="order-confirmation-page container mx-auto max-w-5xl px-4 pb-10 pt-4 sm:pt-6 lg:pb-16">
+    <div
+      className="order-confirmation-page container mx-auto max-w-5xl px-4 pb-10 lg:pb-16"
+      style={{ paddingTop: "calc(var(--nav-h) + 1.75rem)" }}
+    >
       <StorefrontSeo
         title={isTrackingView ? "Track Order | Rare Atelier" : "Order Confirmed | Rare Atelier"}
         description={isTrackingView ? `Track order ${order.id.slice(0, 8)} and review delivery, payment, and item details.` : `Your order ${order.id.slice(0, 8)}… has been confirmed. View your bill and delivery details.`}

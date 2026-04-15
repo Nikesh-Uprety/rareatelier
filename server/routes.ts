@@ -224,6 +224,7 @@ let siteSettingsHasFontPresetColumnCache: boolean | null = null;
 let mediaAssetsCompatEnsured: Promise<void> | null = null;
 let orderVerificationChallengesEnsured: Promise<void> | null = null;
 let orderTrackingCompatEnsured: Promise<void> | null = null;
+let orderItemsColorCompatEnsured: Promise<void> | null = null;
 
 async function siteSettingsHasFontPresetColumn() {
   if (siteSettingsHasFontPresetColumnCache !== null) {
@@ -793,6 +794,39 @@ async function ensureOrderTrackingCompatibility() {
   return orderTrackingCompatEnsured;
 }
 
+async function ensureOrderItemsColorCompatibility() {
+  if (orderItemsColorCompatEnsured) return orderItemsColorCompatEnsured;
+
+  orderItemsColorCompatEnsured = (async () => {
+    try {
+      await db.execute(sql`
+        alter table order_items
+        add column if not exists color varchar(80) default ''
+      `);
+    } catch (error) {
+      console.warn("Unable to ensure order_items.color column compatibility", error);
+    }
+
+    try {
+      await db.execute(sql`
+        update order_items oi
+        set color = coalesce(nullif(oi.color, ''), nullif(pv.color, ''), '')
+        from product_variants pv
+        where oi.variant_id = pv.id
+          and coalesce(oi.color, '') = ''
+          and coalesce(pv.color, '') <> ''
+      `);
+    } catch (error) {
+      console.warn("Unable to backfill order_items.color values", error);
+    }
+  })().catch((error) => {
+    orderItemsColorCompatEnsured = null;
+    throw error;
+  });
+
+  return orderItemsColorCompatEnsured;
+}
+
 function trimOptionalString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -968,6 +1002,7 @@ export async function registerRoutes(
   await ensureMediaAssetsCompatibility();
   await ensureOrderVerificationChallengesTable();
   await ensureOrderTrackingCompatibility();
+  await ensureOrderItemsColorCompatibility();
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
@@ -3958,6 +3993,7 @@ ${Array.from(uniqueEntries.entries())
           productId: item.productId,
           variantId: item.resolvedVariantId,
           size: item.normalizedSize,
+          color: item.normalizedColor,
           quantity: item.quantity,
           unitPrice: item.priceAtTime,
         })),
@@ -6740,6 +6776,7 @@ ${Array.from(uniqueEntries.entries())
             productId: item.productId,
             variantId: item.resolvedVariantId,
             size: item.normalizedSize,
+            color: item.normalizedColor,
             quantity: item.quantity,
             unitPrice: item.priceAtTime,
           })),

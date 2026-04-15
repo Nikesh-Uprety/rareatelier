@@ -627,7 +627,7 @@ export default function Products() {
           ) : paginatedProducts.length > 0 ? (
             <div>
               <div
-                className={`grid grid-cols-2 gap-1 p-1 ${desktopGridClassName}`}
+                className={`grid grid-cols-2 gap-x-2.5 gap-y-1.5 p-1 sm:gap-x-3 lg:gap-x-4 ${desktopGridClassName}`}
               >
                 {paginatedProducts.map((product, index) => {
                   const hoverImage = getHoverImage(product);

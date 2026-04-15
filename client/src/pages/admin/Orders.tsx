@@ -65,6 +65,76 @@ function buildOrderTrackingUrl(trackingToken?: string | null) {
   return `${window.location.origin}/orders/track/${trackingToken}`;
 }
 
+const ADMIN_ORDER_COLOR_SWATCHES: Record<string, string> = {
+  black: "#111111",
+  white: "#f5f5f5",
+  cream: "#f2eadf",
+  ivory: "#fff8e7",
+  beige: "#d8c3a5",
+  brown: "#7a5a43",
+  mocha: "#7b5b45",
+  grey: "#7c7c7c",
+  gray: "#7c7c7c",
+  blue: "#2548b1",
+  navy: "#1f2a44",
+  "navy blue": "#1f2a44",
+  green: "#2f7d32",
+  red: "#c62828",
+  maroon: "#6b1f2a",
+  burgundy: "#6d213c",
+  pink: "#f7a6ec",
+  purple: "#7c3aed",
+  yellow: "#facc15",
+  orange: "#f97316",
+  gold: "#c9a84c",
+  stone: "#c8c1b5",
+  espresso: "#4b3428",
+};
+
+function parseAdminColorOptions(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeAdminOrderColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") return null;
+  return trimmed;
+}
+
+function resolveAdminOrderItemColor(item: {
+  variantColor?: string | null;
+  color?: string | null;
+  productColorOptions?: string | null;
+  product?: { colorOptions?: string | null } | null;
+}): string | null {
+  return (
+    normalizeAdminOrderColor(item.variantColor) ??
+    normalizeAdminOrderColor(item.color) ??
+    parseAdminColorOptions(item.product?.colorOptions ?? item.productColorOptions)[0] ??
+    null
+  );
+}
+
+function parseAdminOrderColorMeta(value: string): { label: string; swatch: string | null } {
+  const trimmed = value.trim();
+  const hexMatch = trimmed.match(/#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b/);
+  const label = trimmed.replace(/\(\s*#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\s*\)/g, "").trim();
+  const normalized = label.toLowerCase();
+  return {
+    label: label || trimmed,
+    swatch: hexMatch?.[0] ?? ADMIN_ORDER_COLOR_SWATCHES[normalized] ?? null,
+  };
+}
+
 function BillButton({ orderId }: { orderId: string }) {
   const [showBill, setShowBill] = useState(false);
 
@@ -118,9 +188,11 @@ export default function AdminOrders() {
       productId: string;
       quantity: number;
       unitPrice: string | number;
-      product?: { name?: string } | null;
+      product?: { name?: string; colorOptions?: string | null } | null;
       size?: string;
-      color?: string;
+      color?: string | null;
+      variantColor?: string | null;
+      productColorOptions?: string | null;
     }>
   >([]);
   const [selectedOrderItemsLoading, setSelectedOrderItemsLoading] = useState(false);
@@ -500,7 +572,14 @@ export default function AdminOrders() {
                       pos: 'POS',
                     };
                     const status = statusMap[order.status] ?? order.status;
-                    const itemSummary = order.items?.map((item) => `${item.name}${item.size ? ` (${item.size})` : ""} × ${item.quantity}`).join(", ") || "—";
+                    const itemSummary =
+                      order.items
+                        ?.map((item) => {
+                          const itemColor = resolveAdminOrderItemColor(item);
+                          const variantLabel = [item.size?.trim(), itemColor].filter(Boolean).join(" · ");
+                          return `${item.name}${variantLabel ? ` (${variantLabel})` : ""} × ${item.quantity}`;
+                        })
+                        .join(", ") || "—";
                     return (
                       <tr
                         key={order.id}
@@ -689,10 +768,10 @@ export default function AdminOrders() {
           }
         }}
       >
-        <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-0 flex flex-col bg-[#FDFDFB] dark:bg-card border-l border-[#E5E5E0] dark:border-border">
+        <SheetContent side="right" className="flex h-full w-full max-w-full flex-col overflow-y-auto border-l border-[#E5E5E0] bg-[#F7F6F1] p-0 dark:border-border dark:bg-[#101010] sm:w-[min(92vw,58rem)] sm:max-w-none xl:w-[min(50vw,72rem)]">
           {selectedOrder && (
             <>
-              <div className="p-6 border-b border-border/50 flex-none space-y-4">
+              <div className="sticky top-0 z-10 flex-none space-y-4 border-b border-border/50 bg-[#F7F6F1]/95 p-6 backdrop-blur supports-[backdrop-filter]:bg-[#F7F6F1]/88 dark:bg-[#101010]/95 dark:supports-[backdrop-filter]:bg-[#101010]/88">
                 <SheetHeader className="space-y-1">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -820,9 +899,9 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              <div className="p-6 space-y-8 flex-1">
+              <div className="grid flex-1 auto-rows-max gap-6 p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
                 {/* Items Ordered */}
-                <div className="space-y-3">
+                <div className="space-y-3 xl:col-span-2">
                   <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80">
                     Items Ordered
                   </h4>
@@ -841,10 +920,12 @@ export default function AdminOrders() {
                           const qty = Number(it.quantity) || 0;
                           const unit = Number(it.unitPrice) || 0;
                           const lineSubtotal = qty * unit;
+                          const itemColor = resolveAdminOrderItemColor(it);
+                          const colorMeta = itemColor ? parseAdminOrderColorMeta(itemColor) : null;
                           return (
                             <div
                               key={it.id}
-                              className="flex items-start justify-between gap-3 border border-border/50 rounded-xl p-3 bg-card/60"
+                              className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-white/90 p-4 shadow-[0_18px_38px_-30px_rgba(15,23,42,0.45)] dark:bg-card/70"
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-col">
@@ -855,9 +936,13 @@ export default function AdminOrders() {
                                         Size: {it.size}
                                       </span>
                                     )}
-                                    {it.color && (
-                                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                                        {it.color}
+                                    {colorMeta && (
+                                      <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
+                                        <span
+                                          className="h-3 w-3 rounded-full border border-black/10"
+                                          style={{ background: colorMeta.swatch ?? "#d4d4d8" }}
+                                        />
+                                        {colorMeta.label}
                                       </span>
                                     )}
                                     <span className="text-xs text-muted-foreground">
@@ -1053,7 +1138,7 @@ export default function AdminOrders() {
 
                 {/* Additional Actions */}
                 {selectedOrder.status === "completed" && (
-                  <div className="pt-4 border-t border-border">
+                  <div className="border-t border-border pt-4 xl:col-span-2">
                     <BillButton orderId={selectedOrder.id} />
                   </div>
                 )}

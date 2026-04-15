@@ -59,16 +59,12 @@ vi.mock("@/lib/api", () => ({
 
 const SAVED_FORM_DATA = {
   email: "buyer@example.com",
-  firstName: "Nikesh",
-  lastName: "Uprety",
+  fullName: "Nikesh Uprety",
   address: "Lazimpat",
-  city: "Kathmandu",
-  phone: "9800000000",
+  landmark: "Near Durbar Marg",
+  phone: "+9779800000000",
   paymentMethod: "cash_on_delivery",
   deliveryLocation: "Kathmandu Inside Ring Road",
-  deliveryProvider: "pathao",
-  deliveryAddress: "",
-  deliveryRequired: true,
 };
 
 describe("Checkout", () => {
@@ -108,6 +104,17 @@ describe("Checkout", () => {
     expect(createOrderMock).not.toHaveBeenCalled();
   });
 
+  it("shows an email format error when the customer enters an invalid email", async () => {
+    const user = userEvent.setup();
+
+    renderWithProviders(<Checkout />);
+    await user.type(screen.getByTestId("checkout-email"), "invalid-email");
+    await user.tab();
+
+    expect(await screen.findByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(createOrderMock).not.toHaveBeenCalled();
+  });
+
   it("applies promo codes and shows success feedback", async () => {
     const user = userEvent.setup();
     validatePromoCodeMock.mockResolvedValueOnce({
@@ -130,6 +137,30 @@ describe("Checkout", () => {
     );
   });
 
+  it("shows the selected color in the checkout summary and falls back to the active product color", () => {
+    useCartStoreMock.mockImplementation(() => ({
+      items: [
+        {
+          id: "prod-1-M-default",
+          product: {
+            ...mockCartState.items[0].product,
+            variants: [
+              { size: "M", color: "Black" },
+              { size: "L", color: "Olive" },
+            ],
+          },
+          variant: { size: "M", color: "Default" },
+          quantity: 1,
+        },
+      ],
+      clearCart: clearCartMock,
+    }));
+
+    renderWithProviders(<Checkout />);
+
+    expect(screen.getByText("M · Black")).toBeInTheDocument();
+  });
+
   it("creates a cash-on-delivery order and routes to confirmation", async () => {
     const user = userEvent.setup();
     createOrderMock.mockResolvedValueOnce({
@@ -144,10 +175,27 @@ describe("Checkout", () => {
     localStorage.setItem("ra-checkout-form-data", JSON.stringify(SAVED_FORM_DATA));
     renderWithProviders(<Checkout />);
 
+    await waitFor(() => {
+      expect((screen.getByTestId("checkout-full-name") as HTMLInputElement).value).toBe("Nikesh Uprety");
+      expect((screen.getByTestId("checkout-phone") as HTMLInputElement).value).toBe("9800000000");
+      expect((screen.getByTestId("checkout-landmark") as HTMLInputElement).value).toBe("Near Durbar Marg");
+    });
+
     await user.click(screen.getByTestId("checkout-submit"));
 
     await waitFor(() => {
       expect(createOrderMock).toHaveBeenCalled();
+      const [payload] = createOrderMock.mock.calls[0] ?? [];
+      expect(payload).toEqual(
+        expect.objectContaining({
+          shipping: expect.objectContaining({
+            phone: "+9779800000000",
+            address: "Lazimpat",
+            deliveryLocation: "Kathmandu Inside Ring Road",
+          }),
+          deliveryAddress: "Near Durbar Marg",
+        }),
+      );
       expect(cacheLatestOrderMock).toHaveBeenCalledWith({ id: "order-1" });
       expect(clearPendingCheckoutMock).toHaveBeenCalled();
       expect(clearCartMock).toHaveBeenCalled();

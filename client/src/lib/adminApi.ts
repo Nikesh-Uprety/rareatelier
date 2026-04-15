@@ -57,6 +57,9 @@ export interface AdminOrder {
     productId: string;
     quantity: number;
     size?: string | null;
+    color?: string | null;
+    variantColor?: string | null;
+    productColorOptions?: string | null;
     name: string;
   }>;
 }

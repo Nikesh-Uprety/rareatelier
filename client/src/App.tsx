@@ -175,16 +175,7 @@ function getCommerceBreadcrumb(pathname: string): {
   }
 
   if (pathname === "/checkout") {
-    return {
-      items: [
-        { label: "Home", href: "/" },
-        { label: "Shop", href: "/products" },
-        { label: "Cart", href: "/cart" },
-        { label: "Checkout" },
-      ],
-      backHref: "/cart",
-      backLabel: "Back to cart",
-    };
+    return null;
   }
 
   if (pathname === "/checkout/payment") {
@@ -776,7 +767,9 @@ function RouterShell({
 
     // Reset scroll consistently on all route changes to prevent browser-restored flashes.
     requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+      window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
     });
   }, [location]);
 

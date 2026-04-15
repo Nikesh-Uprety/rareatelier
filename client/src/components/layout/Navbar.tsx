@@ -136,6 +136,7 @@ export default function Navbar() {
   const isAtelierRoute = location === "/atelier";
   const isProductsRoute = location === "/products";
   const isProductDetailRoute = /^\/product\/[^/]+/.test(location);
+  const isCheckoutRoute = location === "/checkout";
   const isLightLandingTemplate = isHomeRoute && (templateSlug === "clean-minimal" || templateSlug === "editorial-grid");
   const isStuffyProductDetail = isStuffyClone && isProductDetailRoute;
   const isStuffyProductsRoute = isStuffyClone && isProductsRoute;
@@ -432,7 +433,13 @@ export default function Navbar() {
         ? "#ffffff"
         : "#ffffff";
   const navLinkColor = navForegroundColor;
-  const navChrome = isHeroMegaOpen
+  const navChrome = isCheckoutRoute
+    ? {
+        ...getInnerPageChrome(isDark),
+        borderColor: "transparent",
+        boxShadow: "none",
+      }
+    : isHeroMegaOpen
     ? {
         background: "#ffffff",
         backdropFilter: "none",

@@ -105,6 +105,41 @@ function splitCustomerName(fullName: string) {
   };
 }
 
+function normalizeStoredOrderColor(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "default") {
+    return null;
+  }
+  return trimmed;
+}
+
+function parseStoredColorOptions(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function resolveStoredOrderItemColor(params: {
+  savedColor?: string | null;
+  variantColor?: string | null;
+  productColorOptions?: string | null;
+}): string | null {
+  const explicitColor = normalizeStoredOrderColor(params.savedColor);
+  if (explicitColor) return explicitColor;
+
+  const variantColor = normalizeStoredOrderColor(params.variantColor);
+  if (variantColor) return variantColor;
+
+  return parseStoredColorOptions(params.productColorOptions)[0] ?? null;
+}
+
 type ProductFilterInput = {
   category?: string;
   search?: string;
@@ -221,6 +256,7 @@ export interface CreateOrderItemInput {
   productId: string;
   variantId?: number | null;
   size?: string | null;
+  color?: string | null;
   quantity: number;
   unitPrice: number;
 }
@@ -1290,10 +1326,14 @@ export class PgStorage implements IStorage {
         productId: orderItems.productId,
         quantity: orderItems.quantity,
         size: orderItems.size,
+        savedColor: orderItems.color,
+        variantColor: productVariants.color,
         productName: products.name,
+        productColorOptions: products.colorOptions,
       })
       .from(orderItems)
       .leftJoin(products, eq(orderItems.productId, products.id))
+      .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
       .where(inArray(orderItems.orderId, orderIds))
       .orderBy(asc(orderItems.id));
 
@@ -1301,15 +1341,26 @@ export class PgStorage implements IStorage {
       productId: string;
       quantity: number;
       size: string | null;
+      color: string | null;
+      variantColor: string | null;
+      productColorOptions: string | null;
       name: string;
     }>>();
 
     items.forEach((item) => {
       const entry = itemsByOrderId.get(item.orderId) ?? [];
+      const variantColor = normalizeStoredOrderColor(item.variantColor);
       entry.push({
         productId: item.productId,
         quantity: item.quantity,
         size: item.size,
+        color: resolveStoredOrderItemColor({
+          savedColor: item.savedColor,
+          variantColor,
+          productColorOptions: item.productColorOptions,
+        }),
+        variantColor,
+        productColorOptions: item.productColorOptions ?? null,
         name: item.productName ?? "Unknown Product",
       });
       itemsByOrderId.set(item.orderId, entry);
@@ -1420,12 +1471,13 @@ export class PgStorage implements IStorage {
     const trackingToken = orderRowRaw.trackingToken ?? await this.ensureOrderTrackingToken(id);
     const orderRow = { ...orderRowRaw, trackingToken };
 
-    const items = await db
+    const rawItems = await db
       .select({
         id: orderItems.id,
         orderId: orderItems.orderId,
         productId: orderItems.productId,
         variantId: orderItems.variantId,
+        savedColor: orderItems.color,
         variantColor: productVariants.color,
         size: orderItems.size,
         quantity: orderItems.quantity,
@@ -1437,6 +1489,19 @@ export class PgStorage implements IStorage {
       .leftJoin(productVariants, eq(orderItems.variantId, productVariants.id))
       .where(eq(orderItems.orderId, id))
       .orderBy(asc(orderItems.id));
+
+    const items = rawItems.map((item) => {
+      const variantColor = normalizeStoredOrderColor(item.variantColor);
+      return {
+        ...item,
+        color: resolveStoredOrderItemColor({
+          savedColor: item.savedColor,
+          variantColor,
+          productColorOptions: item.product?.colorOptions ?? null,
+        }),
+        variantColor,
+      };
+    });
 
     return { ...orderRow, items };
   }
@@ -1559,6 +1624,7 @@ export class PgStorage implements IStorage {
           productId: item.productId,
           variantId: item.variantId ?? null,
           size: item.size ?? "",
+          color: item.color ?? "",
           quantity: item.quantity,
           unitPrice: item.unitPrice.toString(),
         })),
@@ -3904,12 +3970,20 @@ export class MemStorage implements IStorage {
 
     return filtered.map(({ items, ...order }) => ({
       ...order,
-      items: items.map((item) => ({
-        productId: item.productId,
-        quantity: item.quantity,
-        size: item.size ?? null,
-        name: this._products.find((product) => product.id === item.productId)?.name ?? "Unknown Product",
-      })),
+      items: items.map((item) => {
+        const itemColor =
+          (typeof (item as any).variantColor === "string" && (item as any).variantColor.trim()) ||
+          (typeof (item as any).color === "string" && (item as any).color.trim()) ||
+          null;
+        return {
+          productId: item.productId,
+          quantity: item.quantity,
+          size: item.size ?? null,
+          color: itemColor,
+          variantColor: itemColor,
+          name: this._products.find((product) => product.id === item.productId)?.name ?? "Unknown Product",
+        };
+      }),
     }));
   }
 
@@ -3961,11 +4035,18 @@ export class MemStorage implements IStorage {
       order.trackingToken = generateOrderTrackingToken();
     }
 
-    const itemsWithProducts = order.items.map(item => ({
-      ...item,
-      variantColor: null,
-      product: this._products.find(p => p.id === item.productId)
-    }));
+    const itemsWithProducts = order.items.map(item => {
+      const itemColor =
+        (typeof (item as any).variantColor === "string" && (item as any).variantColor.trim()) ||
+        (typeof (item as any).color === "string" && (item as any).color.trim()) ||
+        null;
+      return {
+        ...item,
+        variantColor: itemColor,
+        color: itemColor,
+        product: this._products.find(p => p.id === item.productId)
+      };
+    });
 
     return { ...order, items: itemsWithProducts };
   }
@@ -3995,7 +4076,7 @@ export class MemStorage implements IStorage {
 
   async createOrder(data: CreateOrderInput): Promise<Order> {
     const id = crypto.randomUUID();
-    const order: Order & { items: OrderItem[] } = {
+    const order: Order & { items: Array<OrderItem & { color?: string | null; variantColor?: string | null }> } = {
       id,
       userId: null,
       email: data.email ?? null,
@@ -4032,6 +4113,8 @@ export class MemStorage implements IStorage {
         productId: item.productId,
         variantId: item.variantId ?? null,
         size: item.size ?? "",
+        color: item.color ?? null,
+        variantColor: item.color ?? null,
         quantity: item.quantity,
         unitPrice: item.unitPrice.toString(),
       })),

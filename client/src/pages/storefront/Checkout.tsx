@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trash2, CheckCircle2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
+import { Trash2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
 import { DeliveryLocationSelect } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
@@ -23,6 +23,9 @@ import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 const MAX_NEW_CUSTOMER_ITEMS = 5;
 const DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
+const NEPAL_PHONE_COUNTRY_CODE = "+977";
+const NEPAL_PHONE_LOCAL_LENGTH = 10;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PAYMENT_OPTIONS = [
   {
@@ -65,6 +68,7 @@ type PendingCheckoutContinuation = {
   emailVal: string;
   fullNameVal: string;
   addressVal: string;
+  landmarkVal: string;
   phoneVal: string;
   deliveryLocationVal: string;
 };
@@ -102,6 +106,73 @@ function getCheckoutOriginalPrice(price: number, originalPrice?: number | null, 
   return currentPrice;
 }
 
+function normalizeNepalPhoneLocal(value: string) {
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("977")) {
+    digits = digits.slice(3);
+  }
+
+  if (digits.startsWith("0") && digits.length > NEPAL_PHONE_LOCAL_LENGTH) {
+    digits = digits.slice(1);
+  }
+
+  return digits.slice(0, NEPAL_PHONE_LOCAL_LENGTH);
+}
+
+function buildNepalPhoneNumber(value: string) {
+  const localDigits = normalizeNepalPhoneLocal(value);
+  return localDigits ? `${NEPAL_PHONE_COUNTRY_CODE}${localDigits}` : "";
+}
+
+function getEmailError(value: string, required: boolean) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return required ? "Email is required for large-order verification." : undefined;
+  }
+  if (!EMAIL_PATTERN.test(trimmed)) {
+    return "Enter a valid email address.";
+  }
+  return undefined;
+}
+
+function getPhoneError(value: string) {
+  const localDigits = normalizeNepalPhoneLocal(value);
+  if (!localDigits) {
+    return "Phone number is required.";
+  }
+  if (localDigits.length !== NEPAL_PHONE_LOCAL_LENGTH) {
+    return "Enter a valid 10-digit Nepal mobile number.";
+  }
+  return undefined;
+}
+
+function resolveCheckoutItemColor(item: CartState["items"][number]) {
+  const explicitColor = String(item.variant.color ?? "").trim();
+  if (explicitColor && explicitColor.toLowerCase() !== "default") {
+    return explicitColor;
+  }
+
+  const matchedVariantColor = item.product.variants
+    ?.find((variant) => {
+      const sameSize = String(variant.size ?? "").trim() === String(item.variant.size ?? "").trim();
+      const sameColor = String(variant.color ?? "").trim() === explicitColor;
+      return sameSize && (sameColor || !explicitColor || explicitColor.toLowerCase() === "default");
+    })
+    ?.color
+    ?.trim();
+
+  if (matchedVariantColor && matchedVariantColor.toLowerCase() !== "default") {
+    return matchedVariantColor;
+  }
+
+  const firstAvailableColor = item.product.variants
+    ?.map((variant) => String(variant.color ?? "").trim())
+    .find((color) => color && color.toLowerCase() !== "default");
+
+  return firstAvailableColor || explicitColor || "Default";
+}
+
 export default function Checkout() {
   const [, setLocation] = useLocation();
   const { items, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
@@ -115,6 +186,7 @@ export default function Checkout() {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
   const [address, setAddress] = useState("");
+  const [landmark, setLandmark] = useState("");
   const [phone, setPhone] = useState("");
 
   useEffect(() => {
@@ -127,7 +199,8 @@ export default function Checkout() {
         if (data.email) setEmail(data.email);
         if (data.fullName) setFullName(data.fullName);
         if (data.address) setAddress(data.address);
-        if (data.phone) setPhone(data.phone);
+        if (data.landmark) setLandmark(data.landmark);
+        if (data.phone) setPhone(normalizeNepalPhoneLocal(data.phone));
         if (data.paymentMethod) setPaymentMethod(data.paymentMethod);
         if (data.deliveryLocation) setDeliveryLocation(data.deliveryLocation);
       }
@@ -142,6 +215,7 @@ export default function Checkout() {
         email,
         fullName,
         address,
+        landmark,
         phone,
         paymentMethod,
         deliveryLocation,
@@ -276,12 +350,13 @@ export default function Checkout() {
     mutationFn: createOrder,
   });
 
-  const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   
   const fieldRefs = {
     email: useRef<HTMLInputElement>(null),
     fullName: useRef<HTMLInputElement>(null),
     address: useRef<HTMLInputElement>(null),
+    landmark: useRef<HTMLInputElement>(null),
     phone: useRef<HTMLInputElement>(null),
     deliveryLocation: useRef<HTMLDivElement>(null),
   };
@@ -339,6 +414,7 @@ export default function Checkout() {
     emailVal,
     fullNameVal,
     addressVal,
+    landmarkVal,
     phoneVal,
     deliveryLocationVal,
   }: PendingCheckoutContinuation) => {
@@ -347,7 +423,8 @@ export default function Checkout() {
         email: emailVal,
         fullName: fullNameVal,
         address: addressVal,
-        phone: phoneVal,
+        landmark: landmarkVal,
+        phone: normalizeNepalPhoneLocal(phoneVal),
         deliveryLocation: deliveryLocationVal,
       });
 
@@ -570,26 +647,32 @@ export default function Checkout() {
   const handlePlaceOrder = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError(null);
-    const newErrors: Record<string, boolean> = {};
+    const newErrors: Record<string, string> = {};
 
     const formData = new FormData(event.currentTarget);
 
-    const emailVal = email || String(formData.get("email") || "").trim();
-    const fullNameVal = fullName || String(formData.get("fullName") || "").trim();
-    const addressVal = address || String(formData.get("address") || "").trim();
-    const phoneVal = phone || String(formData.get("phone") || "").trim();
+    const emailVal = (email || String(formData.get("email") || "")).trim();
+    const fullNameVal = (fullName || String(formData.get("fullName") || "")).trim();
+    const addressVal = (address || String(formData.get("address") || "")).trim();
+    const landmarkVal = (landmark || String(formData.get("landmark") || "")).trim();
+    const phoneLocalVal = normalizeNepalPhoneLocal(phone || String(formData.get("phone") || ""));
+    const phoneVal = buildNepalPhoneNumber(phoneLocalVal);
     const deliveryLocationVal = deliveryLocation.trim() || String(formData.get("deliveryLocation") || "").trim();
 
-    if (!fullNameVal) newErrors.fullName = true;
-    if (!phoneVal) newErrors.phone = true;
-    if (!deliveryLocationVal) newErrors.deliveryLocation = true;
-    if (!emailVal && totalQuantity > MAX_NEW_CUSTOMER_ITEMS) newErrors.email = true;
+    if (!fullNameVal) newErrors.fullName = "Full name is required.";
+
+    const phoneError = getPhoneError(phoneLocalVal);
+    if (phoneError) newErrors.phone = phoneError;
+
+    if (!deliveryLocationVal) newErrors.deliveryLocation = "Delivery location is required.";
+
+    const emailError = getEmailError(emailVal, totalQuantity > MAX_NEW_CUSTOMER_ITEMS);
+    if (emailError) newErrors.email = emailError;
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       setFormError("Please fill in all required fields.");
       
-      // Scroll to first error
       const firstField = Object.keys(newErrors)[0] as keyof typeof fieldRefs;
       fieldRefs[firstField].current?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
@@ -627,7 +710,7 @@ export default function Checkout() {
       source: "website",
       deliveryRequired: true,
       deliveryProvider: null,
-      deliveryAddress: null,
+      deliveryAddress: landmarkVal || null,
       promoCodeId: appliedPromo?.id,
     };
 
@@ -640,6 +723,7 @@ export default function Checkout() {
         emailVal,
         fullNameVal,
         addressVal,
+        landmarkVal,
         phoneVal,
         deliveryLocationVal,
       };
@@ -671,16 +755,22 @@ export default function Checkout() {
         canonicalPath="/checkout"
         noIndex
       />
-      <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6 lg:pb-20">
-      <div className="flex flex-col lg:flex-row gap-20">
+      <div
+        className="container mx-auto max-w-7xl px-4 pb-16 lg:pb-20"
+        style={{ paddingTop: "calc(var(--nav-h) + 2rem)" }}
+      >
+      <div className="flex flex-col gap-16 lg:flex-row">
         <form
           data-testid="checkout-form"
-          className="flex-1 space-y-12"
+          className="flex-1 space-y-14"
           onSubmit={handlePlaceOrder}
         >
-          <div className="space-y-10">
+          <div className="space-y-12">
             <div>
-              <h2 className="text-xl font-black uppercase tracking-tighter mb-8">Contact</h2>
+              <div className="mb-6 border-b border-zinc-200 pb-4">
+                <h2 className="text-xl font-black uppercase tracking-tighter">Contact</h2>
+                <p className="mt-2 text-sm text-muted-foreground">Use the phone number our delivery team should call if they need help reaching you.</p>
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
@@ -691,26 +781,43 @@ export default function Checkout() {
                     name="fullName"
                     placeholder="Full name"
                     data-testid="checkout-full-name"
-                    defaultValue={fullName}
+                    value={fullName}
                     onChange={(e) => { setFullName(e.target.value); clearError("fullName"); }}
                     className={`h-14 rounded-none transition-colors ${errors.fullName ? "border-red-500 border-2" : "border-gray-200"}`}
                   />
-                  {errors.fullName && <p className="text-[10px] text-red-500 uppercase font-bold">Full name is required</p>}
+                  {errors.fullName && <p className="text-[10px] text-red-500 uppercase font-bold">{errors.fullName}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
                     Phone <span className="text-red-500">*</span>
                   </label>
-                  <Input
-                    ref={fieldRefs.phone}
-                    name="phone"
-                    placeholder="Phone"
-                    data-testid="checkout-phone"
-                    defaultValue={phone}
-                    onChange={(e) => { setPhone(e.target.value); clearError("phone"); }}
-                    className={`h-14 rounded-none transition-colors ${errors.phone ? "border-red-500 border-2" : "border-gray-200"}`}
-                  />
-                  {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">Phone is required</p>}
+                  <div
+                    className={`relative flex h-14 overflow-hidden rounded-none border transition-colors ${
+                      errors.phone ? "border-2 border-red-500" : "border-gray-200"
+                    }`}
+                  >
+                    <div className="pointer-events-none flex items-center gap-2 border-r border-gray-200 bg-zinc-50 px-4">
+                      <img src="/nepal-flag-icon.svg" alt="Nepal flag" className="h-4 w-6 object-cover" />
+                      <span className="text-sm font-semibold tracking-wide text-zinc-700">{NEPAL_PHONE_COUNTRY_CODE}</span>
+                    </div>
+                    <Input
+                      ref={fieldRefs.phone}
+                      name="phone"
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="98XXXXXXXX"
+                      data-testid="checkout-phone"
+                      value={phone}
+                      onChange={(e) => {
+                        setPhone(normalizeNepalPhoneLocal(e.target.value));
+                        clearError("phone");
+                      }}
+                      className="h-full rounded-none border-0 px-4 shadow-none focus-visible:ring-0"
+                      maxLength={NEPAL_PHONE_LOCAL_LENGTH}
+                    />
+                  </div>
+                  {errors.phone && <p className="text-[10px] text-red-500 uppercase font-bold">{errors.phone}</p>}
                 </div>
               </div>
             </div>
@@ -718,12 +825,12 @@ export default function Checkout() {
             <div>
               <div className="mb-5">
                 <h2 className="text-xl font-black uppercase tracking-tighter">Additional Details</h2>
-                <p className="mt-2 text-sm text-muted-foreground">Name, phone, and delivery location are required. Everything else is optional.</p>
+                <p className="mt-2 text-sm text-muted-foreground">Add address notes, landmark details, and any extra context that helps the rider find you faster.</p>
               </div>
               <div className="space-y-4">
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                    Email Address {totalQuantity > MAX_NEW_CUSTOMER_ITEMS ? <span className="text-red-500">*</span> : <span className="text-muted-foreground/60">(optional)</span>}
+                    Email Address {totalQuantity > MAX_NEW_CUSTOMER_ITEMS ? <span className="text-red-500">*</span> : null}
                   </label>
                   <Input
                     ref={fieldRefs.email}
@@ -731,25 +838,52 @@ export default function Checkout() {
                     type="email"
                     placeholder="Email Address"
                     data-testid="checkout-email"
-                    defaultValue={email}
-                    onChange={(e) => { setEmail(e.target.value); clearError("email"); }}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      clearError("email");
+                    }}
+                    onBlur={(e) => {
+                      const nextError = getEmailError(e.target.value, totalQuantity > MAX_NEW_CUSTOMER_ITEMS);
+                      if (nextError) {
+                        setErrors((prev) => ({ ...prev, email: nextError }));
+                      }
+                    }}
                     className={`h-14 rounded-none transition-colors ${errors.email ? "border-red-500 border-2" : "border-gray-200"}`}
                   />
-                  {errors.email && <p className="text-[10px] text-red-500 uppercase font-bold">Email is required for large-order verification</p>}
+                  {errors.email && <p className="text-[10px] text-red-500 uppercase font-bold">{errors.email}</p>}
                 </div>
 
                 <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-muted-foreground">
-                    Address <span className="text-muted-foreground/60">(optional)</span>
+                    Address
                   </label>
                   <Input
                     ref={fieldRefs.address}
                     name="address"
                     placeholder="Address"
                     data-testid="checkout-address"
-                    defaultValue={address}
+                    value={address}
                     onChange={(e) => { setAddress(e.target.value); clearError("address"); }}
                     className={`h-14 rounded-none transition-colors ${errors.address ? "border-red-500 border-2" : "border-gray-200"}`}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    Landmark
+                  </label>
+                  <Input
+                    ref={fieldRefs.landmark}
+                    name="landmark"
+                    placeholder="Nearby chowk, school, temple, office, or shop"
+                    data-testid="checkout-landmark"
+                    value={landmark}
+                    onChange={(e) => {
+                      setLandmark(e.target.value);
+                      clearError("landmark");
+                    }}
+                    className="h-14 rounded-none border-gray-200 transition-colors"
                   />
                 </div>
 
@@ -767,76 +901,125 @@ export default function Checkout() {
                       error={Boolean(errors.deliveryLocation)}
                     />
                   </div>
-                  {errors.deliveryLocation && <p className="text-[10px] text-red-500 uppercase font-bold">Delivery location is required</p>}
+                  {errors.deliveryLocation && <p className="text-[10px] text-red-500 uppercase font-bold">{errors.deliveryLocation}</p>}
                 </div>
               </div>
             </div>
           </div>
 
           <div>
-            <h2 className="text-xl font-black uppercase tracking-tighter mb-6">
-              Payment Option <span className="text-red-500">*</span>
-            </h2>
-            <div className="space-y-3">
-              {PAYMENT_OPTIONS.map((opt) => {
-                const isSelected = paymentMethod === opt.id;
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    data-testid={`checkout-payment-${opt.id}`}
-                    onClick={() => setPaymentMethod(opt.id)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
-                      isSelected
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-900/5 dark:bg-white/10"
-                        : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
-                    }`}
-                  >
-                    <span
-                      className={`h-12 min-w-[140px] flex items-center justify-center shrink-0 overflow-hidden ${
-                        "logoWrapClass" in opt ? opt.logoWrapClass : ""
+            <div className="mb-6 flex items-end justify-between gap-4 border-b border-zinc-200 pb-4">
+              <div>
+                <h2 className="text-xl font-black uppercase tracking-tighter">
+                  Payment Option <span className="text-red-500">*</span>
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Choose how you&apos;d like to complete the order. Online methods move you to payment proof, while cash on delivery finishes directly from checkout.
+                </p>
+              </div>
+              <span className="hidden text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground md:block">
+                Select one route
+              </span>
+            </div>
+
+            <div className="space-y-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                {PAYMENT_OPTIONS.map((opt) => {
+                  const isSelected = paymentMethod === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      data-testid={`checkout-payment-${opt.id}`}
+                      onClick={() => setPaymentMethod(opt.id)}
+                      className={`group relative flex min-h-[104px] flex-col justify-between border px-5 py-4 text-left transition-all ${
+                        isSelected
+                          ? "border-zinc-900 bg-zinc-50"
+                          : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50/60"
                       }`}
                     >
-                      {"logoUrl" in opt ? (
-                        <img 
-                          src={opt.logoUrl} 
-                          alt={opt.label} 
-                          className={`max-w-full object-contain ${
-                            "logoImageClass" in opt ? opt.logoImageClass : "h-8 w-auto"
+                      <div className="flex items-start justify-between gap-4">
+                        <span
+                          className={`h-11 min-w-[124px] flex items-center justify-start overflow-hidden ${
+                            "logoWrapClass" in opt ? opt.logoWrapClass : ""
                           }`}
-                        />
-                      ) : null}
-                    </span>
-                    <span className="font-semibold uppercase tracking-wide text-sm text-zinc-900 dark:text-zinc-100">
-                      {opt.label}
-                    </span>
-                    {isSelected && (
-                      <CheckCircle2 className="w-5 h-5 text-zinc-900 dark:text-zinc-100 ml-auto shrink-0" />
-                    )}
-                  </button>
-                );
-              })}
+                        >
+                          {"logoUrl" in opt ? (
+                            <img
+                              src={opt.logoUrl}
+                              alt={opt.label}
+                              className={`max-w-full object-contain ${
+                                "logoImageClass" in opt ? opt.logoImageClass : "h-8 w-auto"
+                              }`}
+                            />
+                          ) : null}
+                        </span>
+                        <span
+                          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                            isSelected ? "border-zinc-900 bg-zinc-900" : "border-zinc-300 bg-white"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                              isSelected ? "bg-white" : "bg-transparent"
+                            }`}
+                          />
+                        </span>
+                      </div>
 
-              <div className="mt-6 pt-6 border-t border-gray-200">
+                      <div className="mt-5 space-y-1">
+                        <span className="block text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900">
+                          {opt.label}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="border-t border-dashed border-zinc-200 pt-5">
                 <button
                   type="button"
                   data-testid="checkout-payment-cash-on-delivery"
                   onClick={() => setPaymentMethod("cash_on_delivery")}
-                  className={`w-full flex items-center gap-4 p-4 rounded-none border-2 text-left transition-all ${
+                  className={`flex w-full items-center gap-4 border px-5 py-4 text-left transition-all ${
                     paymentMethod === "cash_on_delivery"
-                      ? "border-zinc-900 dark:border-zinc-100 bg-amber-50 dark:bg-amber-900/20"
-                      : "border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20"
+                      ? "border-zinc-900 bg-amber-50"
+                      : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50/60"
                   }`}
                 >
-                  <span className="w-12 h-12 rounded-none flex items-center justify-center text-white shrink-0 bg-amber-600">
-                    <Banknote className="w-6 h-6" />
+                  <span className={`flex h-11 w-11 items-center justify-center border ${
+                    paymentMethod === "cash_on_delivery"
+                      ? "border-amber-300 bg-amber-100 text-amber-700"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-700"
+                  }`}>
+                    <Banknote className="w-5 h-5" />
                   </span>
-                  <span className="font-semibold uppercase tracking-wide text-sm text-black dark:text-white">
-                    Cash on Delivery <span className="text-red-500">*</span>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900">
+                      Cash on Delivery <span className="text-red-500">*</span>
+                    </span>
+                    <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                      Keep it simple and pay when your order arrives.
+                    </span>
                   </span>
-                  {paymentMethod === "cash_on_delivery" && (
-                    <CheckCircle2 className="w-5 h-5 text-amber-600 ml-auto shrink-0" />
-                  )}
+
+                  <span
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                      paymentMethod === "cash_on_delivery"
+                        ? "border-zinc-900 bg-zinc-900"
+                        : "border-zinc-300 bg-white"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                        paymentMethod === "cash_on_delivery" ? "bg-white" : "bg-transparent"
+                      }`}
+                    />
+                  </span>
                 </button>
               </div>
             </div>
@@ -964,32 +1147,40 @@ export default function Checkout() {
 
         <div className="w-full lg:w-[450px] bg-zinc-50 dark:bg-zinc-900 p-10 h-fit rounded-2xl border border-zinc-200 dark:border-zinc-700 shadow-sm text-zinc-900 dark:text-zinc-100">
           <div className="space-y-6 mb-10">
-            {items.map(item => (
-              <div key={item.id} className="flex gap-4">
-                <div className="w-24 h-32 bg-muted shrink-0 relative rounded-sm overflow-hidden">
-                  <img src={item.product.images[0]} className="w-full h-full object-cover" />
-                  <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1 bg-black text-white text-[10px] flex items-center justify-center rounded-sm font-bold shadow-sm">{item.quantity}</span>
+            {items.map((item) => {
+              const summaryColor = resolveCheckoutItemColor(item);
+              const sizeLabel = String(item.variant.size ?? "").trim() || "One Size";
+              const variantSummary = summaryColor && summaryColor !== "Default"
+                ? `${sizeLabel} · ${summaryColor}`
+                : sizeLabel;
+
+              return (
+                <div key={item.id} className="flex gap-4">
+                  <div className="w-24 h-32 bg-muted shrink-0 relative rounded-sm overflow-hidden">
+                    <img src={item.product.images[0]} className="w-full h-full object-cover" />
+                    <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1 bg-black text-white text-[10px] flex items-center justify-center rounded-sm font-bold shadow-sm">{item.quantity}</span>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-[10px] font-bold uppercase tracking-widest">{item.product.name}</h4>
+                    <p className="text-[10px] text-muted-foreground uppercase">{variantSummary}</p>
+                    {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                        <BadgePercent className="h-3 w-3" />
+                        Deal applied
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
+                    <div>{formatPrice(item.product.price)}</div>
+                    {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
+                      <div className="mt-1 text-[8px] text-zinc-500 dark:text-zinc-400 line-through">
+                        {formatPrice(Number(item.product.originalPrice))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-[10px] font-bold uppercase tracking-widest">{item.product.name}</h4>
-                  <p className="text-[10px] text-muted-foreground uppercase">{item.variant.size}</p>
-                  {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
-                    <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[8px] font-black uppercase tracking-[0.16em] text-emerald-700">
-                      <BadgePercent className="h-3 w-3" />
-                      Deal applied
-                    </div>
-                  )}
-                </div>
-                <div className="text-right text-[10px] font-black uppercase tracking-widest text-zinc-900 dark:text-zinc-100">
-                  <div>{formatPrice(item.product.price)}</div>
-                  {Number(item.product.originalPrice ?? item.product.price) > item.product.price && (
-                    <div className="mt-1 text-[8px] text-zinc-500 dark:text-zinc-400 line-through">
-                      {formatPrice(Number(item.product.originalPrice))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="flex gap-2 mb-10">

@@ -217,6 +217,7 @@ export const orderItems = pgTable("order_items", {
     .references(() => products.id),
   variantId: integer("variant_id").references(() => productVariants.id),
   size: varchar("size", { length: 10 }).default(""),
+  color: varchar("color", { length: 80 }).default(""),
   quantity: integer("quantity").notNull(),
   unitPrice: numeric("unit_price", { precision: 10, scale: 2 }).notNull(),
 }, (table) => ({

@@ -6,8 +6,9 @@ import "@/styles/bill-viewer.css";
 
 interface BillItem {
   productName: string;
-  variantColor: string;
-  size: string;
+  variantColor?: string | null;
+  color?: string | null;
+  size?: string | null;
   sku: string;
   quantity: number;
   unitPrice: number;
@@ -232,9 +233,9 @@ const sourceLabels: Record<string, string> = {
               <tr key={i}>
                 <td>
                   <div>{item.productName}</div>
-                  {(item.variantColor || item.size) && (
+                  {((item.variantColor || item.color) || item.size) && (
                     <div style={{ fontSize: "11px", color: "#666" }}>
-                      {item.variantColor}{item.variantColor && item.size ? ` · ${item.size}` : item.size || ""}
+                      {item.variantColor || item.color}{(item.variantColor || item.color) && item.size ? ` · ${item.size}` : item.size || ""}
                     </div>
                   )}
                 </td>

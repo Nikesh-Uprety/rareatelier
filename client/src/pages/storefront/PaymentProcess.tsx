@@ -30,6 +30,7 @@ import {
   X,
   ZoomIn,
   Download,
+  Phone,
 } from "lucide-react";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { useCartStore } from "@/store/cart";
@@ -49,12 +50,82 @@ const FALLBACK_PAYMENT_QR = {
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
 
+const PAYMENT_RECEIVER = {
+  name: "Aaryan Raj Pradhan",
+  primaryPhone: "970-5211511",
+  alternatePhone: "+977 984-3203050",
+  bankName: "Global IME Bank",
+  accountNumber: "01234567890123",
+} as const;
+
 const PAYMENT_METHOD_SWITCH_OPTIONS = [
   { id: "esewa", label: "eSewa" },
   { id: "khalti", label: "Khalti" },
   { id: "fonepay", label: "Fonepay" },
   { id: "stripe", label: "Card" },
 ] as const;
+
+function downloadBlob(blob: Blob, filename: string) {
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(blobUrl);
+}
+
+function loadImageElement(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Unable to load QR image"));
+    image.src = src;
+  });
+}
+
+async function convertImageToJpegBlob(src: string) {
+  const response = await fetch(src, { mode: "cors" });
+  if (!response.ok) {
+    throw new Error("Download request failed");
+  }
+
+  const originalBlob = await response.blob();
+  const objectUrl = URL.createObjectURL(originalBlob);
+
+  try {
+    const image = await loadImageElement(objectUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || image.width;
+    canvas.height = image.naturalHeight || image.height;
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      throw new Error("Canvas is not available");
+    }
+
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob(
+        (jpegBlob) => {
+          if (jpegBlob) {
+            resolve(jpegBlob);
+            return;
+          }
+          reject(new Error("Unable to create JPEG file"));
+        },
+        "image/jpeg",
+        0.92,
+      );
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
 
 export default function PaymentProcess() {
   const query = useSearchQuery();
@@ -246,7 +317,10 @@ export default function PaymentProcess() {
           return;
         }
 
-        cacheLatestOrder(createdOrder);
+        const refreshedCreatedOrder = await fetchOrderById(createdOrder.id).catch(() => null);
+        const nextCreatedOrder = refreshedCreatedOrder ?? createdOrder;
+
+        cacheLatestOrder(nextCreatedOrder);
         clearPendingCheckout();
         clearCart();
         try {
@@ -254,18 +328,25 @@ export default function PaymentProcess() {
         } catch {
         }
 
-        setOrder(createdOrder);
+        setOrder(nextCreatedOrder);
         setUploaded(true);
         toast({ title: "Payment screenshot uploaded. Order created successfully." });
 
         setTimeout(() => {
-          setLocation(`/order-confirmation/${createdOrder.id}`);
-        }, 1400);
+          setLocation(`/order-confirmation/${nextCreatedOrder.id}`);
+        }, 900);
         return;
       }
 
       const result = await uploadPaymentProof(orderId, base64);
       if (result.success) {
+        const refreshedOrder = await fetchOrderById(orderId).catch(() => null);
+        const nextOrder = refreshedOrder ?? order;
+        if (nextOrder) {
+          cacheLatestOrder(nextOrder);
+          setOrder(nextOrder);
+        }
+
         clearCart();
         clearPendingCheckout();
         try {
@@ -276,7 +357,7 @@ export default function PaymentProcess() {
         toast({ title: "Payment screenshot uploaded. We will verify shortly." });
         setTimeout(() => {
           setLocation(`/order-confirmation/${orderId}`);
-        }, 2000);
+        }, 900);
       } else {
         toast({ title: result.error || "Upload failed", variant: "destructive" });
       }
@@ -376,6 +457,45 @@ export default function PaymentProcess() {
 
   const orderTotal = Number(order?.total ?? pendingCheckout?.total ?? 0);
   const confirmationOrderId = order?.id ?? orderId;
+  const normalizedMethod =
+    method === "esewa" || method === "khalti" || method === "fonepay" || method === "bank"
+      ? method
+      : "esewa";
+  const title =
+    normalizedMethod === "esewa"
+      ? "Pay with eSewa"
+      : normalizedMethod === "khalti"
+        ? "Pay with Khalti"
+        : normalizedMethod === "fonepay"
+          ? "Pay with Fonepay"
+          : "Bank Transfer";
+  const qrConfig = paymentQrQuery.data;
+  const paymentLabel =
+    normalizedMethod === "esewa"
+      ? "eSewa"
+      : normalizedMethod === "khalti"
+        ? "Khalti"
+        : normalizedMethod === "fonepay"
+          ? "Fonepay"
+          : "Bank Transfer";
+  const isBankTransfer = normalizedMethod === "bank";
+  const qrImageSrc =
+    normalizedMethod === "khalti"
+      ? qrConfig?.khaltiQrUrl
+      : normalizedMethod === "fonepay"
+        ? qrConfig?.fonepayQrUrl
+        : qrConfig?.esewaQrUrl;
+  const resolvedQrImageSrc =
+    qrImageSrc ||
+    (normalizedMethod === "khalti"
+      ? FALLBACK_PAYMENT_QR.khalti
+      : normalizedMethod === "fonepay"
+        ? FALLBACK_PAYMENT_QR.fonepay
+        : FALLBACK_PAYMENT_QR.esewa);
+
+  useEffect(() => {
+    setQrImageLoading(true);
+  }, [resolvedQrImageSrc]);
 
   if (!orderId && !hasPendingManualOrder) {
     return (
@@ -514,79 +634,23 @@ export default function PaymentProcess() {
     );
   }
 
-  const normalizedMethod =
-    method === "esewa" || method === "khalti" || method === "fonepay" || method === "bank"
-      ? method
-      : "esewa";
-
-  const title =
-    normalizedMethod === "esewa"
-      ? "Pay with eSewa"
-      : normalizedMethod === "khalti"
-        ? "Pay with Khalti"
-        : normalizedMethod === "fonepay"
-          ? "Pay with Fonepay"
-          : "Bank Transfer";
-
-  const qrConfig = paymentQrQuery.data;
-  const paymentLabel =
-    normalizedMethod === "esewa"
-      ? "eSewa"
-      : normalizedMethod === "khalti"
-        ? "Khalti"
-        : "Fonepay";
-
-  const qrImageSrc =
-    normalizedMethod === "khalti"
-      ? qrConfig?.khaltiQrUrl
-      : normalizedMethod === "fonepay"
-        ? qrConfig?.fonepayQrUrl
-        : qrConfig?.esewaQrUrl;
-  const resolvedQrImageSrc =
-    qrImageSrc ||
-    (normalizedMethod === "khalti"
-      ? FALLBACK_PAYMENT_QR.khalti
-      : normalizedMethod === "fonepay"
-        ? FALLBACK_PAYMENT_QR.fonepay
-        : FALLBACK_PAYMENT_QR.esewa);
-
-  useEffect(() => {
-    setQrImageLoading(true);
-  }, [resolvedQrImageSrc]);
-
   const handleDownloadQr = async () => {
     setDownloadingQr(true);
     try {
-      const response = await fetch(resolvedQrImageSrc, { mode: "cors" });
-      if (!response.ok) {
-        throw new Error("Download request failed");
-      }
-      const blob = await response.blob();
-      const extension = blob.type.includes("jpeg")
-        ? "jpg"
-        : blob.type.includes("webp")
-          ? "webp"
-          : "png";
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = `rare-${normalizedMethod}-qr.${extension}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-      toast({ title: `${paymentLabel} QR downloaded` });
+      const jpegBlob = await convertImageToJpegBlob(resolvedQrImageSrc);
+      downloadBlob(jpegBlob, `rare-${normalizedMethod}-qr.jpg`);
+      toast({ title: `${paymentLabel} QR downloaded as JPG` });
     } catch {
       const fallbackLink = document.createElement("a");
       fallbackLink.href = resolvedQrImageSrc;
       fallbackLink.target = "_blank";
       fallbackLink.rel = "noopener noreferrer";
-      fallbackLink.download = `rare-${normalizedMethod}-qr`;
+      fallbackLink.download = `rare-${normalizedMethod}-qr.jpg`;
       document.body.appendChild(fallbackLink);
       fallbackLink.click();
       fallbackLink.remove();
       toast({
-        title: "Opened QR image in a new tab. Save it from your browser if download did not start.",
+        title: "We could not convert the QR automatically. It has been opened so you can save it manually.",
       });
     } finally {
       setDownloadingQr(false);
@@ -594,234 +658,395 @@ export default function PaymentProcess() {
   };
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
-      <h1 className="text-2xl font-black uppercase tracking-tighter mb-2">
-        {title}
-      </h1>
-      <p className="text-muted-foreground text-sm mb-8">
-        Order total: {formatPrice(orderTotal)}
-      </p>
-
-      <div className="mb-8 flex flex-col items-center border border-gray-200 bg-gray-50 p-5 sm:p-8 dark:border-zinc-700 dark:bg-zinc-900">
-        {normalizedMethod === "bank" ? (
-          <div className="w-full text-center space-y-4">
-            <h3 className="font-bold text-lg uppercase tracking-widest text-black dark:text-zinc-100">Bank Details</h3>
-            <div className="bg-white p-6 border border-gray-200 rounded-none text-left space-y-3 dark:bg-zinc-950 dark:border-zinc-700">
-              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Bank Name:</strong> Global IME Bank</p>
-              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account Name:</strong> Nikesh Uprety</p>
-              <p className="text-sm"><strong className="font-bold uppercase tracking-wide">Account N.O:</strong> 01234567890123</p>
-            </div>
-            <p className="mt-4 text-xs text-muted-foreground text-center">
-              Please transfer the exact amount and upload the screenshot below.
+    <div className="container mx-auto max-w-6xl px-4 pb-12 pt-4 sm:pb-16 sm:pt-6">
+      <div className="space-y-12">
+        <div className="flex flex-col gap-6 border-b border-zinc-200 pb-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-3">
+            <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+              Payment Confirmation
+            </p>
+            <h1 className="text-3xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
+              {title}
+            </h1>
+            <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
+              {isBankTransfer
+                ? "Finish this order in two simple steps: make the transfer, then upload the proof so we can verify it quickly."
+                : `Finish this order in two simple steps: pay in ${paymentLabel}, then upload the proof so we can verify it quickly.`}
             </p>
           </div>
-        ) : (
-          <>
-            <div className="flex items-center gap-3 mb-4">
-              <div className={`w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 ${
-                normalizedMethod === "esewa" ? "rounded-full" : "rounded-none"
-              }`}>
-                <img 
-                  src={resolvedQrImageSrc} 
-                  alt={paymentLabel} 
-                  className={`w-full h-full object-contain ${
-                    normalizedMethod === "esewa" ? "scale-150" : ""
-                  }`}
-                />
+
+          <div className="grid min-w-full gap-2 border-t border-zinc-200 pt-4 text-sm sm:min-w-[300px] sm:border-t-0 sm:pt-0 lg:max-w-[340px]">
+            <div className="flex items-center justify-between border-b border-zinc-200 pb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Order total
+              </span>
+              <span className="text-lg font-black text-zinc-950 dark:text-zinc-50">{formatPrice(orderTotal)}</span>
+            </div>
+            {confirmationOrderId ? (
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span className="uppercase tracking-[0.18em]">Order ref</span>
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">{confirmationOrderId.slice(-8).toUpperCase()}</span>
               </div>
-              <p className="text-xs uppercase tracking-widest text-muted-foreground">
-                Scan QR code to pay with {paymentLabel}
+            ) : (
+              <p className="text-xs leading-5 text-muted-foreground">
+                Your order will be created as soon as the payment screenshot is confirmed.
               </p>
-            </div>
-            <div
-              className="group relative h-52 w-52 cursor-pointer overflow-hidden rounded-lg border border-gray-200 bg-white p-2 sm:h-64 sm:w-64 dark:border-zinc-700 dark:bg-zinc-950"
-              onClick={() => !qrImageLoading && setQrPreviewOpen(true)}
-            >
-              {qrImageLoading ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-zinc-950/90">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                    <span className="text-[11px] uppercase tracking-[0.18em]">Loading QR</span>
-                  </div>
-                </div>
-              ) : null}
-              <img
-                src={resolvedQrImageSrc}
-                alt={`${paymentLabel} QR Code`}
-                className={`w-full h-full object-contain transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-100"}`}
-                onLoad={() => setQrImageLoading(false)}
-                onError={() => setQrImageLoading(false)}
-              />
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-200 flex items-center justify-center">
-                <ZoomIn className={`w-8 h-8 text-white transition-opacity duration-200 drop-shadow-lg ${qrImageLoading ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`} />
-              </div>
-            </div>
-            <p className="mt-2 text-[10px] text-muted-foreground text-center flex items-center justify-center gap-1">
-              <ZoomIn className="w-3 h-3" />
-              Click to view full size
-            </p>
-            <div className="mt-4 grid w-full max-w-md gap-2 sm:grid-cols-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="h-11 rounded-none text-xs uppercase tracking-widest"
-                onClick={() => setQrPreviewOpen(true)}
-              >
-                <ZoomIn className="mr-2 h-4 w-4" />
-                View QR
-              </Button>
-              <Button
-                type="button"
-                className="h-11 rounded-none text-xs uppercase tracking-widest"
-                onClick={handleDownloadQr}
-                disabled={downloadingQr}
-              >
-                {downloadingQr ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download QR
-                  </>
-                )}
-              </Button>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground text-center">
-              {paymentLabel} • Nikesh Uprety • 9843010717
-            </p>
-          </>
-        )}
-      </div>
-
-      <div className="space-y-4">
-        <h2 className="text-sm font-bold uppercase tracking-widest">
-          Upload payment screenshot
-        </h2>
-        <p className="text-muted-foreground text-sm">
-          After paying, upload a screenshot of your payment confirmation. We will verify and complete your order. Maximum file size: 5 MB.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          data-testid="payment-proof-input"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-          disabled={uploading || uploaded}
-        />
-        {uploaded ? (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 p-4 border border-green-200 bg-green-50 text-green-800 rounded-none dark:border-green-900/70 dark:bg-green-950/30 dark:text-green-300">
-              <CheckCircle2 className="w-5 h-5 shrink-0" />
-              <span className="text-sm font-medium">Payment proof uploaded successfully. Redirecting to your order.</span>
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="space-y-4">
-            <Button
-              type="button"
-              data-testid="payment-proof-trigger"
-              variant="outline"
-              className="w-full h-14 rounded-none border-2 border-dashed border-gray-300 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-100"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <>
-                  <Upload className="w-5 h-5 mr-2" />
-                  {selectedProofFile ? "Choose different screenshot" : "Choose payment screenshot"}
-                </>
-              )}
-            </Button>
+        </div>
 
-            {selectedProofPreview ? (
-              <div className="space-y-4 border border-gray-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900/50">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Preview</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">{selectedProofFile?.name}</p>
-                    <p className="text-xs text-muted-foreground">Review your payment screenshot before confirming the order.</p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="rounded-none"
-                    onClick={() => {
-                      if (selectedProofPreview) URL.revokeObjectURL(selectedProofPreview);
-                      setSelectedProofPreview(null);
-                      setSelectedProofFile(null);
-                    }}
-                    disabled={uploading}
-                  >
-                    Remove
-                  </Button>
-                </div>
-                <div className="overflow-hidden border border-gray-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950">
-                  <img
-                    src={selectedProofPreview}
-                    alt="Payment screenshot preview"
-                    className="max-h-[420px] w-full object-contain"
-                  />
-                </div>
-                <Button
+        <div className="space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+            Change Payment Method
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {PAYMENT_METHOD_SWITCH_OPTIONS.map((option) => {
+              const isCurrent = option.id === method;
+              return (
+                <button
+                  key={option.id}
                   type="button"
-                  className="w-full h-14 bg-black text-white rounded-none uppercase tracking-widest text-xs font-bold"
-                  onClick={handleConfirmPaymentScreenshot}
+                  disabled={isCurrent || switchingPaymentMethod !== null}
+                  onClick={() => handleChangePaymentMethod(option.id)}
+                  className={`h-10 border px-4 text-[11px] uppercase tracking-[0.18em] transition-colors ${
+                    isCurrent
+                      ? "border-zinc-900 bg-zinc-900 text-white"
+                      : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400 hover:text-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+                  }`}
+                >
+                  {switchingPaymentMethod === option.id
+                    ? "Switching..."
+                    : isCurrent
+                      ? `${option.label} selected`
+                      : option.label}
+                </button>
+              );
+            })}
+            <Button asChild variant="ghost" className="h-10 rounded-none px-2 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <Link href="/checkout?returning=1">Back to Checkout</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
+          <section className="border border-zinc-200 bg-zinc-50/70 p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-900/40">
+            <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Step 1</p>
+                <h2 className="mt-2 text-xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
+                  {isBankTransfer ? "Transfer the amount" : `Pay with ${paymentLabel}`}
+                </h2>
+              </div>
+              <span className="max-w-[180px] text-right text-xs leading-5 text-muted-foreground">
+                {isBankTransfer ? "Use the account details exactly as shown." : "Use the QR below and pay the exact amount shown above."}
+              </span>
+            </div>
+
+            {isBankTransfer ? (
+              <div className="mt-8 space-y-6">
+                <div className="border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="grid gap-5 sm:grid-cols-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Bank Name</p>
+                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.bankName}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Account Name</p>
+                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Account No.</p>
+                      <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.accountNumber}</p>
+                    </div>
+                  </div>
+                  <div className="mt-5 grid gap-4 border-t border-dashed border-zinc-200 pt-5 sm:grid-cols-2 dark:border-zinc-800">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Primary contact</p>
+                      <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        <Phone className="h-4 w-4 text-zinc-500" />
+                        <span>{PAYMENT_RECEIVER.primaryPhone}</span>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Alternate contact</p>
+                      <div className="mt-2 flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        <Phone className="h-4 w-4 text-zinc-500" />
+                        <span>{PAYMENT_RECEIVER.alternatePhone}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 text-sm text-muted-foreground">
+                  <p>Transfer exactly {formatPrice(orderTotal)} and keep the completed payment screen visible.</p>
+                  <p>Upload one clear confirmation screenshot in the next step so we can verify the payment quickly.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(250px,320px)_1fr] lg:items-start">
+                <div className="mx-auto w-full max-w-[320px]">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900 dark:text-zinc-100">{paymentLabel} QR</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Open the full-size QR if you need a cleaner scan.</p>
+                    </div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Exact amount</p>
+                  </div>
+
+                  <div
+                    className="group relative aspect-square w-full cursor-pointer overflow-hidden border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
+                    onClick={() => !qrImageLoading && setQrPreviewOpen(true)}
+                  >
+                    {qrImageLoading ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-zinc-950/90">
+                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                          <Loader2 className="h-6 w-6 animate-spin" />
+                          <span className="text-[11px] uppercase tracking-[0.18em]">Loading QR</span>
+                        </div>
+                      </div>
+                    ) : null}
+                    <img
+                      src={resolvedQrImageSrc}
+                      alt={`${paymentLabel} QR Code`}
+                      className={`h-full w-full object-contain transition-opacity duration-300 ${qrImageLoading ? "opacity-0" : "opacity-100"}`}
+                      onLoad={() => setQrImageLoading(false)}
+                      onError={() => setQrImageLoading(false)}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/10">
+                      <ZoomIn className={`h-8 w-8 text-white drop-shadow-lg transition-opacity duration-200 ${qrImageLoading ? "opacity-0" : "opacity-0 group-hover:opacity-100"}`} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">1</span>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Open {paymentLabel}</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Scan the QR and complete the payment with the exact order amount.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">2</span>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Save the confirmation screen</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Keep the amount, payment app, and successful status visible in one clean screenshot.</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-[10px] font-bold text-zinc-700 dark:border-zinc-700 dark:text-zinc-300">3</span>
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Upload it on this page</p>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">Once you confirm the screenshot, we verify the payment and move you to the order page.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-11 rounded-none text-xs uppercase tracking-widest"
+                      onClick={() => setQrPreviewOpen(true)}
+                    >
+                      <ZoomIn className="mr-2 h-4 w-4" />
+                      View full QR
+                    </Button>
+                    <Button
+                      type="button"
+                      className="h-11 rounded-none text-xs uppercase tracking-widest"
+                      onClick={handleDownloadQr}
+                      disabled={downloadingQr}
+                    >
+                      {downloadingQr ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Downloading...
+                        </>
+                      ) : (
+                        <>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download QR
+                        </>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="border-t border-dashed border-zinc-200 pt-5 dark:border-zinc-800">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Receiver</p>
+                    <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{PAYMENT_RECEIVER.name}</p>
+                    <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-zinc-500" />
+                        <span>{PAYMENT_RECEIVER.primaryPhone}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-zinc-500" />
+                        <span>Alternate: {PAYMENT_RECEIVER.alternatePhone}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="border border-zinc-200 bg-white p-6 sm:p-8 dark:border-zinc-800 dark:bg-zinc-950/60">
+            <div className="space-y-6">
+              <div className="flex items-start justify-between gap-4 border-b border-zinc-200 pb-5 dark:border-zinc-800">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground">Step 2</p>
+                  <h2 className="mt-2 text-xl font-black uppercase tracking-tighter text-zinc-950 dark:text-zinc-50">
+                    Upload payment proof
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Upload one clear screenshot with the amount, payment app, and successful status visible. PNG, JPG, or WEBP up to 5 MB.
+                  </p>
+                </div>
+                <span className="max-w-[150px] text-right text-xs leading-5 text-muted-foreground">
+                  Final step: once confirmed, we&apos;ll redirect you to the order page.
+                </span>
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                data-testid="payment-proof-input"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChange}
+                disabled={uploading || uploaded}
+              />
+
+              {uploaded ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 border border-emerald-200 bg-emerald-50 px-4 py-4 text-emerald-800 dark:border-emerald-900/70 dark:bg-emerald-950/30 dark:text-emerald-300">
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold">Payment proof uploaded successfully.</p>
+                      <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">We&apos;re redirecting you to your order now.</p>
+                    </div>
+                  </div>
+                </div>
+              ) : selectedProofPreview ? (
+                <div className="space-y-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Selected file</p>
+                      <p className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">{selectedProofFile?.name}</p>
+                      <p className="text-xs text-muted-foreground">Make sure everything is readable before you confirm.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-none"
+                      onClick={() => {
+                        if (selectedProofPreview) URL.revokeObjectURL(selectedProofPreview);
+                        setSelectedProofPreview(null);
+                        setSelectedProofFile(null);
+                      }}
+                      disabled={uploading}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+
+                  <div className="overflow-hidden border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950">
+                    <img
+                      src={selectedProofPreview}
+                      alt="Payment screenshot preview"
+                      className="max-h-[460px] w-full object-contain"
+                    />
+                  </div>
+
+                  <div className="rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-muted-foreground dark:border-zinc-800 dark:bg-zinc-900/40">
+                    A clean screenshot helps us verify your payment faster.
+                  </div>
+
+                  <div className="border border-zinc-200 bg-white/90 p-3 dark:border-zinc-800 dark:bg-zinc-950/60">
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="group h-10 w-full rounded-none px-4 text-[11px] font-semibold uppercase tracking-[0.18em] transition-all duration-200 hover:-translate-y-0.5 hover:border-zinc-900 hover:bg-zinc-50 active:scale-[0.98] sm:w-auto"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        <Upload className="mr-2 h-4 w-4 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95" />
+                        Choose another screenshot
+                      </Button>
+                      <Button
+                        type="button"
+                        className="group h-11 w-full rounded-none bg-black px-5 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-all duration-200 hover:-translate-y-0.5 hover:bg-zinc-800 active:scale-[0.98] sm:w-auto"
+                        onClick={handleConfirmPaymentScreenshot}
+                        disabled={uploading}
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Confirming proof...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4 transition-transform duration-200 group-hover:scale-110 group-active:scale-95" />
+                            Confirm payment
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  data-testid="payment-proof-trigger"
+                  className="group flex min-h-[280px] w-full flex-col items-center justify-center gap-5 border border-dashed border-zinc-300 bg-zinc-50/70 px-6 text-center transition-all duration-200 hover:border-zinc-500 hover:bg-zinc-50 active:scale-[0.995] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900/30 dark:hover:border-zinc-500 dark:hover:bg-zinc-900/40"
+                  onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
                 >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                      Confirming payment proof...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5 mr-2" />
-                      Confirm payment screenshot
-                    </>
-                  )}
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-12 grid gap-3 border-t border-gray-100 dark:border-zinc-800 pt-8 sm:grid-cols-[1fr_auto]">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {PAYMENT_METHOD_SWITCH_OPTIONS.filter((option) => option.id !== method).map((option) => (
-            <Button
-              key={option.id}
-              type="button"
-              variant="outline"
-              className="h-11 rounded-none text-[11px] uppercase tracking-widest"
-              disabled={switchingPaymentMethod !== null}
-              onClick={() => handleChangePaymentMethod(option.id)}
-            >
-              {switchingPaymentMethod === option.id ? "Switching..." : option.label}
-            </Button>
-          ))}
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-900 transition-transform duration-200 group-hover:-translate-y-0.5 group-active:scale-95 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+                    {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+                  </span>
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900 dark:text-zinc-100">
+                      {uploading ? "Preparing upload..." : "Choose payment screenshot"}
+                    </p>
+                    <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+                      After payment, choose one clean screenshot from your gallery. One clear image is enough.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                    <span className="border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">PNG / JPG / WEBP</span>
+                    <span className="border border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-950">Max 5 MB</span>
+                  </div>
+                </button>
+              )}
+            </div>
+          </section>
         </div>
-        <Button asChild variant="outline" className="h-11 rounded-none">
-          <Link href="/checkout?returning=1">← Back to Checkout</Link>
-        </Button>
+
+        <div className="flex flex-col gap-4 border-t border-zinc-200 pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Exact amount</span>
+            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Readable proof</span>
+            <span className="border border-zinc-200 px-3 py-2 dark:border-zinc-800">Fast verification</span>
+          </div>
+          <Button asChild variant="outline" className="h-11 rounded-none">
+            <Link href="/checkout?returning=1">Back to Checkout</Link>
+          </Button>
+        </div>
       </div>
 
-      {/* QR Code Full-Screen Preview Modal */}
       <AnimatePresence>
-        {qrPreviewOpen && (
+        {qrPreviewOpen && !isBankTransfer && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
             onClick={() => setQrPreviewOpen(false)}
           >
             <motion.div
@@ -834,17 +1059,17 @@ export default function PaymentProcess() {
             >
               <button
                 onClick={() => setQrPreviewOpen(false)}
-                className="absolute -top-3 -right-3 z-10 h-10 w-10 rounded-full bg-white dark:bg-zinc-900 shadow-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors"
+                className="absolute -right-3 -top-3 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-lg transition-colors hover:bg-gray-100 dark:bg-zinc-900 dark:hover:bg-zinc-800"
                 aria-label="Close QR preview"
               >
-                <X className="w-5 h-5 text-zinc-700 dark:text-zinc-300" />
+                <X className="h-5 w-5 text-zinc-700 dark:text-zinc-300" />
               </button>
               <div className="overflow-hidden rounded-2xl bg-white p-2 shadow-2xl dark:bg-zinc-900">
                 <div className="aspect-square w-full bg-white dark:bg-zinc-950">
                   <img
                     src={resolvedQrImageSrc}
                     alt={`${paymentLabel} QR Code Full Size`}
-                    className="w-full h-full object-contain"
+                    className="h-full w-full object-contain"
                   />
                 </div>
               </div>
