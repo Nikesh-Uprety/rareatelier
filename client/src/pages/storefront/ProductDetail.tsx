@@ -8,6 +8,7 @@ import { ChevronDown, FileText, Minus, Plus, ShieldCheck, Truck } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, fetchPageConfig, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import ProductMediaStage from "@/components/product/ProductMediaStage";
@@ -626,12 +627,12 @@ export default function ProductDetail() {
   );
 
   const purchaseButtonsBlock = (
-    <div className={isStuffyClone ? "flex flex-wrap gap-3 pt-1" : "flex flex-col gap-3 pt-2"}>
+    <div className={isStuffyClone ? "flex w-full flex-col gap-2.5 pt-1 sm:w-auto sm:flex-row sm:flex-wrap sm:gap-3" : "flex flex-col gap-3 pt-2"}>
       <Button
         data-testid="product-add-to-bag"
         onClick={handleAddToCart}
         disabled={!selectedSize || selectedVariantStock === 0}
-        className={isStuffyClone ? "h-10 min-w-[9.25rem] rounded-full border border-neutral-950 bg-white px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-950 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:bg-transparent dark:text-white dark:hover:bg-white/10" : "h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"}
+        className={isStuffyClone ? "h-11 w-full rounded-full border border-neutral-950 bg-white px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-neutral-950 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-w-[9.25rem] sm:w-auto dark:border-white dark:bg-transparent dark:text-white dark:hover:bg-white/10" : "h-14 w-full rounded-none bg-black text-xs font-bold uppercase tracking-[0.2em] text-white hover:bg-gray-900 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-neutral-200"}
       >
         {!selectedSize
           ? "Select Size"
@@ -644,7 +645,7 @@ export default function ProductDetail() {
         variant="outline"
         onClick={handleBuyNow}
         disabled={!selectedSize || selectedVariantStock === 0}
-        className={isStuffyClone ? "h-10 min-w-[9.25rem] rounded-full border border-neutral-950 bg-neutral-950 px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-white transition-all hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:bg-white dark:text-black dark:hover:bg-neutral-200" : "h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"}
+        className={isStuffyClone ? "h-11 w-full rounded-full border border-neutral-950 bg-neutral-950 px-5 text-[10px] font-bold uppercase tracking-[0.22em] text-white transition-all hover:bg-black disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:min-w-[9.25rem] sm:w-auto dark:border-white dark:bg-white dark:text-black dark:hover:bg-neutral-200" : "h-14 w-full rounded-none border-zinc-900 text-xs font-bold uppercase tracking-[0.2em] text-zinc-900 transition-all hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 dark:border-white dark:text-white dark:hover:bg-white dark:hover:text-black"}
       >
         Buy Now
       </Button>
@@ -655,7 +656,7 @@ export default function ProductDetail() {
     <div className="space-y-4">
       {colorSelectorBlock ? colorSelectorBlock : null}
       {sizeSelectorBlock}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-col items-stretch gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         {quantitySelectorBlock}
         {purchaseButtonsBlock}
       </div>
@@ -668,9 +669,14 @@ export default function ProductDetail() {
     </>
   );
 
+  const mobileInlinePurchasePanel = !isStuffyClone ? (
+    <div className="space-y-6 border-y border-border/70 py-5 lg:hidden">
+      {purchasePanel}
+    </div>
+  ) : null;
 
   return (
-    <div className={`relative w-full pb-12 ${isStuffyClone ? "min-h-screen bg-white pt-[4.1rem] text-neutral-950 dark:bg-[#050505] dark:text-white lg:pt-[4.12rem]" : "px-3 pt-0 sm:px-6 lg:px-8 xl:px-10"}`}>
+    <div className={`relative w-full pb-20 ${isStuffyClone ? "min-h-screen bg-white pt-[4.1rem] text-neutral-950 dark:bg-[#050505] dark:text-white lg:pt-[4.12rem]" : "px-3 pt-0 sm:px-6 lg:px-8 xl:px-10"}`}>
       <StorefrontSeo
         title={`${product.name} | Rare Atelier`}
         description={
@@ -710,7 +716,7 @@ export default function ProductDetail() {
               : "lg:h-screen lg:grid-cols-[minmax(280px,0.95fr)_minmax(0,1.9fr)_minmax(300px,1fr)]"
           }`}
         >
-        <aside className={`space-y-4 ${isStuffyClone ? "order-2 px-4 sm:px-5 lg:order-2 lg:col-start-2 lg:self-start lg:sticky lg:top-[3.68rem] lg:space-y-2 lg:pl-5 lg:pr-6 xl:pl-6 xl:pr-8 lg:pt-0 lg:pb-5 text-neutral-950 dark:text-white" : "lg:py-24"}`}>
+        <aside className={`space-y-4 ${isStuffyClone ? "order-2 px-4 sm:px-5 lg:order-2 lg:col-start-2 lg:self-start lg:sticky lg:top-[3.68rem] lg:space-y-2 lg:pl-5 lg:pr-6 xl:pl-6 xl:pr-8 lg:pt-0 lg:pb-5 text-neutral-950 dark:text-white" : "order-2 lg:order-1 lg:py-24"}`}>
           {isStuffyClone ? (
             <div className="space-y-2 border-b border-neutral-200 pb-2 dark:border-white/10">
               <div className="space-y-2">
@@ -823,6 +829,8 @@ export default function ProductDetail() {
             </p>
           ) : null}
 
+          {mobileInlinePurchasePanel}
+
           {isStuffyClone ? (
             <div className="space-y-4 pt-2">
               {purchasePanel}
@@ -908,7 +916,7 @@ export default function ProductDetail() {
         />
 
         {!isStuffyClone ? (
-          <aside className="space-y-6 lg:py-24">
+          <aside className="order-3 hidden space-y-6 lg:block lg:py-24">
             {purchasePanel}
           </aside>
         ) : null}
@@ -944,9 +952,16 @@ export default function ProductDetail() {
             >
               <div className="relative mb-4 aspect-[3/4] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900">
                 <img
-                  src={p.imageUrl ?? ""}
+                  src={buildStorefrontImageUrl(p.imageUrl ?? "", {
+                    width: 720,
+                    height: 960,
+                    fit: "cover",
+                    quality: 80,
+                  }) || p.imageUrl || ""}
                   alt={p.name}
                   loading="lazy"
+                  decoding="async"
+                  sizes="(min-width: 768px) 25vw, 50vw"
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-700"
                 />
               </div>

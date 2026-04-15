@@ -473,12 +473,12 @@ function ProductMediaStage({
     <>
       <section
         ref={productSectionRef}
-        className={`${isStuffyClone ? "order-1 space-y-0 lg:min-w-0 lg:order-1 lg:-mt-[3.06rem] lg:py-0" : "space-y-4 lg:min-w-0 lg:py-0"}`}
+        className={`${isStuffyClone ? "order-1 space-y-0 lg:min-w-0 lg:order-1 lg:-mt-[3.06rem] lg:py-0" : "order-1 space-y-3 lg:min-w-0 lg:order-2 lg:space-y-4 lg:py-0"}`}
       >
         <div className={`relative min-w-0 ${!isMobileOrTablet && allImages.length > 1 ? "lg:sticky lg:top-[3.06rem]" : ""}`}>
           <div
             ref={productStageRef}
-            className={`relative h-[72vh] min-h-[520px] overflow-hidden sm:h-[76vh] ${
+            className={`relative h-[58svh] min-h-[340px] overflow-hidden sm:h-[70svh] sm:min-h-[440px] lg:h-[76vh] lg:min-h-[520px] ${
               isStuffyClone
                 ? "bg-transparent lg:h-[calc(100dvh-3.06rem)] lg:min-h-[calc(100dvh-3.06rem)]"
                 : "rounded-sm border border-border/60 bg-black/5 dark:border-white/10 dark:bg-black/35"
@@ -530,6 +530,7 @@ function ProductMediaStage({
                 fetchPriority={selectedImageIndex === 0 ? "high" : "auto"}
                 width={1600}
                 height={2000}
+                sizes={isMobileOrTablet ? "100vw" : "(min-width: 1024px) 58vw, 100vw"}
                 className={`absolute inset-0 z-20 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
                 style={
                   isStuffyClone
@@ -559,6 +560,7 @@ function ProductMediaStage({
                       fetchPriority={index === selectedImageIndex || index === 0 ? "high" : "auto"}
                       width={1600}
                       height={2000}
+                      sizes="(min-width: 1024px) 58vw, 100vw"
                       className={`absolute inset-0 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
                       style={
                         isStuffyClone
@@ -586,7 +588,7 @@ function ProductMediaStage({
                       event.stopPropagation();
                       previewImage(i);
                     }}
-                    className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
+                    className={`snap-start h-16 w-12 overflow-hidden rounded-sm border transition-all sm:h-20 sm:w-16 ${
                       selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
                     }`}
                     aria-label={`View image ${i + 1}`}
@@ -598,6 +600,7 @@ function ProductMediaStage({
                       decoding="async"
                       width={120}
                       height={150}
+                      sizes="(max-width: 640px) 48px, 64px"
                       className="h-full w-full object-cover object-top"
                     />
                   </button>
@@ -677,6 +680,7 @@ function ProductMediaStage({
                       decoding="async"
                       width={140}
                       height={175}
+                      sizes="68px"
                       className="h-full w-full object-cover"
                     />
                   </button>
@@ -731,6 +735,7 @@ function ProductMediaStage({
                     fetchPriority={index === gallerySelectedImageIndex ? "high" : "auto"}
                     width={2200}
                     height={2800}
+                    sizes="100vw"
                     className="block h-auto w-full select-none"
                     style={{ imageRendering: "auto" }}
                   />

@@ -11,6 +11,7 @@ import {
   type ProductApi,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { useThemeStore } from "@/store/theme";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
@@ -580,7 +581,7 @@ export default function Products() {
         }}
       />
 
-      <div className="shop-page-surface w-full px-3 pr-1 sm:px-4 sm:pr-2 lg:px-6 xl:px-7 2xl:px-8">
+      <div className="shop-page-surface w-full px-3 sm:px-4 lg:px-6 xl:px-7 2xl:px-8">
         <div className="shop-page-content min-h-[400px] text-neutral-900">
           {layoutConfig.showCategoryMenu && categoryMenuOptions.length > 1 ? (
             <div className="mb-4 md:hidden">
@@ -627,7 +628,7 @@ export default function Products() {
           ) : paginatedProducts.length > 0 ? (
             <div>
               <div
-                className={`grid grid-cols-2 gap-x-2.5 gap-y-1.5 p-1 sm:gap-x-3 lg:gap-x-4 ${desktopGridClassName}`}
+                className={`grid grid-cols-2 gap-x-3 gap-y-5 p-1 sm:gap-x-3 sm:gap-y-6 lg:gap-x-4 ${desktopGridClassName}`}
               >
                 {paginatedProducts.map((product, index) => {
                   const hoverImage = getHoverImage(product);
@@ -650,6 +651,22 @@ export default function Products() {
                   const primaryImage = activeColorImages[0] ?? mainImage;
                   const secondaryImage =
                     activeColorImages[1] ?? hoverImage ?? primaryImage;
+                  const optimizedPrimaryImage = buildStorefrontImageUrl(primaryImage, {
+                    width: isStuffyClone ? 920 : 880,
+                    height: isStuffyClone ? 1100 : 1460,
+                    fit: "cover",
+                    quality: 82,
+                  });
+                  const optimizedSecondaryImage =
+                    secondaryImage !== primaryImage
+                      ? buildStorefrontImageUrl(secondaryImage, {
+                          width: isStuffyClone ? 920 : 880,
+                          height: isStuffyClone ? 1100 : 1460,
+                          fit: "cover",
+                          quality: 82,
+                        })
+                      : optimizedPrimaryImage;
+                  const shouldRenderSecondaryImage = optimizedSecondaryImage !== optimizedPrimaryImage;
                   const hasSaleBadge = Boolean(
                     product.saleActive && Number(product.salePercentage) > 0,
                   );
@@ -668,6 +685,7 @@ export default function Products() {
                           (1 - Number(product.salePercentage) / 100),
                       )
                     : formatPrice(product.price);
+                  const shouldPrioritizeCard = index < 4;
 
                   return (
                     <Link
@@ -680,7 +698,7 @@ export default function Products() {
                           className={`shop-card-frame relative overflow-hidden rounded-none border ${
                             isStuffyClone
                               ? "aspect-[5/6] border-neutral-100 bg-white"
-                              : "aspect-[3/5] border-neutral-100 bg-white"
+                              : "aspect-[3/4.35] border-neutral-100 bg-white sm:aspect-[3/5]"
                           }`}
                         >
                           {showNewInBadge ? (
@@ -703,38 +721,44 @@ export default function Products() {
                             </div>
                           ) : null}
                           <img
-                            src={primaryImage}
+                            src={optimizedPrimaryImage || primaryImage}
                             alt={product.name}
-                            loading="lazy"
+                            loading={shouldPrioritizeCard ? "eager" : "lazy"}
+                            decoding={shouldPrioritizeCard ? "sync" : "async"}
+                            fetchPriority={shouldPrioritizeCard ? "high" : "auto"}
+                            sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 50vw"
                             className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                              shouldRenderSecondaryImage
+                                ? isStuffyClone
+                                  ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
+                                : "opacity-100"
                             }`}
                           />
-                          <img
-                            src={secondaryImage}
-                            alt={product.name}
-                            loading="lazy"
-                            className={`absolute inset-0 h-full w-full object-cover ${
-                              isStuffyClone
-                                ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                            }`}
-                          />
+                          {shouldRenderSecondaryImage ? (
+                            <img
+                              src={optimizedSecondaryImage}
+                              alt={product.name}
+                              loading="lazy"
+                              decoding="async"
+                              sizes="(min-width: 1280px) 25vw, (min-width: 640px) 33vw, 50vw"
+                              className={`absolute inset-0 h-full w-full object-cover ${
+                                isStuffyClone
+                                  ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
+                                  : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                              }`}
+                            />
+                          ) : null}
                         </div>
                       </div>
 
-                      <div className="shop-card-meta mt-2 space-y-1.5 text-neutral-950">
+                      <div className="shop-card-meta mt-2 space-y-2 text-neutral-950">
                         <div className="min-w-0 space-y-1">
                           <h3
-                            className="shop-card-title truncate text-[rgb(17,17,17)]"
+                            className="shop-card-title line-clamp-2 min-h-[2.2rem] text-[13px] font-normal leading-[1.1rem] text-[rgb(17,17,17)] sm:min-h-[3.4rem] sm:text-[18px] sm:leading-[27px]"
                             style={{
                               fontFamily:
                                 "Roboto, ui-sans-serif, system-ui, sans-serif",
-                              fontWeight: 400,
-                              fontSize: "18px",
-                              lineHeight: "27px",
                             }}
                           >
                             {product.name}

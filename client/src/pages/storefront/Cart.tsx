@@ -309,16 +309,16 @@ export default function Cart() {
         noIndex
       />
       <div className="container mx-auto max-w-7xl px-4 pb-16 pt-4 sm:pt-6">
-      <h1 className="text-4xl font-black uppercase tracking-tighter mb-16 italic underline decoration-zinc-100 dark:decoration-white/5 underline-offset-[20px]">Your Bag</h1>
+      <h1 className="mb-10 text-3xl font-black uppercase tracking-tighter italic underline decoration-zinc-100 underline-offset-[16px] dark:decoration-white/5 sm:mb-16 sm:text-4xl sm:underline-offset-[20px]">Your Bag</h1>
 
-      <div className="flex flex-col lg:flex-row gap-20">
+      <div className="flex flex-col gap-10 lg:flex-row lg:gap-20">
         <div className="flex-1">
           {/* Glassmorphism Items Container */}
-          <div className="rounded-3xl p-6 lg:p-8 backdrop-blur-xl bg-black/[0.03] dark:bg-white/[0.05] border border-black/[0.06] dark:border-white/[0.08] shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+          <div className="rounded-3xl border border-black/[0.06] bg-black/[0.03] p-4 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] sm:p-6 lg:p-8">
             <div className="divide-y divide-black/[0.04] dark:divide-white/[0.06]">
               {items.map((item) => (
-                <div key={item.id} className="py-7 flex gap-6 group transition-all duration-300 hover:bg-white/40 dark:hover:bg-white/[0.03] -mx-6 lg:-mx-8 px-6 lg:px-8 first:rounded-t-2xl last:rounded-b-2xl">
-                  <Link href={`/product/${item.product.id}`} className="w-24 h-32 lg:w-28 lg:h-36 bg-white dark:bg-white/[0.04] shrink-0 block border border-black/[0.04] dark:border-white/[0.06] p-1 rounded-xl overflow-hidden flex-shrink-0 transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-lg">
+                <div key={item.id} className="group -mx-4 flex gap-4 px-4 py-5 transition-all duration-300 hover:bg-white/40 dark:hover:bg-white/[0.03] sm:-mx-6 sm:gap-6 sm:px-6 lg:-mx-8 lg:px-8 first:rounded-t-2xl last:rounded-b-2xl">
+                  <Link href={`/product/${item.product.id}`} className="block h-28 w-20 shrink-0 overflow-hidden rounded-xl border border-black/[0.04] bg-white p-1 transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-lg dark:border-white/[0.06] dark:bg-white/[0.04] sm:h-32 sm:w-24 lg:h-36 lg:w-28">
                     <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover rounded-lg" />
                   </Link>
                   <div className="flex-1 flex flex-col">
@@ -410,7 +410,7 @@ export default function Cart() {
 
         <div className="w-full lg:w-[400px]">
           {/* Glassmorphism Summary Card */}
-          <div className="backdrop-blur-xl bg-black/[0.03] dark:bg-white/[0.05] p-10 lg:p-12 border border-black/[0.06] dark:border-white/[0.08] rounded-3xl sticky top-32 shadow-[0_8px_32px_rgba(0,0,0,0.04)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
+          <div className="sticky top-24 rounded-3xl border border-black/[0.06] bg-black/[0.03] p-5 shadow-[0_8px_32px_rgba(0,0,0,0.04)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:shadow-[0_8px_32px_rgba(0,0,0,0.3)] sm:p-8 lg:top-32 lg:p-12">
             <h2 className="text-xl font-black uppercase tracking-tighter mb-10 italic text-zinc-900 dark:text-zinc-100">Checkout Summary</h2>
             
             <div className="space-y-5 text-[10px] uppercase tracking-widest font-black mb-12">
