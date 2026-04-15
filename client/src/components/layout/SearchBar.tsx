@@ -4,12 +4,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { useClickAway } from "react-use";
 
 interface SearchBarProps {
   iconColor?: string;
   minimal?: boolean;
 }
+
+const SEARCH_SUGGESTION_IMAGE_DIMENSIONS = getStorefrontImagePresetOptions("galleryThumb");
 
 export default function SearchBar({ iconColor, minimal = false }: SearchBarProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -159,9 +162,18 @@ export default function SearchBar({ iconColor, minimal = false }: SearchBarProps
                     >
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
                         <img
-                          src={product.imageUrl || "/placeholder.png"}
+                          src={
+                            buildStorefrontPresetImageUrl(product.imageUrl, "galleryThumb") ||
+                            product.imageUrl ||
+                            "/placeholder.png"
+                          }
                           alt={product.name}
                           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          loading="lazy"
+                          decoding="async"
+                          width={SEARCH_SUGGESTION_IMAGE_DIMENSIONS.width}
+                          height={SEARCH_SUGGESTION_IMAGE_DIMENSIONS.height}
+                          sizes="48px"
                         />
                       </div>
                       <div className="flex-1 min-w-0">

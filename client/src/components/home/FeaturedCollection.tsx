@@ -5,6 +5,13 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { FeaturedProductCard } from "@/components/home/FeaturedProductCard";
 import { formatPrice } from "@/lib/format";
+import {
+  buildStorefrontPresetImageUrl,
+  getStorefrontImagePresetOptions,
+  getStorefrontProductImageSources,
+} from "@/lib/storefrontImage";
+
+const FEATURED_COLLECTION_CARD_DIMENSIONS = getStorefrontImagePresetOptions("collectionCard");
 
 interface FeaturedCollectionProps {
   featuredProducts: any[];
@@ -224,6 +231,8 @@ function MaisonNocturneFeatured({
                 : index % 2 === 0
                   ? { label: "New", bg: "var(--gold)", color: "var(--bg)" }
                   : { label: "SS25", bg: "transparent", color: "var(--fg)" };
+              const productImage =
+                getStorefrontProductImageSources(product.imageUrl, product.galleryUrls)[0] ?? "";
 
               return (
                 <Link
@@ -238,9 +247,15 @@ function MaisonNocturneFeatured({
                   <div className="relative overflow-hidden border border-[var(--border)] bg-black/20">
                     <div className="aspect-[3/4] overflow-hidden">
                       <img
-                        src={product.imageUrl ?? ""}
+                        src={buildStorefrontPresetImageUrl(productImage, "collectionCard") || productImage}
                         alt={product.name}
                         className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06] group-hover:brightness-110"
+                        loading={index < 2 ? "eager" : "lazy"}
+                        decoding={index < 2 ? "sync" : "async"}
+                        fetchPriority={index < 2 ? "high" : "auto"}
+                        width={FEATURED_COLLECTION_CARD_DIMENSIONS.width}
+                        height={FEATURED_COLLECTION_CARD_DIMENSIONS.height}
+                        sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 28vw"
                       />
                     </div>
                     <span
@@ -364,6 +379,8 @@ function NikeshDesignFeatured({
                 : index % 3 === 0
                   ? { label: "New", bg: "var(--gold)", color: "var(--bg)" }
                   : { label: "SS25", bg: "transparent", color: "var(--fg)" };
+              const productImage =
+                getStorefrontProductImageSources(product.imageUrl, product.galleryUrls)[0] ?? "";
 
               return (
                 <Link
@@ -375,9 +392,15 @@ function NikeshDesignFeatured({
                   <div className="relative overflow-hidden rounded-[1.15rem] border border-white/85 bg-white p-1.5 shadow-[0_20px_44px_-28px_rgba(15,23,42,0.34)] dark:border-white/14 dark:bg-[#121212]">
                     <div className="aspect-[3/4] overflow-hidden rounded-[0.95rem] border border-white/15 bg-black/20">
                       <img
-                        src={product.imageUrl ?? ""}
+                        src={buildStorefrontPresetImageUrl(productImage, "collectionCard") || productImage}
                         alt={product.name}
                         className="h-full w-full object-cover transition duration-700 group-hover:scale-[1.06] group-hover:brightness-110"
+                        loading={index < 2 ? "eager" : "lazy"}
+                        decoding={index < 2 ? "sync" : "async"}
+                        fetchPriority={index < 2 ? "high" : "auto"}
+                        width={FEATURED_COLLECTION_CARD_DIMENSIONS.width}
+                        height={FEATURED_COLLECTION_CARD_DIMENSIONS.height}
+                        sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 28vw"
                       />
                     </div>
                     <span

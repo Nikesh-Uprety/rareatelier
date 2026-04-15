@@ -7,6 +7,7 @@ import { fetchProducts, type ProductApi } from "@/lib/api";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import ThreeDHoverGallery from "@/components/ui/3d-hover-gallery";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { useThemeStore } from "@/store/theme";
 
 type SiteAsset = {
@@ -96,6 +97,7 @@ const PHOTO_CARD_ASPECTS = [
   "aspect-[3/4]",
   "aspect-[5/6]",
 ];
+const GALLERY_SELECTED_PRODUCT_DIMENSIONS = getStorefrontImagePresetOptions("collectionCard");
 
 async function fetchJsonArray<T>(url: string): Promise<T[]> {
   const response = await fetch(url);
@@ -411,10 +413,14 @@ export default function Gallery() {
                       >
                         <div className="aspect-[4/5] overflow-hidden">
                           <img
-                            src={image}
+                            src={buildStorefrontPresetImageUrl(image, "collectionCard") || image}
                             alt={product.name}
                             loading="lazy"
+                            decoding="async"
                             className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                            width={GALLERY_SELECTED_PRODUCT_DIMENSIONS.width}
+                            height={GALLERY_SELECTED_PRODUCT_DIMENSIONS.height}
+                            sizes="(max-width: 640px) 92vw, (max-width: 1280px) 46vw, 23vw"
                           />
                         </div>
                         <div className="space-y-2 px-4 py-4">

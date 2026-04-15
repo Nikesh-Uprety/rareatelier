@@ -18,6 +18,7 @@ import {
   validatePromoCode,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 const CHECKOUT_FORM_KEY = "ra-checkout-form-data";
@@ -26,6 +27,7 @@ const DEFAULT_VERIFICATION_RESEND_COOLDOWN_SECONDS = 60;
 const NEPAL_PHONE_COUNTRY_CODE = "+977";
 const NEPAL_PHONE_LOCAL_LENGTH = 10;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CHECKOUT_SUMMARY_IMAGE_DIMENSIONS = getStorefrontImagePresetOptions("galleryThumb");
 
 const PAYMENT_OPTIONS = [
   {
@@ -1179,11 +1181,23 @@ export default function Checkout() {
               const variantSummary = summaryColor && summaryColor !== "Default"
                 ? `${sizeLabel} · ${summaryColor}`
                 : sizeLabel;
+              const checkoutImage = item.product.images[0] ?? "";
 
               return (
                 <div key={item.id} className="flex gap-4">
                   <div className="w-24 h-32 bg-muted shrink-0 relative rounded-sm overflow-hidden">
-                    <img src={item.product.images[0]} className="w-full h-full object-cover" />
+                    {checkoutImage ? (
+                      <img
+                        src={buildStorefrontPresetImageUrl(checkoutImage, "galleryThumb") || checkoutImage}
+                        alt={item.product.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        decoding="async"
+                        width={CHECKOUT_SUMMARY_IMAGE_DIMENSIONS.width}
+                        height={CHECKOUT_SUMMARY_IMAGE_DIMENSIONS.height}
+                        sizes="96px"
+                      />
+                    ) : null}
                     <span className="absolute top-2 right-2 min-w-[20px] h-5 px-1 bg-black text-white text-[10px] flex items-center justify-center rounded-sm font-bold shadow-sm">{item.quantity}</span>
                   </div>
                   <div className="flex-1">

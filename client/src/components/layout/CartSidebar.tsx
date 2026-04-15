@@ -4,10 +4,12 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { formatPrice } from "@/lib/format";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemAvailableStock, useCartStore } from "@/store/cart";
 
 const SHIPPING_FEE = 100;
+const CART_SIDEBAR_IMAGE_DIMENSIONS = getStorefrontImagePresetOptions("galleryThumb");
 
 export default function CartSidebar() {
   const [, setLocation] = useLocation();
@@ -87,12 +89,23 @@ export default function CartSidebar() {
                         onClick={() => closeCartSidebar()}
                         className="h-24 w-20 shrink-0 overflow-hidden rounded-lg border border-border/50 bg-muted/40"
                       >
-                        <img
-                          src={item.product.images[0] ?? ""}
-                          alt={item.product.name}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
+                        {item.product.images[0] ? (
+                          <img
+                            src={
+                              buildStorefrontPresetImageUrl(
+                                item.product.images[0],
+                                "galleryThumb",
+                              ) || item.product.images[0]
+                            }
+                            alt={item.product.name}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                            width={CART_SIDEBAR_IMAGE_DIMENSIONS.width}
+                            height={CART_SIDEBAR_IMAGE_DIMENSIONS.height}
+                            sizes="80px"
+                          />
+                        ) : null}
                       </Link>
 
                       <div className="min-w-0 flex-1">
