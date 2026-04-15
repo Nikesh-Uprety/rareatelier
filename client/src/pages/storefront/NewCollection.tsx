@@ -8,7 +8,8 @@ import { apiRequest } from "@/lib/queryClient";
 import ThreeDHoverGallery from "@/components/ui/3d-hover-gallery";
 import { useToast } from "@/hooks/use-toast";
 import { useThemeStore } from "@/store/theme";
-import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
+import StorefrontCardImage from "@/components/storefront/StorefrontCardImage";
+import { buildStorefrontPresetImageUrl } from "@/lib/storefrontImage";
 
 type SiteAsset = {
   id: string;
@@ -44,27 +45,9 @@ function RevealImage({
   index: number;
   isDark: boolean;
 }) {
-  const [isHovered, setIsHovered] = useState(false);
-
   const gallery = useMemo(() => parseGalleryUrls(product.galleryUrls), [product.galleryUrls]);
   const primaryImage = product.imageUrl ?? gallery[0] ?? "";
   const secondaryImage = gallery.length > 1 ? gallery[1] : null;
-  const optimizedPrimaryImage =
-    buildStorefrontImageUrl(primaryImage, {
-      width: 760,
-      height: 950,
-      fit: "cover",
-      quality: 70,
-    }) || primaryImage;
-  const optimizedSecondaryImage =
-    secondaryImage
-      ? buildStorefrontImageUrl(secondaryImage, {
-          width: 760,
-          height: 950,
-          fit: "cover",
-          quality: 70,
-        }) || secondaryImage
-      : null;
   const shouldPrioritize = index < 6;
 
   const salePercentage = useMemo(() => {
@@ -83,77 +66,62 @@ function RevealImage({
           : undefined
       }
     >
-      <Link
-        href={`/product/${product.id}`}
-        className="group block overflow-hidden rounded-sm"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        <div className={`${COLLECTION_CARD_ASPECT} relative overflow-hidden bg-neutral-100 dark:bg-neutral-800`}>
-          <img
-            src={optimizedPrimaryImage}
-            alt={product.name}
-            loading={shouldPrioritize ? "eager" : "lazy"}
-            fetchPriority={shouldPrioritize ? "high" : "auto"}
-            decoding="async"
-            sizes={COLLECTION_IMAGE_SIZES}
-            width={760}
-            height={950}
-            className={`h-full w-full object-cover transition-[transform,opacity] duration-500 ease-out ${
-              isHovered && optimizedSecondaryImage ? "scale-[1.035] opacity-0" : "scale-100 opacity-100"
-            }`}
-            style={{
-              filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.08) contrast(1.03) brightness(1.01)",
-            }}
-          />
+      <Link href={`/product/${product.id}`} className="group block overflow-hidden rounded-sm">
+        <StorefrontCardImage
+          primarySrc={primaryImage}
+          secondarySrc={secondaryImage}
+          alt={product.name}
+          ratio={4 / 5}
+          sizes={COLLECTION_IMAGE_SIZES}
+          prioritize={shouldPrioritize}
+          primaryPreset="collectionCard"
+          secondaryPreset="collectionCard"
+          aspectClassName="rounded-sm bg-neutral-100 dark:bg-neutral-800"
+          imageClassName="object-cover"
+          imageStyle={{
+            filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.08) contrast(1.03) brightness(1.01)",
+          }}
+          renderOverlay={({ isHovered }) => (
+            <>
+              {salePercentage ? (
+                <div className="absolute left-3 top-3 z-10 rounded-sm border border-red-500 bg-red-600 px-3 py-1.5 shadow-lg shadow-red-900/30">
+                  <span className="text-xs font-black uppercase italic tracking-widest text-white">
+                    -{salePercentage}% OFF
+                  </span>
+                </div>
+              ) : null}
 
-          {optimizedSecondaryImage ? (
-            <img
-              src={optimizedSecondaryImage}
-              alt={`${product.name} alternate view`}
-              loading="lazy"
-              decoding="async"
-              sizes={COLLECTION_IMAGE_SIZES}
-              width={760}
-              height={950}
-              className={`absolute inset-0 h-full w-full object-cover transition-[transform,opacity] duration-500 ease-out ${
-                isHovered ? "scale-[1.035] opacity-100" : "scale-100 opacity-0"
-              }`}
-              style={{
-                filter: isDark ? "saturate(0.96) contrast(1.02)" : "saturate(1.08) contrast(1.03) brightness(1.01)",
-              }}
-            />
-          ) : null}
+              <div
+                className={`absolute inset-0 bg-gradient-to-t from-black/85 via-black/22 to-transparent transition-opacity duration-300 ${
+                  isHovered ? "opacity-100" : "opacity-0"
+                }`}
+              >
+                <div
+                  className={`absolute bottom-0 left-0 right-0 p-6 transition-transform duration-300 sm:p-7 ${
+                    isHovered ? "translate-y-0" : "translate-y-3"
+                  }`}
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.34em] text-white/88 drop-shadow-md">
+                      View Collection
+                    </span>
+                    <h3 className="text-lg font-bold leading-tight tracking-tight text-white drop-shadow-lg sm:text-xl">
+                      {product.name}
+                    </h3>
+                  </div>
+                </div>
 
-          {salePercentage ? (
-            <div className="absolute left-3 top-3 z-10 rounded-sm border border-red-500 bg-red-600 px-3 py-1.5 shadow-lg shadow-red-900/30">
-              <span className="text-xs font-black uppercase italic tracking-widest text-white">
-                -{salePercentage}% OFF
-              </span>
-            </div>
-          ) : null}
-
-          <div
-            className={`absolute inset-0 bg-gradient-to-t from-black/85 via-black/22 to-transparent transition-opacity duration-300 ${
-              isHovered ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            <div className="absolute bottom-0 left-0 right-0 translate-y-3 p-6 transition-transform duration-300 group-hover:translate-y-0 sm:p-7">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-[0.34em] text-white/88 drop-shadow-md">
-                  View Collection
-                </span>
-                <h3 className="text-lg font-bold leading-tight tracking-tight text-white drop-shadow-lg sm:text-xl">
-                  {product.name}
-                </h3>
+                <div
+                  className={`absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 shadow-xl transition-all duration-300 ${
+                    isHovered ? "scale-100 opacity-100" : "scale-75 opacity-0"
+                  }`}
+                >
+                  <ArrowUpRight className="h-4 w-4 text-black" />
+                </div>
               </div>
-            </div>
-
-            <div className="absolute left-1/2 top-1/2 flex h-10 w-10 -translate-x-1/2 -translate-y-1/2 scale-75 items-center justify-center rounded-full bg-white/95 opacity-0 shadow-xl transition-all duration-300 group-hover:scale-100 group-hover:opacity-100">
-              <ArrowUpRight className="h-4 w-4 text-black" />
-            </div>
-          </div>
-        </div>
+            </>
+          )}
+        />
       </Link>
     </div>
   );
@@ -220,14 +188,20 @@ export default function NewCollection() {
     
     // If we have banner assets, use them (up to maxItems)
     if (imageAssets.length > 0) {
-      return imageAssets.slice(0, maxItems);
+      return imageAssets.slice(0, maxItems).map((image) =>
+        buildStorefrontPresetImageUrl(image, "collectionCard", {
+          width: 960,
+          height: 1200,
+          quality: 72,
+        }) || image,
+      );
     }
-    
+
     // Otherwise, use default images for a beautiful gallery
     return [
       "/images/collection-banner.png",
       "/images/feature1.webp",
-      "/images/feature2.webp", 
+      "/images/feature2.webp",
       "/images/feature3.webp",
       "/images/landingpage3.webp",
       "/images/landingpage4.webp",

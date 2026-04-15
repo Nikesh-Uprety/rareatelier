@@ -1,5 +1,7 @@
 import { Helmet } from "react-helmet-async";
 
+import { STOREFRONT_IMAGE_REMOTE_ORIGINS } from "@/lib/storefrontImage";
+
 type StorefrontSeoProps = {
   title: string;
   description?: string;
@@ -40,6 +42,12 @@ export function StorefrontSeo({
   return (
     <Helmet>
       <title>{title}</title>
+      {STOREFRONT_IMAGE_REMOTE_ORIGINS.map((origin) => (
+        <link key={`preconnect-${origin}`} rel="preconnect" href={origin} crossOrigin="anonymous" />
+      ))}
+      {STOREFRONT_IMAGE_REMOTE_ORIGINS.map((origin) => (
+        <link key={`dns-${origin}`} rel="dns-prefetch" href={origin} />
+      ))}
       {description ? <meta name="description" content={description} /> : null}
       {canonicalUrl ? <link rel="canonical" href={canonicalUrl} /> : null}
       <meta property="og:title" content={title} />

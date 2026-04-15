@@ -8,7 +8,7 @@ import { ChevronDown, FileText, Minus, Plus, ShieldCheck, Truck } from "lucide-r
 import { useToast } from "@/hooks/use-toast";
 import { fetchProductById, fetchProducts, fetchPageConfig, type ProductApi, type ProductSizeChart } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
+import { buildStorefrontPresetImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import ProductMediaStage from "@/components/product/ProductMediaStage";
@@ -945,12 +945,7 @@ export default function ProductDetail() {
             >
               <div className="relative mb-4 aspect-[3/4] overflow-hidden rounded-sm bg-neutral-100 dark:bg-neutral-900">
                 <img
-                  src={buildStorefrontImageUrl(p.imageUrl, {
-                    width: 720,
-                    height: 960,
-                    fit: "cover",
-                    quality: 82,
-                  }) || p.imageUrl || ""}
+                  src={buildStorefrontPresetImageUrl(p.imageUrl, "relatedProduct") || p.imageUrl || ""}
                   alt={p.name}
                   loading="lazy"
                   decoding="async"

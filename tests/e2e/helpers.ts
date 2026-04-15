@@ -27,15 +27,22 @@ export async function loginAsSuperadmin(page: Page) {
 }
 
 export async function openFirstProduct(page: Page) {
-  await page.goto("/products");
-  const productLinks = page.locator('a[href^="/product/"]');
-  await expect(productLinks.first()).toBeVisible();
+  const productsResponse = await page.context().request.get("/api/products?limit=24");
+  expect(productsResponse.ok(), await productsResponse.text()).toBeTruthy();
+
+  const payload = (await productsResponse.json()) as {
+    success?: boolean;
+    data?: Array<{ id?: string | null }>;
+  };
+  const productIds = (payload.data ?? [])
+    .map((product) => String(product?.id ?? "").trim())
+    .filter(Boolean);
+  expect(productIds.length, "No storefront products available for E2E selection.").toBeGreaterThan(0);
 
   const sizeLabels = [/^XXS$/i, /^XS$/i, /^S$/i, /^M$/i, /^L$/i, /^XL$/i, /^XXL$/i, /^XXXL$/i, /^ONE$/i, /^One Size$/i, /^Free Size$/i];
-  const count = await productLinks.count();
 
-  for (let i = 0; i < count; i++) {
-    await productLinks.nth(i).click();
+  for (const productId of productIds) {
+    await page.goto(`/product/${productId}`);
     await expect(page).toHaveURL(/\/product\//);
 
     const buyNowButton = page.getByTestId("product-buy-now");
@@ -59,9 +66,6 @@ export async function openFirstProduct(page: Page) {
       await expect(buyNowButton).toBeEnabled();
       return;
     }
-
-    await page.goBack();
-    await expect(page).toHaveURL(/\/products/);
   }
 
   throw new Error("No purchasable product with an available size was found.");

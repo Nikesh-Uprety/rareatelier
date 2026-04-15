@@ -9,6 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { motion } from "framer-motion";
 import { useMemo } from "react";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
+
+const CART_IMAGE_DIMENSIONS = getStorefrontImagePresetOptions("galleryThumb");
 
 function getCartOriginalPrice(price: number, originalPrice?: number | null, salePercentage?: number | null, saleActive?: boolean | null) {
   const currentPrice = Number(price);
@@ -165,10 +168,20 @@ export default function Cart() {
                   <div key={item.id} className="py-6 flex gap-6 opacity-70 hover:opacity-100 transition-opacity">
                     <div className="w-24 h-30 bg-zinc-50 dark:bg-zinc-800 shrink-0 border border-gray-100 dark:border-white/10 p-1 rounded-sm overflow-hidden">
                       {item.product?.imageUrl ? (
-                        <img 
-                          src={item.product.imageUrl} 
-                          alt={item.product?.name || "Product"} 
-                          className="w-full h-full object-cover rounded-sm" 
+                        <img
+                          src={
+                            buildStorefrontPresetImageUrl(
+                              item.product.imageUrl,
+                              "galleryThumb",
+                            ) || item.product.imageUrl
+                          }
+                          alt={item.product?.name || "Product"}
+                          className="w-full h-full object-cover rounded-sm"
+                          loading="lazy"
+                          decoding="async"
+                          width={CART_IMAGE_DIMENSIONS.width}
+                          height={CART_IMAGE_DIMENSIONS.height}
+                          sizes="96px"
                         />
                       ) : (
                         <div className="w-full h-full bg-zinc-100 dark:bg-zinc-700 rounded-sm flex items-center justify-center">
@@ -319,7 +332,23 @@ export default function Cart() {
               {items.map((item) => (
                 <div key={item.id} className="py-7 flex gap-6 group transition-all duration-300 hover:bg-white/40 dark:hover:bg-white/[0.03] -mx-6 lg:-mx-8 px-6 lg:px-8 first:rounded-t-2xl last:rounded-b-2xl">
                   <Link href={`/product/${item.product.id}`} className="w-24 h-32 lg:w-28 lg:h-36 bg-white dark:bg-white/[0.04] shrink-0 block border border-black/[0.04] dark:border-white/[0.06] p-1 rounded-xl overflow-hidden flex-shrink-0 transition-all duration-300 group-hover:scale-[1.03] group-hover:shadow-lg">
-                    <img src={item.product.images[0]} alt={item.product.name} className="w-full h-full object-cover rounded-lg" />
+                    {item.product.images[0] ? (
+                      <img
+                        src={
+                          buildStorefrontPresetImageUrl(
+                            item.product.images[0],
+                            "galleryThumb",
+                          ) || item.product.images[0]
+                        }
+                        alt={item.product.name}
+                        className="w-full h-full object-cover rounded-lg"
+                        loading="lazy"
+                        decoding="async"
+                        width={CART_IMAGE_DIMENSIONS.width}
+                        height={CART_IMAGE_DIMENSIONS.height}
+                        sizes="(max-width: 1024px) 96px, 112px"
+                      />
+                    ) : null}
                   </Link>
                   <div className="flex-1 flex flex-col">
                     {(() => {

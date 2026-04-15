@@ -2,28 +2,42 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 
+import StorefrontCardImage from "@/components/storefront/StorefrontCardImage";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { getStorefrontProductImageSources } from "@/lib/storefrontImage";
 
 interface FreshReleaseSectionProps {
   config?: Record<string, any>;
 }
 
-function FreshReleaseCard({ product }: { product: ProductApi }) {
+const FRESH_RELEASE_CARD_SIZES =
+  "(max-width: 640px) 92vw, (max-width: 1280px) 44vw, (max-width: 1600px) 30vw, 23vw";
+
+function FreshReleaseCard({ product, index }: { product: ProductApi; index: number }) {
+  const productImages = getStorefrontProductImageSources(product.imageUrl, product.galleryUrls);
+  const primaryImage = productImages[0] ?? "";
+  const secondaryImage = productImages[1] ?? null;
+
   return (
     <Link
       href={`/product/${product.id}`}
       className="group block overflow-hidden rounded-2xl border border-border/60 bg-card transition-all hover:-translate-y-1 hover:shadow-xl"
     >
-      <div className="aspect-[4/5] overflow-hidden bg-muted/30">
-        {product.imageUrl ? (
-          <img
-            src={product.imageUrl}
+      <div className="overflow-hidden bg-muted/30">
+        {primaryImage ? (
+          <StorefrontCardImage
+            primarySrc={primaryImage}
+            secondarySrc={secondaryImage}
             alt={product.name}
-            className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+            ratio={4 / 5}
+            sizes={FRESH_RELEASE_CARD_SIZES}
+            prioritize={index < 2}
+            aspectClassName="rounded-none bg-muted/30"
+            imageClassName="object-cover group-hover:scale-[1.04]"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-xs uppercase tracking-[0.24em] text-muted-foreground">
+          <div className="flex aspect-[4/5] h-full w-full items-center justify-center text-xs uppercase tracking-[0.24em] text-muted-foreground">
             No Image
           </div>
         )}
@@ -117,8 +131,8 @@ export default function FreshReleaseSection({ config }: FreshReleaseSectionProps
         </div>
 
         <div className={`grid grid-cols-1 gap-6 sm:grid-cols-2 ${desktopGridClass}`}>
-          {selectedProducts.map((product) => (
-            <FreshReleaseCard key={product.id} product={product} />
+          {selectedProducts.map((product, index) => (
+            <FreshReleaseCard key={product.id} product={product} index={index} />
           ))}
         </div>
       </div>

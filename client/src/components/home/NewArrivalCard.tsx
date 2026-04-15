@@ -4,8 +4,13 @@ import { Link } from "wouter";
 
 import { formatPrice } from "@/lib/format";
 import { type ProductApi } from "@/lib/api";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
 import { getGalleryImagesForCard } from "@/components/home/FeaturedProductCard";
+import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
+
+const NEW_ARRIVAL_PRIMARY_DIMENSIONS = getStorefrontImagePresetOptions("productCardPrimary");
+const NEW_ARRIVAL_SECONDARY_DIMENSIONS = getStorefrontImagePresetOptions("productCardSecondary");
+const NEW_ARRIVAL_CARD_SIZES =
+  "(max-width: 640px) 88vw, (max-width: 1024px) 44vw, (max-width: 1440px) 28vw, 22vw";
 
 function NewArrivalCard({
   product,
@@ -27,6 +32,10 @@ function NewArrivalCard({
   }, [preferredIndex, product]);
   const primaryImage = images[0] ?? "/placeholder.svg";
   const hoverImage = images[1] ?? primaryImage;
+  const primaryImageUrl =
+    buildStorefrontPresetImageUrl(primaryImage, "productCardPrimary") || primaryImage;
+  const hoverImageUrl =
+    buildStorefrontPresetImageUrl(hoverImage, "productCardSecondary") || hoverImage;
 
   return (
     <Link href={`/product/${product.id}`} className="group block cursor-pointer">
@@ -35,17 +44,27 @@ function NewArrivalCard({
       >
         <div className="absolute inset-[6px] overflow-hidden rounded-[0.9rem]">
           <div className="absolute inset-0 transition-opacity duration-500 group-hover:opacity-0">
-            <OptimizedImage
-              src={primaryImage}
+            <img
+              src={primaryImageUrl}
               alt={product.name}
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+              loading="lazy"
+              decoding="async"
+              width={NEW_ARRIVAL_PRIMARY_DIMENSIONS.width}
+              height={NEW_ARRIVAL_PRIMARY_DIMENSIONS.height}
+              sizes={NEW_ARRIVAL_CARD_SIZES}
             />
           </div>
           <div className="absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100">
-            <OptimizedImage
-              src={hoverImage}
+            <img
+              src={hoverImageUrl}
               alt={`${product.name} alternate`}
               className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-[1.035]"
+              loading="lazy"
+              decoding="async"
+              width={NEW_ARRIVAL_SECONDARY_DIMENSIONS.width}
+              height={NEW_ARRIVAL_SECONDARY_DIMENSIONS.height}
+              sizes={NEW_ARRIVAL_CARD_SIZES}
             />
           </div>
           <div className="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-60 z-[2]" />

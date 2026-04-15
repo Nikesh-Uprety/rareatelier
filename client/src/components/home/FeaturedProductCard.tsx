@@ -5,7 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { formatPrice } from "@/lib/format";
 import { type ProductApi } from "@/lib/api";
-import { OptimizedImage } from "@/components/ui/OptimizedImage";
+import {
+  buildStorefrontPresetImageUrl,
+  getStorefrontImagePresetOptions,
+  getStorefrontProductImageSources,
+} from "@/lib/storefrontImage";
 
 const FEATURED_STATIC_IMAGES = [
   "https://cdn2.blanxer.com/uploads/67cd36dcf133882caba612b4/product_image-dsc03423-6408.webp",
@@ -17,23 +21,17 @@ const DUMMY_NEW_ARRIVAL_IMAGES = [
   "https://placehold.co/900x1200/111827/ffffff?text=RARE+ALT+2",
   "https://placehold.co/900x1200/0f172a/ffffff?text=RARE+ALT+3",
 ];
+const FEATURED_PRODUCT_CARD_SIZES =
+  "(max-width: 1024px) 88vw, (max-width: 1440px) 32vw, 26vw";
+const FEATURED_PRODUCT_PRIMARY_DIMENSIONS = getStorefrontImagePresetOptions("productCardPrimary");
+const FEATURED_PRODUCT_SECONDARY_DIMENSIONS = getStorefrontImagePresetOptions("productCardSecondary");
 
 function getGalleryImagesForCard(
   product: ProductApi,
   { addDummyFallback }: { addDummyFallback: boolean },
 ) {
-  const main = product.imageUrl ?? "";
-  const parsed = (() => {
-    try {
-      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
-      return Array.isArray(urls) ? urls.filter((u) => typeof u === "string") : [];
-    } catch {
-      return [];
-    }
-  })();
-
-  const all = [main, ...parsed].filter(Boolean);
-  if (!addDummyFallback) return all.length > 0 ? all : [main].filter(Boolean);
+  const all = getStorefrontProductImageSources(product.imageUrl, product.galleryUrls);
+  if (!addDummyFallback) return all.length > 0 ? all : [product.imageUrl ?? ""].filter(Boolean);
 
   if (all.length >= 2) return all;
   return [...all, ...DUMMY_NEW_ARRIVAL_IMAGES].filter(Boolean);
@@ -51,24 +49,24 @@ function FeaturedProductCard({
   const autoCycleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const didSwipeRef = useRef(false);
 
-  const galleryImages = (() => {
-    try {
-      const urls = product.galleryUrls ? JSON.parse(product.galleryUrls) : [];
-      const mainImg = product.imageUrl ?? "";
-      const all = mainImg ? [mainImg, ...urls] : [...urls];
-      return all.length > 0 ? all : [mainImg];
-    } catch {
-      return [product.imageUrl ?? ""];
-    }
-  })();
+  const galleryImages = getStorefrontProductImageSources(product.imageUrl, product.galleryUrls);
+  const resolvedGalleryImages = galleryImages.length
+    ? galleryImages
+    : getGalleryImagesForCard(product, { addDummyFallback: true });
+  const optimizedGalleryImages = resolvedGalleryImages.map((src, imageIndex) =>
+    buildStorefrontPresetImageUrl(
+      src,
+      imageIndex === 0 ? "productCardPrimary" : "productCardSecondary",
+    ) || src,
+  );
 
   const startAutoCycle = useCallback(() => {
-    if (galleryImages.length <= 1) return;
+    if (optimizedGalleryImages.length <= 1) return;
     if (autoCycleRef.current) clearInterval(autoCycleRef.current);
     autoCycleRef.current = setInterval(() => {
-      setMobileImageIndex((prev) => (prev + 1) % galleryImages.length);
+      setMobileImageIndex((prev) => (prev + 1) % optimizedGalleryImages.length);
     }, 2000);
-  }, [galleryImages.length]);
+  }, [optimizedGalleryImages.length]);
 
   useEffect(() => {
     startAutoCycle();
@@ -87,15 +85,15 @@ function FeaturedProductCard({
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-    if (galleryImages.length <= 1) {
+    if (optimizedGalleryImages.length <= 1) {
       startAutoCycle();
       return;
     }
     if (Math.abs(deltaX) > 50) {
       didSwipeRef.current = true;
       setMobileImageIndex((prev) => {
-        if (deltaX < 0) return (prev + 1) % galleryImages.length;
-        return (prev - 1 + galleryImages.length) % galleryImages.length;
+        if (deltaX < 0) return (prev + 1) % optimizedGalleryImages.length;
+        return (prev - 1 + optimizedGalleryImages.length) % optimizedGalleryImages.length;
       });
       setTimeout(() => {
         didSwipeRef.current = false;
@@ -112,8 +110,13 @@ function FeaturedProductCard({
   };
 
   const staticImage =
-    FEATURED_STATIC_IMAGES[index] ??
-    (product.galleryUrls ? JSON.parse(product.galleryUrls)[0] : product.imageUrl ?? "");
+    FEATURED_STATIC_IMAGES[index] ?? resolvedGalleryImages[1] ?? resolvedGalleryImages[0] ?? "";
+  const desktopPrimaryImage =
+    buildStorefrontPresetImageUrl(staticImage, "productCardPrimary") || staticImage;
+  const desktopSecondaryImage =
+    buildStorefrontPresetImageUrl(resolvedGalleryImages[0], "productCardSecondary") ||
+    resolvedGalleryImages[0] ||
+    desktopPrimaryImage;
 
   return (
     <Link href={`/product/${product.id}`} className="group cursor-pointer relative">
@@ -125,17 +128,27 @@ function FeaturedProductCard({
               whileHover={{ scale: 1.1 }}
               transition={{ duration: 0.4, ease: [0.33, 1, 0.68, 1] }}
             >
-              <OptimizedImage
-                src={staticImage}
+              <img
+                src={desktopPrimaryImage}
                 alt={`${product.name} lifestyle`}
                 className="w-full h-full object-cover transition-opacity duration-1000 ease-in-out group-hover:opacity-0"
-                priority={index < 2}
+                loading={index < 2 ? "eager" : "lazy"}
+                decoding={index < 2 ? "sync" : "async"}
+                fetchPriority={index < 2 ? "high" : "auto"}
+                width={FEATURED_PRODUCT_PRIMARY_DIMENSIONS.width}
+                height={FEATURED_PRODUCT_PRIMARY_DIMENSIONS.height}
+                sizes={FEATURED_PRODUCT_CARD_SIZES}
               />
               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-1000 ease-in-out">
-                <OptimizedImage
-                  src={product.imageUrl ?? ""}
+                <img
+                  src={desktopSecondaryImage}
                   alt={product.name}
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
+                  width={FEATURED_PRODUCT_SECONDARY_DIMENSIONS.width}
+                  height={FEATURED_PRODUCT_SECONDARY_DIMENSIONS.height}
+                  sizes={FEATURED_PRODUCT_CARD_SIZES}
                 />
               </div>
             </motion.div>
@@ -148,9 +161,9 @@ function FeaturedProductCard({
           onTouchEnd={handleTouchEnd}
           onClick={handleGalleryClick}
         >
-          {galleryImages.map((src: string, imgIdx: number) => (
+          {optimizedGalleryImages.map((src, imgIdx) => (
             <div
-              key={imgIdx}
+              key={`${src}-${imgIdx}`}
               className="absolute inset-0 transition-opacity duration-700 ease-in-out"
               style={{ opacity: imgIdx === mobileImageIndex ? 1 : 0 }}
             >
@@ -158,12 +171,26 @@ function FeaturedProductCard({
                 src={src}
                 alt={`${product.name} view ${imgIdx + 1}`}
                 className="w-full h-full object-cover"
+                loading={index === 0 && imgIdx === 0 ? "eager" : "lazy"}
+                decoding={index === 0 && imgIdx === 0 ? "sync" : "async"}
+                fetchPriority={index === 0 && imgIdx === 0 ? "high" : "auto"}
+                width={
+                  imgIdx === 0
+                    ? FEATURED_PRODUCT_PRIMARY_DIMENSIONS.width
+                    : FEATURED_PRODUCT_SECONDARY_DIMENSIONS.width
+                }
+                height={
+                  imgIdx === 0
+                    ? FEATURED_PRODUCT_PRIMARY_DIMENSIONS.height
+                    : FEATURED_PRODUCT_SECONDARY_DIMENSIONS.height
+                }
+                sizes={FEATURED_PRODUCT_CARD_SIZES}
               />
             </div>
           ))}
-          {galleryImages.length > 1 && (
+          {optimizedGalleryImages.length > 1 && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
-              {galleryImages.map((_: string, dotIdx: number) => (
+              {optimizedGalleryImages.map((_, dotIdx: number) => (
                 <div
                   key={dotIdx}
                   className={`h-1 rounded-full transition-all duration-500 ${

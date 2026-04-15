@@ -144,6 +144,8 @@ const MAX_VERIFICATION_CODE_ATTEMPTS = 5;
 const MAX_GUEST_ORDER_IDS = 24;
 const IS_E2E_TEST_MODE = process.env.E2E_TEST_MODE === "1";
 const e2eFonepayQrPollCounts = new Map<string, number>();
+const STOREFRONT_IMAGE_RENDITION_CACHE_LIMIT = 180;
+const storefrontImageRenditionCache = new Map<string, Buffer>();
 
 const STOREFRONT_IMAGE_REMOTE_HOSTS = new Set([
   "rare.t3.tigrisfiles.io",
@@ -188,6 +190,39 @@ async function loadStorefrontImageBuffer(src: string): Promise<Buffer> {
   }
 
   return Buffer.from(await response.arrayBuffer());
+}
+
+function getStorefrontImageRenditionCacheKey(
+  src: string,
+  width: number,
+  height: number | undefined,
+  fit: "cover" | "contain" | "inside",
+  quality: number,
+): string {
+  return [src, width, height ?? "auto", fit, quality].join("::");
+}
+
+function getCachedStorefrontImageRendition(cacheKey: string): Buffer | null {
+  const cached = storefrontImageRenditionCache.get(cacheKey);
+  if (!cached) return null;
+
+  storefrontImageRenditionCache.delete(cacheKey);
+  storefrontImageRenditionCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setCachedStorefrontImageRendition(cacheKey: string, outputBuffer: Buffer) {
+  if (storefrontImageRenditionCache.has(cacheKey)) {
+    storefrontImageRenditionCache.delete(cacheKey);
+  }
+
+  storefrontImageRenditionCache.set(cacheKey, outputBuffer);
+
+  while (storefrontImageRenditionCache.size > STOREFRONT_IMAGE_RENDITION_CACHE_LIMIT) {
+    const oldestKey = storefrontImageRenditionCache.keys().next().value;
+    if (!oldestKey) break;
+    storefrontImageRenditionCache.delete(oldestKey);
+  }
 }
 
 function resolveForwardedRequestBaseUrl(req: Request): string {
@@ -3340,6 +3375,21 @@ ${Array.from(uniqueEntries.entries())
         fitParam === "cover" || fitParam === "contain" ? fitParam : "inside";
       const quality = Number.isFinite(qualityParam) ? Math.min(Math.max(qualityParam, 40), 92) : 84;
 
+      const cacheKey = getStorefrontImageRenditionCacheKey(
+        srcParam,
+        width,
+        height,
+        fit,
+        quality,
+      );
+      const cachedOutputBuffer = getCachedStorefrontImageRendition(cacheKey);
+
+      if (cachedOutputBuffer) {
+        res.setHeader("Content-Type", "image/webp");
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        return res.send(cachedOutputBuffer);
+      }
+
       const inputBuffer = await loadStorefrontImageBuffer(srcParam);
       const outputBuffer = await sharp(inputBuffer, { failOn: "none" })
         .rotate()
@@ -3356,6 +3406,7 @@ ${Array.from(uniqueEntries.entries())
         })
         .toBuffer();
 
+      setCachedStorefrontImageRendition(cacheKey, outputBuffer);
       res.setHeader("Content-Type", "image/webp");
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       return res.send(outputBuffer);

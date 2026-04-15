@@ -11,8 +11,8 @@ import {
   type ProductApi,
 } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
-import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
+import StorefrontCardImage from "@/components/storefront/StorefrontCardImage";
 import { useThemeStore } from "@/store/theme";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 import {
@@ -91,6 +91,11 @@ const DESKTOP_GRID_CLASS_NAMES: Record<number, string> = {
   5: "lg:grid-cols-5 xl:grid-cols-5",
   6: "lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-6",
 };
+
+const STANDARD_PRODUCT_CARD_SIZES =
+  "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 25vw, 18vw";
+const STUFFY_PRODUCT_CARD_SIZES =
+  "(max-width: 640px) 50vw, (max-width: 1024px) 33vw, (max-width: 1536px) 20vw, 16vw";
 
 function resolveNamedColorSwatch(label: string): string | null {
   const normalized = label.trim().toLowerCase();
@@ -649,23 +654,12 @@ export default function Products() {
                     ? normalizedColorMap[normalizeColorLabel(activeColor)] ?? []
                     : [];
                   const primaryImage = activeColorImages[0] ?? mainImage;
-                  const secondaryImage =
-                    activeColorImages[1] ?? hoverImage ?? primaryImage;
-                  const optimizedPrimaryImage =
-                    buildStorefrontImageUrl(primaryImage, {
-                      width: isStuffyClone ? 960 : 720,
-                      height: isStuffyClone ? 1152 : 1200,
-                      fit: "cover",
-                      quality: 82,
-                    }) || primaryImage;
-                  const optimizedSecondaryImage =
-                    buildStorefrontImageUrl(secondaryImage, {
-                      width: isStuffyClone ? 960 : 720,
-                      height: isStuffyClone ? 1152 : 1200,
-                      fit: "cover",
-                      quality: 82,
-                    }) || secondaryImage;
+                  const secondaryImage = activeColorImages[1] ?? hoverImage ?? primaryImage;
                   const hasHoverImage = Boolean(secondaryImage && secondaryImage !== primaryImage);
+                  const shouldPrioritize = index < 4;
+                  const cardSizes = isStuffyClone
+                    ? STUFFY_PRODUCT_CARD_SIZES
+                    : STANDARD_PRODUCT_CARD_SIZES;
                   const hasSaleBadge = Boolean(
                     product.saleActive && Number(product.salePercentage) > 0,
                   );
@@ -690,67 +684,47 @@ export default function Products() {
                       key={product.id}
                       href={`/product/${product.id}?from=${encodeURIComponent(shopPath)}`}
                       className="group block"
+                      style={index > 7 ? { contentVisibility: "auto", containIntrinsicSize: "560px" } : undefined}
                     >
                       <div className="mb-1.5">
-                        <div
-                          className={`shop-card-frame relative overflow-hidden rounded-none border ${
+                        <StorefrontCardImage
+                          primarySrc={primaryImage}
+                          secondarySrc={hasHoverImage ? secondaryImage : null}
+                          alt={product.name}
+                          ratio={isStuffyClone ? 5 / 6 : 3 / 5}
+                          sizes={cardSizes}
+                          prioritize={shouldPrioritize}
+                          hoverMode={isStuffyClone ? "slide" : "fade"}
+                          aspectClassName={`shop-card-frame rounded-none border ${
                             isStuffyClone
-                              ? "aspect-[5/6] border-neutral-100 bg-white"
-                              : "aspect-[3/5] border-neutral-100 bg-white"
+                              ? "border-neutral-100 bg-white"
+                              : "border-neutral-100 bg-white"
                           }`}
-                        >
-                          {showNewInBadge ? (
-                            <div className="absolute left-3 top-3 z-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-950">
-                              NEW IN
-                            </div>
-                          ) : null}
-                          {hasSaleBadge ? (
-                            <div
-                              className={`absolute left-3 z-10 rounded-sm bg-red-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white shadow-xl ${saleBadgeTopClass}`}
-                            >
-                              {product.salePercentage}% OFF
-                            </div>
-                          ) : null}
-                          {Number(product.stock) === 0 ? (
-                            <div
-                              className={`absolute left-3 z-10 rounded bg-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white ${stockBadgeTopClass}`}
-                            >
-                              Out of Stock
-                            </div>
-                          ) : null}
-                          <img
-                            src={optimizedPrimaryImage}
-                            alt={product.name}
-                            loading="lazy"
-                            decoding="async"
-                            width={720}
-                            height={1200}
-                            sizes={isStuffyClone ? "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 20vw" : "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"}
-                            className={`absolute inset-0 h-full w-full object-cover ${
-                              hasHoverImage
-                                ? isStuffyClone
-                                  ? "translate-x-0 transition-transform duration-500 ease-out group-hover:-translate-x-full motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-100 motion-reduce:group-hover:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                  : "opacity-100 transition-opacity duration-300 group-hover:opacity-0"
-                                : ""
-                            }`}
-                          />
-                          {hasHoverImage ? (
-                            <img
-                              src={optimizedSecondaryImage}
-                              alt={product.name}
-                              loading="lazy"
-                              decoding="async"
-                              width={720}
-                              height={1200}
-                              sizes={isStuffyClone ? "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 20vw" : "(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 25vw"}
-                              className={`absolute inset-0 h-full w-full object-cover ${
-                                isStuffyClone
-                                  ? "translate-x-full transition-transform duration-500 ease-out group-hover:translate-x-0 motion-reduce:translate-x-0 motion-reduce:group-hover:translate-x-0 motion-reduce:opacity-0 motion-reduce:group-hover:opacity-100 motion-reduce:transition-opacity motion-reduce:duration-200"
-                                  : "opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-                              }`}
-                            />
-                          ) : null}
-                        </div>
+                          imageClassName="object-cover"
+                          renderOverlay={() => (
+                            <>
+                              {showNewInBadge ? (
+                                <div className="absolute left-3 top-3 z-10 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-950">
+                                  NEW IN
+                                </div>
+                              ) : null}
+                              {hasSaleBadge ? (
+                                <div
+                                  className={`absolute left-3 z-10 rounded-sm bg-red-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white shadow-xl ${saleBadgeTopClass}`}
+                                >
+                                  {product.salePercentage}% OFF
+                                </div>
+                              ) : null}
+                              {Number(product.stock) === 0 ? (
+                                <div
+                                  className={`absolute left-3 z-10 rounded bg-black px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white ${stockBadgeTopClass}`}
+                                >
+                                  Out of Stock
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        />
                       </div>
 
                       <div className="shop-card-meta mt-2 space-y-1.5 text-neutral-950">

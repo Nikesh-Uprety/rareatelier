@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
-import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
+import { buildStorefrontPresetImageUrl } from "@/lib/storefrontImage";
 
 interface ProductMediaStageProps {
   productName: string;
@@ -37,14 +37,16 @@ function ProductMediaStage({
   const [gallerySelectedImageIndex, setGallerySelectedImageIndex] = useState(0);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isGalleryVisible, setIsGalleryVisible] = useState(false);
-  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
   const [optimizedStageIndices, setOptimizedStageIndices] = useState<Set<number>>(() => new Set());
 
   const galleryCloseTimeoutRef = useRef<number | null>(null);
+  const mobileSwipeResetTimeoutRef = useRef<number | null>(null);
   const didSwipeRef = useRef(false);
+  const touchStartXRef = useRef<number | null>(null);
   const productSectionRef = useRef<HTMLElement | null>(null);
   const productStageRef = useRef<HTMLDivElement | null>(null);
+  const mobileCarouselRef = useRef<HTMLDivElement | null>(null);
   const galleryScrollRef = useRef<HTMLDivElement | null>(null);
   const galleryImageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const desktopScrollProgressRef = useRef(0);
@@ -55,41 +57,24 @@ function ProductMediaStage({
   const stageImageUrls = useMemo(
     () =>
       allImages.map((url) =>
-        buildStorefrontImageUrl(url, {
-          width: isMobileOrTablet ? 1280 : 1680,
-          height: isMobileOrTablet ? 1600 : 2200,
-          fit: "inside",
-          quality: 86,
-        }),
+        buildStorefrontPresetImageUrl(
+          url,
+          isMobileOrTablet ? "pdpStageMobile" : "pdpStageDesktop",
+          isStuffyClone ? { fit: "cover" } : undefined,
+        ),
       ),
-    [allImages, isMobileOrTablet],
+    [allImages, isMobileOrTablet, isStuffyClone],
   );
 
   const thumbnailUrls = useMemo(
-    () =>
-      allImages.map((url) =>
-        buildStorefrontImageUrl(url, {
-          width: 200,
-          height: 240,
-          fit: "cover",
-          quality: 72,
-        }),
-      ),
+    () => allImages.map((url) => buildStorefrontPresetImageUrl(url, "galleryThumb")),
     [allImages],
   );
 
-  const modalImageUrls = useMemo(
-    () =>
-      allImages.map((url) =>
-        buildStorefrontImageUrl(url, {
-          width: 2200,
-          height: 2800,
-          fit: "inside",
-          quality: 90,
-        }),
-      ),
-    [allImages],
-  );
+  const modalImageUrls = useMemo(() => {
+    if (!isGalleryOpen) return allImages;
+    return allImages.map((url) => buildStorefrontPresetImageUrl(url, "galleryFullscreen"));
+  }, [allImages, isGalleryOpen]);
 
   const desktopReelGap = isStuffyClone ? 3 : 3.5;
   const desktopRenderCenter = useMemo(() => Math.round(desktopScrollProgress), [desktopScrollProgress]);
@@ -319,6 +304,64 @@ function ProductMediaStage({
   }, [isGalleryOpen]);
 
   useEffect(() => {
+    return () => {
+      if (mobileSwipeResetTimeoutRef.current !== null) {
+        window.clearTimeout(mobileSwipeResetTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const scrollMobileCarouselToImage = useCallback((targetIndex: number, behavior: ScrollBehavior = "smooth") => {
+    const container = mobileCarouselRef.current;
+    if (!container) return;
+
+    const target = container.children.item(targetIndex) as HTMLElement | null;
+    if (!target) return;
+
+    container.scrollTo({
+      left: target.offsetLeft,
+      behavior,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileOrTablet || allImages.length <= 1) return;
+    const container = mobileCarouselRef.current;
+    if (!container) return;
+
+    let frame = 0;
+    const syncSelectedFromScroll = () => {
+      frame = 0;
+      const width = container.clientWidth || 1;
+      const nextIndex = Math.max(0, Math.min(allImages.length - 1, Math.round(container.scrollLeft / width)));
+      setSelectedImageIndex((current) => (current === nextIndex ? current : nextIndex));
+    };
+
+    const onScroll = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(syncSelectedFromScroll);
+    };
+
+    container.addEventListener("scroll", onScroll, { passive: true });
+    syncSelectedFromScroll();
+
+    return () => {
+      container.removeEventListener("scroll", onScroll);
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [allImages.length, isMobileOrTablet]);
+
+  useEffect(() => {
+    if (!isMobileOrTablet || allImages.length <= 1) return;
+    const frame = window.requestAnimationFrame(() => {
+      scrollMobileCarouselToImage(0, "auto");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [allImages.length, isMobileOrTablet, mediaResetKey, scrollMobileCarouselToImage]);
+
+  useEffect(() => {
     if (!isGalleryOpen) return;
     const raf = window.requestAnimationFrame(() => setIsGalleryVisible(true));
     return () => window.cancelAnimationFrame(raf);
@@ -343,22 +386,15 @@ function ProductMediaStage({
         setDesktopSequenceProgress(index);
         return;
       }
+      if (isMobileOrTablet && allImages.length > 1) {
+        setSelectedImageIndex(index);
+        scrollMobileCarouselToImage(index);
+        return;
+      }
       setSelectedImageIndex(index);
     },
-    [allImages.length, isMobileOrTablet, selectedImageIndex, setDesktopSequenceProgress],
+    [allImages.length, isMobileOrTablet, scrollMobileCarouselToImage, selectedImageIndex, setDesktopSequenceProgress],
   );
-
-  const goToImage = useCallback(
-    (index: number) => {
-      if (!allImages.length) return;
-      const next = (index + allImages.length) % allImages.length;
-      previewImage(next);
-    },
-    [allImages.length, previewImage],
-  );
-
-  const goToNextImage = useCallback(() => goToImage(selectedImageIndex + 1), [goToImage, selectedImageIndex]);
-  const goToPreviousImage = useCallback(() => goToImage(selectedImageIndex - 1), [goToImage, selectedImageIndex]);
 
   const scrollGalleryToImage = useCallback((targetIndex: number, behavior: ScrollBehavior = "smooth") => {
     const container = galleryScrollRef.current;
@@ -473,38 +509,25 @@ function ProductMediaStage({
     <>
       <section
         ref={productSectionRef}
-        className={`${isStuffyClone ? "order-1 space-y-0 lg:min-w-0 lg:order-1 lg:-mt-[3.06rem] lg:py-0" : "space-y-4 lg:min-w-0 lg:py-0"}`}
+        className={`${isStuffyClone ? "order-1 space-y-0 lg:min-w-0 lg:order-1 lg:-mt-[3.06rem] lg:py-0" : "order-1 -mx-3 space-y-3 sm:-mx-6 lg:mx-0 lg:min-w-0 lg:order-2 lg:space-y-4 lg:py-0"}`}
       >
         <div className={`relative min-w-0 ${!isMobileOrTablet && allImages.length > 1 ? "lg:sticky lg:top-[3.06rem]" : ""}`}>
           <div
             ref={productStageRef}
-            className={`relative h-[72vh] min-h-[520px] overflow-hidden sm:h-[76vh] ${
+            className={`relative h-[calc(100svh-4.35rem)] min-h-[460px] overflow-hidden sm:h-[calc(100svh-5rem)] sm:min-h-[560px] lg:h-[76vh] lg:min-h-[520px] ${
               isStuffyClone
                 ? "bg-transparent lg:h-[calc(100dvh-3.06rem)] lg:min-h-[calc(100dvh-3.06rem)]"
-                : "rounded-sm border border-border/60 bg-black/5 dark:border-white/10 dark:bg-black/35"
+                : "border-y border-border/50 bg-[#f5f0e8] dark:border-white/10 dark:bg-black/35 lg:rounded-sm lg:border lg:border-border/60 lg:bg-black/5"
             }`}
             onClick={() => {
+              if (isMobileOrTablet && allImages.length > 1) {
+                return;
+              }
               if (didSwipeRef.current) {
                 didSwipeRef.current = false;
                 return;
               }
               openGallery(selectedImageIndex);
-            }}
-            onTouchStart={(event) => {
-              didSwipeRef.current = false;
-              if (event.touches[0]) {
-                setTouchStartX(event.touches[0].clientX);
-              }
-            }}
-            onTouchEnd={(event) => {
-              if (touchStartX === null) return;
-              const deltaX = event.changedTouches[0].clientX - touchStartX;
-              if (Math.abs(deltaX) > 40) {
-                didSwipeRef.current = true;
-                if (deltaX < 0) goToNextImage();
-                if (deltaX > 0) goToPreviousImage();
-              }
-              setTouchStartX(null);
             }}
           >
             {stock === 0 ? (
@@ -513,7 +536,27 @@ function ProductMediaStage({
               </div>
             ) : null}
 
-            {!isMobileOrTablet && allImages.length > 1 ? (
+            {isMobileOrTablet && allImages.length > 1 ? (
+              <>
+                <div className="pointer-events-none absolute right-3 top-16 z-30 flex items-center gap-2 rounded-full bg-black/22 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.22em] text-white backdrop-blur-md sm:right-4">
+                  <span>
+                    {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
+                  </span>
+                </div>
+                <div className="pointer-events-none absolute inset-x-0 bottom-5 z-30 flex justify-center px-4">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-black/18 px-3 py-2 backdrop-blur-md">
+                    {allImages.map((_, index) => (
+                      <span
+                        key={`mobile-dot-${index}`}
+                        className={`block rounded-full transition-all duration-300 ${
+                          selectedImageIndex === index ? "h-1.5 w-5 bg-white" : "h-1.5 w-1.5 bg-white/45"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : !isMobileOrTablet && allImages.length > 1 ? (
               <div className="absolute bottom-3 right-3 z-30 flex items-center gap-2 rounded-sm border border-white/20 bg-black/35 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-white/90 backdrop-blur-sm">
                 <span>
                   {String(selectedImageIndex + 1).padStart(2, "0")} / {String(allImages.length).padStart(2, "0")}
@@ -521,7 +564,72 @@ function ProductMediaStage({
               </div>
             ) : null}
 
-            {isMobileOrTablet || allImages.length <= 1 ? (
+            {isMobileOrTablet && allImages.length > 1 ? (
+              <div
+                ref={mobileCarouselRef}
+                className="scrollbar-hide absolute inset-0 z-20 flex snap-x snap-mandatory overflow-x-auto overflow-y-hidden"
+                style={{ WebkitOverflowScrolling: "touch", overscrollBehaviorX: "contain" }}
+                onTouchStart={(event) => {
+                  didSwipeRef.current = false;
+                  touchStartXRef.current = event.touches[0]?.clientX ?? null;
+                }}
+                onTouchMove={(event) => {
+                  if (touchStartXRef.current === null || !event.touches[0]) return;
+                  if (Math.abs(event.touches[0].clientX - touchStartXRef.current) > 12) {
+                    didSwipeRef.current = true;
+                  }
+                }}
+                onTouchEnd={() => {
+                  touchStartXRef.current = null;
+                  if (mobileSwipeResetTimeoutRef.current !== null) {
+                    window.clearTimeout(mobileSwipeResetTimeoutRef.current);
+                  }
+                  mobileSwipeResetTimeoutRef.current = window.setTimeout(() => {
+                    didSwipeRef.current = false;
+                  }, 140);
+                }}
+              >
+                {allImages.map((url, index) => (
+                  <div
+                    key={`mobile-stage-${index}`}
+                    className={`relative h-full min-w-full snap-center snap-always ${isStuffyClone ? "bg-black" : "bg-[#f5f0e8] dark:bg-[#050505]"}`}
+                  >
+                    <button
+                      type="button"
+                      className="block h-full w-full"
+                      onClick={() => {
+                        if (didSwipeRef.current) {
+                          didSwipeRef.current = false;
+                          return;
+                        }
+                        openGallery(index);
+                      }}
+                      aria-label={`Open image ${index + 1} in fullscreen gallery`}
+                    >
+                      <img
+                        src={getStageDisplaySrc(index) || url || ""}
+                        alt={`${productName} - view ${index + 1}`}
+                        loading={index <= 1 ? "eager" : "lazy"}
+                        decoding={index === 0 ? "sync" : "async"}
+                        fetchPriority={index === 0 ? "high" : "auto"}
+                        width={1600}
+                        height={2000}
+                        sizes="100vw"
+                        className={`h-full w-full select-none ${isStuffyClone ? "" : "object-contain object-center"}`}
+                        style={
+                          isStuffyClone
+                            ? {
+                                objectFit: "cover",
+                                objectPosition: "50% 48%",
+                              }
+                            : undefined
+                        }
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : allImages.length <= 1 ? (
               <img
                 src={getStageDisplaySrc(selectedImageIndex)}
                 alt={`${productName} - view ${selectedImageIndex + 1}`}
@@ -530,8 +638,10 @@ function ProductMediaStage({
                 fetchPriority={selectedImageIndex === 0 ? "high" : "auto"}
                 width={1600}
                 height={2000}
-                sizes={isMobileOrTablet ? "100vw" : "58vw"}
-                className={`absolute inset-0 z-20 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
+                sizes={isMobileOrTablet ? "100vw" : "(min-width: 1024px) 58vw, 100vw"}
+                className={`absolute inset-0 z-20 h-full w-full select-none ${
+                  isStuffyClone ? "" : isMobileOrTablet ? "object-contain object-center" : "object-cover object-top"
+                }`}
                 style={
                   isStuffyClone
                     ? {
@@ -560,8 +670,8 @@ function ProductMediaStage({
                       fetchPriority={index === selectedImageIndex || index === 0 ? "high" : "auto"}
                       width={1600}
                       height={2000}
-                      sizes="58vw"
-                      className={`absolute inset-0 h-full w-full select-none ${isStuffyClone ? "" : "object-top"}`}
+                      sizes="(min-width: 1024px) 58vw, 100vw"
+                      className={`absolute inset-0 h-full w-full select-none ${isStuffyClone ? "" : "object-cover object-top"}`}
                       style={
                         isStuffyClone
                           ? {
@@ -578,37 +688,17 @@ function ProductMediaStage({
           </div>
 
           {isMobileOrTablet && allImages.length > 1 ? (
-            <div className="scrollbar-hide -mt-1 overflow-x-auto">
-              <div className="flex min-w-max snap-x snap-mandatory gap-2 pb-1">
-                {allImages.map((url, i) => (
-                  <button
-                    key={`thumb-${i}`}
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      previewImage(i);
-                    }}
-                    className={`snap-start h-20 w-16 overflow-hidden rounded-sm border transition-all ${
-                      selectedImageIndex === i ? "border-foreground" : "border-border opacity-80"
-                    }`}
-                    aria-label={`View image ${i + 1}`}
-                  >
-                    <img
-                      src={thumbnailUrls[i] || url || ""}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      width={120}
-                      height={150}
-                      sizes="80px"
-                      className="h-full w-full object-cover object-top"
-                    />
-                  </button>
-                ))}
+            <div className="px-4 pt-3 sm:px-6 lg:px-0">
+              <div className="flex items-center justify-between border-t border-black/8 pt-3 text-[10px] font-semibold uppercase tracking-[0.24em] text-neutral-500 dark:border-white/10 dark:text-neutral-400">
+                <span>Swipe through the gallery</span>
+                <button
+                  type="button"
+                  onClick={() => openGallery(selectedImageIndex)}
+                  className="transition-opacity hover:opacity-65"
+                >
+                  Open fullscreen
+                </button>
               </div>
-              <p className={`mt-2 text-center text-[10px] font-semibold uppercase tracking-[0.24em] ${isStuffyClone ? "text-neutral-500 dark:text-neutral-400" : "text-muted-foreground"}`}>
-                Tap a preview or swipe the image
-              </p>
             </div>
           ) : null}
         </div>
