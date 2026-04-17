@@ -21,6 +21,8 @@ export type StorefrontImageOptions = {
 export type StorefrontImagePreset =
   | "productCardPrimary"
   | "productCardSecondary"
+  | "productCardPreview"
+  | "productCardPreviewHover"
   | "collectionCard"
   | "pdpStageMobile"
   | "pdpStageDesktop"
@@ -40,6 +42,18 @@ const STOREFRONT_IMAGE_PRESETS: Record<StorefrontImagePreset, StorefrontImageOpt
     height: 760,
     fit: "cover",
     quality: 64,
+  },
+  productCardPreview: {
+    width: 720,
+    height: 960,
+    fit: "inside",
+    quality: 72,
+  },
+  productCardPreviewHover: {
+    width: 720,
+    height: 960,
+    fit: "inside",
+    quality: 68,
   },
   collectionCard: {
     width: 760,
@@ -141,6 +155,29 @@ export function buildStorefrontPresetImageUrl(
 ): string {
   return buildStorefrontImageUrl(src, getStorefrontImagePresetOptions(preset, overrides));
 }
+
+const STOREFRONT_CARD_FALLBACK_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 960" role="img" aria-hidden="true">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f7f4ef" />
+        <stop offset="100%" stop-color="#ece6dd" />
+      </linearGradient>
+      <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.85" />
+        <stop offset="100%" stop-color="#f4efe7" stop-opacity="0.55" />
+      </linearGradient>
+    </defs>
+    <rect width="720" height="960" fill="url(#bg)" />
+    <rect x="104" y="184" width="512" height="592" rx="40" fill="url(#panel)" />
+    <rect x="176" y="288" width="368" height="336" rx="28" fill="#ffffff" fill-opacity="0.48" stroke="#d8cfc2" stroke-width="10" />
+    <path d="M252 528l72-82 68 78 48-50 56 54v86H252z" fill="#c9beb0" fill-opacity="0.75" />
+    <circle cx="322" cy="396" r="30" fill="#d7c8b7" fill-opacity="0.9" />
+  </svg>
+`;
+
+export const STOREFRONT_CARD_FALLBACK_IMAGE =
+  `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(STOREFRONT_CARD_FALLBACK_SVG)}`;
 
 export function parseStorefrontGalleryUrls(value: string | null | undefined): string[] {
   if (!value?.trim()) return [];
