@@ -62,7 +62,7 @@ import {
 import type { AdminBill, AdminOrder, AdminOrderFonepayAudit } from "@/lib/adminApi";
 import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, displayEmptyField } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Pagination } from "@/components/admin/Pagination";
 import OrdersTrendChart from "@/components/admin/OrdersTrendChart";
@@ -686,9 +686,9 @@ export default function AdminOrders() {
                         )}>{getOrderSerial(idx)}</td>
                         <td className="px-3 py-3 align-middle min-w-0">
                           <div className="font-medium text-[#2C3E2D] dark:text-foreground truncate" title={order.fullName}>{order.fullName}</div>
-                          <div className="text-muted-foreground text-xs truncate" title={order.email ?? undefined}>{order.email ?? "—"}</div>
+                          <div className="text-muted-foreground text-xs truncate" title={order.email ?? undefined}>{displayEmptyField(order.email, "—")}</div>
                           {order.country && (
-                            <div className="text-muted-foreground text-xs mt-1 truncate" title={order.country}>{order.country}</div>
+                            <div className="text-muted-foreground text-xs mt-1 truncate" title={order.country}>{displayEmptyField(order.country, "—")}</div>
                           )}
                           <div className="mt-1.5 space-y-0.5 md:hidden">
                             <div className="text-[11px] text-muted-foreground truncate" title={itemSummary}>{itemSummary}</div>
@@ -875,11 +875,11 @@ export default function AdminOrders() {
                   </SheetTitle>
                   <div className="space-y-1">
                     <SheetDescription className="text-sm">
-                      {selectedOrder.email}
+                      {displayEmptyField(selectedOrder.email)}
                     </SheetDescription>
                     <div className="text-sm text-muted-foreground flex items-center gap-2">
                       <Phone className="w-4 h-4" />
-                      <span>Customer Phone: {selectedOrder.phoneNumber ?? "—"}</span>
+                      <span>Customer Phone: {displayEmptyField(selectedOrder.phoneNumber)}</span>
                     </div>
                   </div>
                 </SheetHeader>
@@ -1179,24 +1179,24 @@ export default function AdminOrders() {
                             Delivery Location
                           </p>
                           <p className="text-sm font-medium text-foreground">
-                            {selectedOrder.deliveryLocation ?? "—"}
+                            {displayEmptyField(selectedOrder.deliveryLocation, "—")}
                           </p>
                         </div>
                         {selectedOrder.deliveryAddress ? (
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>
-                            <p className="text-sm font-medium text-foreground">{selectedOrder.deliveryAddress}</p>
+                            <p className="text-sm font-medium text-foreground">{displayEmptyField(selectedOrder.deliveryAddress)}</p>
                           </div>
                         ) : selectedOrder.addressLine1 ? (
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Delivery Address</p>
                             <div className="text-sm font-medium text-foreground leading-relaxed">
-                              {selectedOrder.addressLine1}, {selectedOrder.city}
-                              {selectedOrder.region && `, ${selectedOrder.region}`}
-                              {selectedOrder.postalCode && ` ${selectedOrder.postalCode}`}
-                              {selectedOrder.country ? `, ${selectedOrder.country}` : ""}
+                              {displayEmptyField(selectedOrder.addressLine1)}, {displayEmptyField(selectedOrder.city)}
+                              {selectedOrder.region && `, ${displayEmptyField(selectedOrder.region)}`}
+                              {selectedOrder.postalCode && ` ${displayEmptyField(selectedOrder.postalCode)}`}
+                              {selectedOrder.country ? `, ${displayEmptyField(selectedOrder.country)}` : ""}
                               <div className="text-muted-foreground mt-1 text-xs">
-                                Customer Phone: {selectedOrder.phoneNumber ?? "—"}
+                                Customer Phone: {displayEmptyField(selectedOrder.phoneNumber)}
                               </div>
                             </div>
                             

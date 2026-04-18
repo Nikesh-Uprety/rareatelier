@@ -5,7 +5,7 @@ import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Spark
 import { fetchOrderById, fetchOrderByTrackingToken, getCachedLatestOrder, updateCachedOrder, type OrderDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { formatStorefrontPrice as formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice, displayEmptyField } from "@/lib/format";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function paymentMethodLabel(method: string) {
@@ -658,12 +658,12 @@ export default function OrderSuccess() {
             <div>
               <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Customer</p>
               <p className="font-semibold text-black dark:text-white">{order.fullName}</p>
-              <p className="text-zinc-700 dark:text-zinc-300">{order.email}</p>
+              <p className="text-zinc-700 dark:text-zinc-300">{displayEmptyField(order.email)}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Delivery Location</p>
-              <p className="font-semibold text-black dark:text-white">{order.deliveryLocation || order.locationCoordinates || "-"}</p>
-              {order.deliveryAddress && <p className="text-zinc-700 dark:text-zinc-300">{order.deliveryAddress}</p>}
+              <p className="font-semibold text-black dark:text-white">{displayEmptyField(order.deliveryLocation || order.locationCoordinates || "", "-")}</p>
+              {order.deliveryAddress && <p className="text-zinc-700 dark:text-zinc-300">{displayEmptyField(order.deliveryAddress)}</p>}
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1">Delivery</p>

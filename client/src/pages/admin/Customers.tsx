@@ -16,7 +16,7 @@ import {
   type AdminCustomerDetail,
   type AdminCustomerOrderHistoryItem,
 } from "@/lib/adminApi";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, displayEmptyField } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -411,8 +411,8 @@ export default function AdminCustomers() {
               </Avatar>
               <div className="min-w-0 space-y-0.5">
                 <p className="truncate text-sm font-semibold text-[#1A1F2B]">{row.customerName}</p>
-                <p className="truncate text-xs text-muted-foreground">{row.email}</p>
-                <p className="truncate text-xs text-muted-foreground">{row.phoneNumber}</p>
+                <p className="truncate text-xs text-muted-foreground">{displayEmptyField(row.email)}</p>
+                <p className="truncate text-xs text-muted-foreground">{displayEmptyField(row.phoneNumber)}</p>
                 <p className={cn("text-[11px] font-medium", isActive ? "text-emerald-700" : "text-slate-500")}>
                   {isActive ? "Active customer" : "No orders yet"}
                 </p>
@@ -792,8 +792,8 @@ export default function AdminCustomers() {
                   <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">Customer Summary</p>
                   <div className="mt-3 space-y-2 text-sm">
                     <p className="font-semibold text-[#1A1F2B]">{detail.firstName} {detail.lastName}</p>
-                    <p className="text-muted-foreground">{detail.email}</p>
-                    <p className="text-muted-foreground">{detail.phoneNumber || "No phone number"}</p>
+                    <p className="text-muted-foreground">{displayEmptyField(detail.email)}</p>
+                    <p className="text-muted-foreground">{displayEmptyField(detail.phoneNumber)}</p>
                     <p className="text-muted-foreground">Joined {new Date(detail.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
@@ -804,10 +804,10 @@ export default function AdminCustomers() {
                     <div className="flex items-start gap-2">
                       <MapPin className="mt-0.5 h-4 w-4" />
                       <div>
-                        <p>{detail.deliveryAddress?.street || latestOrder?.deliveryAddress || "No address on file"}</p>
+                        <p>{displayEmptyField(detail.deliveryAddress?.street || latestOrder?.deliveryAddress || "", "N/A")}</p>
                         {(detail.deliveryAddress?.city || detail.deliveryAddress?.region) ? (
                           <p>
-                            {[detail.deliveryAddress?.city, detail.deliveryAddress?.region].filter(Boolean).join(", ")}
+                            {[displayEmptyField(detail.deliveryAddress?.city, ""), displayEmptyField(detail.deliveryAddress?.region, "")].filter(Boolean).join(", ")}
                           </p>
                         ) : null}
                       </div>
@@ -948,7 +948,7 @@ export default function AdminCustomers() {
                                 <div className="mt-3 rounded-lg border border-border/60 bg-background/80 p-3">
                                   <div className="flex items-start gap-2 text-[10px] text-muted-foreground">
                                     <MapPin className="mt-0.5 h-3 w-3" />
-                                    <span>{order.deliveryAddress || "No delivery address on file"}</span>
+                                    <span>{displayEmptyField(order.deliveryAddress, "N/A")}</span>
                                   </div>
                                   <div className="mt-3 space-y-2">
                                     {order.items.map((item, index) => (
