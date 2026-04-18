@@ -101,6 +101,7 @@ export default function AdminPromoCodes() {
   const [editingPromo, setEditingPromo] = useState<PromoCode | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [promoToDelete, setPromoToDelete] = useState<PromoCode | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 

@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { type CartProduct, type CartState, useCartStore } from "@/store/cart";
+import { type CartProduct, type CartItem, type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -258,7 +258,7 @@ function resolveCheckoutItemColor(item: CartState["items"][number]) {
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { items, replaceItems, hasHydrated = true } = useCartStore((state: CartState) => state);
+  const { items, replaceItems, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
   const { toast } = useToast();
   const fonepayStatusQuery = useQuery({
     queryKey: ["payments", "fonepay", "status"],
@@ -319,9 +319,9 @@ export default function Checkout() {
           product,
           variant,
           quantity,
-        };
+        } as CartItem;
       })
-      .filter((item): item is CartState["items"][number] => Boolean(item));
+      .filter((item): item is CartItem => item !== null);
 
     if (!seededItems.length) {
       setAdminSeedPending(false);
