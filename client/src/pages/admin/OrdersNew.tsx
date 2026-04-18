@@ -1,21 +1,22 @@
-import { useDeferredValue, useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { createTheme, ThemeProvider as MuiThemeProvider } from "@mui/material/styles";
+import { DataGrid, type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
+import { useThemeStore } from "@/store/theme";
 import {
-  ArrowUpRight,
-  Check,
   ChevronLeft,
   ChevronRight,
+  Check,
   Copy,
-  Link2,
   Minus,
   Plus,
   Search,
-  ShoppingBag,
-  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { GenerateCustomLinkUI } from "@/components/admin/GenerateCustomLinkUI";
 import {
   createAdminOrder,
   fetchAdminOrdersPage,
@@ -97,9 +98,9 @@ type RequiredFieldErrors = {
   phone?: string;
 };
 
-const CARD_CLASS = "rounded-xl border border-black/8 bg-white";
+const CARD_CLASS = "rounded-xl border border-black/8 bg-white dark:border-border dark:bg-card";
 const INPUT_CLASS =
-  "h-10 rounded-lg border border-black/10 bg-[#f6f5f1] px-3 text-[13px] shadow-none transition-colors placeholder:text-[#8e8a80] focus-visible:ring-0 focus-visible:border-black/25";
+  "h-10 rounded-lg border border-black/10 bg-[#f6f5f1] px-3 text-[13px] text-[#1f1e1a] shadow-none transition-colors placeholder:text-[#8e8a80] focus-visible:ring-0 focus-visible:border-black/25 dark:border-border dark:bg-muted dark:text-foreground dark:placeholder:text-muted-foreground dark:focus-visible:border-ring";
 
 const PAYMENT_METHOD_MAP: Record<PaymentFormState["method"], AdminCreateOrderInput["paymentMethod"]> = {
   "Cash on delivery": "cash_on_delivery",
@@ -415,6 +416,12 @@ function StatusBadge({ status }: { status: PaymentStatusUi }) {
 export default function AdminOrdersNew() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const reduceMotion = useReducedMotion();
+  const { theme: appTheme } = useThemeStore();
+  const muiTheme = useMemo(
+    () => createTheme({ palette: { mode: appTheme === "dark" ? "dark" : "light" } }),
+    [appTheme],
+  );
 
   const [productQuery, setProductQuery] = useState("");
   const [productPage, setProductPage] = useState(1);
@@ -425,14 +432,13 @@ export default function AdminOrdersNew() {
   const [recentOrders, setRecentOrders] = useState<RecentOrderRow[]>([]);
   const [recentOrdersSearch, setRecentOrdersSearch] = useState("");
   const [editingCell, setEditingCell] = useState<EditableCell | null>(null);
-  const [linkModalOpen, setLinkModalOpen] = useState(false);
   const [createdModalState, setCreatedModalState] = useState<CreatedModalState>({
     open: false,
     orderLabel: "",
     total: 0,
     trackingToken: null,
   });
-  const [copiedLink, setCopiedLink] = useState<"checkout" | "tracking" | "created" | null>(null);
+  const [copiedLink, setCopiedLink] = useState<"tracking" | "created" | null>(null);
   const [recentOrdersHydrated, setRecentOrdersHydrated] = useState(false);
   const [previewToken] = useState(createPreviewToken);
 
@@ -533,6 +539,168 @@ export default function AdminOrdersNew() {
     return [row.id, row.display_id, row.customer_name, row.phone].some((value) => value.toLowerCase().includes(search));
   });
 
+  const recentOrderColumns: GridColDef<RecentOrderRow>[] = [
+    {
+      field: "display_id",
+      headerName: "Order ID",
+      width: 80,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => (
+        <span className="font-medium">{params.row.display_id}</span>
+      ),
+    },
+    {
+      field: "customer_name",
+      headerName: "Customer",
+      flex: 1,
+      minWidth: 130,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => {
+        const row = params.row;
+        const isEditing = editingCell?.rowId === row.id && editingCell.field === "customer_name";
+        if (isEditing && editingCell) {
+          return (
+            <Input
+              autoFocus
+              value={editingCell.value}
+              onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value })}
+              onBlur={commitEditing}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") commitEditing();
+                if (event.key === "Escape") setEditingCell(null);
+              }}
+              className="h-7 w-full rounded-md border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+              aria-label={`Edit customer name for ${row.display_id}`}
+            />
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => beginEditing(row, "customer_name")}
+            className="w-full truncate text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+          >
+            {row.customer_name}
+          </button>
+        );
+      },
+    },
+    {
+      field: "phone",
+      headerName: "Phone",
+      width: 110,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => {
+        const row = params.row;
+        const isEditing = editingCell?.rowId === row.id && editingCell.field === "phone";
+        if (isEditing && editingCell) {
+          return (
+            <Input
+              autoFocus
+              value={editingCell.value}
+              onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value })}
+              onBlur={commitEditing}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") commitEditing();
+                if (event.key === "Escape") setEditingCell(null);
+              }}
+              className="h-7 w-full rounded-md border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+              aria-label={`Edit phone for ${row.display_id}`}
+            />
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => beginEditing(row, "phone")}
+            className="w-full truncate text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+          >
+            {row.phone || "N.A"}
+          </button>
+        );
+      },
+    },
+    {
+      field: "products_summary",
+      headerName: "Products",
+      flex: 1.1,
+      minWidth: 140,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => (
+        <span className="truncate text-[#8e8a80] dark:text-muted-foreground">{params.row.products_summary}</span>
+      ),
+    },
+    {
+      field: "total",
+      headerName: "Total",
+      width: 90,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => <span>{formatPrice(params.row.total)}</span>,
+    },
+    {
+      field: "payment_status",
+      headerName: "Status",
+      width: 110,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => {
+        const row = params.row;
+        const isEditing = editingCell?.rowId === row.id && editingCell.field === "payment_status";
+        if (isEditing && editingCell) {
+          return (
+            <select
+              autoFocus
+              value={editingCell.value}
+              onBlur={() => setEditingCell(null)}
+              onChange={(event) => {
+                setRecentOrders((current) =>
+                  current.map((item) =>
+                    item.id === row.id
+                      ? { ...item, payment_status: event.target.value as PaymentStatusUi }
+                      : item,
+                  ),
+                );
+                setEditingCell(null);
+              }}
+              className="h-7 rounded-md border border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+              aria-label={`Edit payment status for ${row.display_id}`}
+            >
+              <option>Paid</option>
+              <option>Pending</option>
+              <option>Partial</option>
+              <option>Cancelled</option>
+            </select>
+          );
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => beginEditing(row, "payment_status")}
+            className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded"
+            aria-label={`Payment status ${row.payment_status}. Click to edit`}
+          >
+            <StatusBadge status={row.payment_status} />
+          </button>
+        );
+      },
+    },
+    {
+      field: "actions",
+      headerName: "Action",
+      width: 70,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<RecentOrderRow>) => (
+        <button
+          type="button"
+          onClick={() => beginEditing(params.row, "customer_name")}
+          className="text-[11px] text-[#8e8a80] transition-colors hover:text-[#1f1e1a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded dark:text-muted-foreground dark:hover:text-foreground"
+          aria-label={`Edit order ${params.row.display_id}`}
+        >
+          Edit
+        </button>
+      ),
+    },
+  ];
+
   function updateCustomerField(field: keyof CustomerFormState, value: string) {
     setCustomerForm((current) => ({ ...current, [field]: value }));
     if (field === "fullName" || field === "phone") {
@@ -611,7 +779,7 @@ export default function AdminOrdersNew() {
     setEditingCell(null);
   }
 
-  async function copyText(value: string, key: "checkout" | "tracking" | "created") {
+  async function copyText(value: string, key: "tracking" | "created") {
     try {
       await navigator.clipboard.writeText(value);
       setCopiedLink(key);
@@ -681,33 +849,33 @@ export default function AdminOrdersNew() {
   }
 
   return (
-    <div className="min-h-full bg-[#f7f6f2] p-4 text-[#1f1e1a] sm:p-6">
+    <div className="min-h-full bg-[#f7f6f2] p-4 text-[#1f1e1a] sm:p-6 dark:bg-background dark:text-foreground">
       <div className="mx-auto max-w-[1320px] space-y-4">
         <header className="space-y-1">
-          <h1 className="text-[20px] font-medium leading-none text-[#1f1e1a]">Create order</h1>
-          <p className="text-[12px] text-[#8e8a80]">Home › Orders › New</p>
+          <h1 className="text-[20px] font-medium leading-none text-[#1f1e1a] dark:text-foreground">Create order</h1>
+          <p className="text-[12px] text-[#8e8a80] dark:text-muted-foreground">Home › Orders › New</p>
         </header>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
           <div className="space-y-4">
-            <section className={cn(CARD_CLASS, "p-4")}> 
+            <section className={cn(CARD_CLASS, "p-4")}>
               <div className="mb-4">
-                <h2 className="text-[15px] font-medium text-[#1f1e1a]">Select products</h2>
-                <p className="mt-1 text-[12px] text-[#8e8a80]">Search and add products to this order</p>
+                <h2 className="text-[15px] font-medium text-[#1f1e1a] dark:text-foreground">Select products</h2>
+                <p className="mt-1 text-[12px] text-[#8e8a80] dark:text-muted-foreground">Search and add products to this order</p>
               </div>
 
-              <div className="mb-3 flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3">
-                <Search className="size-4 text-[#8e8a80]" />
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3 dark:border-border dark:bg-muted">
+                <Search className="size-4 text-[#8e8a80] dark:text-muted-foreground" />
                 <Input
                   value={productQuery}
                   onChange={(event) => setProductQuery(event.target.value)}
                   placeholder="Search by name or category..."
-                  className="border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
+                  className="border-0 bg-transparent px-0 text-[13px] text-[#1f1e1a] shadow-none focus-visible:ring-0 dark:text-foreground dark:placeholder:text-muted-foreground"
                 />
               </div>
 
-              <div className="overflow-hidden rounded-lg border border-black/8">
-                <div className="grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center bg-[#f6f5f1] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8e8a80]">
+              <div className="overflow-hidden rounded-lg border border-black/8 dark:border-border">
+                <div className="grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center bg-[#f6f5f1] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8e8a80] dark:bg-muted dark:text-muted-foreground">
                   <span />
                   <span>Product</span>
                   <span className="text-center">Stock</span>
@@ -717,7 +885,20 @@ export default function AdminOrdersNew() {
 
                 <div>
                   {productsQuery.isPending ? (
-                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80]">Loading products...</div>
+                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80] dark:text-muted-foreground">Loading products...</div>
+                  ) : productsQuery.isError ? (
+                    <div className="flex flex-col items-center gap-3 px-3 py-10 text-center">
+                      <p className="text-[13px] text-[#A32D2D] dark:text-destructive">
+                        Couldn't load products. {getErrorMessage(productsQuery.error)}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => productsQuery.refetch()}
+                        className="rounded-md border border-black/10 bg-white px-3 py-1.5 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:bg-[#f6f5f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted"
+                      >
+                        Retry
+                      </button>
+                    </div>
                   ) : paginatedProducts.length ? (
                     paginatedProducts.map((product) => {
                       const inCart = cart.some((item) => item.productId === product.id);
@@ -726,22 +907,24 @@ export default function AdminOrdersNew() {
                         <div
                           key={product.id}
                           className={cn(
-                            "grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center border-t border-black/8 px-3 py-[9px] transition-colors first:border-t-0",
-                            inCart ? "bg-[#EAF3DE]" : "bg-white hover:bg-[#f6f5f1]",
-                            product.stock_status === "out" && "bg-white text-[#a5a096]",
+                            "grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center border-t border-black/8 px-3 py-[9px] transition-colors first:border-t-0 dark:border-border",
+                            inCart
+                              ? "bg-[#EAF3DE] dark:bg-green-950/40"
+                              : "bg-white hover:bg-[#f6f5f1] dark:bg-card dark:hover:bg-muted",
+                            product.stock_status === "out" && "bg-white text-[#a5a096] dark:bg-card dark:text-muted-foreground/70",
                           )}
                         >
                           <ProductThumb id={product.id} name={product.name} imageUrl={product.image_url} size={36} rounded="rounded-md" />
                           <div className="min-w-0 px-2">
                             <p className={cn("truncate text-[13px] font-medium", stockMeta.rowClass)}>{product.name}</p>
-                            <p className="mt-0.5 truncate text-[11px] text-[#8e8a80]">{product.category}</p>
+                            <p className="mt-0.5 truncate text-[11px] text-[#8e8a80] dark:text-muted-foreground">{product.category}</p>
                           </div>
                           <div className="flex justify-center">
                             <span className={cn("inline-flex rounded-full px-2 py-1 text-[10px] font-medium", stockMeta.badgeClass)}>
                               {stockMeta.label}
                             </span>
                           </div>
-                          <div className={cn("pr-2 text-right text-[13px] font-medium", product.stock_status === "out" ? "text-[#a5a096]" : "text-[#1f1e1a]")}>
+                          <div className={cn("pr-2 text-right text-[13px] font-medium", product.stock_status === "out" ? "text-[#a5a096] dark:text-muted-foreground/70" : "text-[#1f1e1a] dark:text-foreground")}>
                             {formatPrice(product.price)}
                           </div>
                           <button
@@ -750,9 +933,9 @@ export default function AdminOrdersNew() {
                             disabled={product.stock_status === "out"}
                             onClick={() => addProduct(product)}
                             className={cn(
-                              "flex size-[26px] items-center justify-center rounded-full border border-black/10 bg-white text-[#6f6b61] transition-colors",
-                              inCart && "border-[#3B6D11] bg-[#3B6D11] text-white",
-                              product.stock_status !== "out" && !inCart && "hover:border-black/30 hover:text-[#1f1e1a]",
+                              "flex size-[26px] items-center justify-center rounded-full border border-black/10 bg-white text-[#6f6b61] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-border dark:bg-card dark:text-muted-foreground",
+                              inCart && "border-[#3B6D11] bg-[#3B6D11] text-white dark:border-green-700 dark:bg-green-700 dark:text-white",
+                              product.stock_status !== "out" && !inCart && "hover:border-black/30 hover:text-[#1f1e1a] dark:hover:border-border dark:hover:text-foreground",
                               product.stock_status === "out" && "cursor-not-allowed opacity-40",
                             )}
                           >
@@ -762,13 +945,13 @@ export default function AdminOrdersNew() {
                       );
                     })
                   ) : (
-                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80]">No products match your search.</div>
+                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80] dark:text-muted-foreground">No products match your search.</div>
                   )}
                 </div>
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-3">
-                <span className="text-[12px] text-[#8e8a80]">
+                <span className="text-[12px] text-[#8e8a80] dark:text-muted-foreground">
                   {filteredProducts.length ? `${(safeProductPage - 1) * 8 + 1}-${Math.min(safeProductPage * 8, filteredProducts.length)} of ${filteredProducts.length}` : "0-0 of 0"}
                 </span>
                 <div className="flex items-center gap-1">
@@ -777,7 +960,7 @@ export default function AdminOrdersNew() {
                     aria-label="Previous page"
                     disabled={safeProductPage <= 1}
                     onClick={() => setProductPage((current) => Math.max(1, current - 1))}
-                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] disabled:opacity-35"
+                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] transition-colors hover:bg-[#f6f5f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-35 dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-muted"
                   >
                     <ChevronLeft className="size-4" />
                   </button>
@@ -787,10 +970,10 @@ export default function AdminOrdersNew() {
                       type="button"
                       onClick={() => setProductPage(pageNumber)}
                       className={cn(
-                        "flex size-7 items-center justify-center rounded-lg border text-[12px]",
+                        "flex size-7 items-center justify-center rounded-lg border text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                         pageNumber === safeProductPage
-                          ? "border-black bg-black text-white"
-                          : "border-black/8 bg-white text-[#6f6b61]",
+                          ? "border-black bg-black text-white dark:border-primary dark:bg-primary dark:text-primary-foreground"
+                          : "border-black/8 bg-white text-[#6f6b61] hover:bg-[#f6f5f1] dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-muted",
                       )}
                     >
                       {pageNumber}
@@ -801,7 +984,7 @@ export default function AdminOrdersNew() {
                     aria-label="Next page"
                     disabled={safeProductPage >= totalPages}
                     onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
-                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] disabled:opacity-35"
+                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] transition-colors hover:bg-[#f6f5f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-35 dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-muted"
                   >
                     <ChevronRight className="size-4" />
                   </button>
@@ -809,29 +992,51 @@ export default function AdminOrdersNew() {
               </div>
             </section>
 
-            <section className={cn(CARD_CLASS, "p-4")}> 
+            <section className={cn(CARD_CLASS, "p-4")}>
               <div className="mb-4">
-                <h2 className="text-[15px] font-medium text-[#1f1e1a]">Customer details</h2>
-                <p className="mt-1 text-[12px] text-[#8e8a80]">Fill in delivery and contact information</p>
+                <h2 className="text-[15px] font-medium text-[#1f1e1a] dark:text-foreground">Customer details</h2>
+                <p className="mt-1 text-[12px] text-[#8e8a80] dark:text-muted-foreground">Fill in delivery and contact information</p>
               </div>
 
               <div className="grid gap-3 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Full name <span className="text-[#A32D2D]">*</span></span>
-                  <Input value={customerForm.fullName} onChange={(event) => updateCustomerField("fullName", event.target.value)} className={cn(INPUT_CLASS, requiredFieldErrors.fullName && "border-[#A32D2D] focus-visible:border-[#A32D2D]")} placeholder="Customer name" />
-                  {requiredFieldErrors.fullName ? <span className="mt-1 block text-[11px] text-[#A32D2D]">{requiredFieldErrors.fullName}</span> : null}
+                <label className="block" htmlFor="customer-fullname">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Full name <span className="text-[#A32D2D] dark:text-destructive">*</span></span>
+                  <Input
+                    id="customer-fullname"
+                    value={customerForm.fullName}
+                    onChange={(event) => updateCustomerField("fullName", event.target.value)}
+                    className={cn(INPUT_CLASS, requiredFieldErrors.fullName && "border-[#A32D2D] focus-visible:border-[#A32D2D] dark:border-destructive dark:focus-visible:border-destructive")}
+                    placeholder="Customer name"
+                    aria-required="true"
+                    aria-invalid={Boolean(requiredFieldErrors.fullName)}
+                    aria-describedby={requiredFieldErrors.fullName ? "customer-fullname-error" : undefined}
+                  />
+                  {requiredFieldErrors.fullName ? (
+                    <span id="customer-fullname-error" role="alert" className="mt-1 block text-[11px] text-[#A32D2D] dark:text-destructive">{requiredFieldErrors.fullName}</span>
+                  ) : null}
+                </label>
+                <label className="block" htmlFor="customer-phone">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Phone number <span className="text-[#A32D2D] dark:text-destructive">*</span></span>
+                  <Input
+                    id="customer-phone"
+                    value={customerForm.phone}
+                    onChange={(event) => updateCustomerField("phone", event.target.value)}
+                    className={cn(INPUT_CLASS, requiredFieldErrors.phone && "border-[#A32D2D] focus-visible:border-[#A32D2D] dark:border-destructive dark:focus-visible:border-destructive")}
+                    placeholder="+977-"
+                    aria-required="true"
+                    aria-invalid={Boolean(requiredFieldErrors.phone)}
+                    aria-describedby={requiredFieldErrors.phone ? "customer-phone-error" : undefined}
+                  />
+                  {requiredFieldErrors.phone ? (
+                    <span id="customer-phone-error" role="alert" className="mt-1 block text-[11px] text-[#A32D2D] dark:text-destructive">{requiredFieldErrors.phone}</span>
+                  ) : null}
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Phone number <span className="text-[#A32D2D]">*</span></span>
-                  <Input value={customerForm.phone} onChange={(event) => updateCustomerField("phone", event.target.value)} className={cn(INPUT_CLASS, requiredFieldErrors.phone && "border-[#A32D2D] focus-visible:border-[#A32D2D]")} placeholder="+977-" />
-                  {requiredFieldErrors.phone ? <span className="mt-1 block text-[11px] text-[#A32D2D]">{requiredFieldErrors.phone}</span> : null}
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Email</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Email</span>
                   <Input value={customerForm.email} onChange={(event) => updateCustomerField("email", event.target.value)} className={INPUT_CLASS} placeholder="email@example.com" />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">City / District</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">City / District</span>
                   <select
                     value={customerForm.city}
                     onChange={(event) => updateCustomerField("city", event.target.value)}
@@ -846,60 +1051,91 @@ export default function AdminOrdersNew() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Address</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Address</span>
                   <Input value={customerForm.address} onChange={(event) => updateCustomerField("address", event.target.value)} className={INPUT_CLASS} placeholder="Street address" />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Landmark</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Landmark</span>
                   <Input value={customerForm.landmark} onChange={(event) => updateCustomerField("landmark", event.target.value)} className={INPUT_CLASS} placeholder="Near..." />
                 </label>
               </div>
             </section>
           </div>
 
-          <aside className={cn(CARD_CLASS, "p-4 lg:sticky lg:top-4")}> 
+          <aside className={cn(CARD_CLASS, "p-4 lg:sticky lg:top-4")}>
             <div>
-              <h2 className="text-[15px] font-medium text-[#1f1e1a]">Order summary</h2>
-              <p className="mt-1 text-[11px] text-[#8e8a80]">{itemsSelectedCount} items selected</p>
+              <h2 className="text-[15px] font-medium text-[#1f1e1a] dark:text-foreground">Order summary</h2>
+              <p className="mt-1 text-[11px] text-[#8e8a80] dark:text-muted-foreground">{itemsSelectedCount} items selected</p>
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
-              {cart.length ? (
-                cart.map((item) => (
-                  <div key={item.productId} className="flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2">
-                    <ProductThumb id={item.productId} name={item.name} imageUrl={item.image_url} size={30} rounded="rounded-[5px]" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[12px] font-medium text-[#1f1e1a]">{item.name}</p>
-                      <div className="mt-1 flex items-center gap-1">
-                        <button type="button" className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white" onClick={() => updateCartQuantity(item.productId, -1)}>
-                          <Minus className="size-3" />
-                        </button>
-                        <span className="min-w-[14px] text-center text-[11px] font-medium text-[#1f1e1a]">{item.quantity}</span>
-                        <button type="button" className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white" onClick={() => updateCartQuantity(item.productId, 1)}>
-                          <Plus className="size-3" />
+              <AnimatePresence initial={false}>
+                {cart.length ? (
+                  cart.map((item) => (
+                    <motion.div
+                      key={item.productId}
+                      layout
+                      initial={reduceMotion ? false : { opacity: 0, y: -4 }}
+                      animate={reduceMotion ? undefined : { opacity: 1, y: 0 }}
+                      exit={reduceMotion ? undefined : { opacity: 0, y: -4 }}
+                      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                      className="flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2 dark:border-border dark:bg-muted"
+                    >
+                      <ProductThumb id={item.productId} name={item.name} imageUrl={item.image_url} size={30} rounded="rounded-[5px]" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium text-[#1f1e1a] dark:text-foreground">{item.name}</p>
+                        <div className="mt-1 flex items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label={`Decrease ${item.name} quantity`}
+                            className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white text-[#1f1e1a] transition-colors hover:bg-[#f1efe8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted/70"
+                            onClick={() => updateCartQuantity(item.productId, -1)}
+                          >
+                            <Minus className="size-3" />
+                          </button>
+                          <span className="min-w-[14px] text-center text-[11px] font-medium text-[#1f1e1a] dark:text-foreground">{item.quantity}</span>
+                          <button
+                            type="button"
+                            aria-label={`Increase ${item.name} quantity`}
+                            className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white text-[#1f1e1a] transition-colors hover:bg-[#f1efe8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted/70"
+                            onClick={() => updateCartQuantity(item.productId, 1)}
+                          >
+                            <Plus className="size-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] font-medium text-[#1f1e1a] dark:text-foreground">{formatPrice(item.priceAtTime * item.quantity)}</p>
+                        <button
+                          type="button"
+                          className="mt-1 text-[10px] text-[#8e8a80] transition-colors hover:text-[#A32D2D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded dark:text-muted-foreground dark:hover:text-destructive"
+                          onClick={() => removeCartItem(item.productId)}
+                        >
+                          Remove
                         </button>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[12px] font-medium text-[#1f1e1a]">{formatPrice(item.priceAtTime * item.quantity)}</p>
-                      <button type="button" className="mt-1 text-[10px] text-[#8e8a80] hover:text-[#A32D2D]" onClick={() => removeCartItem(item.productId)}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-black/8 px-3 py-8 text-center text-[12px] text-[#8e8a80]">
-                  No products added yet
-                </div>
-              )}
+                    </motion.div>
+                  ))
+                ) : (
+                  <motion.div
+                    key="empty-cart"
+                    initial={reduceMotion ? false : { opacity: 0 }}
+                    animate={reduceMotion ? undefined : { opacity: 1 }}
+                    exit={reduceMotion ? undefined : { opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="rounded-lg border border-dashed border-black/8 px-3 py-8 text-center text-[12px] text-[#8e8a80] dark:border-border dark:text-muted-foreground"
+                  >
+                    No products added yet
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
-            <div className="my-4 h-px bg-black/8" />
+            <div className="my-4 h-px bg-black/8 dark:bg-border" />
 
             <div className="space-y-3">
               <label className="block">
-                <span className="mb-1 block text-[11px] text-[#8e8a80]">Payment method</span>
+                <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Payment method</span>
                 <select value={paymentForm.method} onChange={(event) => updatePaymentField("method", event.target.value)} className={cn(INPUT_CLASS, "w-full")}>
                   <option>Cash on delivery</option>
                   <option>Online transfer</option>
@@ -910,7 +1146,7 @@ export default function AdminOrdersNew() {
 
               <div className="grid grid-cols-2 gap-2">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Payment status</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Payment status</span>
                   <select value={paymentForm.status} onChange={(event) => updatePaymentField("status", event.target.value)} className={cn(INPUT_CLASS, "w-full")}>
                     <option>Pending</option>
                     <option>Paid</option>
@@ -919,20 +1155,20 @@ export default function AdminOrdersNew() {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Delivery charge</span>
+                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Delivery charge</span>
                   <Input type="number" value={paymentForm.deliveryCharge} onChange={(event) => updatePaymentField("deliveryCharge", event.target.value)} className={INPUT_CLASS} />
                 </label>
               </div>
 
               <label className="block">
-                <span className="mb-1 block text-[11px] text-[#8e8a80]">Discount</span>
+                <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Discount</span>
                 <Input type="number" value={paymentForm.discount} onChange={(event) => updatePaymentField("discount", event.target.value)} className={INPUT_CLASS} />
               </label>
             </div>
 
-            <div className="my-4 h-px bg-black/8" />
+            <div className="my-4 h-px bg-black/8 dark:bg-border" />
 
-            <div className="space-y-1.5 text-[13px] text-[#6f6b61]">
+            <div className="space-y-1.5 text-[13px] text-[#6f6b61] dark:text-muted-foreground">
               <div className="flex items-center justify-between">
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
@@ -943,29 +1179,26 @@ export default function AdminOrdersNew() {
               </div>
               <div className="flex items-center justify-between">
                 <span>Discount</span>
-                <span className="text-[#A32D2D]">- {formatPrice(paymentForm.discount)}</span>
+                <span className="text-[#A32D2D] dark:text-destructive">- {formatPrice(paymentForm.discount)}</span>
               </div>
-              <div className="mt-2 flex items-center justify-between border-t border-black/8 pt-2 text-[14px] font-medium text-[#1f1e1a]">
+              <div className="mt-2 flex items-center justify-between border-t border-black/8 pt-2 text-[14px] font-medium text-[#1f1e1a] dark:border-border dark:text-foreground">
                 <span>Order total</span>
                 <span>{formatPrice(orderTotal)}</span>
               </div>
             </div>
 
             <div className="mt-4 flex gap-2 flex-col-reverse sm:flex-row">
+              <div className="flex-1">
+                <GenerateCustomLinkUI
+                  link={checkoutLink}
+                  disabled={!canShareCheckoutLink}
+                  disabledReason={!canShareCheckoutLink ? "Fill in customer details and add products to generate a checkout link" : undefined}
+                  onGenerate={() => {}}
+                />
+              </div>
               <Button
                 type="button"
-                variant="outline"
-                disabled={!canShareCheckoutLink}
-                className="min-h-11 flex-1 rounded-lg border-black/10 bg-[#f6f5f1] text-[#1f1e1a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-[#f1efe8] hover:border-black/20"
-                onClick={() => setLinkModalOpen(true)}
-                title={!canShareCheckoutLink ? "Fill in customer details and add products to generate checkout link" : "Generate a checkout link for the customer"}
-              >
-                <Link2 className="size-4" />
-                Generate checkout link
-              </Button>
-              <Button
-                type="button"
-                className="min-h-11 flex-1 rounded-lg bg-black text-white hover:bg-black/85 transition-colors"
+                className="h-11 flex-1 rounded-md bg-black px-4 text-[13px] font-medium text-white hover:bg-black/85 transition-colors dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
                 loading={mutation.isPending}
                 loadingText="Creating..."
                 onClick={handleCreateOrder}
@@ -976,24 +1209,25 @@ export default function AdminOrdersNew() {
           </aside>
         </div>
 
-        <section className={cn(CARD_CLASS, "p-4")}> 
+        <section className={cn(CARD_CLASS, "p-4")}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-[15px] font-medium text-[#1f1e1a]">Recent orders</h2>
-              <p className="mt-1 text-[12px] text-[#8e8a80]">Click any cell to edit inline</p>
+              <h2 className="text-[15px] font-medium text-[#1f1e1a] dark:text-foreground">Recent orders</h2>
+              <p className="mt-1 text-[12px] text-[#8e8a80] dark:text-muted-foreground">Click any cell to edit inline</p>
             </div>
             <Input
               value={recentOrdersSearch}
               onChange={(event) => setRecentOrdersSearch(event.target.value)}
               placeholder="Search orders..."
               className={cn(INPUT_CLASS, "w-full sm:w-[180px]")}
+              aria-label="Search orders"
             />
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] table-fixed border-collapse">
               <thead>
-                <tr className="bg-[#f6f5f1] text-left text-[10px] font-medium uppercase tracking-[0.05em] text-[#8e8a80]">
+                <tr className="bg-[#f6f5f1] text-left text-[10px] font-medium uppercase tracking-[0.05em] text-[#8e8a80] dark:bg-muted dark:text-muted-foreground">
                   <th className="w-[70px] px-3 py-2">Order ID</th>
                   <th className="w-[130px] px-3 py-2">Customer</th>
                   <th className="w-[90px] px-3 py-2">Phone</th>
@@ -1006,7 +1240,7 @@ export default function AdminOrdersNew() {
               <tbody>
                 {!recentOrdersHydrated && recentOrdersQuery.isPending ? (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80]">
+                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80] dark:text-muted-foreground">
                       Loading recent orders...
                     </td>
                   </tr>
@@ -1017,10 +1251,10 @@ export default function AdminOrdersNew() {
                     const isStatusEditing = editingCell?.rowId === row.id && editingCell.field === "payment_status";
 
                     return (
-                      <tr key={row.id} className="border-t border-black/8 text-[12px] text-[#1f1e1a] hover:bg-[#f6f5f1]">
+                      <tr key={row.id} className="border-t border-black/8 text-[12px] text-[#1f1e1a] transition-colors hover:bg-[#f6f5f1] dark:border-border dark:text-foreground dark:hover:bg-muted/70">
                         <td className="px-3 py-2 font-medium">{row.display_id}</td>
                         <td className="px-3 py-2">
-                          {isCustomerEditing ? (
+                          {isCustomerEditing && editingCell ? (
                             <Input
                               autoFocus
                               value={editingCell.value}
@@ -1028,17 +1262,24 @@ export default function AdminOrdersNew() {
                               onBlur={commitEditing}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") commitEditing();
+                                if (event.key === "Escape") setEditingCell(null);
                               }}
-                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px]"
+                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+                              aria-label={`Edit customer name for ${row.display_id}`}
                             />
                           ) : (
-                            <button type="button" className="w-full text-left" onClick={() => beginEditing(row, "customer_name")}>
+                            <button
+                              type="button"
+                              onClick={() => beginEditing(row, "customer_name")}
+                              className="w-full rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              aria-label={`Edit customer name for ${row.display_id} (currently ${row.customer_name})`}
+                            >
                               {row.customer_name}
                             </button>
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          {isPhoneEditing ? (
+                          {isPhoneEditing && editingCell ? (
                             <Input
                               autoFocus
                               value={editingCell.value}
@@ -1046,19 +1287,26 @@ export default function AdminOrdersNew() {
                               onBlur={commitEditing}
                               onKeyDown={(event) => {
                                 if (event.key === "Enter") commitEditing();
+                                if (event.key === "Escape") setEditingCell(null);
                               }}
-                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px]"
+                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+                              aria-label={`Edit phone for ${row.display_id}`}
                             />
                           ) : (
-                            <button type="button" className="w-full text-left" onClick={() => beginEditing(row, "phone")}>
-                              {row.phone || "—"}
+                            <button
+                              type="button"
+                              onClick={() => beginEditing(row, "phone")}
+                              className="w-full rounded text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              aria-label={`Edit phone for ${row.display_id}`}
+                            >
+                              {row.phone || "N.A"}
                             </button>
                           )}
                         </td>
-                        <td className="px-3 py-2 text-[#8e8a80]">{row.products_summary}</td>
+                        <td className="px-3 py-2 text-[#8e8a80] dark:text-muted-foreground">{row.products_summary}</td>
                         <td className="px-3 py-2">{formatPrice(row.total)}</td>
                         <td className="px-3 py-2">
-                          {isStatusEditing ? (
+                          {isStatusEditing && editingCell ? (
                             <select
                               autoFocus
                               value={editingCell.value}
@@ -1073,7 +1321,8 @@ export default function AdminOrdersNew() {
                                 );
                                 setEditingCell(null);
                               }}
-                              className="h-7 rounded-md border border-black/15 bg-white px-2 text-[12px]"
+                              className="h-7 rounded-md border border-black/15 bg-white px-2 text-[12px] dark:border-border dark:bg-card dark:text-foreground"
+                              aria-label={`Edit payment status for ${row.display_id}`}
                             >
                               <option>Paid</option>
                               <option>Pending</option>
@@ -1081,13 +1330,23 @@ export default function AdminOrdersNew() {
                               <option>Cancelled</option>
                             </select>
                           ) : (
-                            <button type="button" onClick={() => beginEditing(row, "payment_status")}>
+                            <button
+                              type="button"
+                              onClick={() => beginEditing(row, "payment_status")}
+                              className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                              aria-label={`Payment status ${row.payment_status}. Click to edit`}
+                            >
                               <StatusBadge status={row.payment_status} />
                             </button>
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <button type="button" className="text-[11px] text-[#8e8a80] hover:text-[#1f1e1a]" onClick={() => beginEditing(row, "customer_name")}>
+                          <button
+                            type="button"
+                            onClick={() => beginEditing(row, "customer_name")}
+                            className="rounded text-[11px] text-[#8e8a80] transition-colors hover:text-[#1f1e1a] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background dark:text-muted-foreground dark:hover:text-foreground"
+                            aria-label={`Edit order ${row.display_id}`}
+                          >
                             Edit
                           </button>
                         </td>
@@ -1096,7 +1355,7 @@ export default function AdminOrdersNew() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80]">
+                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80] dark:text-muted-foreground">
                       No recent orders found.
                     </td>
                   </tr>
@@ -1106,109 +1365,6 @@ export default function AdminOrdersNew() {
           </div>
         </section>
       </div>
-
-      <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>
-        <DialogContent className="w-full max-w-[min(600px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-black/8 bg-white p-0 shadow-2xl [&>button]:hidden">
-          <div className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-            <div className="sticky top-0 border-b border-black/8 bg-white/95 backdrop-blur-sm px-6 py-4">
-              <DialogHeader className="text-left">
-                <DialogTitle className="text-[18px] font-semibold text-[#1f1e1a]">Share Order Links</DialogTitle>
-                <DialogDescription className="text-[12px] leading-5 text-[#8e8a80] mt-1">
-                  Generate and share checkout and tracking links with your customer
-                </DialogDescription>
-              </DialogHeader>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div className="min-w-0 rounded-xl border border-black/8 bg-gradient-to-br from-blue-50/40 to-transparent p-4">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="inline-flex items-center justify-center size-6 rounded-lg bg-blue-100 text-blue-700">
-                        <ShoppingBag className="size-3.5" />
-                      </div>
-                      <p className="text-[11px] font-semibold text-[#1f1e1a] uppercase tracking-wider">Checkout Link</p>
-                    </div>
-                    <p className="mt-2 text-[12px] leading-5 text-[#6f6b61]">
-                      Customer lands on checkout with exact products from this order
-                    </p>
-                  </div>
-                </div>
-                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[11px] leading-5 text-[#6f6b61] break-all font-mono">
-                  {canShareCheckoutLink ? checkoutLink : "Fill in customer details and add products to generate link"}
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    disabled={!canShareCheckoutLink}
-                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#f1efe8] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#f6f5f1]"
-                    onClick={() => copyText(checkoutLink, "checkout")}
-                  >
-                    <Copy className="size-3.5 mr-1.5" />
-                    {copiedLink === "checkout" ? "Copied!" : "Copy link"}
-                  </button>
-                  <a
-                    href={canShareCheckoutLink ? checkoutLink : undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={cn(
-                      "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all",
-                      canShareCheckoutLink ? "hover:border-black/20 hover:bg-[#faf8f3]" : "pointer-events-none opacity-40",
-                    )}
-                  >
-                    Open
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-xl border border-black/8 bg-gradient-to-br from-emerald-50/40 to-transparent p-4">
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="inline-flex items-center justify-center size-6 rounded-lg bg-emerald-100 text-emerald-700">
-                        <Truck className="size-3.5" />
-                      </div>
-                      <p className="text-[11px] font-semibold text-[#1f1e1a] uppercase tracking-wider">Tracking Link</p>
-                    </div>
-                    <p className="mt-2 text-[12px] leading-5 text-[#6f6b61]">
-                      Customer can check order status and delivery updates
-                    </p>
-                  </div>
-                </div>
-                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[11px] leading-5 text-[#6f6b61] break-all font-mono">
-                  {trackingLink}
-                </div>
-                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                  <button
-                    type="button"
-                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#f1efe8]"
-                    onClick={() => copyText(trackingLink, "tracking")}
-                  >
-                    <Copy className="size-3.5 mr-1.5" />
-                    {copiedLink === "tracking" ? "Copied!" : "Copy link"}
-                  </button>
-                  <a
-                    href={trackingLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#faf8f3]"
-                  >
-                    Open
-                    <ArrowUpRight className="size-3.5" />
-                  </a>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-black/8 bg-white/50 backdrop-blur-sm px-6 py-4 mt-auto">
-              <Button type="button" className="min-h-11 w-full rounded-lg bg-black text-white hover:bg-black/85 transition-colors" onClick={() => setLinkModalOpen(false)}>
-                Done
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Dialog
         open={createdModalState.open}
