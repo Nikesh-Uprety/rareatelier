@@ -614,7 +614,7 @@ export const useCartStore = create<CartState>()(
         if (error) {
           console.error('Failed to rehydrate cart store', error);
         }
-        state?.setHasHydrated(false);
+        state?.setHasHydrated(true);
       },
     },
   ),
