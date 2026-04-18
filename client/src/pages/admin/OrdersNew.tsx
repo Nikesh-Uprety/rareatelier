@@ -319,8 +319,19 @@ function createPreviewToken(): string {
   return `preview-${Math.random().toString(36).slice(2, 12)}`;
 }
 
-function encodeCheckoutSeed(cart: CartItem[]): string {
+function encodeCheckoutSeed(cart: CartItem[], customer: CustomerFormState): string {
+  const hasRequiredCustomer = Boolean(customer.fullName.trim() && customer.phone.trim());
   const payload = {
+    ...(hasRequiredCustomer && {
+      customer: {
+        fullName: customer.fullName.trim(),
+        phone: customer.phone.trim(),
+        ...(customer.email.trim() && { email: customer.email.trim() }),
+        ...(customer.city.trim() && { city: customer.city.trim() }),
+        ...(customer.address.trim() && { address: customer.address.trim() }),
+        ...(customer.landmark.trim() && { landmark: customer.landmark.trim() }),
+      },
+    }),
     items: cart.map((item) => ({
       id: item.productId,
       quantity: item.quantity,
@@ -508,8 +519,9 @@ export default function AdminOrdersNew() {
   const subtotal = cart.reduce((sum, item) => sum + item.priceAtTime * item.quantity, 0);
   const orderTotal = Math.max(0, subtotal + paymentForm.deliveryCharge - paymentForm.discount);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const checkoutLink = `${origin}/checkout?admin_order_seed=${encodeURIComponent(encodeCheckoutSeed(cart))}`;
-  const canShareCheckoutLink = cart.length > 0;
+  const hasCustomerForLink = Boolean(customerForm.fullName.trim() && customerForm.phone.trim());
+  const checkoutLink = `${origin}/checkout?admin_order_seed=${encodeURIComponent(encodeCheckoutSeed(cart, customerForm))}`;
+  const canShareCheckoutLink = cart.length > 0 && hasCustomerForLink;
   const activeTrackingToken = createdModalState.trackingToken || previewToken;
   const trackingLink = `${origin}/orders/track/${activeTrackingToken}`;
 
@@ -1114,7 +1126,7 @@ export default function AdminOrdersNew() {
                   </a>
                 </div>
                 <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-3 text-[12px] leading-5 text-[#6f6b61] break-all">
-                  {canShareCheckoutLink ? checkoutLink : "Add at least one product to generate a checkout link."}
+                  {canShareCheckoutLink ? checkoutLink : "Add products and customer details to generate a checkout link."}
                 </div>
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                   <button

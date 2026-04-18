@@ -102,7 +102,17 @@ type AdminSeedItem = {
   product?: AdminSeedItemProduct;
 };
 
+type AdminSeedCustomer = {
+  fullName: string;
+  phone: string;
+  email?: string;
+  city?: string;
+  address?: string;
+  landmark?: string;
+};
+
 type AdminOrderSeedPayload = {
+  customer?: AdminSeedCustomer;
   items?: AdminSeedItem[];
 };
 
@@ -305,6 +315,15 @@ export default function Checkout() {
         },
         Math.max(1, Number(seedItem.quantity ?? 1)),
       );
+    }
+
+    if (seed.customer) {
+      if (seed.customer.fullName) setFullName(seed.customer.fullName);
+      if (seed.customer.phone) setPhone(normalizeNepalPhoneLocal(seed.customer.phone));
+      if (seed.customer.email) setEmail(seed.customer.email);
+      if (seed.customer.city) setDeliveryLocation(seed.customer.city);
+      if (seed.customer.address) setAddress(seed.customer.address);
+      if (seed.customer.landmark) setLandmark(seed.customer.landmark);
     }
 
     params.delete("admin_order_seed");

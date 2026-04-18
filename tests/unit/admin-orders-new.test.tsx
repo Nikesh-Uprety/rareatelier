@@ -125,6 +125,8 @@ describe("AdminOrdersNew", () => {
     renderWithProviders(<AdminOrdersNew />);
 
     await user.click(await screen.findByRole("button", { name: "Add Alpha Tee" }));
+    await user.type(screen.getByPlaceholderText("Customer name"), "Test Customer");
+    await user.type(screen.getByPlaceholderText("+977-"), "9800000000");
     await user.click(screen.getByRole("button", { name: /link/i }));
 
     expect(await screen.findByText("Checkout & tracking links")).toBeInTheDocument();
