@@ -10,6 +10,8 @@ import {
   Minus,
   Plus,
   Search,
+  ShoppingBag,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -949,14 +951,26 @@ export default function AdminOrdersNew() {
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2">
-              <Button type="button" className="min-h-11 flex-1 rounded-lg bg-black text-white hover:bg-black/85" loading={mutation.isPending} loadingText="Creating..." onClick={handleCreateOrder}>
-                Create order
-              </Button>
-              <Button type="button" variant="outline" className="min-h-11 rounded-lg border-black/10 bg-[#f6f5f1] px-4 text-[#1f1e1a]" onClick={() => setLinkModalOpen(true)}>
+            <div className="mt-4 flex gap-2 flex-col-reverse sm:flex-row">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canShareCheckoutLink}
+                className="min-h-11 flex-1 rounded-lg border-black/10 bg-[#f6f5f1] text-[#1f1e1a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-[#f1efe8] hover:border-black/20"
+                onClick={() => setLinkModalOpen(true)}
+                title={!canShareCheckoutLink ? "Fill in customer details and add products to generate checkout link" : "Generate a checkout link for the customer"}
+              >
                 <Link2 className="size-4" />
-                <ArrowUpRight className="size-3.5 text-[#8e8a80]" />
-                Link
+                Generate checkout link
+              </Button>
+              <Button
+                type="button"
+                className="min-h-11 flex-1 rounded-lg bg-black text-white hover:bg-black/85 transition-colors"
+                loading={mutation.isPending}
+                loadingText="Creating..."
+                onClick={handleCreateOrder}
+              >
+                Create order
               </Button>
             </div>
           </aside>
@@ -1094,109 +1108,102 @@ export default function AdminOrdersNew() {
       </div>
 
       <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>
-        <DialogContent className="w-full max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-black/8 bg-white p-0 shadow-2xl [&>button]:hidden">
-          <div className="max-h-[calc(100vh-2rem)] overflow-y-auto p-6">
-            <DialogHeader className="text-left">
-              <DialogTitle className="text-[18px] font-medium text-[#1f1e1a]">Checkout & tracking links</DialogTitle>
-              <DialogDescription className="text-[12px] leading-5 text-[#8e8a80]">
-                Share a ready-to-checkout link with the selected products, or open it yourself in a new tab.
-              </DialogDescription>
-            </DialogHeader>
+        <DialogContent className="w-full max-w-[min(600px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-black/8 bg-white p-0 shadow-2xl [&>button]:hidden">
+          <div className="max-h-[calc(100vh-2rem)] overflow-y-auto">
+            <div className="sticky top-0 border-b border-black/8 bg-white/95 backdrop-blur-sm px-6 py-4">
+              <DialogHeader className="text-left">
+                <DialogTitle className="text-[18px] font-semibold text-[#1f1e1a]">Share Order Links</DialogTitle>
+                <DialogDescription className="text-[12px] leading-5 text-[#8e8a80] mt-1">
+                  Generate and share checkout and tracking links with your customer
+                </DialogDescription>
+              </DialogHeader>
+            </div>
 
-            <div className="mt-5 space-y-4">
-              <div className="min-w-0 rounded-xl border border-black/8 bg-[#fcfbf8] p-4">
+            <div className="p-6 space-y-5">
+              <div className="min-w-0 rounded-xl border border-black/8 bg-gradient-to-br from-blue-50/40 to-transparent p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-medium text-[#8e8a80]">Checkout link with selected products</p>
-                    <p className="mt-1 text-[12px] leading-5 text-[#6f6b61]">
-                      The customer lands on checkout with the exact products from this draft order.
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center justify-center size-6 rounded-lg bg-blue-100 text-blue-700">
+                        <ShoppingBag className="size-3.5" />
+                      </div>
+                      <p className="text-[11px] font-semibold text-[#1f1e1a] uppercase tracking-wider">Checkout Link</p>
+                    </div>
+                    <p className="mt-2 text-[12px] leading-5 text-[#6f6b61]">
+                      Customer lands on checkout with exact products from this order
                     </p>
                   </div>
-                  <a
-                    href={canShareCheckoutLink ? checkoutLink : undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Open checkout in a new tab"
-                    className={cn(
-                      "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-black/8 bg-white text-[#1f1e1a] transition-colors",
-                      canShareCheckoutLink ? "hover:border-black/20 hover:bg-[#faf8f3]" : "pointer-events-none opacity-40",
-                    )}
-                  >
-                    <ArrowUpRight className="size-4" />
-                  </a>
                 </div>
-                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-3 text-[12px] leading-5 text-[#6f6b61] break-all">
-                  {canShareCheckoutLink ? checkoutLink : "Add products and customer details to generate a checkout link."}
+                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[11px] leading-5 text-[#6f6b61] break-all font-mono">
+                  {canShareCheckoutLink ? checkoutLink : "Fill in customer details and add products to generate link"}
                 </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
                     disabled={!canShareCheckoutLink}
-                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#f1efe8] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#f1efe8] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#f6f5f1]"
                     onClick={() => copyText(checkoutLink, "checkout")}
                   >
-                    {copiedLink === "checkout" ? "Copied!" : "Copy checkout link"}
+                    <Copy className="size-3.5 mr-1.5" />
+                    {copiedLink === "checkout" ? "Copied!" : "Copy link"}
                   </button>
                   <a
                     href={canShareCheckoutLink ? checkoutLink : undefined}
                     target="_blank"
                     rel="noreferrer"
                     className={cn(
-                      "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors",
+                      "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all",
                       canShareCheckoutLink ? "hover:border-black/20 hover:bg-[#faf8f3]" : "pointer-events-none opacity-40",
                     )}
                   >
-                    Open checkout
+                    Open
                     <ArrowUpRight className="size-3.5" />
                   </a>
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-xl border border-black/8 bg-[#fcfbf8] p-4">
+              <div className="min-w-0 rounded-xl border border-black/8 bg-gradient-to-br from-emerald-50/40 to-transparent p-4">
                 <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-medium text-[#8e8a80]">Order tracking link</p>
-                    <p className="mt-1 text-[12px] leading-5 text-[#6f6b61]">
-                      Share this link if you want the customer to follow the order status after creation.
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="inline-flex items-center justify-center size-6 rounded-lg bg-emerald-100 text-emerald-700">
+                        <Truck className="size-3.5" />
+                      </div>
+                      <p className="text-[11px] font-semibold text-[#1f1e1a] uppercase tracking-wider">Tracking Link</p>
+                    </div>
+                    <p className="mt-2 text-[12px] leading-5 text-[#6f6b61]">
+                      Customer can check order status and delivery updates
                     </p>
                   </div>
-                  <a
-                    href={trackingLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label="Open tracking in a new tab"
-                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-black/8 bg-white text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#faf8f3]"
-                  >
-                    <ArrowUpRight className="size-4" />
-                  </a>
                 </div>
-                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-3 text-[12px] leading-5 text-[#6f6b61] break-all">
+                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[11px] leading-5 text-[#6f6b61] break-all font-mono">
                   {trackingLink}
                 </div>
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
                   <button
                     type="button"
-                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#f1efe8]"
+                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#f1efe8]"
                     onClick={() => copyText(trackingLink, "tracking")}
                   >
-                    {copiedLink === "tracking" ? "Copied!" : "Copy tracking link"}
+                    <Copy className="size-3.5 mr-1.5" />
+                    {copiedLink === "tracking" ? "Copied!" : "Copy link"}
                   </button>
                   <a
                     href={trackingLink}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#faf8f3]"
+                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2.5 text-[12px] font-medium text-[#1f1e1a] transition-all hover:border-black/20 hover:bg-[#faf8f3]"
                   >
-                    Open tracking
+                    Open
                     <ArrowUpRight className="size-3.5" />
                   </a>
                 </div>
               </div>
             </div>
 
-            <div className="mt-5">
-              <Button type="button" className="min-h-11 w-full rounded-lg bg-black text-white hover:bg-black/85" onClick={() => setLinkModalOpen(false)}>
-                Close
+            <div className="border-t border-black/8 bg-white/50 backdrop-blur-sm px-6 py-4 mt-auto">
+              <Button type="button" className="min-h-11 w-full rounded-lg bg-black text-white hover:bg-black/85 transition-colors" onClick={() => setLinkModalOpen(false)}>
+                Done
               </Button>
             </div>
           </div>

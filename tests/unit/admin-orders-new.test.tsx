@@ -127,15 +127,13 @@ describe("AdminOrdersNew", () => {
     await user.click(await screen.findByRole("button", { name: "Add Alpha Tee" }));
     await user.type(screen.getByPlaceholderText("Customer name"), "Test Customer");
     await user.type(screen.getByPlaceholderText("+977-"), "9800000000");
-    await user.click(screen.getByRole("button", { name: /link/i }));
+    await user.click(screen.getByRole("button", { name: /Generate checkout link/i }));
 
-    expect(await screen.findByText("Checkout & tracking links")).toBeInTheDocument();
+    expect(await screen.findByText("Share Order Links")).toBeInTheDocument();
+    expect(screen.getByText(/Checkout Link/)).toBeInTheDocument();
 
     const checkoutLinkText = screen.getByText((content) => content.includes("/checkout?admin_order_seed="));
     expect(checkoutLinkText).toBeInTheDocument();
-
-    const openCheckoutLink = screen.getByRole("link", { name: "Open checkout in a new tab" });
-    expect(openCheckoutLink).toHaveAttribute("href", expect.stringContaining("/checkout?admin_order_seed="));
   });
   it("submits through the existing API, prepends the new order, and opens the created modal", async () => {
     const user = userEvent.setup();
