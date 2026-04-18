@@ -258,7 +258,7 @@ function resolveCheckoutItemColor(item: CartState["items"][number]) {
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { items, clearCart, addItem, hasHydrated = true } = useCartStore((state: CartState) => state);
+  const { items, replaceItems, hasHydrated = true } = useCartStore((state: CartState) => state);
   const { toast } = useToast();
   const fonepayStatusQuery = useQuery({
     queryKey: ["payments", "fonepay", "status"],
@@ -302,20 +302,33 @@ export default function Checkout() {
       return;
     }
 
-    clearCart();
-    for (const seedItem of seed.items) {
-      const product = normalizeSeedProduct(seedItem.product);
-      if (!product) continue;
-      addItem(
-        product,
-        {
+    const seededItems = seed.items
+      .map((seedItem) => {
+        const product = normalizeSeedProduct(seedItem.product);
+        if (!product) return null;
+
+        const variant = {
           id: typeof seedItem.variant?.id === "number" ? seedItem.variant.id : undefined,
           size: typeof seedItem.variant?.size === "string" && seedItem.variant.size.trim() ? seedItem.variant.size : "One Size",
           color: typeof seedItem.variant?.color === "string" && seedItem.variant.color.trim() ? seedItem.variant.color : "Default",
-        },
-        Math.max(1, Number(seedItem.quantity ?? 1)),
-      );
+        };
+        const quantity = Math.max(1, Number(seedItem.quantity ?? 1));
+
+        return {
+          id: `${product.id}-${variant.size}-${variant.color}`,
+          product,
+          variant,
+          quantity,
+        };
+      })
+      .filter((item): item is CartState["items"][number] => Boolean(item));
+
+    if (!seededItems.length) {
+      setAdminSeedPending(false);
+      return;
     }
+
+    replaceItems(seededItems);
 
     if (seed.customer) {
       if (seed.customer.fullName) setFullName(seed.customer.fullName);
@@ -330,7 +343,7 @@ export default function Checkout() {
     const nextSearch = params.toString();
     window.history.replaceState(window.history.state, "", nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname);
     setAdminSeedPending(false);
-  }, [addItem, adminSeedPending, clearCart, hasHydrated]);
+  }, [adminSeedPending, hasHydrated, replaceItems]);
 
   useEffect(() => {
     try {

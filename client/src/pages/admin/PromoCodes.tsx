@@ -50,6 +50,7 @@ import {
 import { fetchAdminPromoCodes, createAdminPromoCode, updateAdminPromoCode, deleteAdminPromoCode, type PromoCode } from "@/lib/adminApi";
 import { fetchProducts, type ProductApi } from "@/lib/api";
 import { getErrorMessage } from "@/lib/queryClient";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   RadioGroup,
   RadioGroupItem,
@@ -387,11 +388,7 @@ export default function AdminPromoCodes() {
                         variant="ghost"
                         size="sm"
                         className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        onClick={() => {
-                          if (confirm(`Delete promo code ${promo.code}?`)) {
-                            deleteMutation.mutate(promo.id!);
-                          }
-                        }}
+                        onClick={() => setPromoToDelete(promo)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -689,6 +686,21 @@ export default function AdminPromoCodes() {
           </Form>
         </DialogContent>
       </Dialog>
+
+
+      <DeleteConfirmDialog
+        open={!!promoToDelete}
+        onOpenChange={(open) => !open && setPromoToDelete(null)}
+        title="Delete Promo Code"
+        subject={promoToDelete?.code ?? "Promo code"}
+        description="This discount code will stop working immediately and cannot be recovered once deleted."
+        loading={deleteMutation.isPending}
+        loadingText="Deleting promo code..."
+        onConfirm={() => {
+          if (!promoToDelete?.id) return;
+          deleteMutation.mutate(promoToDelete.id, { onSettled: () => setPromoToDelete(null) });
+        }}
+      />
     </div>
   );
 }

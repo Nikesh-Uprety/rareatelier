@@ -6,8 +6,8 @@ import { useToast } from "@/hooks/use-toast";
 
 import { cn } from "@/lib/utils";
 import { deleteAdminImage, fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Image as ImageIcon, Loader2, RefreshCcw, Trash2, Eye, CheckCircle2 } from "lucide-react";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 
 type StorefrontLibraryEntry = {
   key: string;
@@ -465,56 +465,41 @@ export default function StorefrontImagePicker() {
         ) : null}
       </section>
 
-      <Dialog open={!!imageToDelete} onOpenChange={(open) => !open && setImageToDelete(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Storefront Image</DialogTitle>
-            <DialogDescription>
-              {imageToDelete?.provider === "cloudinary"
-                ? "This removes the selected image from Cloudinary-backed admin media."
-                : "This removes the selected image from Tigris-backed admin media."}
-            </DialogDescription>
-          </DialogHeader>
-          {imageToDelete ? (
-            <div className="space-y-4 py-2">
-              <div className="overflow-hidden rounded-2xl border border-border bg-muted/30">
-                <img
-                  src={getLibraryPreviewUrl(imageToDelete)}
-                  alt={imageToDelete.filename}
-                  className="h-48 w-full object-cover"
-                  decoding="async"
-                />
-              </div>
-              <div className="rounded-2xl border border-border bg-muted/20 px-4 py-3 text-sm">
-                <p className="font-medium">{imageToDelete.filename}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {`${imageToDelete.provider} • ${imageToDelete.category ?? "uncategorized"}`}
-                </p>
-              </div>
-              {currentlySelectedUrls.has(imageToDelete.url) && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-100">
-                  This image is currently assigned to a storefront slot. Deleting it will reset that slot to the default image.
-                </div>
-              )}
+      <DeleteConfirmDialog
+        open={!!imageToDelete}
+        onOpenChange={(open) => !open && setImageToDelete(null)}
+        title="Delete Image"
+        subject={imageToDelete?.filename ?? "Storefront image"}
+        description={imageToDelete?.provider === "cloudinary"
+          ? "This removes the selected image from Cloudinary-backed admin media."
+          : "This removes the selected image from Tigris-backed admin media."}
+        loading={deleteMutation.isPending}
+        loadingText="Deleting image..."
+        preview={imageToDelete ? (
+          <div className="space-y-4 py-2 text-left">
+            <div className="overflow-hidden rounded-[24px] border border-[#FFE1DE] bg-[#FFF7F6]">
+              <img
+                src={getLibraryPreviewUrl(imageToDelete)}
+                alt={imageToDelete.filename}
+                className="h-48 w-full object-cover"
+                decoding="async"
+              />
             </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setImageToDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={deleteMutation.isPending}
-              loadingText="Deleting..."
-              onClick={() => {
-                if (imageToDelete) deleteMutation.mutate(imageToDelete);
-              }}
-            >
-              Delete Image
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="rounded-[22px] border border-[#FFE1DE] bg-[#FFF7F6] px-4 py-3 text-sm text-[#4F4F4F]">
+              <p className="font-semibold text-[#212121]">{imageToDelete.filename}</p>
+              <p className="mt-1 text-xs text-[#777777]">{`${imageToDelete.provider} • ${imageToDelete.category ?? "uncategorized"}`}</p>
+            </div>
+          </div>
+        ) : null}
+        warning={imageToDelete && currentlySelectedUrls.has(imageToDelete.url) ? (
+          <div className="rounded-[22px] border border-[#FFD7A8] bg-[#FFF6E8] px-4 py-3 text-left text-sm text-[#8A4B08] dark:border-[#6B3A05] dark:bg-[#2C1C0A] dark:text-[#FFD39B]">
+            This image is currently assigned to a storefront slot. Deleting it will reset that slot to the default image.
+          </div>
+        ) : null}
+        onConfirm={() => {
+          if (imageToDelete) deleteMutation.mutate(imageToDelete);
+        }}
+      />
     </div>
   );
 }

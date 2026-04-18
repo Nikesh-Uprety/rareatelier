@@ -25,6 +25,9 @@ import { Trash2, Upload, Images as ImagesIcon, Copy, Eye, ChevronLeft, ChevronRi
 import { useToast } from "@/hooks/use-toast";
 import { Pagination } from "@/components/admin/Pagination";
 import { AdminImagesSkeleton } from "@/components/admin/AdminPageSkeletons";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
+import ReactCrop, { type Crop, centerCrop, makeAspectCrop, type PixelCrop } from 'react-image-crop';
+import 'react-image-crop/dist/ReactCrop.css';
 
 type ImageCategory =
   | "product"
@@ -84,6 +87,7 @@ export default function AdminImagesPage() {
   const [completedCount, setCompletedCount] = useState(0);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [assetToDelete, setAssetToDelete] = useState<AdminImageAsset | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -300,40 +304,134 @@ export default function AdminImagesPage() {
     },
   });
 
-  function addBulkFiles(files: FileList | null) {
-    if (!files || files.length === 0) return;
-    const next: BulkFile[] = [];
-    let oversizedCount = 0;
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) return;
-      const cleanedName = sanitizeFilename(file.name);
-      const normalizedFile = new File([file], cleanedName, {
-        type: file.type,
-        lastModified: file.lastModified,
-      });
-      const tooLarge = file.size > MAX_IMAGE_SIZE_BYTES;
-      const previewUrl = URL.createObjectURL(normalizedFile);
-      if (tooLarge) oversizedCount += 1;
-      next.push({
-        id: `${cleanedName}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
-        file: normalizedFile,
-        previewUrl,
-        tooLarge,
-        status: tooLarge ? "skipped" : "idle",
-        error: tooLarge ? `File exceeds ${MAX_IMAGE_SIZE_LABEL} limit` : undefined,
-        progress: 0,
-      });
-    });
-    if (next.length === 0) return;
-    setBulkFiles((prev) => [...prev, ...next]);
+  const [cropQueue, setCropQueue] = useState<File[]>([]);
+  const [cropDialogOpen, setCropDialogOpen] = useState(false);
+  const [currentCropFile, setCurrentCropFile] = useState<File | null>(null);
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+  const [cropAspect, setCropAspect] = useState<number | undefined>(3 / 4);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [cropImageSrc, setCropImageSrc] = useState<string>("");
 
-    if (oversizedCount > 0) {
+  useEffect(() => {
+    if (cropQueue.length > 0 && !cropDialogOpen) {
+      const file = cropQueue[0];
+      setCurrentCropFile(file);
+      setCropImageSrc(URL.createObjectURL(file));
+      setCropDialogOpen(true);
+      setCrop(undefined);
+      setCompletedCrop(undefined);
+    }
+  }, [cropQueue, cropDialogOpen]);
+
+  function onImageLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    if (cropAspect) {
+      const { width, height } = e.currentTarget;
+      const crop = centerCrop(
+        makeAspectCrop(
+          {
+            unit: '%',
+            width: 90,
+          },
+          cropAspect,
+          width,
+          height
+        ),
+        width,
+        height
+      );
+      setCrop(crop);
+    }
+  }
+
+  function proceedWithFile(file: File) {
+    const cleanedName = sanitizeFilename(file.name);
+    const tooLarge = file.size > MAX_IMAGE_SIZE_BYTES;
+    const previewUrl = URL.createObjectURL(file);
+    
+    setBulkFiles(prev => [...prev, {
+      id: `${cleanedName}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
+      file,
+      previewUrl,
+      tooLarge,
+      status: tooLarge ? "skipped" : "idle",
+      error: tooLarge ? `File exceeds ${MAX_IMAGE_SIZE_LABEL} limit` : undefined,
+      progress: 0,
+    }]);
+
+    if (tooLarge) {
       toast({
         title: "Large image skipped",
         description: `Files over ${MAX_IMAGE_SIZE_LABEL} are not allowed. Reduce the image size or upload a smaller file.`,
         variant: "warning",
         duration: 2000,
       });
+    }
+    
+    const nextQueue = cropQueue.slice(1);
+    setCropQueue(nextQueue);
+    if (nextQueue.length === 0) {
+      setCropDialogOpen(false);
+      setCropImageSrc("");
+    } else {
+      const nextFile = nextQueue[0];
+      setCurrentCropFile(nextFile);
+      setCropImageSrc(URL.createObjectURL(nextFile));
+      setCrop(undefined);
+      setCompletedCrop(undefined);
+    }
+  }
+
+  async function handleCropConfirm() {
+    if (!currentCropFile || !completedCrop || !imgRef.current || completedCrop.width === 0 || completedCrop.height === 0) {
+      if (currentCropFile) proceedWithFile(currentCropFile);
+      return;
+    }
+    
+    const canvas = document.createElement('canvas');
+    const scaleX = imgRef.current.naturalWidth / imgRef.current.width;
+    const scaleY = imgRef.current.naturalHeight / imgRef.current.height;
+    canvas.width = completedCrop.width * scaleX;
+    canvas.height = completedCrop.height * scaleY;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      proceedWithFile(currentCropFile);
+      return;
+    }
+    
+    ctx.drawImage(
+      imgRef.current,
+      completedCrop.x * scaleX,
+      completedCrop.y * scaleY,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY,
+      0,
+      0,
+      completedCrop.width * scaleX,
+      completedCrop.height * scaleY
+    );
+    
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        proceedWithFile(currentCropFile);
+        return;
+      }
+      const croppedFile = new File([blob], currentCropFile.name, { type: currentCropFile.type, lastModified: Date.now() });
+      proceedWithFile(croppedFile);
+    }, currentCropFile.type);
+  }
+
+  function handleCropSkip() {
+    if (currentCropFile) {
+      proceedWithFile(currentCropFile);
+    }
+  }
+
+  function addBulkFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const imageFiles = Array.from(files).filter(f => f.type.startsWith("image/"));
+    if (imageFiles.length > 0) {
+      setCropQueue(prev => [...prev, ...imageFiles]);
     }
   }
 
@@ -524,9 +622,7 @@ export default function AdminImagesPage() {
               loadingText="Deleting..."
               onClick={() => {
                 if (selectedIds.size === 0) return;
-                const ids = Array.from(selectedIds);
-                if (!window.confirm(`Delete ${ids.length} image(s)? This cannot be undone.`)) return;
-                bulkDeleteMutation.mutate(ids);
+                setBulkDeleteOpen(true);
               }}
             >
               <Trash2 className="h-4 w-4 mr-2" />
@@ -960,45 +1056,121 @@ export default function AdminImagesPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!assetToDelete} onOpenChange={(open) => !open && setAssetToDelete(null)}>
-        <DialogContent className="max-w-md">
+      <DeleteConfirmDialog
+        open={!!assetToDelete}
+        onOpenChange={(open) => !open && setAssetToDelete(null)}
+        title="Delete Image"
+        subject={assetToDelete ? getDisplayName(assetToDelete.filename ?? assetToDelete.url) : "Image"}
+        description="This image will be removed from the admin media library and cannot be restored afterward."
+        loading={deleteMutation.isPending}
+        loadingText="Deleting image..."
+        preview={assetToDelete ? (
+          <div className="space-y-4 py-2 text-left">
+            <div className="overflow-hidden rounded-[24px] border border-[#FFE1DE] bg-[#FFF7F6]">
+              <img
+                src={getAssetThumbnailUrl(assetToDelete) || undefined}
+                alt={assetToDelete.filename ?? "Delete image"}
+                className="h-48 w-full object-cover"
+                decoding="async"
+              />
+            </div>
+            <div className="rounded-[22px] border border-[#FFE1DE] bg-[#FFF7F6] px-4 py-3 text-sm text-[#4F4F4F]">
+              <p className="font-semibold text-[#212121]">{getDisplayName(assetToDelete.filename ?? assetToDelete.url)}</p>
+              <p className="mt-1 text-xs capitalize text-[#777777]">
+                {assetToDelete.provider} • {CATEGORY_LABELS[assetToDelete.category as ImageCategory] ?? assetToDelete.category}
+              </p>
+            </div>
+          </div>
+        ) : null}
+        onConfirm={() => {
+          if (assetToDelete) deleteMutation.mutate(assetToDelete.id);
+        }}
+      />
+
+      <DeleteConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title="Delete Images"
+        subject={`${selectedIds.size} selected image${selectedIds.size === 1 ? "" : "s"}`}
+        description="These images will be removed from the media library permanently. Make sure nothing important still depends on them."
+        loading={bulkDeleteMutation.isPending}
+        loadingText="Deleting images..."
+        onConfirm={() => bulkDeleteMutation.mutate(Array.from(selectedIds))}
+      />
+
+      <Dialog open={cropDialogOpen} onOpenChange={(open) => {
+        if (!open && cropQueue.length > 0) {
+          setCropQueue([]);
+          setCropDialogOpen(false);
+        }
+      }}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Delete Image</DialogTitle>
+            <DialogTitle>Crop Image</DialogTitle>
             <DialogDescription>
-              This will remove the image from the admin media library.
+              Adjust the image before uploading. You can choose a free ratio or the default desktop ratio (3:4) which looks best in the shop.
+              {cropQueue.length > 1 && ` (${cropQueue.length} images remaining)`}
             </DialogDescription>
           </DialogHeader>
-          {assetToDelete ? (
-            <div className="space-y-4 py-2">
-              <div className="overflow-hidden rounded-2xl border border-border bg-muted/20">
-                <img
-                  src={getAssetThumbnailUrl(assetToDelete) || undefined}
-                  alt={assetToDelete.filename ?? "Delete image"}
-                  className="h-48 w-full object-cover"
-                  decoding="async"
-                />
-              </div>
-              <div className="rounded-2xl border border-border bg-muted/10 px-4 py-3 text-sm">
-                <p className="font-medium">{getDisplayName(assetToDelete.filename ?? assetToDelete.url)}</p>
-                <p className="mt-1 text-xs text-muted-foreground capitalize">
-                  {assetToDelete.provider} • {CATEGORY_LABELS[assetToDelete.category as ImageCategory] ?? assetToDelete.category}
-                </p>
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAssetToDelete(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              loading={deleteMutation.isPending}
-              loadingText="Deleting..."
+          
+          <div className="flex gap-2 mb-4">
+            <Button 
+              variant={cropAspect === 3 / 4 ? "default" : "outline"} 
               onClick={() => {
-                if (assetToDelete) deleteMutation.mutate(assetToDelete.id);
+                setCropAspect(3 / 4);
+                setCrop(undefined);
               }}
+              size="sm"
             >
-              Delete Image
+              Desktop Default (3:4)
+            </Button>
+            <Button 
+              variant={cropAspect === 1 ? "default" : "outline"} 
+              onClick={() => {
+                setCropAspect(1);
+                setCrop(undefined);
+              }}
+              size="sm"
+            >
+              Square (1:1)
+            </Button>
+            <Button 
+              variant={cropAspect === undefined ? "default" : "outline"} 
+              onClick={() => {
+                setCropAspect(undefined);
+                setCrop(undefined);
+              }}
+              size="sm"
+            >
+              Free Crop
+            </Button>
+          </div>
+
+          <div className="flex justify-center bg-black/5 rounded-lg overflow-hidden max-h-[60vh]">
+            {cropImageSrc && (
+              <ReactCrop
+                crop={crop}
+                onChange={(_, percentCrop) => setCrop(percentCrop)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={cropAspect}
+              >
+                <img
+                  ref={imgRef}
+                  alt="Crop me"
+                  src={cropImageSrc}
+                  onLoad={onImageLoad}
+                  className="max-h-[60vh] w-auto object-contain"
+                />
+              </ReactCrop>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleCropSkip}>
+              Skip Cropping
+            </Button>
+            <Button onClick={handleCropConfirm}>
+              Crop & Continue
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -74,7 +74,6 @@ type CustomerFormState = {
   fullName: string;
   phone: string;
   email: string;
-  city: string;
   address: string;
   landmark: string;
 };
@@ -123,17 +122,8 @@ const BACKEND_TO_UI_STATUS: Record<string, PaymentStatusUi> = {
   cancelled: "Cancelled",
 };
 
-const CITY_OPTIONS = [
-  "Kathmandu",
-  "Lalitpur",
-  "Bhaktapur",
-  "Pokhara",
-  "Biratnagar",
-  "Birgunj",
-  "Butwal",
-  "Dharan",
-  "Chitwan",
-];
+const NEPAL_PHONE_COUNTRY_CODE = "+977";
+const NEPAL_PHONE_LOCAL_LENGTH = 10;
 
 const THUMBNAIL_PALETTE = [
   { bg: "#E6F1FB", text: "#185FA5" },
@@ -198,7 +188,6 @@ const DEFAULT_CUSTOMER_FORM: CustomerFormState = {
   fullName: "",
   phone: "",
   email: "",
-  city: "",
   address: "",
   landmark: "",
 };
@@ -298,6 +287,40 @@ function backendStatusToUi(status: string | null | undefined): PaymentStatusUi {
   return BACKEND_TO_UI_STATUS[(status || "pending").toLowerCase()] || "Pending";
 }
 
+function normalizeNepalPhoneLocal(value: string) {
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("977")) {
+    digits = digits.slice(3);
+  }
+
+  if (digits.startsWith("0") && digits.length > NEPAL_PHONE_LOCAL_LENGTH) {
+    digits = digits.slice(1);
+  }
+
+  return digits.slice(0, NEPAL_PHONE_LOCAL_LENGTH);
+}
+
+function buildNepalPhoneNumber(value: string) {
+  const localDigits = normalizeNepalPhoneLocal(value);
+  return localDigits ? `${NEPAL_PHONE_COUNTRY_CODE}${localDigits}` : "";
+}
+
+function getPhoneError(value: string, options?: { live?: boolean }) {
+  const localDigits = normalizeNepalPhoneLocal(value);
+  if (!localDigits) {
+    return options?.live ? undefined : "Enter your 10-digit Nepal mobile number.";
+  }
+  if (localDigits.length < NEPAL_PHONE_LOCAL_LENGTH) {
+    const remainingDigits = NEPAL_PHONE_LOCAL_LENGTH - localDigits.length;
+    return `Add ${remainingDigits} more digit${remainingDigits === 1 ? "" : "s"} to complete your mobile number.`;
+  }
+  if (!/^9\d{9}$/.test(localDigits)) {
+    return "Use a valid Nepal mobile number starting with 9.";
+  }
+  return undefined;
+}
+
 function summarizeOrderProducts(order: AdminOrder): string {
   if (!order.items?.length) return "No products";
   return order.items.map((item) => `${item.name} x${item.quantity}`).join(", ");
@@ -328,9 +351,8 @@ function encodeCheckoutSeed(cart: CartItem[], customer: CustomerFormState): stri
     ...(hasRequiredCustomer && {
       customer: {
         fullName: customer.fullName.trim(),
-        phone: customer.phone.trim(),
+        phone: buildNepalPhoneNumber(customer.phone.trim()),
         ...(customer.email.trim() && { email: customer.email.trim() }),
-        ...(customer.city.trim() && { city: customer.city.trim() }),
         ...(customer.address.trim() && { address: customer.address.trim() }),
         ...(customer.landmark.trim() && { landmark: customer.landmark.trim() }),
       },
@@ -702,13 +724,23 @@ export default function AdminOrdersNew() {
   ];
 
   function updateCustomerField(field: keyof CustomerFormState, value: string) {
-    setCustomerForm((current) => ({ ...current, [field]: value }));
-    if (field === "fullName" || field === "phone") {
+    const nextValue = field === "phone" ? normalizeNepalPhoneLocal(value) : value;
+    setCustomerForm((current) => ({ ...current, [field]: nextValue }));
+    if (field === "fullName") {
       setRequiredFieldErrors((current) => {
         const next = { ...current };
-        delete next[field];
+        if (nextValue.trim()) {
+          delete next.fullName;
+        }
         return next;
       });
+      return;
+    }
+    if (field === "phone") {
+      setRequiredFieldErrors((current) => ({
+        ...current,
+        phone: getPhoneError(nextValue, { live: true }),
+      }));
     }
   }
 
@@ -805,6 +837,11 @@ export default function AdminOrdersNew() {
     }
     if (!customerForm.phone.trim()) {
       nextRequiredErrors.phone = "Phone number is required.";
+    } else {
+      const phoneError = getPhoneError(customerForm.phone);
+      if (phoneError) {
+        nextRequiredErrors.phone = phoneError;
+      }
     }
     if (Object.keys(nextRequiredErrors).length > 0) {
       setRequiredFieldErrors(nextRequiredErrors);
@@ -817,9 +854,8 @@ export default function AdminOrdersNew() {
     }
 
     const fullName = customerForm.fullName.trim();
-    const phone = customerForm.phone.trim();
+    const phone = buildNepalPhoneNumber(customerForm.phone.trim());
     const email = customerForm.email.trim();
-    const city = customerForm.city.trim();
     const address = customerForm.address.trim();
     const landmark = customerForm.landmark.trim();
     const [firstName = "", ...lastParts] = fullName.split(/\s+/).filter(Boolean);
@@ -837,7 +873,6 @@ export default function AdminOrdersNew() {
         lastName: lastName || undefined,
         phone: phone || undefined,
         email: email || undefined,
-        city: city || undefined,
         address: address || undefined,
         deliveryLocation: landmark || undefined,
       },
@@ -1017,38 +1052,51 @@ export default function AdminOrdersNew() {
                 </label>
                 <label className="block" htmlFor="customer-phone">
                   <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Phone number <span className="text-[#A32D2D] dark:text-destructive">*</span></span>
-                  <Input
-                    id="customer-phone"
-                    value={customerForm.phone}
-                    onChange={(event) => updateCustomerField("phone", event.target.value)}
-                    className={cn(INPUT_CLASS, requiredFieldErrors.phone && "border-[#A32D2D] focus-visible:border-[#A32D2D] dark:border-destructive dark:focus-visible:border-destructive")}
-                    placeholder="+977-"
-                    aria-required="true"
-                    aria-invalid={Boolean(requiredFieldErrors.phone)}
-                    aria-describedby={requiredFieldErrors.phone ? "customer-phone-error" : undefined}
-                  />
-                  {requiredFieldErrors.phone ? (
-                    <span id="customer-phone-error" role="alert" className="mt-1 block text-[11px] text-[#A32D2D] dark:text-destructive">{requiredFieldErrors.phone}</span>
-                  ) : null}
+                  <div
+                    className={cn(
+                      "relative flex h-10 overflow-hidden rounded-lg border bg-[#f6f5f1] transition-colors dark:bg-muted",
+                      requiredFieldErrors.phone
+                        ? "border-[#A32D2D] dark:border-destructive"
+                        : "border-black/10 focus-within:border-black/25 dark:border-border dark:focus-within:border-ring",
+                    )}
+                  >
+                    <div className="pointer-events-none flex items-center gap-2 border-r border-black/10 bg-white px-3 dark:border-border dark:bg-card">
+                      <img src="/nepal-flag-icon.svg" alt="Nepal flag" className="h-4 w-6 object-cover" />
+                      <span className="text-[12px] font-semibold tracking-wide text-[#1f1e1a] dark:text-foreground">{NEPAL_PHONE_COUNTRY_CODE}</span>
+                    </div>
+                    <Input
+                      id="customer-phone"
+                      type="tel"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="98XXXXXXXX"
+                      value={customerForm.phone}
+                      onChange={(event) => updateCustomerField("phone", event.target.value)}
+                      onBlur={(event) => {
+                        setRequiredFieldErrors((current) => ({
+                          ...current,
+                          phone: getPhoneError(event.target.value),
+                        }));
+                      }}
+                      className="h-full rounded-none border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
+                      maxLength={NEPAL_PHONE_LOCAL_LENGTH}
+                      aria-required="true"
+                      aria-invalid={Boolean(requiredFieldErrors.phone)}
+                      aria-describedby="customer-phone-feedback"
+                    />
+                  </div>
+                  <span
+                    id="customer-phone-feedback"
+                    role={requiredFieldErrors.phone ? "alert" : undefined}
+                    aria-live="polite"
+                    className={requiredFieldErrors.phone ? "mt-1 block text-[11px] text-[#A32D2D] dark:text-destructive" : "mt-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground"}
+                  >
+                    {requiredFieldErrors.phone || "Nepal mobile number only. The +977 country code is already added for you."}
+                  </span>
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Email</span>
                   <Input value={customerForm.email} onChange={(event) => updateCustomerField("email", event.target.value)} className={INPUT_CLASS} placeholder="email@example.com" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">City / District</span>
-                  <select
-                    value={customerForm.city}
-                    onChange={(event) => updateCustomerField("city", event.target.value)}
-                    className={cn(INPUT_CLASS, "w-full")}
-                  >
-                    <option value="">Select city</option>
-                    {CITY_OPTIONS.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
                 </label>
                 <label className="block">
                   <span className="mb-1 block text-[11px] text-[#8e8a80] dark:text-muted-foreground">Address</span>
@@ -1187,8 +1235,17 @@ export default function AdminOrdersNew() {
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2 flex-col-reverse sm:flex-row">
-              <div className="flex-1">
+            <div className="mt-4 flex flex-col gap-2">
+              <Button
+                type="button"
+                className="h-11 w-full rounded-md bg-black px-4 text-[13px] font-medium text-white transition-colors hover:bg-black/85 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                loading={mutation.isPending}
+                loadingText="Creating..."
+                onClick={handleCreateOrder}
+              >
+                Create order
+              </Button>
+              <div className="w-full">
                 <GenerateCustomLinkUI
                   link={checkoutLink}
                   disabled={!canShareCheckoutLink}
@@ -1196,15 +1253,6 @@ export default function AdminOrdersNew() {
                   onGenerate={() => {}}
                 />
               </div>
-              <Button
-                type="button"
-                className="h-11 flex-1 rounded-md bg-black px-4 text-[13px] font-medium text-white hover:bg-black/85 transition-colors dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-                loading={mutation.isPending}
-                loadingText="Creating..."
-                onClick={handleCreateOrder}
-              >
-                Create order
-              </Button>
             </div>
           </aside>
         </div>

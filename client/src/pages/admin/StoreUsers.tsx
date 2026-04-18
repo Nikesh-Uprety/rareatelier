@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   Table,
   TableBody,
@@ -28,16 +29,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -844,34 +835,18 @@ export default function StoreUsers() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation */}
-      <AlertDialog
+      <DeleteConfirmDialog
         open={!!deletingUser}
         onOpenChange={(open) => {
           if (!open) setDeletingUser(null);
         }}
-      >
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-destructive">Delete User?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to remove <strong>{deletingUser?.name ?? deletingUser?.email}</strong>?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full" disabled={deleteMutation.isPending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              onClick={() => deletingUser && deleteMutation.mutate(deletingUser.id)}
-              disabled={deleteMutation.isPending}
-            >
-              {deleteMutation.isPending || pendingDeleteUserId === deletingUser?.id ? "Deleting..." : "Confirm"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        title="Delete Account"
+        subject={deletingUser?.name ?? deletingUser?.email ?? "Account"}
+        description="This team account will lose admin access immediately and the removal cannot be undone."
+        loading={deleteMutation.isPending}
+        loadingText="Deleting account..."
+        onConfirm={() => deletingUser && deleteMutation.mutate(deletingUser.id)}
+      />
     </div>
   );
 }

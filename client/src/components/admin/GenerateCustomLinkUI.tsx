@@ -52,7 +52,7 @@ export function GenerateCustomLinkUI({
         type="button"
         variant="outline"
         disabled={disabled}
-        className="h-11 rounded-md border-black/15 bg-white px-4 text-[13px] font-medium text-[#1f1e1a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-[#f6f5f1] hover:border-black/25 dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted dark:hover:border-border"
+        className="h-11 w-full justify-center rounded-md border-black/15 bg-white px-4 text-[13px] font-medium text-[#1f1e1a] transition-colors hover:border-black/25 hover:bg-[#f6f5f1] disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-foreground dark:hover:border-border dark:hover:bg-muted"
         onClick={handleGenerateClick}
         title={disabled ? disabledReason : "Generate a custom link for the customer"}
       >
@@ -72,29 +72,31 @@ export function GenerateCustomLinkUI({
               </span>
               <span className="sr-only">{link}</span>
             </div>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-black/10 bg-white text-[#1f1e1a] transition-colors hover:bg-[#f1efe8] dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted"
-              title={copiedState === "copied" ? "Copied!" : "Copy link"}
-              aria-label="Copy link to clipboard"
-            >
-              {copiedState === "copied" ? (
-                <Check className="size-4 text-emerald-600" />
-              ) : (
-                <Copy className="size-4" />
-              )}
-            </button>
-            <a
-              href={link}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-black text-white transition-colors hover:bg-black/85 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
-              title="Open link in new tab"
-              aria-label="Open link in new tab"
-            >
-              <ArrowUpRight className="size-4" />
-            </a>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="inline-flex size-9 items-center justify-center rounded-lg border border-black/10 bg-white text-[#1f1e1a] transition-colors hover:bg-[#f1efe8] dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted"
+                title={copiedState === "copied" ? "Copied!" : "Copy link"}
+                aria-label="Copy link to clipboard"
+              >
+                {copiedState === "copied" ? (
+                  <Check className="size-4 text-emerald-600" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </button>
+              <a
+                href={link}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex size-9 items-center justify-center rounded-lg bg-black text-white transition-colors hover:bg-black/85 dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary/90"
+                title="Open link in new tab"
+                aria-label="Open link in new tab"
+              >
+                <ArrowUpRight className="size-4" />
+              </a>
+            </div>
           </div>
         </div>
       )}

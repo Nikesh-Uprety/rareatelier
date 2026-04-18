@@ -366,6 +366,7 @@ export interface CartState {
     variant: { id?: number; size: string; color: string },
     quantity?: number,
   ) => CartMutationResult;
+  replaceItems: (items: CartItem[]) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => CartMutationResult;
   clearCart: () => void;
@@ -479,6 +480,11 @@ export const useCartStore = create<CartState>()(
         }
 
         return mutationResult;
+      },
+      replaceItems: (items) => {
+        const normalizedItems = normalizeCartItems(items);
+        set({ items: normalizedItems });
+        persistGuestCartSnapshot(normalizedItems);
       },
       removeItem: (id) => {
         let target: CartItem | undefined;

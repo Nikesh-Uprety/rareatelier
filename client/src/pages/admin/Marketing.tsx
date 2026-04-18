@@ -7,6 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { AdvancedEmailEditor } from "@/components/admin/AdvancedEmailEditor";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   addNewsletterEmail,
   importNewsletterEmails,
@@ -231,6 +232,7 @@ export default function AdminMarketingPage() {
   const [marketingBody, setMarketingBody] = useState<string>(emailTemplates.template5.html);
   const [subscriberSearch, setSubscriberSearch] = useState("");
   const [newSubscriberEmail, setNewSubscriberEmail] = useState("");
+  const [deleteSubscriberDialog, setDeleteSubscriberDialog] = useState<null | { kind: "selected" | "all" }>(null);
   const [showSplitEditor, setShowSplitEditor] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("template5");
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -765,7 +767,7 @@ export default function AdminMarketingPage() {
                     bulkDeleteMutation.isPending ||
                     selectedNewsletterEmails.length === 0
                   }
-                  onClick={() => bulkDeleteMutation.mutate(selectedNewsletterEmails)}
+                  onClick={() => setDeleteSubscriberDialog({ kind: "selected" })}
                 >
                   <Trash2 className="h-3 w-3 mr-1.5" />
                   Remove selected ({selectedNewsletterEmails.length})
@@ -776,10 +778,7 @@ export default function AdminMarketingPage() {
                   size="sm"
                   className="h-8 text-[10px] border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-950/30 max-sm:flex-1"
                   disabled={deleteAllMutation.isPending || subscribers.length === 0}
-                  onClick={() => {
-                    const ok = window.confirm("Delete all newsletter subscribers?");
-                    if (ok) deleteAllMutation.mutate();
-                  }}
+                  onClick={() => setDeleteSubscriberDialog({ kind: "all" })}
                 >
                   Delete all
                 </Button>
@@ -1160,6 +1159,28 @@ export default function AdminMarketingPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
+      <DeleteConfirmDialog
+        open={deleteSubscriberDialog !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteSubscriberDialog(null);
+        }}
+        title={deleteSubscriberDialog?.kind === "all" ? "Delete Subscribers" : "Delete Selected Subscribers"}
+        subject={deleteSubscriberDialog?.kind === "all" ? `${subscribers.length} subscriber${subscribers.length === 1 ? "" : "s"}` : `${selectedNewsletterEmails.length} selected subscriber${selectedNewsletterEmails.length === 1 ? "" : "s"}`}
+        description={deleteSubscriberDialog?.kind === "all"
+          ? "Every newsletter subscriber in the admin panel will be permanently removed. This cannot be undone."
+          : "The selected newsletter subscribers will be permanently removed from your mailing list. This cannot be undone."}
+        loading={deleteSubscriberDialog?.kind === "all" ? deleteAllMutation.isPending : bulkDeleteMutation.isPending}
+        loadingText={deleteSubscriberDialog?.kind === "all" ? "Deleting subscribers..." : "Deleting selection..."}
+        onConfirm={() => {
+          if (deleteSubscriberDialog?.kind === "all") {
+            deleteAllMutation.mutate(undefined, { onSettled: () => setDeleteSubscriberDialog(null) });
+            return;
+          }
+          bulkDeleteMutation.mutate(selectedNewsletterEmails, { onSettled: () => setDeleteSubscriberDialog(null) });
+        }}
+      />
     </div>
   );
 }

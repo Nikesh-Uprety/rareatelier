@@ -24,16 +24,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Trash2, Edit } from "lucide-react";
 import {
   Sheet,
@@ -54,6 +44,7 @@ import { DataGrid, type GridColDef, type GridRowSelectionModel } from "@mui/x-da
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Pagination } from "@/components/admin/Pagination";
 import CustomerSpendingChart from "@/components/admin/CustomerSpendingChart";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 
 export default function AdminCustomers() {
   const [searchInput, setSearchInput] = useState("");
@@ -1075,49 +1066,27 @@ export default function AdminCustomers() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Alert */}
-      <AlertDialog open={!!deletingCustomer} onOpenChange={(open) => !open && setDeletingCustomer(null)}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-destructive">Delete Customer?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove <strong>{deletingCustomer?.firstName} {deletingCustomer?.lastName}</strong> from your records.
-              This action cannot be undone, although their order history will remain in the database for accounting.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => deletingCustomer && deleteMutation.mutate(deletingCustomer.id)}
-              className="rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-            >
-              {deleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={!!deletingCustomer}
+        onOpenChange={(open) => !open && setDeletingCustomer(null)}
+        title="Delete Customer"
+        subject={deletingCustomer ? `${deletingCustomer.firstName} ${deletingCustomer.lastName}`.trim() : "Customer"}
+        description="This customer will be removed from your admin records. Order history stays preserved for accounting, but the customer profile itself cannot be restored."
+        loading={deleteMutation.isPending}
+        loadingText="Deleting customer..."
+        onConfirm={() => deletingCustomer && deleteMutation.mutate(deletingCustomer.id)}
+      />
 
-      <AlertDialog open={isBulkDeleteOpen} onOpenChange={setIsBulkDeleteOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xl font-bold text-destructive">Delete selected customers?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove <strong>{selectedCustomerIds.length}</strong> selected customers from your records.
-              This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-full" disabled={bulkDeleteMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => bulkDeleteMutation.mutate(selectedCustomerIds)}
-              className="rounded-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-              disabled={bulkDeleteMutation.isPending || selectedCustomerIds.length === 0}
-            >
-              {bulkDeleteMutation.isPending ? "Deleting..." : "Confirm Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={isBulkDeleteOpen}
+        onOpenChange={setIsBulkDeleteOpen}
+        title="Delete Customers"
+        subject={`${selectedCustomerIds.length} selected customers`}
+        description="These customer profiles will be permanently removed from your records. This bulk action cannot be undone."
+        loading={bulkDeleteMutation.isPending}
+        loadingText="Deleting customers..."
+        onConfirm={() => bulkDeleteMutation.mutate(selectedCustomerIds)}
+      />
     </div>
   );
 }

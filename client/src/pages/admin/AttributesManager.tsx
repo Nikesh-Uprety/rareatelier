@@ -59,6 +59,7 @@ import {
   PreviewLinkCardTrigger,
 } from "@/components/ui/preview-link-card";
 import { extractAttributeLabel, normalizeAttributeLabel } from "@shared/productAttributes";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 
 // Helper for color contrast
 function getContrastColor(hex: string): string {
@@ -109,6 +110,8 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
   const [editingCategory, setEditingCategory] = useState<CategoryApi | null>(null);
   const [viewCategoryProducts, setViewCategoryProducts] = useState<string | null>(null);
   const [showSizeChart, setShowSizeChart] = useState(false);
+  const [attributeToDelete, setAttributeToDelete] = useState<ProductAttribute | null>(null);
+  const [categoryToDelete, setCategoryToDelete] = useState<CategoryApi | null>(null);
   const sizeChartRef = useRef<HTMLDivElement>(null);
 
   // Queries
@@ -338,7 +341,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
                             variant="destructive" 
                             size="icon" 
                             className="absolute -top-1 -right-1 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                            onClick={() => deleteAttrMutation.mutate(attr.id)}
+                            onClick={() => setAttributeToDelete(attr)}
                           >
                             <X className="w-3 h-3" />
                           </Button>
@@ -382,7 +385,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
                     variant="ghost" 
                     size="icon" 
                     className="absolute top-0 right-0 h-5 w-5 opacity-0 group-hover:opacity-100 text-destructive" 
-                    onClick={() => { if(confirm("Remove?")) deleteAttrMutation.mutate(attr.id); }}
+                    onClick={() => setAttributeToDelete(attr)}
                    >
                      <Trash2 className="w-3 h-3" />
                    </Button>
@@ -488,7 +491,7 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
                      </PreviewLinkCard>
                       <div className="flex items-center gap-2">
                          <Button variant="ghost" size="sm" className="rounded-full text-[10px] font-bold uppercase tracking-widest" onClick={() => setViewCategoryProducts(cat.slug)}>View</Button>
-                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => { if(confirm("Confirm deletion?")) deleteCatMutation.mutate(cat.id); }}>
+                         <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setCategoryToDelete(cat)}>
                            <Trash2 className="w-4 h-4" />
                          </Button>
                       </div>
@@ -543,6 +546,35 @@ export function AttributesManager({ onClose }: { onClose: () => void }) {
       <div className="shrink-0 border-t border-[#DDE7DB] bg-white/85 p-5 backdrop-blur dark:border-border dark:bg-card/80">
          <Button variant="outline" className="w-full rounded-2xl border-[#CFE0CD] bg-gradient-to-r from-white to-[#F2F7F2] font-semibold hover:-translate-y-0.5 hover:shadow-[0_12px_22px_rgba(34,63,41,0.16)] transition-all duration-300" onClick={onClose}>Close Manager</Button>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!attributeToDelete}
+        onOpenChange={(open) => !open && setAttributeToDelete(null)}
+        title="Delete Attribute"
+        subject={attributeToDelete ? extractAttributeLabel(attributeToDelete.value) : "Attribute"}
+        description="This attribute will be removed from the admin catalog and may affect products that still reference it."
+        loading={deleteAttrMutation.isPending}
+        loadingText="Deleting attribute..."
+        onConfirm={() => {
+          if (!attributeToDelete) return;
+          deleteAttrMutation.mutate(attributeToDelete.id, { onSettled: () => setAttributeToDelete(null) } as any);
+        }}
+      />
+
+      <DeleteConfirmDialog
+        open={!!categoryToDelete}
+        onOpenChange={(open) => !open && setCategoryToDelete(null)}
+        title="Delete Category"
+        subject={categoryToDelete?.name ?? "Category"}
+        description="This category will be permanently removed from the admin panel. Please make sure no important product grouping still depends on it."
+        loading={deleteCatMutation.isPending}
+        loadingText="Deleting category..."
+        onConfirm={() => {
+          if (!categoryToDelete) return;
+          deleteCatMutation.mutate(categoryToDelete.id, { onSettled: () => setCategoryToDelete(null) } as any);
+        }}
+      />
+
     </div>
   );
 }

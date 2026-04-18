@@ -1,16 +1,6 @@
 import { lazy, Suspense, useEffect, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
 import {
@@ -61,6 +51,7 @@ import {
 } from "@/lib/adminApi";
 import type { AdminBill, AdminOrder, AdminOrderFonepayAudit } from "@/lib/adminApi";
 import { ExportButton } from "@/components/admin/ExportButton";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice, displayEmptyField } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -816,40 +807,24 @@ export default function AdminOrders() {
         </div>
       )}
 
-      <AlertDialog open={!!orderToDelete} onOpenChange={(open) => !open && setOrderToDelete(null)}>
-        <AlertDialogContent className="max-w-md rounded-[28px] border border-[#D8E4D8] bg-white/95 p-0 shadow-[0_28px_80px_rgba(21,33,24,0.22)] backdrop-blur-xl dark:border-[#2F3D33] dark:bg-[#101712]/95">
-          <div className="px-6 py-6">
-            <AlertDialogHeader className="space-y-2 text-left">
-              <AlertDialogTitle className="text-xl font-black tracking-tight text-[#142017] dark:text-[#F3FAF4]">
-                Delete this order?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm leading-6 text-[#4B5A4E] dark:text-[#C7D6C9]">
-                {orderToDelete
-                  ? `Order #${orderToDelete.id.slice(0, 8)} will be permanently removed. This action cannot be undone.`
-                  : "This order will be permanently removed. This action cannot be undone."}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-          </div>
-          <AlertDialogFooter className="gap-2 px-6 py-5 sm:justify-end">
-            <AlertDialogCancel className="mt-0 rounded-full border-[#D0DCCF] px-5 dark:border-[#324134] dark:bg-[#141D16] dark:text-[#E3F1E5] dark:hover:bg-[#1C2820]" disabled={deleteOrderMutation.isPending}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="mt-0 rounded-full bg-[#B42318] px-5 text-white hover:bg-[#932018] dark:bg-[#C9372C] dark:hover:bg-[#A52E24]"
-              onClick={(event) => {
-                event.preventDefault();
-                if (!orderToDelete) return;
-                deleteOrderMutation.mutate(orderToDelete.id, {
-                  onSuccess: () => setOrderToDelete(null),
-                });
-              }}
-              disabled={deleteOrderMutation.isPending}
-            >
-              {deleteOrderMutation.isPending ? "Deleting..." : "Delete Order"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteConfirmDialog
+        open={!!orderToDelete}
+        onOpenChange={(open) => {
+          if (!open) setOrderToDelete(null);
+        }}
+        title="Delete Order"
+        subject={orderToDelete ? `Order #${orderToDelete.id.slice(0, 8)}` : "Order"}
+        description="This order will be permanently removed from admin order management. This action cannot be undone."
+        confirmLabel="Yes, Delete!"
+        loading={deleteOrderMutation.isPending}
+        loadingText="Deleting order..."
+        onConfirm={() => {
+          if (!orderToDelete) return;
+          deleteOrderMutation.mutate(orderToDelete.id, {
+            onSuccess: () => setOrderToDelete(null),
+          });
+        }}
+      />
 
   {/* Sliding Drawer for Order Details */}
       <Sheet

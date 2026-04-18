@@ -103,6 +103,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import AddProductWizard from "./AddProductWizard";
+import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import {
   DEFAULT_PRODUCT_SIZES,
   DEFAULT_PRODUCT_VARIANTS,
@@ -2337,71 +2338,85 @@ export default function AdminProducts() {
         )}
       </AnimatePresence>
 
-      <AlertDialog
-        open={Boolean(productActionDialog)}
-        onOpenChange={(open) => {
-          if (!open) setProductActionDialog(null);
-        }}
-      >
-        <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border border-[#D8E4D8] bg-white/95 p-0 shadow-[0_28px_80px_rgba(21,33,24,0.22)] backdrop-blur-xl dark:border-[#2F3D33] dark:bg-[#101712]/95">
-          {productActionDialog && (
-            <>
-              <div className="border-b border-[#E4EDE4] bg-gradient-to-br from-white via-[#F6FAF5] to-[#EEF5EE] px-6 py-6 dark:border-[#243126] dark:from-[#131B15] dark:via-[#18231B] dark:to-[#111A13]">
-                <div className="flex items-start gap-4">
-                  <div
-                    className={cn(
-                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border",
-                      productActionDialog.tone === "destructive" &&
-                        "border-red-200 bg-red-50 text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
-                      productActionDialog.tone === "warning" &&
-                        "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
-                      productActionDialog.tone === "success" &&
-                        "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-                    )}
-                  >
-                    {productActionDialog.icon === "trash" && <Trash2 className="h-5 w-5" />}
-                    {productActionDialog.icon === "archive" && <FolderInput className="h-5 w-5" />}
-                    {productActionDialog.icon === "activate" && <Power className="h-5 w-5" />}
-                    {productActionDialog.icon === "deactivate" && <PowerOff className="h-5 w-5" />}
+      {productActionDialog?.tone === "destructive" ? (
+        <DeleteConfirmDialog
+          open={Boolean(productActionDialog)}
+          onOpenChange={(open) => {
+            if (!open) setProductActionDialog(null);
+          }}
+          title={productActionDialog.title}
+          subject="Product"
+          description={productActionDialog.description}
+          confirmLabel={productActionDialog.confirmLabel}
+          loading={deleteMutation.isPending || bulkDeleteMutation.isPending}
+          loadingText="Deleting product..."
+          onConfirm={() => {
+            productActionDialog.onConfirm();
+            setProductActionDialog(null);
+          }}
+        />
+      ) : (
+        <AlertDialog
+          open={Boolean(productActionDialog)}
+          onOpenChange={(open) => {
+            if (!open) setProductActionDialog(null);
+          }}
+        >
+          <AlertDialogContent className="max-w-md overflow-hidden rounded-[28px] border border-[#D8E4D8] bg-white/95 p-0 shadow-[0_28px_80px_rgba(21,33,24,0.22)] backdrop-blur-xl dark:border-[#2F3D33] dark:bg-[#101712]/95">
+            {productActionDialog && (
+              <>
+                <div className="border-b border-[#E4EDE4] bg-gradient-to-br from-white via-[#F6FAF5] to-[#EEF5EE] px-6 py-6 dark:border-[#243126] dark:from-[#131B15] dark:via-[#18231B] dark:to-[#111A13]">
+                  <div className="flex items-start gap-4">
+                    <div
+                      className={cn(
+                        "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border",
+                        productActionDialog.tone === "warning" &&
+                          "border-amber-200 bg-amber-50 text-amber-600 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
+                        productActionDialog.tone === "success" &&
+                          "border-emerald-200 bg-emerald-50 text-emerald-600 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
+                      )}
+                    >
+                      {productActionDialog.icon === "archive" && <FolderInput className="h-5 w-5" />}
+                      {productActionDialog.icon === "activate" && <Power className="h-5 w-5" />}
+                      {productActionDialog.icon === "deactivate" && <PowerOff className="h-5 w-5" />}
+                    </div>
+                    <AlertDialogHeader className="space-y-2 text-left">
+                      <AlertDialogTitle className="text-xl font-black tracking-tight text-[#142017] dark:text-[#F3FAF4]">
+                        {productActionDialog.title}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm leading-6 text-[#4B5A4E] dark:text-[#C7D6C9]">
+                        {productActionDialog.description}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
                   </div>
-                  <AlertDialogHeader className="space-y-2 text-left">
-                    <AlertDialogTitle className="text-xl font-black tracking-tight text-[#142017] dark:text-[#F3FAF4]">
-                      {productActionDialog.title}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription className="text-sm leading-6 text-[#4B5A4E] dark:text-[#C7D6C9]">
-                      {productActionDialog.description}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
                 </div>
-              </div>
 
-              <AlertDialogFooter className="gap-2 px-6 py-5 sm:justify-end">
-                <AlertDialogCancel className="mt-0 rounded-full border-[#D0DCCF] px-5 dark:border-[#324134] dark:bg-[#141D16] dark:text-[#E3F1E5] dark:hover:bg-[#1C2820]">
-                  Cancel
-                </AlertDialogCancel>
-                <Button
-                  type="button"
-                  className={cn(
-                    "rounded-full px-5 font-bold",
-                    productActionDialog.tone === "destructive" &&
-                      "bg-[#1B1B1B] text-white hover:bg-[#2A2A2A] dark:bg-red-500 dark:hover:bg-red-400",
-                    productActionDialog.tone === "warning" &&
-                      "bg-[#233826] text-white hover:bg-[#2E4A32] dark:bg-amber-500 dark:text-[#111] dark:hover:bg-amber-400",
-                    productActionDialog.tone === "success" &&
-                      "bg-[#1D6B3D] text-white hover:bg-[#24854B] dark:bg-emerald-500 dark:text-[#08110A] dark:hover:bg-emerald-400",
-                  )}
-                  onClick={() => {
-                    productActionDialog.onConfirm();
-                    setProductActionDialog(null);
-                  }}
-                >
-                  {productActionDialog.confirmLabel}
-                </Button>
-              </AlertDialogFooter>
-            </>
-          )}
-        </AlertDialogContent>
-      </AlertDialog>
+                <AlertDialogFooter className="gap-2 px-6 py-5 sm:justify-end">
+                  <AlertDialogCancel className="mt-0 rounded-full border-[#D0DCCF] px-5 dark:border-[#324134] dark:bg-[#141D16] dark:text-[#E3F1E5] dark:hover:bg-[#1C2820]">
+                    Cancel
+                  </AlertDialogCancel>
+                  <Button
+                    type="button"
+                    className={cn(
+                      "rounded-full px-5 font-bold",
+                      productActionDialog.tone === "warning" &&
+                        "bg-[#233826] text-white hover:bg-[#2E4A32] dark:bg-amber-500 dark:text-[#111] dark:hover:bg-amber-400",
+                      productActionDialog.tone === "success" &&
+                        "bg-[#1D6B3D] text-white hover:bg-[#24854B] dark:bg-emerald-500 dark:text-[#08110A] dark:hover:bg-emerald-400",
+                    )}
+                    onClick={() => {
+                      productActionDialog.onConfirm();
+                      setProductActionDialog(null);
+                    }}
+                  >
+                    {productActionDialog.confirmLabel}
+                  </Button>
+                </AlertDialogFooter>
+              </>
+            )}
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
 
       {/* Pagination */}
       <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
