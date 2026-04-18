@@ -48,7 +48,7 @@ test("home page loads and storefront shoppers can reach a purchasable product", 
     pageErrors.push(error.message);
   });
 
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("main").first()).toBeVisible({ timeout: 10_000 });
 
   await openFirstProduct(page);
@@ -62,7 +62,7 @@ test("landing newsletter popup can be dismissed and collection nav routes to the
     window.sessionStorage.removeItem("rare-premium-newsletter-dialog-dismissed");
   });
 
-  await page.goto("/");
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("heading", { name: "Subscribe for early access." })).toBeVisible();
@@ -71,7 +71,7 @@ test("landing newsletter popup can be dismissed and collection nav routes to the
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 
-  await page.goto("/products");
+  await page.goto("/products", { waitUntil: "domcontentloaded" });
   const collectionLink = page.getByRole("link", { name: "Collection" }).first();
   await expect(collectionLink).toBeVisible();
   await collectionLink.click();

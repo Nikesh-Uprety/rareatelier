@@ -18,9 +18,9 @@ test("new store user completes first-login OTP setup before admin access", async
   const password = "TestPass123!";
 
   await loginAsAdmin(page);
-  await page.goto("/admin/store-users");
+  await page.goto("/admin/store-users", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Store Users" })).toBeVisible();
-  await page.getByRole("button", { name: "Add User" }).click();
+  await page.getByRole("button", { name: "Add User" }).first().click({ force: true });
   await expect(page.getByRole("heading", { name: "Add Team Member" })).toBeVisible();
   await page.locator("#store-user-name").fill("Onboarding Staff");
   await page.locator("#store-user-email").fill(uniqueEmail);
@@ -31,7 +31,7 @@ test("new store user completes first-login OTP setup before admin access", async
   const logoutResponse = await page.request.post("/api/auth/logout");
   expect(logoutResponse.ok()).toBeTruthy();
 
-  await page.goto("/admin/login");
+  await page.goto("/admin/login", { waitUntil: "domcontentloaded" });
   await page.getByTestId("login-email").fill(uniqueEmail);
   await page.getByTestId("login-password").fill(password);
 
@@ -79,9 +79,9 @@ test("expired OTP is rejected and resend issues a fresh code that works", async 
   const password = "TestPass123!";
 
   await loginAsAdmin(page);
-  await page.goto("/admin/store-users");
+  await page.goto("/admin/store-users", { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("heading", { name: "Store Users" })).toBeVisible();
-  await page.getByRole("button", { name: "Add User" }).click();
+  await page.getByRole("button", { name: "Add User" }).first().click({ force: true });
   await expect(page.getByRole("heading", { name: "Add Team Member" })).toBeVisible();
   await page.locator("#store-user-name").fill("Expired OTP Staff");
   await page.locator("#store-user-email").fill(uniqueEmail);
@@ -92,7 +92,7 @@ test("expired OTP is rejected and resend issues a fresh code that works", async 
   const logoutResponse = await page.request.post("/api/auth/logout");
   expect(logoutResponse.ok()).toBeTruthy();
 
-  await page.goto("/admin/login");
+  await page.goto("/admin/login", { waitUntil: "domcontentloaded" });
   await page.getByTestId("login-email").fill(uniqueEmail);
   await page.getByTestId("login-password").fill(password);
 

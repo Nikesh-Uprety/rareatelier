@@ -421,6 +421,7 @@ const CANVAS_TEMPLATE_OVERRIDES = {
 let siteSettingsHasFontPresetColumnCache: boolean | null = null;
 let mediaAssetsCompatEnsured: Promise<void> | null = null;
 let orderVerificationChallengesEnsured: Promise<void> | null = null;
+let orderDeliveryLocationCompatEnsured: Promise<void> | null = null;
 let orderTrackingCompatEnsured: Promise<void> | null = null;
 let billTrackingCompatEnsured: Promise<void> | null = null;
 let orderItemsColorCompatEnsured: Promise<void> | null = null;
@@ -998,6 +999,26 @@ async function ensureOrderTrackingCompatibility() {
   return orderTrackingCompatEnsured;
 }
 
+async function ensureOrderDeliveryLocationCompatibility() {
+  if (orderDeliveryLocationCompatEnsured) return orderDeliveryLocationCompatEnsured;
+
+  orderDeliveryLocationCompatEnsured = (async () => {
+    try {
+      await db.execute(sql`
+        alter table orders
+        add column if not exists delivery_location varchar
+      `);
+    } catch (error) {
+      console.warn("Unable to ensure order delivery location compatibility", error);
+    }
+  })().catch((error) => {
+    orderDeliveryLocationCompatEnsured = null;
+    throw error;
+  });
+
+  return orderDeliveryLocationCompatEnsured;
+}
+
 async function ensureBillTrackingCompatibility() {
   if (billTrackingCompatEnsured) return billTrackingCompatEnsured;
 
@@ -1307,6 +1328,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   await ensureMediaAssetsCompatibility();
   await ensureOrderVerificationChallengesTable();
+  await ensureOrderDeliveryLocationCompatibility();
   await ensureOrderTrackingCompatibility();
   await ensureBillTrackingCompatibility();
   await ensureOrderItemsColorCompatibility();
@@ -4788,8 +4810,6 @@ ${Array.from(uniqueEntries.entries())
         );
       }
 
-      grantGuestOrderAccess(req, order.id);
-
       if (order.paymentMethod !== "fonepay") {
         return res.redirect(
           buildClientRedirectUrl(req, "/checkout/payment", {
@@ -4834,6 +4854,8 @@ ${Array.from(uniqueEntries.entries())
         pid: getQueryParam(req.query.PID) ?? undefined,
         bankCode: getQueryParam(req.query.BC) ?? undefined,
       });
+
+      grantGuestOrderAccess(req, order.id);
 
       if (verification.success) {
         if (order.paymentVerified !== "verified") {
@@ -4925,6 +4947,13 @@ ${Array.from(uniqueEntries.entries())
 
         if (order.paymentMethod !== "fonepay") {
           return res.status(400).json({ success: false, error: "Order is not a Fonepay payment" });
+        }
+
+        if (order.paymentVerified === "verified" || order.status === "completed" || order.status === "cancelled") {
+          return res.status(409).json({
+            success: false,
+            error: "This Fonepay order is already closed.",
+          });
         }
 
         if (IS_E2E_TEST_MODE) {
@@ -5127,6 +5156,18 @@ ${Array.from(uniqueEntries.entries())
 
         if (existingOrder && existingOrder.paymentMethod !== "fonepay") {
           return res.status(400).json({ success: false, error: "Order is not a Fonepay POS payment" });
+        }
+
+        if (
+          existingOrder &&
+          (existingOrder.paymentVerified === "verified" ||
+            existingOrder.status === "completed" ||
+            existingOrder.status === "cancelled")
+        ) {
+          return res.status(409).json({
+            success: false,
+            error: "This Fonepay POS order is already closed.",
+          });
         }
 
         const fonepayStatus = getFonepayRuntimeStatus(req);
@@ -7695,6 +7736,19 @@ ${Array.from(uniqueEntries.entries())
             console.log(`✅ Bill auto-generated for admin-created completed order ${order.id}`);
           } catch (billErr) {
             console.error("Bill generation failed for admin-created completed order (non-critical):", billErr);
+          }
+        }
+
+        if (status && status !== order.status && normalizedShipping.email) {
+          try {
+            sendOrderStatusUpdateEmail(
+              normalizedShipping.email,
+              order.fullName ?? normalizedShipping.email,
+              order.id,
+              status,
+            );
+          } catch (emailErr) {
+            console.error("Order status email failed for admin-created order (non-critical):", emailErr);
           }
         }
 

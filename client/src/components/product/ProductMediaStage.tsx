@@ -92,12 +92,9 @@ function ProductMediaStage({
     (index: number) => {
       const optimizedSrc = stageImageUrls[index] || "";
       const originalSrc = allImages[index] || "";
-      if (optimizedStageIndices.has(index)) {
-        return optimizedSrc || originalSrc;
-      }
-      return originalSrc || optimizedSrc;
+      return optimizedSrc || originalSrc;
     },
-    [allImages, optimizedStageIndices, stageImageUrls],
+    [allImages, stageImageUrls],
   );
 
   const broadcastDesktopReelState = useCallback(
@@ -253,7 +250,7 @@ function ProductMediaStage({
   }, [allImages.length, desktopMaxProgress, isGalleryOpen, isMobileOrTablet, setDesktopSequenceProgress]);
 
   useEffect(() => {
-    const preloadCandidates = [selectedImageIndex, selectedImageIndex - 1, selectedImageIndex + 1]
+    const preloadCandidates = [selectedImageIndex - 1, selectedImageIndex + 1]
       .filter((index) => index >= 0 && index < stageImageUrls.length);
 
     preloadCandidates.forEach((index) => {

@@ -42,6 +42,8 @@ import { UploadProgress } from "@/components/ui/upload-progress";
 import type { CategoryApi } from "@/lib/api";
 import { apiRequest, getErrorMessage } from "@/lib/queryClient";
 import { syncStockBySizeToSizes } from "./productStock";
+import { MAX_PRODUCT_IMAGES, productImageCapMessage } from "@/lib/productImages";
+import { Star } from "lucide-react";
 
 const variantRowSchema = z.object({
   id: z.string(),
@@ -475,6 +477,9 @@ export default function AddProductWizard({
     .map((u: string) => u.trim())
     .filter(Boolean);
   const mainImageUrl = addForm.watch("imageUrl") || galleryUrls[0] || null;
+  const totalProductImageCount =
+    (addForm.watch("imageUrl") ? 1 : 0) + galleryUrls.length + pendingGalleryImages.length;
+  const productImageCapReached = totalProductImageCount >= MAX_PRODUCT_IMAGES;
   const colorImageMap = addForm.watch("colorImageMap") || {};
   const saleIsActive = !!addForm.watch("saleActive");
   const salePercentage = Number(addForm.watch("salePercentage")) || 0;
@@ -617,6 +622,14 @@ export default function AddProductWizard({
     file: File,
     target: "main" | "gallery",
   ) => {
+    if (target === "gallery" && totalProductImageCount >= MAX_PRODUCT_IMAGES) {
+      toast({
+        title: "Image limit reached",
+        description: productImageCapMessage(totalProductImageCount),
+        variant: "destructive",
+      });
+      return;
+    }
     if (target === "main") {
       setMainUploading(true);
       setMainUploadProgress(0);
@@ -1612,9 +1625,21 @@ export default function AddProductWizard({
                         </div>
 
                         <div className="rounded-[28px] border border-black/5 bg-white/90 p-6 shadow-[0_24px_70px_rgba(34,63,41,0.08)] dark:border-white/10 dark:bg-white/[0.04] dark:shadow-none">
-                          <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">
-                            <FolderInput className="h-4 w-4" /> Gallery Images
-                          </h3>
+                          <div className="flex items-center justify-between gap-2">
+                            <h3 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.22em] text-muted-foreground">
+                              <FolderInput className="h-4 w-4" /> Gallery Images
+                            </h3>
+                            <span
+                              className={cn(
+                                "rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]",
+                                productImageCapReached
+                                  ? "border-destructive/60 bg-destructive/10 text-destructive"
+                                  : "border-border text-muted-foreground",
+                              )}
+                            >
+                              {totalProductImageCount} / {MAX_PRODUCT_IMAGES}
+                            </span>
+                          </div>
 
                     {/* Upload mode toggle for gallery */}
                     <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/30 border border-border">
@@ -1665,6 +1690,7 @@ export default function AddProductWizard({
                         size="sm"
                         className="flex-1"
                         onClick={() => onMediaLibraryOpen("add-gallery")}
+                        disabled={productImageCapReached}
                       >
                         <FolderInput className="w-3.5 h-3.5 mr-1.5" /> From Library
                       </Button>
@@ -1675,10 +1701,16 @@ export default function AddProductWizard({
                         className="flex-1 border-dashed"
                         onClick={() => galleryInputRef.current?.click()}
                         loading={galleryUploading}
+                        disabled={productImageCapReached || galleryUploading}
                       >
                         <Upload className="w-3.5 h-3.5 mr-1.5" /> Upload to {getProviderLabel(galleryUploadMode)}
                       </Button>
                     </div>
+                    {productImageCapReached && (
+                      <p className="text-[11px] text-destructive">
+                        Maximum of {MAX_PRODUCT_IMAGES} images reached. Remove one before adding more.
+                      </p>
+                    )}
                     {galleryUploading && (
                       <div className="mt-4 flex justify-center">
                         <UploadProgress value={galleryUploadProgress} label="Upload progress" />
@@ -1692,32 +1724,73 @@ export default function AddProductWizard({
                       className="hidden"
                       onChange={async (e) => {
                         const files = Array.from(e.target.files ?? []);
+                        e.target.value = "";
                         if (!files.length) return;
                         for (const file of files) {
+                          if (totalProductImageCount >= MAX_PRODUCT_IMAGES) {
+                            toast({
+                              title: "Image limit reached",
+                              description: productImageCapMessage(totalProductImageCount),
+                              variant: "destructive",
+                            });
+                            break;
+                          }
                           await handleRemoteUpload(galleryUploadMode, file, "gallery");
                         }
-                        e.target.value = "";
                       }}
                     />
 
                     <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
                       {addForm.watch("galleryUrlsText") &&
-                        addForm.watch("galleryUrlsText")!.split(/\n/).map((u: string) => u.trim()).filter(Boolean).map((url: string, i: number) => (
-                          <div key={i} className="aspect-square bg-muted rounded-lg border border-border overflow-hidden relative group">
-                            <img src={url} alt="" className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={() => {
-                                const urls = addForm.getValues("galleryUrlsText")!.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
-                                urls.splice(i, 1);
-                                addForm.setValue("galleryUrlsText", urls.join("\n"), { shouldValidate: true });
-                              }}
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
+                        addForm.watch("galleryUrlsText")!.split(/\n/).map((u: string) => u.trim()).filter(Boolean).map((url: string, i: number) => {
+                          const isPrimary = addForm.watch("imageUrl") === url;
+                          return (
+                            <div key={i} className="aspect-square bg-muted rounded-lg border border-border overflow-hidden relative group">
+                              <img
+                                src={url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                              {isPrimary && (
+                                <span className="absolute left-1 top-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] text-primary-foreground shadow">
+                                  Primary
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                title={isPrimary ? "Primary image" : "Set as main"}
+                                className={cn(
+                                  "absolute bottom-1 left-1 rounded-full p-1 shadow transition-opacity",
+                                  isPrimary
+                                    ? "bg-primary text-primary-foreground opacity-100"
+                                    : "bg-white/90 text-neutral-800 opacity-0 group-hover:opacity-100",
+                                )}
+                                onClick={() => {
+                                  addForm.setValue("imageUrl", url, { shouldValidate: true, shouldDirty: true });
+                                  toast({ title: "Primary image updated" });
+                                }}
+                              >
+                                <Star className={cn("h-3 w-3", isPrimary && "fill-current")} />
+                              </button>
+                              <button
+                                type="button"
+                                className="absolute top-1 right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  const urls = addForm.getValues("galleryUrlsText")!.split(/\n/).map((u: string) => u.trim()).filter(Boolean);
+                                  urls.splice(i, 1);
+                                  addForm.setValue("galleryUrlsText", urls.join("\n"), { shouldValidate: true });
+                                  if (isPrimary) {
+                                    addForm.setValue("imageUrl", urls[0] || "", { shouldValidate: true, shouldDirty: true });
+                                  }
+                                }}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          );
+                        })}
                       {pendingGalleryImages.map((img) => (
                         <div key={img.id} className="aspect-square bg-muted rounded-lg border border-border overflow-hidden relative group">
                           <img src={img.previewUrl} alt="" className="w-full h-full object-cover" />

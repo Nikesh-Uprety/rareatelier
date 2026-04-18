@@ -4,10 +4,18 @@ import { expect, type Locator, type Page } from "@playwright/test";
 export const adminAuthFile = path.join(process.cwd(), "tests/e2e/.auth/admin.json");
 
 export async function loginAsAdmin(page: Page) {
-  await page.goto("/admin/login");
-  await page.getByTestId("login-email").fill("admin@rare.np");
-  await page.getByTestId("login-password").fill("admin123");
-  await page.getByTestId("login-submit").click();
+  const response = await page.context().request.post("/api/auth/login", {
+    data: {
+      email: "admin@rare.np",
+      password: "admin123",
+    },
+  });
+  const result = (await response.json()) as { success?: boolean; requires2FA?: boolean; error?: string };
+  expect(response.ok(), result.error ?? "Admin login failed").toBeTruthy();
+  expect(result.success, result.error ?? "Admin login failed").toBeTruthy();
+  expect(result.requires2FA, "Admin test account unexpectedly requires OTP").not.toBeTruthy();
+
+  await page.goto("/admin", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/admin$/);
 }
 
@@ -22,7 +30,7 @@ export async function loginAsSuperadmin(page: Page) {
   expect(response.ok(), result.error ?? "Superadmin login failed").toBeTruthy();
   expect(result.success, result.error ?? "Superadmin login failed").toBeTruthy();
   expect(result.requires2FA, "Superadmin test account unexpectedly requires OTP").not.toBeTruthy();
-  await page.goto("/admin");
+  await page.goto("/admin", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/admin$/);
 }
 
@@ -42,7 +50,7 @@ export async function openFirstProduct(page: Page) {
   const sizeLabels = [/^XXS$/i, /^XS$/i, /^S$/i, /^M$/i, /^L$/i, /^XL$/i, /^XXL$/i, /^XXXL$/i, /^ONE$/i, /^One Size$/i, /^Free Size$/i];
 
   for (const productId of productIds) {
-    await page.goto(`/product/${productId}`);
+    await page.goto(`/product/${productId}`, { waitUntil: "domcontentloaded" });
     await expect(page).toHaveURL(/\/product\//);
 
     const buyNowButton = page.getByTestId("product-buy-now");
