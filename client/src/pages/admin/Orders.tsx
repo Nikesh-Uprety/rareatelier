@@ -107,7 +107,7 @@ function getFonepayStatusBadgeClass(status: string): string {
   if (normalized === "failed" || normalized === "error" || normalized === "rejected") {
     return "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900";
   }
-  return "bg-muted text-foreground border-border";
+  return "bg-muted text-[#111827] border-border";
 }
 
 const ADMIN_ORDER_COLOR_SWATCHES: Record<string, string> = {
@@ -190,15 +190,15 @@ function BillButton({ orderId }: { orderId: string }) {
     refetchOnWindowFocus: true,
   });
 
-  if (isLoading) return <div className="text-muted-foreground text-xs">Loading…</div>;
+  if (isLoading) return <div className="text-[#6B7280] text-xs">Loading…</div>;
 
-  if (!data) return <div className="text-muted-foreground text-xs">—</div>;
+  if (!data) return <div className="text-[#6B7280] text-xs">—</div>;
 
   return (
     <>
       <button
         onClick={(e) => { e.stopPropagation(); setShowBill(true); }}
-        className="inline-flex h-7 items-center rounded-md border border-border bg-white px-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-700 transition-colors hover:bg-neutral-900 hover:text-white dark:bg-card dark:text-neutral-200 dark:hover:bg-white dark:hover:text-black"
+        className="inline-flex h-7 items-center rounded-md border border-border bg-white px-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-700 transition-colors hover:bg-neutral-900 hover:text-white dark:text-neutral-200 dark:hover:bg-white dark:hover:text-black"
         title={`Bill ${data.billNumber}`}
       >
         View
@@ -207,7 +207,7 @@ function BillButton({ orderId }: { orderId: string }) {
       {showBill && (
         <div className="bill-modal-overlay" onClick={() => setShowBill(false)}>
           <div className="bill-modal" onClick={e => e.stopPropagation()}>
-            <Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading bill viewer...</div>}>
+            <Suspense fallback={<div className="p-6 text-sm text-[#6B7280]">Loading bill viewer...</div>}>
               <BillViewer bill={data} onClose={() => setShowBill(false)} />
             </Suspense>
           </div>
@@ -408,7 +408,7 @@ export default function AdminOrders() {
       },
     };
 
-    const entry = statusMap[normalized] ?? { label: normalized, className: "bg-muted text-foreground" };
+    const entry = statusMap[normalized] ?? { label: normalized, className: "bg-muted text-[#111827]" };
     return <Badge variant="outline" className={entry.className}>{entry.label}</Badge>;
   };
 
@@ -507,45 +507,54 @@ export default function AdminOrders() {
   const STATUS_TABS = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'POS'];
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
-            Orders
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            {totalOrders} orders • {statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
-          </p>
+    <div className="min-h-screen bg-[#F4F3EE]">
+      <div className="px-6 py-8 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-[22px] font-medium text-[#111827]">
+              Orders
+            </h1>
+            <p className="text-[13px] text-[#6B7280] mt-1">
+              {totalOrders} orders • {statusFilter === 'all' ? 'All' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              onClick={() => setLocation("/admin/orders/new")}
+              className="h-9 bg-black text-white text-[13px] font-medium hover:bg-black/85"
+            >
+              Add Order
+            </Button>
+            <ExportButton onExport={() => exportOrdersCSV()} />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => setLocation("/admin/orders/new")}>
-            Add Order
-          </Button>
-          <ExportButton onExport={() => exportOrdersCSV()} />
-        </div>
-      </div>
 
-      <div className="inline-flex w-fit rounded-xl border border-[#D6DAE0] bg-[#F9FAFB] p-1">
-        <button
-          type="button"
-          className={cn(
-            "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-            activeSection === "orders" ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280] hover:text-[#111827]",
-          )}
-          onClick={() => setActiveSection("orders")}
-        >
-          Orders
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-            activeSection === "chart" ? "bg-white text-[#111827] shadow-sm" : "text-[#6B7280] hover:text-[#111827]",
-          )}
-          onClick={() => setActiveSection("chart")}
-        >
-          Order Chart
-        </button>
+        <div className="inline-flex w-fit rounded-lg border border-[#E5E7EB] bg-[#F3F4F6] p-1 mb-8">
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-4 py-2 text-[13px] font-medium transition-colors",
+              activeSection === "orders" 
+                ? "bg-white text-[#111827] border border-[#E5E7EB]" 
+                : "text-[#6B7280] hover:text-[#111827]",
+            )}
+            onClick={() => setActiveSection("orders")}
+          >
+            Orders
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "rounded-md px-4 py-2 text-[13px] font-medium transition-colors",
+              activeSection === "chart" 
+                ? "bg-white text-[#111827] border border-[#E5E7EB]" 
+                : "text-[#6B7280] hover:text-[#111827]",
+            )}
+            onClick={() => setActiveSection("chart")}
+          >
+            Order Chart
+          </button>
+        </div>
       </div>
 
       {activeSection === "orders" ? (
@@ -561,15 +570,15 @@ export default function AdminOrders() {
                       "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                       (tab === 'All' ? statusFilter === 'all' : statusFilter === tab.toLowerCase())
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                        : "bg-background text-[#6B7280] border-border hover:border-primary hover:text-[#111827]"
                     )}
                   >
                     {tab}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-1.5 bg-white dark:bg-card border border-[#E5E5E0] dark:border-border rounded-lg px-2 py-1 shadow-sm">
-                <Clock className="h-3 w-3 text-muted-foreground" />
+              <div className="flex items-center gap-1.5 bg-white border border-[#E5E7EB] rounded-lg px-2 py-1">
+                <Clock className="h-3 w-3 text-[#6B7280]" />
                 <Select
                   value={timeRange}
                   onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}
@@ -589,11 +598,11 @@ export default function AdminOrders() {
 
             <div className="flex items-center gap-3">
               <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#6B7280]" />
                 <Input
                   placeholder="Search orders, customers..."
                   data-testid="admin-orders-search"
-                  className="pl-9 bg-white dark:bg-card border-[#E5E5E0] dark:border-border rounded-full h-11"
+                  className="pl-9 bg-white border-[#E5E7EB] rounded-full h-11"
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
                 />
@@ -604,7 +613,7 @@ export default function AdminOrders() {
                       setSearchInput("");
                       setSearch("");
                     }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#6B7280] hover:text-[#111827]"
                   >
                     Clear
                   </button>
@@ -614,38 +623,38 @@ export default function AdminOrders() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-card rounded-xl border border-[#E5E5E0] dark:border-border overflow-hidden">
+          <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden mb-6">
             <div className="overflow-x-auto">
               <table className="orders-admin-table w-full min-w-[1060px] text-left text-sm">
                 
-                <thead className="bg-transparent border-b border-[#E5E5E0] dark:border-border text-xs uppercase text-muted-foreground font-semibold tracking-wider">
+                <thead className="bg-transparent border-b border-[#E5E7EB] text-[11px] uppercase text-[#6B7280] font-semibold tracking-[0.06em]">
                   <tr>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">S.N</th>
-                    <th className="px-3 py-3 font-medium text-left">Customer</th>
-                    <th className="px-3 py-3 font-medium text-left">Items</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Date</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Payment</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">Delivered</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Paid</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-left">Status</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-center">Actions</th>
-                    <th className="px-3 py-3 font-medium whitespace-nowrap text-right">Amount</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-center">S.N</th>
+                    <th className="px-4 py-3 font-medium text-left">Customer</th>
+                    <th className="px-4 py-3 font-medium text-left">Items</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-left">Date</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-left">Payment</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-center">Delivered</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-left">Paid</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-left">Status</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-center">Actions</th>
+                    <th className="px-4 py-3 font-medium whitespace-nowrap text-right">Amount</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#E5E5E0] dark:divide-border">
+                <tbody className="divide-y divide-[#E5E7EB]">
                   {isLoading || isError
                     ? Array.from({ length: 6 }).map((_, i) => (
                         <tr key={i}>
-                          <td className="px-3 py-3 align-middle text-center"><div className="mx-auto h-3 w-7 bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-3 w-28 bg-muted animate-pulse mb-2" /><div className="h-3 w-36 bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-3 w-full max-w-[220px] bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-3 w-24 bg-muted animate-pulse mb-2" /><div className="h-3 w-16 bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-3 w-20 bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-6 w-10 rounded-full bg-muted animate-pulse mx-auto" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-6 w-14 rounded-full bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle"><div className="h-6 w-16 rounded-full bg-muted animate-pulse" /></td>
-                          <td className="px-3 py-3 align-middle text-center"><div className="h-7 w-20 bg-muted animate-pulse mx-auto" /></td>
-                          <td className="px-3 py-3 align-middle text-right"><div className="h-3 w-16 bg-muted animate-pulse ml-auto" /></td>
+                          <td className="px-4 py-3 align-middle text-center"><div className="mx-auto h-3 w-7 bg-[#E5E7EB] animate-pulse rounded" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-3 w-28 bg-[#E5E7EB] animate-pulse rounded mb-2" /><div className="h-3 w-36 bg-[#E5E7EB] animate-pulse rounded" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-3 w-full max-w-[220px] bg-[#E5E7EB] animate-pulse rounded" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-3 w-24 bg-[#E5E7EB] animate-pulse rounded mb-2" /><div className="h-3 w-16 bg-[#E5E7EB] animate-pulse rounded" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-3 w-20 bg-[#E5E7EB] animate-pulse rounded" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-6 w-10 rounded-full bg-[#E5E7EB] animate-pulse mx-auto" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-6 w-14 rounded-full bg-[#E5E7EB] animate-pulse" /></td>
+                          <td className="px-4 py-3 align-middle"><div className="h-6 w-16 rounded-full bg-[#E5E7EB] animate-pulse" /></td>
+                          <td className="px-4 py-3 align-middle text-center"><div className="h-7 w-20 bg-[#E5E7EB] animate-pulse rounded mx-auto" /></td>
+                          <td className="px-4 py-3 align-middle text-right"><div className="h-3 w-16 bg-[#E5E7EB] animate-pulse rounded ml-auto" /></td>
                         </tr>
                       ))
                     : paginatedOrders.map((order, idx) => {
@@ -672,8 +681,8 @@ export default function AdminOrders() {
                         className={cn(
                           "transition-all duration-200 cursor-pointer",
                           selectedOrder?.id === order.id
-                            ? "bg-[#2C5234]/[0.06] dark:bg-[#2C5234]/[0.12]"
-                            : "hover:bg-muted/40",
+                            ? "bg-[#2C5234]/5 border-l-2 border-[#2C5234]"
+                            : "hover:bg-[#F9FAFB]",
                         )}
                         onClick={() => {
                           setSelectedOrder(order);
@@ -681,38 +690,38 @@ export default function AdminOrders() {
                         }}
                       >
                         <td className={cn(
-                          "px-3 py-3 align-middle text-center font-medium text-xs whitespace-nowrap",
-                          selectedOrder?.id === order.id && "border-l-[3px] border-[#2C5234] dark:border-[#4ADE80]"
+                          "px-4 py-3 align-middle text-center font-medium text-xs whitespace-nowrap",
+                          selectedOrder?.id === order.id && "border-l-[2px] border-[#2C5234]"
                         )}>{getOrderSerial(idx)}</td>
-                        <td className="px-3 py-3 align-middle min-w-0">
-                          <div className="font-medium text-[#2C3E2D] dark:text-foreground truncate" title={order.fullName}>{order.fullName}</div>
-                          <div className="text-muted-foreground text-xs truncate" title={order.email ?? undefined}>{displayEmptyField(order.email, "—")}</div>
+                        <td className="px-4 py-3 align-middle min-w-0">
+                          <div className="font-medium text-[#111827] truncate text-[13px]" title={order.fullName}>{order.fullName}</div>
+                          <div className="text-[#6B7280] text-[12px] truncate" title={order.email ?? undefined}>{displayEmptyField(order.email, "N.A")}</div>
                           {order.country && (
-                            <div className="text-muted-foreground text-xs mt-1 truncate" title={order.country}>{displayEmptyField(order.country, "—")}</div>
+                            <div className="text-[#6B7280] text-[12px] mt-1 truncate" title={order.country}>{displayEmptyField(order.country, "N.A")}</div>
                           )}
                           <div className="mt-1.5 space-y-0.5 md:hidden">
-                            <div className="text-[11px] text-muted-foreground truncate" title={itemSummary}>{itemSummary}</div>
-                            <div className="hidden sm:block text-[11px] text-muted-foreground">
+                            <div className="text-[12px] text-[#6B7280] truncate" title={itemSummary}>{itemSummary}</div>
+                            <div className="hidden sm:block text-[11px] text-[#6B7280]">
                               {order.createdAt ? `${format(new Date(order.createdAt), "MMM d, yyyy")} · ${format(new Date(order.createdAt), "h:mm a")}` : "—"}
                             </div>
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-middle min-w-0">
-                          <div className="text-xs text-muted-foreground truncate" title={itemSummary}>{itemSummary}</div>
+                        <td className="px-4 py-3 align-middle min-w-0">
+                          <div className="text-[12px] text-[#6B7280] truncate max-w-[220px]" title={itemSummary}>{itemSummary}</div>
                         </td>
-                        <td className="px-3 py-3 align-middle text-muted-foreground whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle text-[#6B7280] whitespace-nowrap">
                           {order.createdAt ? (
                             <div className="flex flex-col">
-                              <span className="font-medium text-foreground">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
-                              <span className="text-[10px]">{format(new Date(order.createdAt), "h:mm a")}</span>
+                              <span className="font-medium text-[#111827] text-[12px]">{format(new Date(order.createdAt), "MMM d, yyyy")}</span>
+                              <span className="text-[11px] text-[#6B7280]">{format(new Date(order.createdAt), "h:mm a")}</span>
                             </div>
                           ) : (
                             "—"
                           )}
                         </td>
-                        <td className="px-3 py-3 align-middle">
-                          <div className="flex flex-col gap-1 text-xs">
-                            <span className="font-medium capitalize truncate" title={order.paymentMethod?.replace(/_/g, " ") ?? "—"}>
+                        <td className="px-4 py-3 align-middle">
+                          <div className="flex flex-col gap-1 text-[12px]">
+                            <span className="font-medium capitalize truncate text-[#111827]" title={order.paymentMethod?.replace(/_/g, " ") ?? "—"}>
                               {order.paymentMethod?.replace(/_/g, " ") ?? "—"}
                             </span>
                           </div>
@@ -772,7 +781,7 @@ export default function AdminOrders() {
                             </Button>
                           </div>
                         </td>
-                        <td className="px-3 py-3 align-middle text-right font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                        <td className="px-4 py-3 align-middle text-right font-semibold text-[#111827] whitespace-nowrap text-[13px]">
                           {formatAdminNpr((order.total ?? 0) - (order.discountAmount ?? 0))}
                         </td>
                       </tr>
@@ -783,7 +792,7 @@ export default function AdminOrders() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-card rounded-xl border border-border overflow-hidden shadow-sm mt-4">
+          <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
             <Pagination
               currentPage={orderPage}
               totalPages={orderTotalPages}
@@ -798,7 +807,7 @@ export default function AdminOrders() {
           </div>
         </>
       ) : (
-        <div className="rounded-2xl border border-[#E3E5E8] bg-white p-5 shadow-sm">
+        <div className="bg-white border border-[#E5E7EB] rounded-xl p-6">
           <OrdersTrendChart
             orders={orders}
             trendData={trendData}
@@ -853,10 +862,10 @@ export default function AdminOrders() {
           }
         }}
       >
-        <SheetContent side="right" className="flex h-full w-full max-w-full flex-col overflow-y-auto border-l border-[#E5E5E0] bg-[#F7F6F1] p-0 dark:border-border dark:bg-[#101010] sm:w-[min(92vw,58rem)] sm:max-w-none xl:w-[min(50vw,72rem)]">
+        <SheetContent side="right" className="flex h-full w-full max-w-full flex-col overflow-y-auto border-l border-[#E5E7EB] bg-[#F4F3EE] p-0 sm:w-[min(92vw,58rem)] sm:max-w-none xl:w-[min(50vw,72rem)]">
           {selectedOrder && (
             <>
-              <div className="sticky top-0 z-10 flex-none space-y-4 border-b border-border/50 bg-[#F7F6F1]/95 p-6 backdrop-blur supports-[backdrop-filter]:bg-[#F7F6F1]/88 dark:bg-[#101010]/95 dark:supports-[backdrop-filter]:bg-[#101010]/88">
+              <div className="sticky top-0 z-10 flex-none space-y-4 border-b border-[#E5E7EB] bg-[#F4F3EE]/95 p-6 backdrop-blur supports-[backdrop-filter]:bg-[#F4F3EE]/88">
                 <SheetHeader className="space-y-1">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex flex-wrap items-center gap-2">
@@ -866,18 +875,21 @@ export default function AdminOrders() {
                       {orderTypeBadge(selectedOrder)}
                       {formatOrderStatusBadge(selectedOrder.status)}
                     </div>
-                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    <span className="text-xs font-medium text-[#6B7280] whitespace-nowrap">
                       {format(new Date(selectedOrder.createdAt), "MMM d, yyyy • h:mm a")}
                     </span>
                   </div>
-                  <SheetTitle className="text-2xl font-serif text-[#2C3E2D] dark:text-foreground pt-2">
-                    {selectedOrder.fullName}
+                  <SheetTitle className="text-[16px] font-medium text-[#111827] pt-2">
+                    Order #{selectedOrder.id.slice(0, 8)}
                   </SheetTitle>
                   <div className="space-y-1">
-                    <SheetDescription className="text-sm">
+                    <SheetDescription className="text-[13px] text-[#111827] font-medium">
+                      {selectedOrder.fullName}
+                    </SheetDescription>
+                    <SheetDescription className="text-[12px] text-[#6B7280]">
                       {displayEmptyField(selectedOrder.email)}
                     </SheetDescription>
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
+                    <div className="text-[12px] text-[#6B7280] flex items-center gap-2">
                       <Phone className="w-4 h-4" />
                       <span>Customer Phone: {displayEmptyField(selectedOrder.phoneNumber)}</span>
                     </div>
@@ -916,10 +928,10 @@ export default function AdminOrders() {
                 </div>
 
                 {/* Quick toggles for delivered/paid */}
-                <div className="flex items-center gap-6 p-3 rounded-lg bg-muted/30 border border-border">
+                <div className="flex items-center gap-6 p-3 rounded-lg bg-[#F9FAFB] border border-[#E5E7EB]">
                   <div className="flex items-center gap-3">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">Delivered</span>
+                    <Truck className="h-4 w-4 text-[#6B7280]" />
+                    <span className="text-xs font-medium text-[#111827]">Delivered</span>
                     <Switch
                       checked={selectedOrder.status === "completed"}
                       onCheckedChange={(checked) => {
@@ -930,8 +942,8 @@ export default function AdminOrders() {
                     />
                   </div>
                   <div className="flex items-center gap-3">
-                    <Receipt className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">Paid</span>
+                    <Receipt className="h-4 w-4 text-[#6B7280]" />
+                    <span className="text-xs font-medium text-[#111827]">Paid</span>
                     <Switch
                       checked={selectedOrder.paymentVerified === "verified"}
                       onCheckedChange={(checked) => {
@@ -943,11 +955,11 @@ export default function AdminOrders() {
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-border bg-white/80 p-3 shadow-sm dark:bg-muted/20">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                <div className="rounded-lg border border-[#E5E7EB] bg-white p-3">
+                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B7280]">
                     <Link2 className="h-3.5 w-3.5" /> Tracking URL
                   </div>
-                  <div className="mt-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-xs text-foreground break-all">
+                  <div className="mt-2 rounded-md border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2 text-xs text-[#111827] break-all">
                     {buildOrderTrackingUrl(selectedOrder.trackingToken) ?? "Preparing tracking link..."}
                   </div>
                   <div className="mt-3 flex gap-2">
@@ -987,18 +999,18 @@ export default function AdminOrders() {
               <div className="grid flex-1 auto-rows-max gap-6 p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
                 {/* Items Ordered */}
                 <div className="space-y-3 xl:col-span-2">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#111827]">
                     Items Ordered
                   </h4>
-                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 shadow-sm">
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
                     {selectedOrderItemsLoading ? (
                       <div className="space-y-3">
                         {Array.from({ length: 4 }).map((_, i) => (
-                          <div key={i} className="h-12 bg-muted rounded-lg animate-pulse" />
+                          <div key={i} className="h-12 bg-[#E5E7EB] rounded-lg animate-pulse" />
                         ))}
                       </div>
                     ) : selectedOrderItems.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No items found.</p>
+                      <p className="text-sm text-[#6B7280]">No items found.</p>
                     ) : (
                       <div className="space-y-3">
                         {selectedOrderItems.map((it) => {
@@ -1010,19 +1022,19 @@ export default function AdminOrders() {
                           return (
                             <div
                               key={it.id}
-                              className="flex items-start justify-between gap-3 rounded-2xl border border-border/60 bg-white/90 p-4 shadow-[0_18px_38px_-30px_rgba(15,23,42,0.45)] dark:bg-card/70"
+                              className="flex items-start justify-between gap-3 rounded-lg border border-[#E5E7EB] bg-white p-4"
                             >
                               <div className="flex-1 min-w-0">
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-medium">{it.product?.name ?? "Unknown Product"}</span>
+                                  <span className="text-sm font-medium text-[#111827]">{it.product?.name ?? "Unknown Product"}</span>
                                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                     {it.size && (
-                                      <span className="text-xs bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">
+                                      <span className="text-xs bg-[#F9FAFB] px-1.5 py-0.5 rounded text-[#6B7280] font-medium border border-[#E5E7EB]">
                                         Size: {it.size}
                                       </span>
                                     )}
                                     {colorMeta && (
-                                      <span className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-xs text-muted-foreground">
+                                      <span className="inline-flex items-center gap-2 rounded-full border border-[#E5E7EB] bg-[#F9FAFB] px-2 py-0.5 text-xs text-[#6B7280]">
                                         <span
                                           className="h-3 w-3 rounded-full border border-black/10"
                                           style={{ background: colorMeta.swatch ?? "#d4d4d8" }}
@@ -1030,18 +1042,18 @@ export default function AdminOrders() {
                                         {colorMeta.label}
                                       </span>
                                     )}
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-xs text-[#6B7280]">
                                       Qty: {qty}
                                     </span>
                                   </div>
                                 </div>
-                                <p className="text-[11px] text-muted-foreground mt-2">
+                                <p className="text-[11px] text-[#6B7280] mt-2">
                                   Unit: {formatPrice(unit)}
                                 </p>
                               </div>
                               <div className="text-right">
-                                <p className="text-sm font-bold">{formatPrice(lineSubtotal)}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1">
+                                <p className="text-sm font-bold text-[#111827]">{formatPrice(lineSubtotal)}</p>
+                                <p className="text-[10px] text-[#6B7280] uppercase tracking-widest mt-1">
                                   Subtotal
                                 </p>
                               </div>
@@ -1055,43 +1067,43 @@ export default function AdminOrders() {
 
                 {/* Payment Section */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80 flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#111827] flex items-center gap-2">
                     <Receipt className="w-4 h-4" /> Payment Details
                   </h4>
-                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 space-y-3 shadow-sm">
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4 space-y-3">
                     <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Method</span>
-                      <span className="font-medium capitalize">{selectedOrder.paymentMethod?.replace(/_/g, " ") ?? "—"}</span>
+                      <span className="text-[#6B7280]">Method</span>
+                      <span className="font-medium capitalize text-[#111827]">{selectedOrder.paymentMethod?.replace(/_/g, " ") ?? "—"}</span>
                     </div>
-                    <div className="pt-2 border-t border-dashed border-border/50 space-y-2">
+                    <div className="pt-2 border-t border-dashed border-[#E5E7EB] space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Subtotal</span>
-                        <span>{formatPrice(selectedOrder.total ?? 0)}</span>
+                        <span className="text-[#6B7280]">Subtotal</span>
+                        <span className="text-[#111827] font-medium">{formatPrice(selectedOrder.total ?? 0)}</span>
                       </div>
 
                       {(selectedOrder.discountAmount ?? 0) > 0 && (
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Discount</span>
-                          <span className="text-green-500">
+                          <span className="text-[#6B7280]">Discount</span>
+                          <span className="text-[#2C5234] font-medium">
                             - {formatPrice(selectedOrder.discountAmount ?? 0)}
                           </span>
                         </div>
                       )}
 
-                      <div className="flex justify-between text-sm font-semibold border-t pt-2 mt-1">
+                      <div className="flex justify-between text-sm font-semibold border-t pt-2 mt-1 text-[#111827]">
                         <span>Total Paid</span>
                         <span>{formatPrice((selectedOrder.total ?? 0) - (selectedOrder.discountAmount ?? 0))}</span>
                       </div>
                     </div>
 
                     {selectedOrder.paymentProofUrl && (
-                      <div className="pt-3 border-t border-border/50">
+                      <div className="pt-3 border-t border-[#E5E7EB]">
                         <div className="flex items-center justify-between mb-2">
                           <a
                             href={selectedOrder.paymentProofUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors"
+                            className="text-xs font-semibold text-[#1D4ED8] hover:text-[#1D4ED8]/80 transition-colors"
                           >
                             View screenshot
                           </a>
@@ -1130,14 +1142,14 @@ export default function AdminOrders() {
 
                 {/* Delivery & Shipping Section */}
                 <div className="space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80 flex items-center gap-2">
+                  <h4 className="text-xs font-bold uppercase tracking-widest text-[#111827] flex items-center gap-2">
                     <Truck className="w-4 h-4" /> Delivery Information
                   </h4>
-                  <div className="bg-white dark:bg-muted/30 border border-[#E5E5E0] dark:border-border rounded-xl p-4 shadow-sm">
+                  <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
                     
                     <div className="mb-4 pb-4 border-b border-border/50 grid grid-cols-2 gap-4">
                       <div>
-                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Source</p>
+                         <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">Source</p>
                          <p className="text-sm font-medium capitalize flex items-center gap-1.5">
                            {selectedOrder.source === 'instagram' ? <Globe className="w-3 h-3 text-pink-600"/> :
                             selectedOrder.source === 'tiktok' ? <Globe className="w-3 h-3"/> :
@@ -1147,11 +1159,11 @@ export default function AdminOrders() {
                          </p>
                       </div>
                       <div>
-                         <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Provider</p>
+                         <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">Provider</p>
                          {selectedOrder.deliveryRequired === false ? (
                            <Badge variant="outline" className="text-[10px]">No Delivery</Badge>
                          ) : (
-                           <p className="text-sm font-medium capitalize text-[#2C3E2D] dark:text-foreground">
+                           <p className="text-sm font-medium capitalize text-[#2C3E2D] dark:text-[#111827]">
                              {selectedOrder.deliveryProvider ? selectedOrder.deliveryProvider.replace(/_/g, " ") : 'Not Assigned'}
                            </p>
                          )}
@@ -1161,10 +1173,10 @@ export default function AdminOrders() {
                     {selectedOrder.source === "pos" ? (
                       <div className="space-y-3 mt-3">
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">
+                          <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">
                             Staff Created
                           </p>
-                          <p className="text-sm font-medium text-foreground">
+                          <p className="text-sm font-medium text-[#111827]">
                             {posBill?.processedBy ?? "—"}
                           </p>
                         </div>
@@ -1175,27 +1187,27 @@ export default function AdminOrders() {
                     ) : selectedOrder.deliveryRequired !== false && (
                       <div className="space-y-4">
                         <div>
-                          <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">
+                          <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">
                             Delivery Location
                           </p>
-                          <p className="text-sm font-medium text-foreground">
-                            {displayEmptyField(selectedOrder.deliveryLocation, "—")}
+                          <p className="text-sm font-medium text-[#111827]">
+                            {displayEmptyField(selectedOrder.deliveryLocation, "N.A")}
                           </p>
                         </div>
                         {selectedOrder.deliveryAddress ? (
                           <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>
-                            <p className="text-sm font-medium text-foreground">{displayEmptyField(selectedOrder.deliveryAddress)}</p>
+                            <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">Custom Delivery Address</p>
+                            <p className="text-sm font-medium text-[#111827]">{displayEmptyField(selectedOrder.deliveryAddress)}</p>
                           </div>
                         ) : selectedOrder.addressLine1 ? (
                           <div>
-                            <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider mb-1">Delivery Address</p>
-                            <div className="text-sm font-medium text-foreground leading-relaxed">
+                            <p className="text-[10px] text-[#6B7280] uppercase font-bold tracking-wider mb-1">Delivery Address</p>
+                            <div className="text-sm font-medium text-[#111827] leading-relaxed">
                               {displayEmptyField(selectedOrder.addressLine1)}, {displayEmptyField(selectedOrder.city)}
                               {selectedOrder.region && `, ${displayEmptyField(selectedOrder.region)}`}
                               {selectedOrder.postalCode && ` ${displayEmptyField(selectedOrder.postalCode)}`}
                               {selectedOrder.country ? `, ${displayEmptyField(selectedOrder.country)}` : ""}
-                              <div className="text-muted-foreground mt-1 text-xs">
+                              <div className="text-[#6B7280] mt-1 text-xs">
                                 Customer Phone: {displayEmptyField(selectedOrder.phoneNumber)}
                               </div>
                             </div>
@@ -1214,7 +1226,7 @@ export default function AdminOrders() {
                             )}
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground italic">No address provided.</p>
+                          <p className="text-sm text-[#6B7280] italic">No address provided.</p>
                         )}
                       </div>
                     )}
@@ -1226,13 +1238,13 @@ export default function AdminOrders() {
                     className="space-y-3 xl:col-span-2"
                     data-testid="admin-order-fonepay-audit"
                   >
-                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80">
+                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#111827]">
                       <QrCode className="h-4 w-4" /> Fonepay Audit
                     </h4>
                     <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
-                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 shadow-sm dark:border-border dark:bg-muted/30">
+                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 dark:bg-muted/30">
                         {fonepayAuditLoading ? (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2 text-sm text-[#6B7280]">
                             <Loader2 className="h-4 w-4 animate-spin" />
                             Loading Fonepay readiness...
                           </div>
@@ -1270,7 +1282,7 @@ export default function AdminOrders() {
 
                             <div className="space-y-2 text-sm">
                               <div>
-                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B7280]">
                                   Recommended Mode
                                 </div>
                                 <div className="mt-1 font-medium capitalize">
@@ -1282,17 +1294,17 @@ export default function AdminOrders() {
                                 </div>
                               </div>
                               <div>
-                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B7280]">
                                   Callback URL
                                 </div>
-                                <div className="mt-1 break-all text-xs text-foreground">
+                                <div className="mt-1 break-all text-xs text-[#111827]">
                                   {fonepayRuntime.callbackUrl ?? "Not resolved"}
                                 </div>
-                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                <div className="mt-1 text-[11px] text-[#6B7280]">
                                   Source: {fonepayRuntime.callbackUrlSource === "env" ? "Environment" : "Derived per request"}
                                 </div>
                               </div>
-                              <div className="rounded-lg border border-[#E5E5E0] bg-muted/30 p-3 text-xs text-muted-foreground dark:border-border">
+                              <div className="rounded-lg border border-[#E5E5E0] bg-muted/30 p-3 text-xs text-[#6B7280]">
                                 Bank selection and credentials stay on the hosted Fonepay side. Rare Atelier only stores the order, gateway readiness, and verification trail.
                               </div>
                             </div>
@@ -1326,19 +1338,19 @@ export default function AdminOrders() {
                             ) : null}
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-[#6B7280]">
                             No Fonepay readiness data available for this order yet.
                           </p>
                         )}
                       </div>
 
-                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 shadow-sm dark:border-border dark:bg-muted/30">
+                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 dark:bg-muted/30">
                         <div className="flex items-center justify-between gap-3">
                           <div>
-                            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B7280]">
                               Event Timeline
                             </div>
-                            <p className="mt-1 text-sm text-muted-foreground">
+                            <p className="mt-1 text-sm text-[#6B7280]">
                               Initiation, callback, and QR verification events stay attached to this order for support and sandbox debugging.
                             </p>
                           </div>
@@ -1349,12 +1361,12 @@ export default function AdminOrders() {
 
                         <div className="mt-4 space-y-3">
                           {fonepayAuditLoading ? (
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <div className="flex items-center gap-2 text-sm text-[#6B7280]">
                               <Loader2 className="h-4 w-4 animate-spin" />
                               Loading event history...
                             </div>
                           ) : (fonepayAudit?.events.length ?? 0) === 0 ? (
-                            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-[#6B7280]">
                               No Fonepay audit events yet. The next redirect or QR action will appear here automatically.
                             </div>
                           ) : (
@@ -1362,7 +1374,7 @@ export default function AdminOrders() {
                               <div
                                 key={event.id}
                                 data-testid={`admin-order-fonepay-event-${index}`}
-                                className="rounded-xl border border-border/60 bg-white/90 p-4 shadow-[0_18px_38px_-30px_rgba(15,23,42,0.45)] dark:bg-card/70"
+                                className="rounded-xl border border-border/60 bg-white/90 p-4 shadow-[0_18px_38px_-30px_rgba(15,23,42,0.45)]/70"
                               >
                                 <div className="flex flex-wrap items-start justify-between gap-3">
                                   <div className="space-y-2">
@@ -1370,7 +1382,7 @@ export default function AdminOrders() {
                                       <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
                                         {event.flow.toUpperCase()}
                                       </Badge>
-                                      <span className="text-sm font-semibold text-foreground">
+                                      <span className="text-sm font-semibold text-[#111827]">
                                         {formatFonepayStageLabel(event.stage)}
                                       </span>
                                       <Badge
@@ -1384,10 +1396,10 @@ export default function AdminOrders() {
                                       </Badge>
                                     </div>
                                     {event.message ? (
-                                      <p className="text-sm text-muted-foreground">{event.message}</p>
+                                      <p className="text-sm text-[#6B7280]">{event.message}</p>
                                     ) : null}
                                   </div>
-                                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                                  <span className="text-xs font-medium text-[#6B7280] whitespace-nowrap">
                                     {event.createdAt
                                       ? format(new Date(event.createdAt), "MMM d, yyyy • h:mm a")
                                       : "—"}
