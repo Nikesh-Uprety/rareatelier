@@ -498,9 +498,23 @@ export default function Checkout() {
     return null;
   }
 
-  if (items.length === 0 && step !== 3 && !adminSeedPending) {
+  if (items.length === 0 && step !== 3 && !adminSeedPending && !hasHydrated) {
     setLocation("/cart");
     return null;
+  }
+
+  if (items.length === 0 && step !== 3 && !adminSeedPending && hasHydrated) {
+    return (
+      <div className="container mx-auto max-w-7xl px-4 pb-16 lg:pb-20 pt-32">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-medium">Your cart is empty</h1>
+          <p className="text-muted-foreground">Add some items to continue checkout.</p>
+          <Button onClick={() => setLocation("/")} variant="outline">
+            Browse Products
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   const { mutateAsync, isPending } = useMutation({
