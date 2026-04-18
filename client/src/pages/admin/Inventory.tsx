@@ -793,14 +793,14 @@ function InventoryLightView({
               value={selectedOutlet}
               onValueChange={(value) => value && onOutletChange(value)}
               variant="outline"
-              className="inventory-light-toggle"
+              className="inventory-light-toggle border border-border/60 rounded-xl"
             >
               <ToggleGroupItem value="all">All outlets</ToggleGroupItem>
               {outlets.map((outlet) => (
                 <ToggleGroupItem key={outlet} value={outlet}>{outlet}</ToggleGroupItem>
               ))}
             </ToggleGroup>
-            <Button onClick={() => onOpenStockIn(selectedItem ?? undefined)}>
+            <Button className="inventory-light-action-btn" onClick={() => onOpenStockIn(selectedItem ?? undefined)}>
               + Stock in
             </Button>
           </div>
@@ -825,10 +825,10 @@ function InventoryLightView({
         </div>
 
         <Tabs value={lightTab} onValueChange={(value) => setLightTab(value as LightTab)} className="mt-5">
-          <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-muted/60 p-1">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="inventory">Inventory</TabsTrigger>
-            <TabsTrigger value="movements">Movements</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 rounded-2xl bg-muted/40 border border-border/60 p-1 shadow-sm">
+            <TabsTrigger value="overview" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">Overview</TabsTrigger>
+            <TabsTrigger value="inventory" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">Inventory</TabsTrigger>
+            <TabsTrigger value="movements" className="data-[state=active]:bg-background data-[state=active]:shadow-sm">Movements</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-4">
@@ -925,7 +925,7 @@ function InventoryLightView({
                 value={chipFilter}
                 onValueChange={(value) => value && onChipFilterChange(value)}
                 variant="outline"
-                className="mt-4 flex flex-wrap justify-start"
+                className="inventory-chip-toggle mt-4 flex flex-wrap justify-start border border-border/60 rounded-xl p-1"
               >
                 {chipOptions.map((chip) => (
                   <ToggleGroupItem key={chip} value={chip}>
@@ -934,8 +934,8 @@ function InventoryLightView({
                 ))}
               </ToggleGroup>
 
-              <div className="mt-5 overflow-hidden rounded-2xl border border-border">
-                <table className="w-full table-fixed text-sm">
+              <div className="mt-5 overflow-hidden rounded-2xl border border-border bg-card">
+                <table className="w-full table-fixed text-sm inventory-light-table">
                   <thead className="bg-muted/40 text-left text-xs uppercase tracking-[0.14em] text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3">Item</th>
@@ -1411,32 +1411,7 @@ export default function Inventory() {
       ) : !canOpenPlatinum ? (
         <InventoryPlatinumUpgrade onOpenLightWorkspace={() => setLocation("/admin/inventory/light")} />
       ) : (
-        <div className="space-y-4">
-          <section className="inventory-workspace-header inventory-workspace-header--platinum">
-            <div className="inventory-workspace-copy">
-              <div className="inventory-workspace-kicker">Premium workspace</div>
-              <div className="inventory-workspace-title-row">
-                <h1 className="inventory-page-title">Inventory Platinum</h1>
-                <Badge className="inventory-premium-badge">
-                  <Sparkles className="mr-1 h-3.5 w-3.5" />
-                  Rs {INVENTORY_PLATINUM_MONTHLY_PRICE} / month
-                </Badge>
-              </div>
-              <p className="inventory-page-copy">
-                Designed for premium operators who need a denser control room for stock health, scoped movement, and valuation.
-              </p>
-            </div>
-            <div className="inventory-workspace-switcher">
-              <Button variant="outline" className="inventory-workspace-switcher-btn" onClick={() => setLocation("/admin/inventory/light")}>
-                Inventory Light
-              </Button>
-              <Button variant="outline" className="inventory-workspace-switcher-btn is-active" onClick={() => setLocation("/admin/inventory/platinum")}>
-                Inventory Platinum
-              </Button>
-            </div>
-          </section>
-
-          <div className="inventory-workspace" data-theme={isDark ? "dark" : "light"}>
+        <div className="inventory-workspace" data-theme={isDark ? "dark" : "light"}>
           <div className="inventory-shell inventory-shell--platinum">
             <aside className="inventory-nav-panel inventory-nav-panel--platinum">
               <div className="inventory-nav-head inventory-nav-head--platinum">
@@ -1779,7 +1754,6 @@ export default function Inventory() {
                 </div>
               </div>
             </section>
-          </div>
           </div>
         </div>
       )}
