@@ -212,9 +212,9 @@ function BillButton({ orderId }: { orderId: string }) {
     refetchOnWindowFocus: true,
   });
 
-  if (isLoading) return <div className="text-[#6B7280] text-xs">Loading…</div>;
+  if (isLoading) return <div className="text-[#4B5563] text-xs">Loading…</div>;
 
-  if (!data) return <div className="text-[#6B7280] text-xs">—</div>;
+  if (!data) return <div className="text-[#4B5563] text-xs">—</div>;
 
   return (
     <>
@@ -229,7 +229,7 @@ function BillButton({ orderId }: { orderId: string }) {
       {showBill && (
         <div className="bill-modal-overlay" onClick={() => setShowBill(false)}>
           <div className="bill-modal" onClick={e => e.stopPropagation()}>
-            <Suspense fallback={<div className="p-6 text-sm text-[#6B7280]">Loading bill viewer...</div>}>
+            <Suspense fallback={<div className="p-6 text-sm text-[#4B5563]">Loading bill viewer...</div>}>
               <BillViewer bill={data} onClose={() => setShowBill(false)} />
             </Suspense>
           </div>
@@ -593,7 +593,7 @@ export default function AdminOrders() {
         <div className="flex flex-col gap-4 border-b border-[#E5E7EB] pb-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-[22px] font-medium tracking-[-0.02em] text-[#111827]">Orders</h1>
-            <p className="text-[13px] text-[#6B7280]">
+            <p className="text-[13px] text-[#374151]">
               {totalOrders.toLocaleString()} total • {activeFilterLabel}
             </p>
           </div>
@@ -607,7 +607,7 @@ export default function AdminOrders() {
                   "rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                   activeSection === "orders"
                     ? "border border-[#E5E7EB] bg-white text-[#111827]"
-                    : "text-[#6B7280]",
+                    : "text-[#4B5563]",
                 )}
                 onClick={() => setActiveSection("orders")}
               >
@@ -619,7 +619,7 @@ export default function AdminOrders() {
                   "rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors",
                   activeSection === "chart"
                     ? "border border-[#E5E7EB] bg-white text-[#111827]"
-                    : "text-[#6B7280]",
+                    : "text-[#4B5563]",
                 )}
                 onClick={() => setActiveSection("chart")}
               >
@@ -652,9 +652,9 @@ export default function AdminOrders() {
                 return (
                   <div key={card.label} className="relative overflow-hidden rounded-xl border border-[#E5E7EB] bg-white p-[18px]">
                     <div className="absolute right-[14px] top-[14px] flex h-8 w-8 items-center justify-center rounded-lg bg-[#F4F3EE]">
-                      <Icon className="h-4 w-4 text-[#6B7280]" strokeWidth={1.8} />
+                      <Icon className="h-4 w-4 text-[#4B5563]" strokeWidth={1.8} />
                     </div>
-                    <div className="mb-2 text-[12px] font-medium text-[#6B7280]">{card.label}</div>
+                    <div className="mb-2 text-[12px] font-medium text-[#4B5563]">{card.label}</div>
                     <div className="mb-1.5 font-mono text-[26px] font-semibold leading-none text-[#1A1A2E]">{card.value}</div>
                     <div className={`flex items-center gap-1 text-[12px] font-medium ${trend.up ? "text-[#10b981]" : "text-[#ef4444]"}`}>
                       {trend.pct > 0 ? (trend.up ? "▲" : "▼") : "—"} {trend.pct > 0 ? `${trend.pct}%` : "no change"}
@@ -693,7 +693,7 @@ export default function AdminOrders() {
                           "cursor-pointer rounded-lg border px-4 py-[7px] text-[13px] font-medium transition-colors",
                           isActive
                             ? "border-[#E5E7EB] bg-[#F4F3EE] text-[#1A1A2E]"
-                            : "border-transparent text-[#6B7280] hover:text-[#1A1A2E]",
+                            : "border-transparent text-[#4B5563] hover:text-[#1A1A2E]",
                         )}
                       >
                         {tab}
@@ -720,7 +720,7 @@ export default function AdminOrders() {
                       <button
                         type="button"
                         onClick={() => { setSearchInput(""); setSearch(""); }}
-                        className="text-[11px] text-[#9CA3AF] hover:text-[#6B7280]"
+                        className="text-[11px] text-[#6B7280] hover:text-[#374151]"
                       >
                         ✕
                       </button>
@@ -755,7 +755,7 @@ export default function AdminOrders() {
                   {/* Date range */}
                   <Select value={timeRange} onValueChange={(v) => setTimeRange(v as "all" | "1d" | "3d" | "7d")}>
                     <SelectTrigger className="h-auto min-h-0 gap-1.5 rounded-lg border border-[#D1D5DB] bg-white px-3 py-[7px] text-[13px] text-[#1A1A2E] shadow-none focus:ring-0">
-                      <Calendar className="h-3 w-3 text-[#6B7280]" />
+                      <Calendar className="h-3 w-3 text-[#4B5563]" />
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -808,17 +808,17 @@ export default function AdminOrders() {
                           }}
                         />
                       </th>
-                      <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280] hover:text-[#1A1A2E]"># ↕</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Customer Name</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Qty</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Total Amount</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Payment Status</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Payment Mode</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Order Status</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Order Note</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Label</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#6B7280]">Created Date</th>
-                      <th className="whitespace-nowrap px-3 py-3 text-center text-[12px] font-semibold text-[#6B7280]">Action</th>
+                      <th className="cursor-pointer whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151] hover:text-[#1A1A2E]"># ↕</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Customer Name</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Qty</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Total Amount</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Payment Status</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Payment Mode</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Order Status</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Order Note</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Label</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-[12px] font-semibold text-[#374151]">Created Date</th>
+                      <th className="whitespace-nowrap px-3 py-3 text-center text-[12px] font-semibold text-[#374151]">Action</th>
                     </tr>
                   </thead>
 
@@ -842,13 +842,13 @@ export default function AdminOrders() {
                       ))
                     ) : isError ? (
                       <tr>
-                        <td colSpan={12} className="px-4 py-10 text-center text-sm text-[#6B7280]">
+                        <td colSpan={12} className="px-4 py-10 text-center text-sm text-[#4B5563]">
                           Failed to load orders. Please refresh and try again.
                         </td>
                       </tr>
                     ) : displayOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={12} className="px-4 py-10 text-center text-sm text-[#6B7280]">
+                        <td colSpan={12} className="px-4 py-10 text-center text-sm text-[#4B5563]">
                           No orders match the current filters.
                         </td>
                       </tr>
@@ -902,7 +902,7 @@ export default function AdminOrders() {
 
                             {/* # */}
                             <td className="px-3 py-3 align-middle">
-                              <span className="font-mono text-[12.5px] text-[#6B7280]">
+                              <span className="font-mono text-[12.5px] text-[#4B5563]">
                                 {getOrderSerial(idx)}
                               </span>
                             </td>
@@ -912,7 +912,7 @@ export default function AdminOrders() {
                               <div className="truncate text-[13.5px] font-medium text-[#1A1A2E]">
                                 {displayEmptyField(order.fullName, "—")}
                               </div>
-                              <div className="font-mono text-[11.5px] text-[#9CA3AF]">
+                              <div className="font-mono text-[11.5px] text-[#4B5563]">
                                 {(order as AdminOrder & { phoneNumber?: string }).phoneNumber ?? "—"}
                               </div>
                             </td>
@@ -949,14 +949,14 @@ export default function AdminOrders() {
 
                             {/* Order Note */}
                             <td className="px-3 py-3 align-middle">
-                              <span className="block max-w-[90px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#6B7280]">
+                              <span className="block max-w-[90px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#4B5563]">
                                 —
                               </span>
                             </td>
 
                             {/* Label */}
                             <td className="px-3 py-3 align-middle">
-                              <span className="block max-w-[70px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#6B7280]">
+                              <span className="block max-w-[70px] overflow-hidden text-ellipsis whitespace-nowrap text-[12px] text-[#4B5563]">
                                 —
                               </span>
                             </td>
@@ -968,12 +968,12 @@ export default function AdminOrders() {
                                   <div className="text-[12.5px] text-[#1A1A2E]">
                                     {format(new Date(order.createdAt), "d MMM yyyy")}
                                   </div>
-                                  <div className="font-mono text-[11.5px] text-[#9CA3AF]">
+                                  <div className="font-mono text-[11.5px] text-[#4B5563]">
                                     {format(new Date(order.createdAt), "hh:mm a")}
                                   </div>
                                 </>
                               ) : (
-                                <span className="text-[12px] text-[#6B7280]">—</span>
+                                <span className="text-[12px] text-[#4B5563]">—</span>
                               )}
                             </td>
 
@@ -985,7 +985,7 @@ export default function AdminOrders() {
                                     type="button"
                                     className="mx-auto flex h-7 w-7 items-center justify-center rounded-md border border-[#E5E7EB] bg-white transition-colors hover:border-[#D1D5DB] hover:bg-[#F4F3EE]"
                                   >
-                                    <MoreVertical className="h-[13px] w-[13px] text-[#6B7280]" strokeWidth={2} />
+                                    <MoreVertical className="h-[13px] w-[13px] text-[#4B5563]" strokeWidth={2} />
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-44">
@@ -1065,7 +1065,7 @@ export default function AdminOrders() {
           </div>
           <AlertDialogHeader className="px-6 pb-2 pt-4 text-center sm:text-center">
             <AlertDialogTitle className="text-2xl font-semibold text-[#111827]">Delete Order</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2 text-center text-[14px] leading-6 text-[#6B7280]">
+            <AlertDialogDescription className="space-y-2 text-center text-[14px] leading-6 text-[#4B5563]">
               <span className="block">
                 You’re going to delete {orderToDelete ? `Order #${orderToDelete.id.slice(0, 8)}` : "this order"}.
               </span>
@@ -1118,7 +1118,7 @@ export default function AdminOrders() {
                     {orderTypeBadge(selectedOrder)}
                     {formatOrderStatusBadge(selectedOrder.status)}
                   </div>
-                  <SheetDescription className="mt-1 text-[12px] text-[#6B7280]">
+                  <SheetDescription className="mt-1 text-[12px] text-[#4B5563]">
                     {selectedOrder.createdAt ? format(new Date(selectedOrder.createdAt), "MMM d, yyyy • h:mm a") : "—"}
                     {selectedOrder.source === "pos" ? " · POS" : ""}
                   </SheetDescription>
@@ -1131,10 +1131,10 @@ export default function AdminOrders() {
 
                   {/* ── 1. Order Status & Actions ── */}
                   <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Status &amp; Actions</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Status &amp; Actions</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1.5">
-                        <p className="text-[11px] font-medium text-[#6B7280]">Order status</p>
+                        <p className="text-[11px] font-medium text-[#4B5563]">Order status</p>
                         <Select
                           value={selectedOrder.status}
                           onValueChange={(val) => {
@@ -1162,7 +1162,7 @@ export default function AdminOrders() {
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <p className="text-[11px] font-medium text-[#6B7280]">Payment verification</p>
+                        <p className="text-[11px] font-medium text-[#4B5563]">Payment verification</p>
                         <Select
                           value={selectedOrder.paymentVerified ?? "pending"}
                           onValueChange={(val) => {
@@ -1191,7 +1191,7 @@ export default function AdminOrders() {
                     <div className="mt-3 flex items-center justify-between rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
                       <div>
                         <p className="text-[12px] font-medium text-[#111827]">Mark as Delivered</p>
-                        <p className="text-[11px] text-[#9CA3AF]">Switches status to completed</p>
+                        <p className="text-[11px] text-[#4B5563]">Switches status to completed</p>
                       </div>
                       <Switch
                         checked={selectedOrder.status === "completed"}
@@ -1206,11 +1206,11 @@ export default function AdminOrders() {
 
                   {/* ── 2. Tracking & Links ── */}
                   <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Tracking &amp; Links</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Tracking &amp; Links</p>
                     <div className="space-y-2.5">
                       <div className="flex items-center gap-2 rounded-lg border border-[#E5E7EB] bg-[#F9FAFB] px-3 py-2.5">
-                        <Link2 className="h-3.5 w-3.5 flex-none text-[#9CA3AF]" />
-                        <span className="flex-1 truncate font-mono text-[11.5px] text-[#6B7280]">
+                        <Link2 className="h-3.5 w-3.5 flex-none text-[#6B7280]" />
+                        <span className="flex-1 truncate font-mono text-[11.5px] text-[#374151]">
                           {selectedOrderTrackingUrl ?? "No tracking URL — token not set"}
                         </span>
                         <button
@@ -1253,7 +1253,7 @@ export default function AdminOrders() {
 
                   {/* ── 3. Products ── */}
                   <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Products</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Products</p>
                     {selectedOrderItemsLoading ? (
                       <div className="space-y-2">
                         {Array.from({ length: 3 }).map((_, i) => (
@@ -1268,7 +1268,7 @@ export default function AdminOrders() {
                         ))}
                       </div>
                     ) : selectedOrderItems.length === 0 ? (
-                      <p className="text-[13px] text-[#6B7280]">No items found.</p>
+                      <p className="text-[13px] text-[#374151]">No items found.</p>
                     ) : (
                       <div className="space-y-2">
                         {selectedOrderItems.map((it) => {
@@ -1290,12 +1290,12 @@ export default function AdminOrders() {
                                 </p>
                                 <div className="mt-1 flex flex-wrap items-center gap-2">
                                   {it.size ? (
-                                    <span className="rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] font-medium text-[#6B7280]">
+                                    <span className="rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] font-medium text-[#374151]">
                                       {it.size}
                                     </span>
                                   ) : null}
                                   {colorMeta ? (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] text-[#6B7280]">
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-[#F3F4F6] px-1.5 py-0.5 text-[11px] text-[#4B5563]">
                                       <span
                                         className="h-2.5 w-2.5 rounded-full border border-black/10"
                                         style={{ background: colorMeta.swatch ?? "#d4d4d8" }}
@@ -1305,7 +1305,7 @@ export default function AdminOrders() {
                                   ) : null}
                                 </div>
                                 <div className="mt-1.5 flex items-center justify-between">
-                                  <span className="text-[12px] text-[#9CA3AF]">
+                                  <span className="text-[12px] text-[#4B5563]">
                                     {qty} × {formatPrice(unit)}
                                   </span>
                                   <span className="font-mono text-[13px] font-semibold text-[#111827]">
@@ -1321,7 +1321,7 @@ export default function AdminOrders() {
 
                     {/* Price breakdown */}
                     <div className="mt-3 space-y-1.5 border-t border-[#E5E7EB] pt-3 text-[13px]">
-                      <div className="flex items-center justify-between text-[#6B7280]">
+                      <div className="flex items-center justify-between text-[#4B5563]">
                         <span>Subtotal</span>
                         <span className="font-mono">{formatAdminNpr(orderItemsSubtotal)}</span>
                       </div>
@@ -1334,7 +1334,7 @@ export default function AdminOrders() {
                       {(() => {
                         const deliveryCharge = selectedOrderTotal - orderItemsSubtotal + (discountAmount ?? 0);
                         return deliveryCharge > 0 ? (
-                          <div className="flex items-center justify-between text-[#6B7280]">
+                          <div className="flex items-center justify-between text-[#4B5563]">
                             <span>Delivery charge</span>
                             <span className="font-mono">{formatAdminNpr(deliveryCharge)}</span>
                           </div>
@@ -1349,30 +1349,30 @@ export default function AdminOrders() {
 
                   {/* ── 4. Customer Details ── */}
                   <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Customer</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Customer</p>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#9CA3AF]">Name</span>
+                        <span className="text-[11px] text-[#4B5563]">Name</span>
                         <span className="text-[13px] font-medium text-[#111827]">
                           {displayEmptyField(selectedOrder.fullName, "N.A")}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#9CA3AF]">Email</span>
-                        <span className="max-w-[200px] truncate text-right text-[13px] text-[#6B7280]">
+                        <span className="text-[11px] text-[#4B5563]">Email</span>
+                        <span className="max-w-[200px] truncate text-right text-[13px] text-[#374151]">
                           {displayEmptyField(selectedOrder.email, "N.A")}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[#9CA3AF]">Phone</span>
-                        <span className="font-mono text-[13px] text-[#6B7280]">
+                        <span className="text-[11px] text-[#4B5563]">Phone</span>
+                        <span className="font-mono text-[13px] text-[#374151]">
                           {displayEmptyField(selectedOrder.phoneNumber, "N.A")}
                         </span>
                       </div>
                       {selectedOrder.source === "pos" && posBill?.processedBy ? (
                         <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-[#9CA3AF]">Processed by</span>
-                          <span className="text-[13px] text-[#6B7280]">{posBill.processedBy}</span>
+                          <span className="text-[11px] text-[#4B5563]">Processed by</span>
+                          <span className="text-[13px] text-[#374151]">{posBill.processedBy}</span>
                         </div>
                       ) : null}
                     </div>
@@ -1380,7 +1380,7 @@ export default function AdminOrders() {
 
                   {/* ── 5. Delivery Details ── */}
                   <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Delivery Details</p>
+                    <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Delivery Details</p>
                     <div className="space-y-2">
                       {[
                         {
@@ -1410,8 +1410,8 @@ export default function AdminOrders() {
                         },
                       ].map(({ label, value }) => (
                         <div key={label} className="flex items-start justify-between gap-3">
-                          <span className="flex-none text-[11px] text-[#9CA3AF]">{label}</span>
-                          <span className="text-right text-[13px] text-[#6B7280]">{value}</span>
+                          <span className="flex-none text-[11px] text-[#4B5563]">{label}</span>
+                          <span className="text-right text-[13px] text-[#374151]">{value}</span>
                         </div>
                       ))}
                     </div>
@@ -1423,13 +1423,13 @@ export default function AdminOrders() {
                       className="rounded-xl border border-[#E5E7EB] bg-white p-4"
                       data-testid="admin-order-fonepay-audit"
                     >
-                      <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">
+                      <div className="mb-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">
                         <QrCode className="h-3.5 w-3.5" />
                         Fonepay Gateway
                       </div>
 
                       {fonepayAuditLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                        <div className="flex items-center gap-2 text-sm text-[#4B5563]">
                           <Loader2 className="h-4 w-4 animate-spin" />
                           Loading Fonepay details...
                         </div>
@@ -1461,15 +1461,15 @@ export default function AdminOrders() {
                             ) : null}
                           </div>
 
-                          <div className="space-y-2 text-[12px] text-[#6B7280]">
+                          <div className="space-y-2 text-[12px] text-[#4B5563]">
                             <div className="flex items-start justify-between gap-3">
-                              <span className="text-[11px] text-[#9CA3AF]">Mode</span>
+                              <span className="text-[11px] text-[#4B5563]">Mode</span>
                               <span>
                                 {fonepayRuntime.recommendedMode === "qr" ? "Dynamic QR" : fonepayRuntime.recommendedMode === "redirect" ? "Hosted redirect" : "Unavailable"}
                               </span>
                             </div>
                             <div className="flex items-start justify-between gap-3">
-                              <span className="flex-none text-[11px] text-[#9CA3AF]">Callback URL</span>
+                              <span className="flex-none text-[11px] text-[#4B5563]">Callback URL</span>
                               <span className="break-all text-right">{fonepayRuntime.callbackUrl ?? "Not resolved"}</span>
                             </div>
                           </div>
@@ -1498,7 +1498,7 @@ export default function AdminOrders() {
 
                           <div className="space-y-2">
                             {(fonepayAudit?.events.length ?? 0) === 0 ? (
-                              <div className="rounded-lg border border-dashed border-[#E5E7EB] p-3 text-[12px] text-[#6B7280]">
+                              <div className="rounded-lg border border-dashed border-[#E5E7EB] p-3 text-[12px] text-[#4B5563]">
                                 No Fonepay audit events yet.
                               </div>
                             ) : (
@@ -1510,7 +1510,7 @@ export default function AdminOrders() {
                                 >
                                   <div className="flex flex-wrap items-start justify-between gap-2">
                                     <div className="flex flex-wrap items-center gap-1.5">
-                                      <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-[#6B7280]">
+                                      <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] uppercase tracking-[0.16em] text-[#4B5563]">
                                         {event.flow.toUpperCase()}
                                       </Badge>
                                       <span className="text-[12px] font-medium text-[#111827]">
@@ -1523,16 +1523,16 @@ export default function AdminOrders() {
                                         {event.status}
                                       </Badge>
                                     </div>
-                                    <span className="text-[11px] text-[#9CA3AF]">
+                                    <span className="text-[11px] text-[#4B5563]">
                                       {event.createdAt ? format(new Date(event.createdAt), "d MMM • h:mm a") : "—"}
                                     </span>
                                   </div>
-                                  {event.message ? <p className="mt-1.5 text-[12px] text-[#6B7280]">{event.message}</p> : null}
+                                  {event.message ? <p className="mt-1.5 text-[12px] text-[#4B5563]">{event.message}</p> : null}
                                   {event.prn || event.uid || event.bankCode ? (
                                     <div className="mt-2 flex flex-wrap gap-1.5">
-                                      {event.prn ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#6B7280]">PRN {event.prn.slice(-10)}</Badge> : null}
-                                      {event.uid ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#6B7280]">UID {event.uid}</Badge> : null}
-                                      {event.bankCode ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#6B7280]">Bank {event.bankCode}</Badge> : null}
+                                      {event.prn ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#4B5563]">PRN {event.prn.slice(-10)}</Badge> : null}
+                                      {event.uid ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#4B5563]">UID {event.uid}</Badge> : null}
+                                      {event.bankCode ? <Badge variant="outline" className="rounded-full border-[#E5E7EB] bg-white px-2 py-0.5 text-[10px] text-[#4B5563]">Bank {event.bankCode}</Badge> : null}
                                     </div>
                                   ) : null}
                                 </div>
@@ -1541,7 +1541,7 @@ export default function AdminOrders() {
                           </div>
                         </div>
                       ) : (
-                        <p className="text-[13px] text-[#6B7280]">No Fonepay readiness data available for this order yet.</p>
+                        <p className="text-[13px] text-[#374151]">No Fonepay readiness data available for this order yet.</p>
                       )}
                     </section>
                   ) : null}
@@ -1549,7 +1549,7 @@ export default function AdminOrders() {
                   {/* ── 7. Bill ── */}
                   {selectedOrder.status === "completed" ? (
                     <section className="rounded-xl border border-[#E5E7EB] bg-white p-4">
-                      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#9CA3AF]">Bill</p>
+                      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-[#4B5563]">Bill</p>
                       <BillButton orderId={selectedOrder.id} />
                     </section>
                   ) : null}
@@ -1557,7 +1557,7 @@ export default function AdminOrders() {
                   {/* ── 8. Danger zone ── */}
                   <section className="rounded-xl border border-[#FDE8E8] bg-[#FFF9F9] p-4">
                     <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.18em] text-[#F87171]">Danger Zone</p>
-                    <p className="mb-3 text-[12px] text-[#6B7280]">
+                    <p className="mb-3 text-[12px] text-[#4B5563]">
                       Permanently delete this order. This action cannot be undone.
                     </p>
                     <Button
