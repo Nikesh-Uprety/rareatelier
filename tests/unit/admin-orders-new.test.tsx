@@ -130,10 +130,11 @@ describe("AdminOrdersNew", () => {
     await user.click(screen.getByRole("button", { name: /Generate checkout link/i }));
 
     expect(await screen.findByText("Share Order Links")).toBeInTheDocument();
-    expect(screen.getByText(/Checkout Link/)).toBeInTheDocument();
 
     const checkoutLinkText = screen.getByText((content) => content.includes("/checkout?admin_order_seed="));
     expect(checkoutLinkText).toBeInTheDocument();
+    expect(screen.getByLabelText("Copy checkout link")).toBeInTheDocument();
+    expect(screen.getByLabelText("Open checkout link")).toBeInTheDocument();
   });
   it("submits through the existing API, prepends the new order, and opens the created modal", async () => {
     const user = userEvent.setup();

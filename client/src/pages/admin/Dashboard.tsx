@@ -427,10 +427,10 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 pr-4">
                           <div className="text-[12px] font-medium">
-                            {order.fullName}
+                            {order.fullName || "N.A"}
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            {order.email}
+                            {order.email || "N.A"}
                           </div>
                         </td>
                         <td className="py-3 pr-4 text-[11px] text-muted-foreground">
@@ -555,10 +555,10 @@ export default function AdminDashboard() {
                         </div>
                         <div>
                           <div className="font-medium text-[12px]">
-                            {customer.firstName} {customer.lastName}
+                            {customer.firstName || "N.A"} {customer.lastName || ""}
                           </div>
                           <div className="text-[11px] text-muted-foreground">
-                            Joined {joined}
+                            Joined {joined || "N.A"}
                           </div>
                         </div>
                       </div>
@@ -614,9 +614,9 @@ export default function AdminDashboard() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">Customer</p>
-                  <p className="font-medium">{orderDetail.fullName}</p>
+                  <p className="font-medium">{orderDetail.fullName || "N.A"}</p>
                   <p className="text-xs text-muted-foreground">
-                    {orderDetail.email}
+                    {orderDetail.email || "N.A"}
                   </p>
                 </div>
                 <div className="space-y-1">

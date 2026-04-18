@@ -22,7 +22,7 @@ export function formatStorefrontPrice(amount: number | string): string {
   return "रू " + num.toLocaleString("en-NP");
 }
 
-export function displayEmptyField(value: string | null | undefined, fallback: string = "N/A"): string {
+export function displayEmptyField(value: string | null | undefined, fallback: string = "N.A"): string {
   if (!value || (typeof value === "string" && !value.trim())) {
     return fallback;
   }
