@@ -30,6 +30,7 @@ export interface AdminNavItem {
   label: string;
   type: string;
   icon: LucideIcon;
+  iconUrl?: string;
   badge?: string;
 }
 
@@ -39,7 +40,8 @@ export const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { page: "landing-page", href: "/admin/canvas", icon: Sparkles, label: "Canvas", type: "system" },
   { page: "analytics", href: "/admin/analytics", icon: BarChart, label: "Analytics", type: "analytics" },
   { page: "products", href: "/admin/products", icon: Shirt, label: "Products", type: "product" },
-  { page: "products", href: "/admin/inventory", icon: Package, label: "Inventory", type: "product" },
+  { page: "products", href: "/admin/inventory/light", icon: Package, iconUrl: "https://img.icons8.com/?size=100&id=8372&format=png&color=40C057", label: "Inventory", type: "product" },
+  { page: "products", href: "/admin/inventory/platinum", icon: Sparkles, iconUrl: "/images/inventory-pro-icon.png", label: "Inventory Pro", type: "product" },
   { page: "orders", href: "/admin/orders", icon: ShoppingBag, label: "Orders", type: "order" },
   { page: "pos", href: "/admin/pos", icon: CreditCard, label: "Point of Sale", type: "pos" },
   { page: "bills", href: "/admin/bills", icon: Receipt, label: "Bills", type: "bill" },

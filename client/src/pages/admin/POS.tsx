@@ -1065,15 +1065,23 @@ export default function AdminPOS() {
     };
   }, [fonepaySession?.prn, toast]);
 
-  // ── Loading session? Show skeleton ──────────────────
+  // ── Loading session? Show GIF loader ──────────────────
   if (sessionLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 animate-in fade-in">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-64" />
-        <div className="w-full max-w-sm space-y-4">
-          <Skeleton className="h-10 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-5 animate-in fade-in duration-500">
+        <div className="relative flex items-center justify-center">
+          <div className="absolute inset-0 rounded-full bg-white/40 dark:bg-white/10 blur-2xl scale-150" />
+          <img
+            src="/images/pos-terminal.gif"
+            alt="Loading POS…"
+            width={120}
+            height={120}
+            className="relative z-10 h-28 w-28 object-contain drop-shadow-xl"
+          />
+        </div>
+        <div className="text-center">
+          <p className="text-base font-semibold text-foreground">Point of Sale</p>
+          <p className="mt-1 text-sm text-muted-foreground animate-pulse">Loading your session…</p>
         </div>
       </div>
     );

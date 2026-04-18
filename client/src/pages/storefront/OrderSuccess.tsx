@@ -505,9 +505,25 @@ export default function OrderSuccess() {
       </style>
 
       {/* Success hero — screen only */}
-      <div className="no-print relative mb-8 overflow-visible rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-500/5 via-background to-blue-500/5 dark:from-emerald-500/5 dark:via-background dark:to-blue-500/5 px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14">
+      <div className="no-print relative mb-8 overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-emerald-500/6 via-background to-blue-500/5 dark:from-emerald-500/5 dark:via-background dark:to-blue-500/5 px-6 pb-10 pt-10 md:px-10 md:pb-14 md:pt-16">
+        {/* Blurred white depth orbs */}
+        <span className="pointer-events-none absolute -left-12 -top-12 h-64 w-64 rounded-full bg-emerald-200/40 blur-3xl dark:bg-emerald-900/25" />
+        <span className="pointer-events-none absolute -right-8 bottom-0 h-48 w-48 rounded-full bg-blue-200/30 blur-2xl dark:bg-blue-900/20" />
         <div className="relative flex flex-col items-center text-center">
-          <div className="min-w-0 space-y-3">
+          {/* Animated order-completed icon */}
+          <div className="order-confirm-icon-float relative mb-6 flex items-center justify-center">
+            <span className="order-confirm-icon-glow absolute inset-0 rounded-full bg-emerald-400/20 blur-2xl" />
+            <div className="relative flex h-24 w-24 items-center justify-center rounded-full border border-white/60 bg-white/70 shadow-[0_8px_32px_rgba(16,185,129,0.18),0_2px_8px_rgba(0,0,0,0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-white/8 dark:shadow-[0_8px_32px_rgba(16,185,129,0.12)] md:h-28 md:w-28">
+              <img
+                src="https://img.icons8.com/?size=200&id=4s6J5ffeGarN&format=gif"
+                alt="Order Confirmed"
+                width={80}
+                height={80}
+                className="h-16 w-16 object-contain md:h-20 md:w-20"
+              />
+            </div>
+          </div>
+          <div className="min-w-0 space-y-3 order-confirm-fade-in">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-muted-foreground">Order Success</p>
             <h1 className="text-2xl font-black uppercase tracking-tight text-foreground md:text-4xl">
               {firstName ? `Thank you, ${firstName}` : "Thank you for your order"}
@@ -518,7 +534,7 @@ export default function OrderSuccess() {
               it below.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-              <span className="inline-flex items-center rounded-md border border-border bg-background/80 px-3 py-1.5 font-mono text-xs font-semibold text-foreground">
+              <span className="inline-flex items-center rounded-md border border-border bg-background/80 px-3 py-1.5 font-mono text-xs font-semibold text-foreground backdrop-blur-sm">
                 Order ID · {order.id}
               </span>
               <span className="text-xs text-muted-foreground">{orderDateLabel}</span>

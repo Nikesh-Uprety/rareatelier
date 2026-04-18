@@ -468,7 +468,11 @@ export default function AdminLayout({
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
+                  {item.iconUrl ? (
+                    <img src={item.iconUrl} alt="" aria-hidden="true" width={16} height={16} className="h-4 w-4 shrink-0 object-contain" loading="lazy" />
+                  ) : (
+                    <item.icon className="h-4 w-4 shrink-0" />
+                  )}
                   <span className="min-w-0 flex-1 truncate">{item.label}</span>
                   {navBadge ? (
                     <span className="ml-auto inline-flex rounded-full border border-amber-700/50 bg-amber-500 px-1.5 py-0.5 text-[8px] font-black tracking-[0.14em] text-black dark:border-amber-300/70 dark:bg-amber-300 dark:text-black">
@@ -597,13 +601,25 @@ export default function AdminLayout({
                         }}
                         data-testid={`link-admin-nav-${item.label.toLowerCase()}`}
                       >
-                        <item.icon
-                          className={cn(
-                            "h-4 w-4 shrink-0",
-                            !isVisuallyExpanded && "text-white dark:text-[#111827]",
-                            isCollapsedActive && "text-[#0f172a] dark:text-white",
-                          )}
-                        />
+                        {item.iconUrl ? (
+                          <img
+                            src={item.iconUrl}
+                            alt=""
+                            aria-hidden="true"
+                            width={16}
+                            height={16}
+                            loading="lazy"
+                            className="h-4 w-4 shrink-0 object-contain"
+                          />
+                        ) : (
+                          <item.icon
+                            className={cn(
+                              "h-4 w-4 shrink-0",
+                              !isVisuallyExpanded && "text-white dark:text-[#111827]",
+                              isCollapsedActive && "text-[#0f172a] dark:text-white",
+                            )}
+                          />
+                        )}
                         <span
                           className={cn(
                             "overflow-hidden whitespace-nowrap transition-all duration-300 ease-out",
