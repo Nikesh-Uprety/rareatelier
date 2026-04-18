@@ -1,281 +1,491 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "wouter";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowRight, PackageSearch, Plus, Search, SlidersHorizontal, Trash2, X } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { PriceInput } from "@/components/ui/price-input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDeferredValue, useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { fetchCategories, type ProductApi } from "@/lib/api";
+  ArrowUpRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Link2,
+  Minus,
+  Plus,
+  Search,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import {
   createAdminOrder,
+  fetchAdminOrdersPage,
   fetchAdminProductsPage,
   type AdminCreateOrderInput,
+  type AdminOrder,
 } from "@/lib/adminApi";
+import type { ProductApi } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
 import { getErrorMessage } from "@/lib/queryClient";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-type OrderItemDraft = {
-  productId: string;
-  color?: string;
-  size?: string;
-  quantity: number;
-  priceAtTime: number;
+type ProductStockStatus = "active" | "low" | "out";
+type PaymentStatusUi = "Paid" | "Pending" | "Partial" | "Cancelled";
+type EditableField = "customer_name" | "phone" | "payment_status";
+
+type CreateOrderListProduct = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  stock_status: ProductStockStatus;
+  image_url: string | null;
+  searchText: string;
 };
 
-type ProductStatusFilter = "all" | "active" | "draft";
-type InventoryFilter = "all" | "in_stock" | "low_stock" | "out_of_stock";
-type ProductSortOption = "name_asc" | "price_low_high" | "price_high_low" | "stock_high_low";
+type CartItem = {
+  productId: string;
+  name: string;
+  category: string;
+  priceAtTime: number;
+  quantity: number;
+  stock_status: ProductStockStatus;
+  image_url: string | null;
+};
+
+type RecentOrderRow = {
+  id: string;
+  display_id: string;
+  customer_name: string;
+  phone: string;
+  products_summary: string;
+  total: number;
+  payment_status: PaymentStatusUi;
+};
+
+type EditableCell = {
+  rowId: string;
+  field: EditableField;
+  value: string;
+};
+
+type CustomerFormState = {
+  fullName: string;
+  phone: string;
+  email: string;
+  city: string;
+  address: string;
+  landmark: string;
+};
+
+type PaymentFormState = {
+  method: "Cash on delivery" | "Online transfer" | "Esewa-Khalti" | "Card";
+  status: PaymentStatusUi;
+  deliveryCharge: number;
+  discount: number;
+};
+
+type CreatedModalState = {
+  open: boolean;
+  orderLabel: string;
+  total: number;
+  trackingToken: string | null;
+};
+
+type RequiredFieldErrors = {
+  fullName?: string;
+  phone?: string;
+};
+
+const CARD_CLASS = "rounded-xl border border-black/8 bg-white";
+const INPUT_CLASS =
+  "h-10 rounded-lg border border-black/10 bg-[#f6f5f1] px-3 text-[13px] shadow-none transition-colors placeholder:text-[#8e8a80] focus-visible:ring-0 focus-visible:border-black/25";
+
+const PAYMENT_METHOD_MAP: Record<PaymentFormState["method"], AdminCreateOrderInput["paymentMethod"]> = {
+  "Cash on delivery": "cash_on_delivery",
+  "Online transfer": "bank_transfer",
+  "Esewa-Khalti": "esewa",
+  Card: "stripe",
+};
+
+const UI_TO_BACKEND_STATUS: Record<PaymentStatusUi, NonNullable<AdminCreateOrderInput["status"]>> = {
+  Paid: "completed",
+  Pending: "pending",
+  Partial: "processing",
+  Cancelled: "cancelled",
+};
+
+const BACKEND_TO_UI_STATUS: Record<string, PaymentStatusUi> = {
+  completed: "Paid",
+  pending: "Pending",
+  processing: "Partial",
+  cancelled: "Cancelled",
+};
+
+const CITY_OPTIONS = [
+  "Kathmandu",
+  "Lalitpur",
+  "Bhaktapur",
+  "Pokhara",
+  "Biratnagar",
+  "Birgunj",
+  "Butwal",
+  "Dharan",
+  "Chitwan",
+];
+
+const THUMBNAIL_PALETTE = [
+  { bg: "#E6F1FB", text: "#185FA5" },
+  { bg: "#EAF3DE", text: "#3B6D11" },
+  { bg: "#FAEEDA", text: "#854F0B" },
+  { bg: "#EEEDFE", text: "#534AB7" },
+  { bg: "#FAECE7", text: "#993C1D" },
+  { bg: "#E1F5EE", text: "#0F6E56" },
+  { bg: "#FBEAF0", text: "#993556" },
+  { bg: "#FCEBEB", text: "#A32D2D" },
+] as const;
+
+const RECENT_ORDER_FALLBACKS: RecentOrderRow[] = [
+  {
+    id: "fallback-1041",
+    display_id: "#1041",
+    customer_name: "Sita Thapa",
+    phone: "9841000001",
+    products_summary: "Henley Tee x1",
+    total: 3300,
+    payment_status: "Paid",
+  },
+  {
+    id: "fallback-1040",
+    display_id: "#1040",
+    customer_name: "Ram Shrestha",
+    phone: "9841000002",
+    products_summary: "Cargo Pants x2",
+    total: 9100,
+    payment_status: "Pending",
+  },
+  {
+    id: "fallback-1039",
+    display_id: "#1039",
+    customer_name: "Anita KC",
+    phone: "9841000003",
+    products_summary: "Laptop Pro x1",
+    total: 68100,
+    payment_status: "Paid",
+  },
+  {
+    id: "fallback-1038",
+    display_id: "#1038",
+    customer_name: "Bikash Rai",
+    phone: "9841000004",
+    products_summary: "Black Set, Crewneck",
+    total: 6500,
+    payment_status: "Partial",
+  },
+  {
+    id: "fallback-1037",
+    display_id: "#1037",
+    customer_name: "Priya Gurung",
+    phone: "9841000005",
+    products_summary: "Mini Tote x2",
+    total: 3700,
+    payment_status: "Pending",
+  },
+];
+
+const DEFAULT_CUSTOMER_FORM: CustomerFormState = {
+  fullName: "",
+  phone: "",
+  email: "",
+  city: "",
+  address: "",
+  landmark: "",
+};
+
+const DEFAULT_PAYMENT_FORM: PaymentFormState = {
+  method: "Cash on delivery",
+  status: "Pending",
+  deliveryCharge: 100,
+  discount: 0,
+};
 
 function parseJsonArray(input: string | null | undefined): string[] {
   if (!input) return [];
   try {
     const parsed = JSON.parse(input);
-    return Array.isArray(parsed) ? parsed.filter((v) => typeof v === "string") : [];
+    return Array.isArray(parsed) ? parsed.filter((value) => typeof value === "string") : [];
   } catch {
     return [];
   }
 }
 
-function getProductPreviewImage(product: ProductApi): string {
+function getImageUrl(product: ProductApi): string | null {
   const gallery = parseJsonArray(product.galleryUrls);
-  return product.imageUrl || gallery[0] || "/placeholder.png";
+  return product.imageUrl || gallery[0] || null;
 }
 
-function getInventoryMeta(stock: number) {
-  if (stock <= 0) {
+function getPaletteIndex(id: string): number {
+  const numeric = Number(id);
+  if (Number.isFinite(numeric)) {
+    return Math.abs(numeric) % THUMBNAIL_PALETTE.length;
+  }
+
+  let hash = 0;
+  for (const char of id) {
+    hash = (hash * 31 + char.charCodeAt(0)) % 2147483647;
+  }
+  return Math.abs(hash) % THUMBNAIL_PALETTE.length;
+}
+
+function getInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "NA";
+}
+
+function getStockStatus(stock: number): ProductStockStatus {
+  if (stock <= 0) return "out";
+  if (stock <= 5) return "low";
+  return "active";
+}
+
+function getStockMeta(status: ProductStockStatus) {
+  if (status === "out") {
     return {
       label: "Out of stock",
-      className: "border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200",
+      badgeClass: "bg-[#FCEBEB] text-[#A32D2D]",
+      rowClass: "text-[#a5a096]",
     };
   }
-
-  if (stock <= 5) {
+  if (status === "low") {
     return {
-      label: `Low stock · ${stock}`,
-      className: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200",
+      label: "Low stock",
+      badgeClass: "bg-[#FAEEDA] text-[#854F0B]",
+      rowClass: "text-[#201f1c]",
     };
   }
-
   return {
-    label: `${stock} in stock`,
-    className: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-200",
+    label: "In stock",
+    badgeClass: "bg-[#EAF3DE] text-[#3B6D11]",
+    rowClass: "text-[#201f1c]",
   };
 }
 
-function matchesInventoryFilter(product: ProductApi, inventoryFilter: InventoryFilter) {
-  if (inventoryFilter === "in_stock") return product.stock > 5;
-  if (inventoryFilter === "low_stock") return product.stock > 0 && product.stock <= 5;
-  if (inventoryFilter === "out_of_stock") return product.stock <= 0;
-  return true;
+function normalizeProduct(product: ProductApi): CreateOrderListProduct {
+  const category = product.category?.trim() || "General";
+  return {
+    id: product.id,
+    name: product.name,
+    category,
+    price: Number(product.price ?? 0),
+    stock_status: getStockStatus(Number(product.stock ?? 0)),
+    image_url: getImageUrl(product),
+    searchText: `${product.name} ${category}`.toLowerCase(),
+  };
 }
 
-function sortProducts(products: ProductApi[], sortOption: ProductSortOption) {
-  const sorted = [...products];
-  sorted.sort((a, b) => {
-    if (sortOption === "price_low_high") return Number(a.price ?? 0) - Number(b.price ?? 0);
-    if (sortOption === "price_high_low") return Number(b.price ?? 0) - Number(a.price ?? 0);
-    if (sortOption === "stock_high_low") return Number(b.stock ?? 0) - Number(a.stock ?? 0);
-    return a.name.localeCompare(b.name);
-  });
-  return sorted;
+function formatRecentOrderId(id: string): string {
+  if (id.startsWith("#") || id.startsWith("UX-")) return id;
+  const compact = id.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  return `#${compact.slice(0, 4) || "NEW"}`;
+}
+
+function backendStatusToUi(status: string | null | undefined): PaymentStatusUi {
+  return BACKEND_TO_UI_STATUS[(status || "pending").toLowerCase()] || "Pending";
+}
+
+function summarizeOrderProducts(order: AdminOrder): string {
+  if (!order.items?.length) return "No products";
+  return order.items.map((item) => `${item.name} x${item.quantity}`).join(", ");
+}
+
+function normalizeRecentOrder(order: AdminOrder): RecentOrderRow {
+  return {
+    id: order.id,
+    display_id: formatRecentOrderId(order.id),
+    customer_name: order.fullName || "Customer",
+    phone: order.phoneNumber || "",
+    products_summary: summarizeOrderProducts(order),
+    total: Number(order.total ?? 0),
+    payment_status: backendStatusToUi(order.status),
+  };
+}
+
+function createPreviewToken(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `preview-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function encodeCheckoutSeed(cart: CartItem[]): string {
+  const payload = {
+    items: cart.map((item) => ({
+      id: item.productId,
+      quantity: item.quantity,
+      variant: { size: "One Size", color: "Default" },
+      product: {
+        id: item.productId,
+        name: item.name,
+        sku: item.productId,
+        price: item.priceAtTime,
+        stock: item.stock_status === "out" ? 0 : item.stock_status === "low" ? 5 : 99,
+        category: item.category,
+        images: item.image_url ? [item.image_url] : [],
+        variants: [{ size: "One Size", color: "Default", stock: item.stock_status === "out" ? 0 : 99 }],
+      },
+    })),
+  };
+
+  const json = JSON.stringify(payload);
+  return typeof window !== "undefined" && typeof window.btoa === "function"
+    ? window.btoa(unescape(encodeURIComponent(json)))
+    : "";
+}
+
+function ProductThumb({
+  id,
+  name,
+  imageUrl,
+  size,
+  rounded,
+  className,
+}: {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  size: number;
+  rounded: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const palette = THUMBNAIL_PALETTE[getPaletteIndex(id)];
+  const initials = getInitials(name);
+
+  if (!imageUrl || failed) {
+    return (
+      <div
+        data-testid={`thumb-fallback-${id}`}
+        className={cn("flex shrink-0 items-center justify-center border border-black/8 text-[11px] font-medium", rounded, className)}
+        style={{ width: size, height: size, backgroundColor: palette.bg, color: palette.text }}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageUrl}
+      alt={name}
+      className={cn("shrink-0 border border-black/8 object-cover", rounded, className)}
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function StatusBadge({ status }: { status: PaymentStatusUi }) {
+  const className =
+    status === "Paid"
+      ? "bg-[#EAF3DE] text-[#3B6D11]"
+      : status === "Pending"
+        ? "bg-[#FAEEDA] text-[#854F0B]"
+        : status === "Partial"
+          ? "bg-[#E6F1FB] text-[#185FA5]"
+          : "bg-[#FCEBEB] text-[#A32D2D]";
+
+  return <span className={cn("inline-flex rounded-full px-2 py-1 text-[10px] font-medium", className)}>{status}</span>;
 }
 
 export default function AdminOrdersNew() {
-  const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const productBrowserRef = useRef<HTMLDivElement | null>(null);
 
-  const [items, setItems] = useState<OrderItemDraft[]>([
-    { productId: "", quantity: 1, priceAtTime: 0 },
-  ]);
-  const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
-  const [status, setStatus] = useState<AdminCreateOrderInput["status"]>("pending");
-  const [deliveryFee, setDeliveryFee] = useState(100);
-  const [customerName, setCustomerName] = useState("");
-  const [productSearch, setProductSearch] = useState("");
-  const [productCategoryFilter, setProductCategoryFilter] = useState("all");
-  const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>("active");
-  const [inventoryFilter, setInventoryFilter] = useState<InventoryFilter>("all");
-  const [sortOption, setSortOption] = useState<ProductSortOption>("name_asc");
-  const [pickerItemIndex, setPickerItemIndex] = useState<number | null>(0);
-  const [shipping, setShipping] = useState({
-    email: "",
-    phone: "",
-    deliveryLocation: "",
+  const [productQuery, setProductQuery] = useState("");
+  const [productPage, setProductPage] = useState(1);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [customerForm, setCustomerForm] = useState<CustomerFormState>(DEFAULT_CUSTOMER_FORM);
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState>(DEFAULT_PAYMENT_FORM);
+  const [requiredFieldErrors, setRequiredFieldErrors] = useState<RequiredFieldErrors>({});
+  const [recentOrders, setRecentOrders] = useState<RecentOrderRow[]>([]);
+  const [recentOrdersSearch, setRecentOrdersSearch] = useState("");
+  const [editingCell, setEditingCell] = useState<EditableCell | null>(null);
+  const [linkModalOpen, setLinkModalOpen] = useState(false);
+  const [createdModalState, setCreatedModalState] = useState<CreatedModalState>({
+    open: false,
+    orderLabel: "",
+    total: 0,
+    trackingToken: null,
   });
-  const [productCache, setProductCache] = useState<Record<string, ProductApi>>({});
+  const [copiedLink, setCopiedLink] = useState<"checkout" | "tracking" | "created" | null>(null);
+  const [recentOrdersHydrated, setRecentOrdersHydrated] = useState(false);
+  const [previewToken] = useState(createPreviewToken);
 
-  const deferredProductSearch = useDeferredValue(productSearch.trim().toLowerCase());
+  const deferredProductQuery = useDeferredValue(productQuery.trim().toLowerCase());
 
-  const { data: categories = [] } = useQuery({
-    queryKey: ["admin", "orders", "categories"],
-    queryFn: fetchCategories,
-    staleTime: 5 * 60_000,
-  });
-
-  const { data: productLibraryData, isPending: productsPending, isFetching: productsFetching } = useQuery({
-    queryKey: ["admin", "orders", "product-library", productCategoryFilter, productStatusFilter],
-    queryFn: () =>
-      fetchAdminProductsPage({
-        category: productCategoryFilter === "all" ? undefined : productCategoryFilter,
-        status: productStatusFilter === "all" ? undefined : productStatusFilter,
-        page: 1,
-        limit: 500,
-      }),
+  const productsQuery = useQuery({
+    queryKey: ["admin", "orders", "new", "products"],
+    queryFn: () => fetchAdminProductsPage({ page: 1, limit: 500, status: "active" }),
     staleTime: 60_000,
   });
 
-  const libraryProducts = productLibraryData?.data ?? [];
+  const recentOrdersQuery = useQuery({
+    queryKey: ["admin", "orders", "new", "recent"],
+    queryFn: () => fetchAdminOrdersPage({ page: 1, limit: 5 }),
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
-    if (!libraryProducts.length) return;
-    setProductCache((prev) => {
-      const next = { ...prev };
-      for (const product of libraryProducts) {
-        next[product.id] = product;
-      }
-      return next;
-    });
-  }, [libraryProducts]);
+    setProductPage(1);
+  }, [deferredProductQuery]);
 
-  const categoryNameBySlug = useMemo(
-    () => new Map(categories.map((category) => [category.slug, category.name])),
-    [categories],
-  );
-
-  const productById = useMemo(
-    () => new Map(Object.values(productCache).map((product) => [product.id, product])),
-    [productCache],
-  );
-
-  const selectedProductQuantities = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const item of items) {
-      if (!item.productId) continue;
-      counts.set(item.productId, (counts.get(item.productId) ?? 0) + item.quantity);
-    }
-    return counts;
-  }, [items]);
-
-  const visibleLibraryProducts = useMemo(() => {
-    const filteredBySearch = deferredProductSearch
-      ? libraryProducts.filter((product) => {
-          const tokens = [
-            product.name,
-            product.shortDetails,
-            categoryNameBySlug.get(product.category ?? "") ?? product.category ?? "",
-            ...parseJsonArray(product.colorOptions),
-            ...parseJsonArray(product.sizeOptions),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase();
-
-          return tokens.includes(deferredProductSearch);
-        })
-      : libraryProducts;
-
-    return sortProducts(
-      filteredBySearch.filter((product) => matchesInventoryFilter(product, inventoryFilter)),
-      sortOption,
-    );
-  }, [categoryNameBySlug, deferredProductSearch, inventoryFilter, libraryProducts, sortOption]);
-
-  const subtotal = items.reduce((sum, item) => sum + item.priceAtTime * item.quantity, 0);
-  const orderTotal = Math.max(0, subtotal + deliveryFee);
-
-  const focusProductBrowser = () => {
-    productBrowserRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const updateItem = (index: number, patch: Partial<OrderItemDraft>) => {
-    setItems((prev) =>
-      prev.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-    );
-  };
-
-  const buildProductDraft = (product: ProductApi): Pick<OrderItemDraft, "productId" | "color" | "size" | "priceAtTime"> => {
-    const availableColors = parseJsonArray(product.colorOptions);
-    const availableSizes = parseJsonArray(product.sizeOptions);
-    return {
-      productId: product.id,
-      priceAtTime: Number(product.price ?? 0),
-      color: availableColors.length === 1 ? availableColors[0] : "",
-      size: availableSizes.length === 1 ? availableSizes[0] : "",
-    };
-  };
-
-  const assignProductToRow = (index: number, product: ProductApi) => {
-    updateItem(index, buildProductDraft(product));
-    setPickerItemIndex(null);
-  };
-
-  const addProductFromLibrary = (product: ProductApi) => {
-    if (pickerItemIndex !== null && items[pickerItemIndex]) {
-      assignProductToRow(pickerItemIndex, product);
+  useEffect(() => {
+    if (recentOrdersHydrated) return;
+    if (recentOrdersQuery.isSuccess) {
+      const normalized = recentOrdersQuery.data.data.map(normalizeRecentOrder);
+      setRecentOrders(normalized.length ? normalized : RECENT_ORDER_FALLBACKS);
+      setRecentOrdersHydrated(true);
       return;
     }
-
-    const emptyIndex = items.findIndex((item) => !item.productId);
-    if (emptyIndex >= 0) {
-      assignProductToRow(emptyIndex, product);
-      return;
+    if (recentOrdersQuery.isError) {
+      setRecentOrders(RECENT_ORDER_FALLBACKS);
+      setRecentOrdersHydrated(true);
     }
-
-    setItems((prev) => [...prev, { ...buildProductDraft(product), quantity: 1 }]);
-  };
-
-  const addRow = () => {
-    const nextIndex = items.length;
-    setItems((prev) => [...prev, { productId: "", quantity: 1, priceAtTime: 0 }]);
-    setPickerItemIndex(nextIndex);
-    requestAnimationFrame(() => {
-      focusProductBrowser();
-    });
-  };
-
-  const beginProductPick = (index: number) => {
-    setPickerItemIndex(index);
-    focusProductBrowser();
-  };
-
-  const removeRow = (index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index));
-    setPickerItemIndex((current) => {
-      if (current === null) return null;
-      if (current === index) return null;
-      if (current > index) return current - 1;
-      return current;
-    });
-  };
-
-  const clearCatalogFilters = () => {
-    setProductSearch("");
-    setProductCategoryFilter("all");
-    setProductStatusFilter("active");
-    setInventoryFilter("all");
-    setSortOption("name_asc");
-  };
+  }, [recentOrdersHydrated, recentOrdersQuery.data, recentOrdersQuery.isError, recentOrdersQuery.isSuccess]);
 
   const mutation = useMutation({
     mutationFn: (payload: AdminCreateOrderInput) => createAdminOrder(payload),
     onSuccess: (data) => {
+      if (!data?.order) {
+        toast({
+          title: "Order created",
+          description: "The order was created, but the server response was incomplete.",
+        });
+        return;
+      }
+
+      const normalizedOrder = normalizeRecentOrder(data.order);
+      normalizedOrder.display_id = data.orderNumber || normalizedOrder.display_id;
+      setRecentOrders((current) => [normalizedOrder, ...current].slice(0, 6));
+      setRecentOrdersHydrated(true);
+      setCart([]);
+      setCustomerForm(DEFAULT_CUSTOMER_FORM);
+      setPaymentForm(DEFAULT_PAYMENT_FORM);
+      setCreatedModalState({
+        open: true,
+        orderLabel: data.orderNumber || normalizedOrder.display_id,
+        total: Number(data.total ?? normalizedOrder.total),
+        trackingToken: data.order?.trackingToken ?? null,
+      });
+      setCopiedLink(null);
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders", "new", "products"] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders", "new", "recent"] });
       toast({
         title: "Order created",
-        description: data?.orderNumber ? `Order ${data.orderNumber} is ready.` : "Order created successfully.",
+        description: `${data.orderNumber || normalizedOrder.display_id} is ready to share.`,
       });
-      setLocation("/admin/orders");
     },
     onError: (error) => {
       toast({
@@ -286,620 +496,744 @@ export default function AdminOrdersNew() {
     },
   });
 
-  const handleSubmit = () => {
-    const filteredItems = items
-      .filter((item) => item.productId)
-      .map((item) => ({
-        ...item,
-        quantity: Number(item.quantity) || 1,
-        priceAtTime: Number(item.priceAtTime) || 0,
-      }));
+  const normalizedProducts = (productsQuery.data?.data ?? []).map(normalizeProduct);
+  const filteredProducts = deferredProductQuery
+    ? normalizedProducts.filter((product) => product.searchText.includes(deferredProductQuery))
+    : normalizedProducts;
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / 8));
+  const safeProductPage = Math.min(productPage, totalPages);
+  const paginatedProducts = filteredProducts.slice((safeProductPage - 1) * 8, safeProductPage * 8);
 
-    if (!filteredItems.length) {
+  const itemsSelectedCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.priceAtTime * item.quantity, 0);
+  const orderTotal = Math.max(0, subtotal + paymentForm.deliveryCharge - paymentForm.discount);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const checkoutLink = `${origin}/checkout?admin_order_seed=${encodeURIComponent(encodeCheckoutSeed(cart))}`;
+  const canShareCheckoutLink = cart.length > 0;
+  const activeTrackingToken = createdModalState.trackingToken || previewToken;
+  const trackingLink = `${origin}/orders/track/${activeTrackingToken}`;
+
+  const filteredRecentOrders = recentOrders.filter((row) => {
+    const search = recentOrdersSearch.trim().toLowerCase();
+    if (!search) return true;
+    return [row.id, row.display_id, row.customer_name, row.phone].some((value) => value.toLowerCase().includes(search));
+  });
+
+  function updateCustomerField(field: keyof CustomerFormState, value: string) {
+    setCustomerForm((current) => ({ ...current, [field]: value }));
+    if (field === "fullName" || field === "phone") {
+      setRequiredFieldErrors((current) => {
+        const next = { ...current };
+        delete next[field];
+        return next;
+      });
+    }
+  }
+
+  function updatePaymentField(field: keyof PaymentFormState, value: string) {
+    setPaymentForm((current) => {
+      if (field === "deliveryCharge" || field === "discount") {
+        const next = Number(value);
+        return { ...current, [field]: Number.isFinite(next) ? Math.max(0, next) : 0 };
+      }
+      return { ...current, [field]: value } as PaymentFormState;
+    });
+  }
+
+  function addProduct(product: CreateOrderListProduct) {
+    if (product.stock_status === "out") return;
+    setCart((current) => {
+      const existing = current.find((item) => item.productId === product.id);
+      if (!existing) {
+        return [
+          ...current,
+          {
+            productId: product.id,
+            name: product.name,
+            category: product.category,
+            priceAtTime: product.price,
+            quantity: 1,
+            stock_status: product.stock_status,
+            image_url: product.image_url,
+          },
+        ];
+      }
+      return current.map((item) =>
+        item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item,
+      );
+    });
+  }
+
+  function updateCartQuantity(productId: string, delta: number) {
+    setCart((current) =>
+      current
+        .map((item) =>
+          item.productId === productId ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item,
+        )
+        .filter((item) => item.quantity > 0),
+    );
+  }
+
+  function removeCartItem(productId: string) {
+    setCart((current) => current.filter((item) => item.productId !== productId));
+  }
+
+  function beginEditing(row: RecentOrderRow, field: EditableField) {
+    setEditingCell({ rowId: row.id, field, value: String(row[field]) });
+  }
+
+  function commitEditing() {
+    if (!editingCell) return;
+    setRecentOrders((current) =>
+      current.map((row) =>
+        row.id === editingCell.rowId
+          ? {
+              ...row,
+              [editingCell.field]: editingCell.value,
+            }
+          : row,
+      ),
+    );
+    setEditingCell(null);
+  }
+
+  async function copyText(value: string, key: "checkout" | "tracking" | "created") {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedLink(key);
+      window.setTimeout(() => setCopiedLink((current) => (current === key ? null : current)), 1400);
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Your browser blocked clipboard access.",
+        variant: "destructive",
+      });
+    }
+  }
+
+  function handleCreateOrder() {
+    if (!cart.length) {
       toast({ title: "Add at least one product", variant: "destructive" });
       return;
     }
 
-    const fullName = customerName.trim();
+    const nextRequiredErrors: RequiredFieldErrors = {};
+    if (!customerForm.fullName.trim()) {
+      nextRequiredErrors.fullName = "Customer name is required.";
+    }
+    if (!customerForm.phone.trim()) {
+      nextRequiredErrors.phone = "Phone number is required.";
+    }
+    if (Object.keys(nextRequiredErrors).length > 0) {
+      setRequiredFieldErrors(nextRequiredErrors);
+      toast({
+        title: "Missing required customer details",
+        description: "Customer name and phone number are required before creating an order.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const fullName = customerForm.fullName.trim();
+    const phone = customerForm.phone.trim();
+    const email = customerForm.email.trim();
+    const city = customerForm.city.trim();
+    const address = customerForm.address.trim();
+    const landmark = customerForm.landmark.trim();
     const [firstName = "", ...lastParts] = fullName.split(/\s+/).filter(Boolean);
     const lastName = lastParts.join(" ");
 
     mutation.mutate({
-      items: filteredItems,
+      items: cart.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        priceAtTime: item.priceAtTime,
+      })),
       shipping: {
         fullName: fullName || undefined,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
-        email: shipping.email || undefined,
-        phone: shipping.phone || undefined,
-        deliveryLocation: shipping.deliveryLocation || undefined,
+        phone: phone || undefined,
+        email: email || undefined,
+        city: city || undefined,
+        address: address || undefined,
+        deliveryLocation: landmark || undefined,
       },
-      paymentMethod,
-      deliveryFee,
+      paymentMethod: PAYMENT_METHOD_MAP[paymentForm.method],
+      deliveryFee: paymentForm.deliveryCharge,
       source: "admin",
-      status: status || undefined,
+      status: UI_TO_BACKEND_STATUS[paymentForm.status],
     });
-  };
+  }
 
   return (
-    <div className="space-y-8 p-4 sm:p-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-serif font-medium text-[#2C3E2D] dark:text-foreground">
-          Create Order
-        </h1>
-        <p className="text-muted-foreground">
-          Search the catalog visually, add the right products fast, then finish the order with only the essential customer details.
-        </p>
-      </div>
+    <div className="min-h-full bg-[#f7f6f2] p-4 text-[#1f1e1a] sm:p-6">
+      <div className="mx-auto max-w-[1320px] space-y-4">
+        <header className="space-y-1">
+          <h1 className="text-[20px] font-medium leading-none text-[#1f1e1a]">Create order</h1>
+          <p className="text-[12px] text-[#8e8a80]">Home › Orders › New</p>
+        </header>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
-          <div className="rounded-[28px] border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  <PackageSearch className="h-4 w-4" />
-                  Add Products
-                </div>
-                <h2 className="text-xl font-semibold text-foreground">Browse the catalog and build the order</h2>
-                <p className="max-w-2xl text-sm text-muted-foreground">
-                  Use search, category, stock state, and sorting to narrow the catalog quickly. Each result includes the product image so the team can add the right item with confidence.
-                </p>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={addRow}>
-                <Plus className="mr-2 h-4 w-4" /> Add empty line
-              </Button>
-            </div>
-
-            <div
-              ref={productBrowserRef}
-              className="mt-6 rounded-[24px] border border-border/70 bg-[#FBFBF8] p-4 dark:bg-muted/20"
-            >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_180px_180px] xl:items-end">
-                  <div className="space-y-1 md:col-span-2 xl:col-span-1">
-                    <label htmlFor="admin-order-product-search" className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Search products
-                    </label>
-                    <div className="flex h-11 items-center rounded-2xl border border-border bg-background px-3 shadow-sm transition-colors focus-within:border-[#2C3E2D]/40">
-                      <Search className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="admin-order-product-search"
-                        value={productSearch}
-                        onChange={(e) => setProductSearch(e.target.value)}
-                        placeholder="Search by product, color, size, or category"
-                        className="h-full border-0 bg-transparent px-3 shadow-none focus-visible:ring-0"
-                      />
-                      {productSearch ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 rounded-full"
-                          onClick={() => setProductSearch("")}
-                          aria-label="Clear product search"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Category
-                    </label>
-                    <Select value={productCategoryFilter} onValueChange={setProductCategoryFilter}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All categories" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All categories</SelectItem>
-                        {categories.map((category) => (
-                          <SelectItem key={category.id} value={category.slug}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Catalog state
-                    </label>
-                    <Select value={productStatusFilter} onValueChange={(value) => setProductStatusFilter(value as ProductStatusFilter)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Active products" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="all">All visible</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Inventory
-                    </label>
-                    <Select value={inventoryFilter} onValueChange={(value) => setInventoryFilter(value as InventoryFilter)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="All stock states" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All stock states</SelectItem>
-                        <SelectItem value="in_stock">In stock</SelectItem>
-                        <SelectItem value="low_stock">Low stock</SelectItem>
-                        <SelectItem value="out_of_stock">Out of stock</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-[180px_auto] xl:min-w-[320px] xl:max-w-[360px] xl:flex-1">
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Sort by
-                    </label>
-                    <Select value={sortOption} onValueChange={(value) => setSortOption(value as ProductSortOption)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sort products" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="name_asc">Name A-Z</SelectItem>
-                        <SelectItem value="price_low_high">Price low to high</SelectItem>
-                        <SelectItem value="price_high_low">Price high to low</SelectItem>
-                        <SelectItem value="stock_high_low">Stock high to low</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex items-end gap-2">
-                    <Button type="button" variant="outline" className="flex-1" onClick={clearCatalogFilters}>
-                      <SlidersHorizontal className="mr-2 h-4 w-4" /> Reset filters
-                    </Button>
-                  </div>
-                </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-start">
+          <div className="space-y-4">
+            <section className={cn(CARD_CLASS, "p-4")}> 
+              <div className="mb-4">
+                <h2 className="text-[15px] font-medium text-[#1f1e1a]">Select products</h2>
+                <p className="mt-1 text-[12px] text-[#8e8a80]">Search and add products to this order</p>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Badge variant="outline" className="rounded-full border-[#D7E2D7] bg-white/80 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground dark:bg-background/40">
-                  {visibleLibraryProducts.length} matches
-                </Badge>
-                <Badge variant="outline" className="rounded-full border-[#D7E2D7] bg-white/80 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground dark:bg-background/40">
-                  {items.filter((item) => item.productId).length} lines in order
-                </Badge>
-                {productsFetching ? (
-                  <Badge variant="outline" className="rounded-full border-[#D7E2D7] bg-white/80 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground dark:bg-background/40">
-                    Refreshing catalog…
-                  </Badge>
-                ) : null}
-                {productLibraryData && productLibraryData.total > libraryProducts.length ? (
-                  <Badge variant="outline" className="rounded-full border-[#D7E2D7] bg-white/80 px-3 py-1 text-[11px] uppercase tracking-[0.16em] text-muted-foreground dark:bg-background/40">
-                    Showing first {libraryProducts.length} of {productLibraryData.total}
-                  </Badge>
-                ) : null}
+              <div className="mb-3 flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3">
+                <Search className="size-4 text-[#8e8a80]" />
+                <Input
+                  value={productQuery}
+                  onChange={(event) => setProductQuery(event.target.value)}
+                  placeholder="Search by name or category..."
+                  className="border-0 bg-transparent px-0 text-[13px] shadow-none focus-visible:ring-0"
+                />
               </div>
 
-              {pickerItemIndex !== null && items[pickerItemIndex] ? (
-                <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-[#D9E6D9] bg-white p-4 shadow-sm dark:border-[#2F4133] dark:bg-background/50 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#506451] dark:text-[#CFE0D1]">
-                      Selecting for line item {pickerItemIndex + 1}
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Choose a product below and it will be applied directly to that row.
-                    </p>
-                  </div>
-                  <Button type="button" variant="ghost" className="justify-start md:justify-center" onClick={() => setPickerItemIndex(null)}>
-                    Cancel targeted selection
-                  </Button>
+              <div className="overflow-hidden rounded-lg border border-black/8">
+                <div className="grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center bg-[#f6f5f1] px-3 py-2 text-[10px] font-medium uppercase tracking-[0.06em] text-[#8e8a80]">
+                  <span />
+                  <span>Product</span>
+                  <span className="text-center">Stock</span>
+                  <span className="pr-2 text-right">Price</span>
+                  <span />
                 </div>
-              ) : null}
 
-              <ScrollArea className="mt-4 h-[420px] pr-4">
-                {productsPending ? (
-                  <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 p-10 text-sm text-muted-foreground">
-                    Loading catalog…
-                  </div>
-                ) : visibleLibraryProducts.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/60 p-10 text-center">
-                    <PackageSearch className="h-8 w-8 text-muted-foreground" />
-                    <h3 className="mt-4 text-base font-semibold text-foreground">No products match the current filters</h3>
-                    <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                      Try a broader search, switch category, or reset the stock filters to bring more products back into view.
-                    </p>
-                    <Button type="button" variant="outline" className="mt-4" onClick={clearCatalogFilters}>
-                      Reset catalog filters
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-                    {visibleLibraryProducts.map((product) => {
-                      const selectedQuantity = selectedProductQuantities.get(product.id) ?? 0;
-                      const availableColors = parseJsonArray(product.colorOptions);
-                      const availableSizes = parseJsonArray(product.sizeOptions);
-                      const inventoryMeta = getInventoryMeta(product.stock);
-                      const categoryLabel = categoryNameBySlug.get(product.category ?? "") ?? product.category ?? "General";
-
+                <div>
+                  {productsQuery.isPending ? (
+                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80]">Loading products...</div>
+                  ) : paginatedProducts.length ? (
+                    paginatedProducts.map((product) => {
+                      const inCart = cart.some((item) => item.productId === product.id);
+                      const stockMeta = getStockMeta(product.stock_status);
                       return (
                         <div
                           key={product.id}
-                          className="group flex min-h-[140px] flex-col justify-between rounded-2xl border border-[#E1E9E1] bg-white p-3 shadow-[0_12px_30px_rgba(31,47,33,0.04)] transition-colors hover:border-[#C4D3C4] dark:border-[#2F4133] dark:bg-background/70 dark:hover:border-[#48604B]"
+                          className={cn(
+                            "grid grid-cols-[44px_minmax(0,1fr)_88px_88px_32px] items-center border-t border-black/8 px-3 py-[9px] transition-colors first:border-t-0",
+                            inCart ? "bg-[#EAF3DE]" : "bg-white hover:bg-[#f6f5f1]",
+                            product.stock_status === "out" && "bg-white text-[#a5a096]",
+                          )}
                         >
-                          <div className="flex gap-3">
-                            <img
-                              src={getProductPreviewImage(product)}
-                              alt={product.name}
-                              className="h-20 w-20 rounded-xl object-cover"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
-                                  <p className="mt-1 text-xs text-muted-foreground">{categoryLabel}</p>
-                                </div>
-                                <p className="shrink-0 text-sm font-semibold text-foreground">{formatPrice(Number(product.price ?? 0))}</p>
-                              </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]", inventoryMeta.className)}>
-                                  {inventoryMeta.label}
-                                </span>
-                                {availableColors.length ? (
-                                  <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    {availableColors.length} color{availableColors.length > 1 ? "s" : ""}
-                                  </span>
-                                ) : null}
-                                {availableSizes.length ? (
-                                  <span className="rounded-full border border-border bg-muted/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                    {availableSizes.length} size{availableSizes.length > 1 ? "s" : ""}
-                                  </span>
-                                ) : null}
-                                {selectedQuantity > 0 ? (
-                                  <span className="rounded-full border border-[#D8E5D8] bg-[#F4F9F4] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#466048] dark:border-[#2E4732] dark:bg-[#18301D] dark:text-[#D8F0DC]">
-                                    In order · {selectedQuantity}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
+                          <ProductThumb id={product.id} name={product.name} imageUrl={product.image_url} size={36} rounded="rounded-md" />
+                          <div className="min-w-0 px-2">
+                            <p className={cn("truncate text-[13px] font-medium", stockMeta.rowClass)}>{product.name}</p>
+                            <p className="mt-0.5 truncate text-[11px] text-[#8e8a80]">{product.category}</p>
                           </div>
-
-                          <div className="mt-4 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-                            <p className="text-xs text-muted-foreground">
-                              {product.shortDetails?.trim() || "Ready to add with variants and custom pricing controls below."}
-                            </p>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="shrink-0"
-                              onClick={() => addProductFromLibrary(product)}
-                            >
-                              {pickerItemIndex !== null ? `Use for line ${pickerItemIndex + 1}` : selectedQuantity > 0 ? "Add again" : "Add to order"}
-                              <ArrowRight className="ml-2 h-4 w-4" />
-                            </Button>
+                          <div className="flex justify-center">
+                            <span className={cn("inline-flex rounded-full px-2 py-1 text-[10px] font-medium", stockMeta.badgeClass)}>
+                              {stockMeta.label}
+                            </span>
                           </div>
+                          <div className={cn("pr-2 text-right text-[13px] font-medium", product.stock_status === "out" ? "text-[#a5a096]" : "text-[#1f1e1a]")}>
+                            {formatPrice(product.price)}
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={inCart ? `Increase ${product.name}` : `Add ${product.name}`}
+                            disabled={product.stock_status === "out"}
+                            onClick={() => addProduct(product)}
+                            className={cn(
+                              "flex size-[26px] items-center justify-center rounded-full border border-black/10 bg-white text-[#6f6b61] transition-colors",
+                              inCart && "border-[#3B6D11] bg-[#3B6D11] text-white",
+                              product.stock_status !== "out" && !inCart && "hover:border-black/30 hover:text-[#1f1e1a]",
+                              product.stock_status === "out" && "cursor-not-allowed opacity-40",
+                            )}
+                          >
+                            {inCart ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
+                          </button>
                         </div>
                       );
-                    })}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-
-            <div className="mt-6">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Order line items</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Review quantity, variants, and pricing for each selected product before placing the order.
-                  </p>
+                    })
+                  ) : (
+                    <div className="px-3 py-10 text-center text-[13px] text-[#8e8a80]">No products match your search.</div>
+                  )}
                 </div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-                  {items.filter((item) => item.productId).length} configured lines
-                </p>
               </div>
 
-              <div className="mt-4 space-y-4">
-                {items.map((item, index) => {
-                  const product = item.productId ? productById.get(item.productId) : null;
-                  const availableColors = parseJsonArray(product?.colorOptions);
-                  const availableSizes = parseJsonArray(product?.sizeOptions);
-                  const categoryLabel = product
-                    ? categoryNameBySlug.get(product.category ?? "") ?? product.category ?? "General"
-                    : "";
-                  const inventoryMeta = product ? getInventoryMeta(product.stock) : null;
-
-                  return (
-                    <div
-                      key={`${item.productId || "empty"}-${index}`}
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <span className="text-[12px] text-[#8e8a80]">
+                  {filteredProducts.length ? `${(safeProductPage - 1) * 8 + 1}-${Math.min(safeProductPage * 8, filteredProducts.length)} of ${filteredProducts.length}` : "0-0 of 0"}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label="Previous page"
+                    disabled={safeProductPage <= 1}
+                    onClick={() => setProductPage((current) => Math.max(1, current - 1))}
+                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] disabled:opacity-35"
+                  >
+                    <ChevronLeft className="size-4" />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      type="button"
+                      onClick={() => setProductPage(pageNumber)}
                       className={cn(
-                        "rounded-2xl border border-border/70 bg-white p-4 shadow-sm transition-colors dark:bg-card",
-                        pickerItemIndex === index && "border-[#2C3E2D]/30 bg-[#F7FBF7] dark:bg-[#162018]",
+                        "flex size-7 items-center justify-center rounded-lg border text-[12px]",
+                        pageNumber === safeProductPage
+                          ? "border-black bg-black text-white"
+                          : "border-black/8 bg-white text-[#6f6b61]",
                       )}
                     >
-                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="flex-1">
-                          {product ? (
-                            <div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-[#FBFBF8] p-3 dark:bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex min-w-0 items-center gap-3">
-                                <img
-                                  src={getProductPreviewImage(product)}
-                                  alt={product.name}
-                                  className="h-16 w-16 rounded-xl object-cover"
-                                />
-                                <div className="min-w-0">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <p className="truncate text-sm font-semibold text-foreground">{product.name}</p>
-                                    <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                      {categoryLabel}
-                                    </span>
-                                  </div>
-                                  <p className="mt-1 text-xs text-muted-foreground">
-                                    Base price {formatPrice(Number(product.price ?? 0))}
-                                  </p>
-                                  <div className="mt-2 flex flex-wrap gap-2">
-                                    {inventoryMeta ? (
-                                      <span className={cn("rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]", inventoryMeta.className)}>
-                                        {inventoryMeta.label}
-                                      </span>
-                                    ) : null}
-                                    {availableColors.length ? (
-                                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                        {availableColors.length} color option{availableColors.length > 1 ? "s" : ""}
-                                      </span>
-                                    ) : null}
-                                    {availableSizes.length ? (
-                                      <span className="rounded-full border border-border bg-background px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                                        {availableSizes.length} size option{availableSizes.length > 1 ? "s" : ""}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-                              <Button type="button" variant="outline" size="sm" onClick={() => beginProductPick(index)}>
-                                Change product
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="rounded-2xl border border-dashed border-border/70 bg-[#FBFBF8] p-4 dark:bg-muted/20">
-                              <p className="text-sm font-semibold text-foreground">Line item {index + 1} does not have a product yet.</p>
-                              <p className="mt-1 text-sm text-muted-foreground">
-                                Pick a product from the catalog above to attach image, pricing, and variants to this row.
-                              </p>
-                              <Button type="button" className="mt-4" onClick={() => beginProductPick(index)}>
-                                Select product from catalog
-                              </Button>
-                            </div>
-                          )}
-                        </div>
+                      {pageNumber}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    aria-label="Next page"
+                    disabled={safeProductPage >= totalPages}
+                    onClick={() => setProductPage((current) => Math.min(totalPages, current + 1))}
+                    className="flex size-7 items-center justify-center rounded-lg border border-black/8 bg-white text-[#6f6b61] disabled:opacity-35"
+                  >
+                    <ChevronRight className="size-4" />
+                  </button>
+                </div>
+              </div>
+            </section>
 
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={() => removeRow(index)}
-                            disabled={items.length === 1}
-                            aria-label="Remove item"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+            <section className={cn(CARD_CLASS, "p-4")}> 
+              <div className="mb-4">
+                <h2 className="text-[15px] font-medium text-[#1f1e1a]">Customer details</h2>
+                <p className="mt-1 text-[12px] text-[#8e8a80]">Fill in delivery and contact information</p>
+              </div>
 
-                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_150px_120px_150px]">
-                        <Select
-                          value={item.color ?? ""}
-                          onValueChange={(value) => updateItem(index, { color: value })}
-                          disabled={!availableColors.length}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={availableColors.length ? "Select color" : "No colors"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableColors.map((color) => (
-                              <SelectItem key={color} value={color}>
-                                {color}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Full name <span className="text-[#A32D2D]">*</span></span>
+                  <Input value={customerForm.fullName} onChange={(event) => updateCustomerField("fullName", event.target.value)} className={cn(INPUT_CLASS, requiredFieldErrors.fullName && "border-[#A32D2D] focus-visible:border-[#A32D2D]")} placeholder="Customer name" />
+                  {requiredFieldErrors.fullName ? <span className="mt-1 block text-[11px] text-[#A32D2D]">{requiredFieldErrors.fullName}</span> : null}
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Phone number <span className="text-[#A32D2D]">*</span></span>
+                  <Input value={customerForm.phone} onChange={(event) => updateCustomerField("phone", event.target.value)} className={cn(INPUT_CLASS, requiredFieldErrors.phone && "border-[#A32D2D] focus-visible:border-[#A32D2D]")} placeholder="+977-" />
+                  {requiredFieldErrors.phone ? <span className="mt-1 block text-[11px] text-[#A32D2D]">{requiredFieldErrors.phone}</span> : null}
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Email</span>
+                  <Input value={customerForm.email} onChange={(event) => updateCustomerField("email", event.target.value)} className={INPUT_CLASS} placeholder="email@example.com" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">City / District</span>
+                  <select
+                    value={customerForm.city}
+                    onChange={(event) => updateCustomerField("city", event.target.value)}
+                    className={cn(INPUT_CLASS, "w-full")}
+                  >
+                    <option value="">Select city</option>
+                    {CITY_OPTIONS.map((city) => (
+                      <option key={city} value={city}>
+                        {city}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Address</span>
+                  <Input value={customerForm.address} onChange={(event) => updateCustomerField("address", event.target.value)} className={INPUT_CLASS} placeholder="Street address" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Landmark</span>
+                  <Input value={customerForm.landmark} onChange={(event) => updateCustomerField("landmark", event.target.value)} className={INPUT_CLASS} placeholder="Near..." />
+                </label>
+              </div>
+            </section>
+          </div>
 
-                        <Select
-                          value={item.size ?? ""}
-                          onValueChange={(value) => updateItem(index, { size: value })}
-                          disabled={!availableSizes.length}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={availableSizes.length ? "Select size" : "No sizes"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableSizes.map((size) => (
-                              <SelectItem key={size} value={size}>
-                                {size}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+          <aside className={cn(CARD_CLASS, "p-4 lg:sticky lg:top-4")}> 
+            <div>
+              <h2 className="text-[15px] font-medium text-[#1f1e1a]">Order summary</h2>
+              <p className="mt-1 text-[11px] text-[#8e8a80]">{itemsSelectedCount} items selected</p>
+            </div>
 
-                        <PriceInput
-                          aria-label="Item price"
-                          min={0}
-                          value={item.priceAtTime}
-                          onChange={(val) => updateItem(index, { priceAtTime: val })}
-                          placeholder="Price"
-                          disabled={!product}
-                        />
-
-                        <Input
-                          type="number"
-                          min={1}
-                          name={`items.${index}.quantity`}
-                          inputMode="numeric"
-                          autoComplete="off"
-                          aria-label="Item quantity"
-                          value={item.quantity}
-                          disabled={!product}
-                          onChange={(e) => updateItem(index, { quantity: Math.max(1, Number(e.target.value) || 1) })}
-                        />
-
-                        <div className="rounded-xl border border-border/70 bg-muted/20 px-4 py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                            Line total
-                          </p>
-                          <p className="mt-1 text-sm font-semibold text-foreground">
-                            {formatPrice(item.priceAtTime * item.quantity)}
-                          </p>
-                        </div>
+            <div className="mt-4 flex flex-col gap-2">
+              {cart.length ? (
+                cart.map((item) => (
+                  <div key={item.productId} className="flex items-center gap-2 rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2">
+                    <ProductThumb id={item.productId} name={item.name} imageUrl={item.image_url} size={30} rounded="rounded-[5px]" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[12px] font-medium text-[#1f1e1a]">{item.name}</p>
+                      <div className="mt-1 flex items-center gap-1">
+                        <button type="button" className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white" onClick={() => updateCartQuantity(item.productId, -1)}>
+                          <Minus className="size-3" />
+                        </button>
+                        <span className="min-w-[14px] text-center text-[11px] font-medium text-[#1f1e1a]">{item.quantity}</span>
+                        <button type="button" className="flex size-[18px] items-center justify-center rounded-[3px] border border-black/10 bg-white" onClick={() => updateCartQuantity(item.productId, 1)}>
+                          <Plus className="size-3" />
+                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="text-right">
+                      <p className="text-[12px] font-medium text-[#1f1e1a]">{formatPrice(item.priceAtTime * item.quantity)}</p>
+                      <button type="button" className="mt-1 text-[10px] text-[#8e8a80] hover:text-[#A32D2D]" onClick={() => removeCartItem(item.productId)}>
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-black/8 px-3 py-8 text-center text-[12px] text-[#8e8a80]">
+                  No products added yet
+                </div>
+              )}
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Customer</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1 sm:col-span-2">
-                <label htmlFor="order-customer-name" className="text-[11px] font-semibold text-muted-foreground">
-                  Customer name
+            <div className="my-4 h-px bg-black/8" />
+
+            <div className="space-y-3">
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-[#8e8a80]">Payment method</span>
+                <select value={paymentForm.method} onChange={(event) => updatePaymentField("method", event.target.value)} className={cn(INPUT_CLASS, "w-full")}>
+                  <option>Cash on delivery</option>
+                  <option>Online transfer</option>
+                  <option>Esewa-Khalti</option>
+                  <option>Card</option>
+                </select>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Payment status</span>
+                  <select value={paymentForm.status} onChange={(event) => updatePaymentField("status", event.target.value)} className={cn(INPUT_CLASS, "w-full")}>
+                    <option>Pending</option>
+                    <option>Paid</option>
+                    <option>Partial</option>
+                    <option>Cancelled</option>
+                  </select>
                 </label>
-                <Input
-                  id="order-customer-name"
-                  name="fullName"
-                  autoComplete="name"
-                  placeholder="Customer name…"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                />
+                <label className="block">
+                  <span className="mb-1 block text-[11px] text-[#8e8a80]">Delivery charge</span>
+                  <Input type="number" value={paymentForm.deliveryCharge} onChange={(event) => updatePaymentField("deliveryCharge", event.target.value)} className={INPUT_CLASS} />
+                </label>
               </div>
-              <div className="space-y-1">
-                <label htmlFor="order-email" className="text-[11px] font-semibold text-muted-foreground">
-                  Email
-                </label>
-                <Input
-                  id="order-email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Email…"
-                  value={shipping.email}
-                  onChange={(e) => setShipping((s) => ({ ...s, email: e.target.value }))}
-                />
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] text-[#8e8a80]">Discount</span>
+                <Input type="number" value={paymentForm.discount} onChange={(event) => updatePaymentField("discount", event.target.value)} className={INPUT_CLASS} />
+              </label>
+            </div>
+
+            <div className="my-4 h-px bg-black/8" />
+
+            <div className="space-y-1.5 text-[13px] text-[#6f6b61]">
+              <div className="flex items-center justify-between">
+                <span>Subtotal</span>
+                <span>{formatPrice(subtotal)}</span>
               </div>
-              <div className="space-y-1">
-                <label htmlFor="order-phone" className="text-[11px] font-semibold text-muted-foreground">
-                  Phone
-                </label>
-                <Input
-                  id="order-phone"
-                  name="phone"
-                  type="tel"
-                  autoComplete="tel"
-                  placeholder="Phone…"
-                  value={shipping.phone}
-                  onChange={(e) => setShipping((s) => ({ ...s, phone: e.target.value }))}
-                />
+              <div className="flex items-center justify-between">
+                <span>Delivery</span>
+                <span>{formatPrice(paymentForm.deliveryCharge)}</span>
               </div>
-              <div className="space-y-1 sm:col-span-2">
-                <label htmlFor="order-delivery-location" className="text-[11px] font-semibold text-muted-foreground">
-                  Delivery location
-                </label>
-                <Input
-                  id="order-delivery-location"
-                  name="deliveryLocation"
-                  autoComplete="off"
-                  placeholder="Delivery location…"
-                  value={shipping.deliveryLocation}
-                  onChange={(e) => setShipping((s) => ({ ...s, deliveryLocation: e.target.value }))}
-                />
+              <div className="flex items-center justify-between">
+                <span>Discount</span>
+                <span className="text-[#A32D2D]">- {formatPrice(paymentForm.discount)}</span>
+              </div>
+              <div className="mt-2 flex items-center justify-between border-t border-black/8 pt-2 text-[14px] font-medium text-[#1f1e1a]">
+                <span>Order total</span>
+                <span>{formatPrice(orderTotal)}</span>
               </div>
             </div>
-          </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button type="button" className="min-h-11 flex-1 rounded-lg bg-black text-white hover:bg-black/85" loading={mutation.isPending} loadingText="Creating..." onClick={handleCreateOrder}>
+                Create order
+              </Button>
+              <Button type="button" variant="outline" className="min-h-11 rounded-lg border-black/10 bg-[#f6f5f1] px-4 text-[#1f1e1a]" onClick={() => setLinkModalOpen(true)}>
+                <Link2 className="size-4" />
+                <ArrowUpRight className="size-3.5 text-[#8e8a80]" />
+                Link
+              </Button>
+            </div>
+          </aside>
         </div>
 
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Payment</h2>
-            <div className="mt-4 space-y-3">
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Payment method" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash_on_delivery">Cash on delivery</SelectItem>
-                  <SelectItem value="esewa">Esewa</SelectItem>
-                  <SelectItem value="khalti">Khalti</SelectItem>
-                  <SelectItem value="fonepay">Fonepay</SelectItem>
-                  <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                  <SelectItem value="stripe">Stripe</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={status ?? "pending"} onValueChange={(value) => setStatus(value as AdminCreateOrderInput["status"])}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Order status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="processing">Processing</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="space-y-1">
-                <label htmlFor="order-delivery-fee" className="text-[11px] font-semibold text-muted-foreground">
-                  Delivery charge
-                </label>
-                <PriceInput
-                  aria-label="Delivery charge"
-                  id="order-delivery-fee"
-                  min={0}
-                  value={deliveryFee}
-                  onChange={(val) => setDeliveryFee(Math.max(0, val))}
-                  placeholder="Delivery charge"
-                />
-              </div>
-              <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Products subtotal</span>
-                  <span className="font-medium text-foreground">{formatPrice(subtotal)}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Delivery charge</span>
-                  <span className="font-medium text-foreground">{formatPrice(deliveryFee)}</span>
-                </div>
-                <div className="h-px bg-border/70" />
-                <div className="flex items-center justify-between">
-                  <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Order total</p>
-                  <p className="text-lg font-semibold text-foreground">{formatPrice(orderTotal)}</p>
-                </div>
-              </div>
+        <section className={cn(CARD_CLASS, "p-4")}> 
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 className="text-[15px] font-medium text-[#1f1e1a]">Recent orders</h2>
+              <p className="mt-1 text-[12px] text-[#8e8a80]">Click any cell to edit inline</p>
             </div>
+            <Input
+              value={recentOrdersSearch}
+              onChange={(event) => setRecentOrdersSearch(event.target.value)}
+              placeholder="Search orders..."
+              className={cn(INPUT_CLASS, "w-full sm:w-[180px]")}
+            />
           </div>
 
-          <div className="rounded-2xl border border-border bg-white/90 p-6 shadow-sm dark:bg-card">
-            <Button
-              type="button"
-              className="w-full"
-              loading={mutation.isPending}
-              loadingText="Creating..."
-              onClick={handleSubmit}
-            >
-              Create Order
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="mt-3 w-full"
-              onClick={() => setLocation("/admin/orders")}
-            >
-              Cancel
-            </Button>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] table-fixed border-collapse">
+              <thead>
+                <tr className="bg-[#f6f5f1] text-left text-[10px] font-medium uppercase tracking-[0.05em] text-[#8e8a80]">
+                  <th className="w-[70px] px-3 py-2">Order ID</th>
+                  <th className="w-[130px] px-3 py-2">Customer</th>
+                  <th className="w-[90px] px-3 py-2">Phone</th>
+                  <th className="w-[140px] px-3 py-2">Products</th>
+                  <th className="w-[80px] px-3 py-2">Total</th>
+                  <th className="w-[80px] px-3 py-2">Status</th>
+                  <th className="w-[50px] px-3 py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!recentOrdersHydrated && recentOrdersQuery.isPending ? (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80]">
+                      Loading recent orders...
+                    </td>
+                  </tr>
+                ) : filteredRecentOrders.length ? (
+                  filteredRecentOrders.map((row) => {
+                    const isCustomerEditing = editingCell?.rowId === row.id && editingCell.field === "customer_name";
+                    const isPhoneEditing = editingCell?.rowId === row.id && editingCell.field === "phone";
+                    const isStatusEditing = editingCell?.rowId === row.id && editingCell.field === "payment_status";
+
+                    return (
+                      <tr key={row.id} className="border-t border-black/8 text-[12px] text-[#1f1e1a] hover:bg-[#f6f5f1]">
+                        <td className="px-3 py-2 font-medium">{row.display_id}</td>
+                        <td className="px-3 py-2">
+                          {isCustomerEditing ? (
+                            <Input
+                              autoFocus
+                              value={editingCell.value}
+                              onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value })}
+                              onBlur={commitEditing}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") commitEditing();
+                              }}
+                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px]"
+                            />
+                          ) : (
+                            <button type="button" className="w-full text-left" onClick={() => beginEditing(row, "customer_name")}>
+                              {row.customer_name}
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {isPhoneEditing ? (
+                            <Input
+                              autoFocus
+                              value={editingCell.value}
+                              onChange={(event) => setEditingCell({ ...editingCell, value: event.target.value })}
+                              onBlur={commitEditing}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") commitEditing();
+                              }}
+                              className="h-7 rounded-md border-black/15 bg-white px-2 text-[12px]"
+                            />
+                          ) : (
+                            <button type="button" className="w-full text-left" onClick={() => beginEditing(row, "phone")}>
+                              {row.phone || "—"}
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-[#8e8a80]">{row.products_summary}</td>
+                        <td className="px-3 py-2">{formatPrice(row.total)}</td>
+                        <td className="px-3 py-2">
+                          {isStatusEditing ? (
+                            <select
+                              autoFocus
+                              value={editingCell.value}
+                              onBlur={() => setEditingCell(null)}
+                              onChange={(event) => {
+                                setRecentOrders((current) =>
+                                  current.map((item) =>
+                                    item.id === row.id
+                                      ? { ...item, payment_status: event.target.value as PaymentStatusUi }
+                                      : item,
+                                  ),
+                                );
+                                setEditingCell(null);
+                              }}
+                              className="h-7 rounded-md border border-black/15 bg-white px-2 text-[12px]"
+                            >
+                              <option>Paid</option>
+                              <option>Pending</option>
+                              <option>Partial</option>
+                              <option>Cancelled</option>
+                            </select>
+                          ) : (
+                            <button type="button" onClick={() => beginEditing(row, "payment_status")}>
+                              <StatusBadge status={row.payment_status} />
+                            </button>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <button type="button" className="text-[11px] text-[#8e8a80] hover:text-[#1f1e1a]" onClick={() => beginEditing(row, "customer_name")}>
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="px-3 py-8 text-center text-[12px] text-[#8e8a80]">
+                      No recent orders found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </section>
       </div>
+
+      <Dialog open={linkModalOpen} onOpenChange={setLinkModalOpen}>
+        <DialogContent className="w-full max-w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-black/8 bg-white p-0 shadow-2xl [&>button]:hidden">
+          <div className="max-h-[calc(100vh-2rem)] overflow-y-auto p-6">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-[18px] font-medium text-[#1f1e1a]">Checkout & tracking links</DialogTitle>
+              <DialogDescription className="text-[12px] leading-5 text-[#8e8a80]">
+                Share a ready-to-checkout link with the selected products, or open it yourself in a new tab.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-5 space-y-4">
+              <div className="min-w-0 rounded-xl border border-black/8 bg-[#fcfbf8] p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-[#8e8a80]">Checkout link with selected products</p>
+                    <p className="mt-1 text-[12px] leading-5 text-[#6f6b61]">
+                      The customer lands on checkout with the exact products from this draft order.
+                    </p>
+                  </div>
+                  <a
+                    href={canShareCheckoutLink ? checkoutLink : undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open checkout in a new tab"
+                    className={cn(
+                      "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-black/8 bg-white text-[#1f1e1a] transition-colors",
+                      canShareCheckoutLink ? "hover:border-black/20 hover:bg-[#faf8f3]" : "pointer-events-none opacity-40",
+                    )}
+                  >
+                    <ArrowUpRight className="size-4" />
+                  </a>
+                </div>
+                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-3 text-[12px] leading-5 text-[#6f6b61] break-all">
+                  {canShareCheckoutLink ? checkoutLink : "Add at least one product to generate a checkout link."}
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    disabled={!canShareCheckoutLink}
+                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#f1efe8] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => copyText(checkoutLink, "checkout")}
+                  >
+                    {copiedLink === "checkout" ? "Copied!" : "Copy checkout link"}
+                  </button>
+                  <a
+                    href={canShareCheckoutLink ? checkoutLink : undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={cn(
+                      "inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors",
+                      canShareCheckoutLink ? "hover:border-black/20 hover:bg-[#faf8f3]" : "pointer-events-none opacity-40",
+                    )}
+                  >
+                    Open checkout
+                    <ArrowUpRight className="size-3.5" />
+                  </a>
+                </div>
+              </div>
+
+              <div className="min-w-0 rounded-xl border border-black/8 bg-[#fcfbf8] p-4">
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-[#8e8a80]">Order tracking link</p>
+                    <p className="mt-1 text-[12px] leading-5 text-[#6f6b61]">
+                      Share this link if you want the customer to follow the order status after creation.
+                    </p>
+                  </div>
+                  <a
+                    href={trackingLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Open tracking in a new tab"
+                    className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-black/8 bg-white text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#faf8f3]"
+                  >
+                    <ArrowUpRight className="size-4" />
+                  </a>
+                </div>
+                <div className="min-w-0 overflow-hidden rounded-lg border border-black/8 bg-white px-3 py-3 text-[12px] leading-5 text-[#6f6b61] break-all">
+                  {trackingLink}
+                </div>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg border border-black/8 bg-[#f6f5f1] px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#f1efe8]"
+                    onClick={() => copyText(trackingLink, "tracking")}
+                  >
+                    {copiedLink === "tracking" ? "Copied!" : "Copy tracking link"}
+                  </button>
+                  <a
+                    href={trackingLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-black/8 bg-white px-3 py-2 text-[12px] font-medium text-[#1f1e1a] transition-colors hover:border-black/20 hover:bg-[#faf8f3]"
+                  >
+                    Open tracking
+                    <ArrowUpRight className="size-3.5" />
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              <Button type="button" className="min-h-11 w-full rounded-lg bg-black text-white hover:bg-black/85" onClick={() => setLinkModalOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={createdModalState.open}
+        onOpenChange={(open) => setCreatedModalState((current) => ({ ...current, open }))}
+      >
+        <DialogContent className="w-[400px] max-w-[calc(100vw-2rem)] rounded-xl border border-black/8 bg-white p-[22px] shadow-2xl [&>button]:hidden">
+          <DialogHeader className="text-left">
+            <DialogTitle className="text-[15px] font-medium text-[#1f1e1a]">Order created</DialogTitle>
+            <DialogDescription className="text-[12px] text-[#8e8a80]">
+              {createdModalState.orderLabel} · {formatPrice(createdModalState.total)}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {[
+              ["Order placed", "Just now", "#1D9E75"],
+              ["Processing", "In progress", "#378ADD"],
+              ["Out for delivery", "Pending", "#d6d1c5"],
+              ["Delivered", "Pending", "#d6d1c5"],
+            ].map(([label, time, color], index, array) => (
+              <div key={label} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span className="mt-1 block size-[10px] rounded-full" style={{ backgroundColor: color }} />
+                  {index < array.length - 1 ? <span className="mt-1 h-4 w-px bg-black/10" /> : null}
+                </div>
+                <div>
+                  <p className="text-[12px] font-medium text-[#1f1e1a]">{label}</p>
+                  <p className="text-[11px] text-[#8e8a80]">{time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <Button type="button" variant="outline" className="min-h-10 flex-1 rounded-lg border-black/10 bg-[#f6f5f1] text-[#1f1e1a]" onClick={() => copyText(trackingLink, "created")}>
+              <Copy className="size-4" />
+              {copiedLink === "created" ? "Copied!" : "Copy tracking link"}
+            </Button>
+            <Button type="button" className="min-h-10 flex-1 rounded-lg bg-black text-white hover:bg-black/85" onClick={() => setCreatedModalState((current) => ({ ...current, open: false }))}>
+              Done
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 
 import { FeaturedProductCard } from "@/components/home/FeaturedProductCard";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import {
   buildStorefrontPresetImageUrl,
   getStorefrontImagePresetOptions,

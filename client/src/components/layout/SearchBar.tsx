@@ -3,7 +3,7 @@ import { Search, X, Loader2, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation } from "wouter";
 import { fetchProducts, type ProductApi } from "@/lib/api";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { useClickAway } from "react-use";
 

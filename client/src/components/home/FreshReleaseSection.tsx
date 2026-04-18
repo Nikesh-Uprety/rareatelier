@@ -4,7 +4,7 @@ import { Link } from "wouter";
 
 import StorefrontCardImage from "@/components/storefront/StorefrontCardImage";
 import { fetchProducts, type ProductApi } from "@/lib/api";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { getStorefrontProductImageSources } from "@/lib/storefrontImage";
 
 interface FreshReleaseSectionProps {

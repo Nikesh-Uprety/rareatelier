@@ -34,7 +34,7 @@ import {
   getFonepayQrPreviewSource,
   resolveFonepayQrPreviewSource,
 } from "@/lib/fonepay";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import {
   Upload,
   CheckCircle2,

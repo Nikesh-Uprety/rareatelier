@@ -3,7 +3,7 @@ import { Minus, Plus, ShoppingBag, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { useToast } from "@/hooks/use-toast";
 import { getCartItemAvailableStock, useCartStore } from "@/store/cart";

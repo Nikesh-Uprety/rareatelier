@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { getCartItemAvailableStock, type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, Trash2, RotateCcw, ShoppingBag, History, BadgePercent, Sparkles, PackageCheck, Truck, CircleX } from "lucide-react";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { useQuery } from "@tanstack/react-query";
 import { cancelOrder, fetchOrderById, getCachedOrderHistory, updateCachedOrder } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";

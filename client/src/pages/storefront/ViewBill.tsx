@@ -1,7 +1,7 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { fetchPublicBill, type PublicBill } from "@/lib/api";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import { Printer, Share2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";

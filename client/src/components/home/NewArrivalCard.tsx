@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ExternalLink } from "lucide-react";
 import { Link } from "wouter";
 
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { type ProductApi } from "@/lib/api";
 import { getGalleryImagesForCard } from "@/components/home/FeaturedProductCard";
 import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";

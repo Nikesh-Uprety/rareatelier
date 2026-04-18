@@ -3,7 +3,7 @@ import { ExternalLink, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { AnimatePresence, motion } from "framer-motion";
 
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { type ProductApi } from "@/lib/api";
 import {
   buildStorefrontPresetImageUrl,

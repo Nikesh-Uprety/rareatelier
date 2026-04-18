@@ -5,7 +5,7 @@ import { Check, Package, Truck, MapPin, Printer, LifeBuoy, ClipboardCheck, Spark
 import { fetchOrderById, fetchOrderByTrackingToken, getCachedLatestOrder, updateCachedOrder, type OrderDetail } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
 function paymentMethodLabel(method: string) {

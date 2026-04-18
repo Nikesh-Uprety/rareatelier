@@ -10,7 +10,8 @@ import {
   type CategoryApi,
   type ProductApi,
 } from "@/lib/api";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 import { BrandedLoader } from "@/components/ui/BrandedLoader";
 import StorefrontCardImage from "@/components/storefront/StorefrontCardImage";
 import { useThemeStore } from "@/store/theme";

@@ -1,6 +1,6 @@
 import { useMemo, useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { type CartState, useCartStore } from "@/store/cart";
+import { type CartProduct, type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,7 @@ import {
   FONEPAY_RARE_ATELIER_FEE_NPR,
   getFonepayEstimatedQrSavings,
 } from "@/lib/fonepay";
-import { formatPrice } from "@/lib/format";
+import { formatStorefrontPrice as formatPrice } from "@/lib/format";
 import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
 
@@ -83,6 +83,64 @@ type PendingCheckoutContinuation = {
   phoneVal: string;
   deliveryLocationVal: string;
 };
+
+type AdminSeedItemProduct = Partial<CartProduct> & {
+  id?: string;
+  name?: string;
+  sku?: string;
+  price?: number;
+  stock?: number;
+  category?: string;
+  images?: string[];
+  variants?: Array<{ id?: number; size: string; color: string; stock?: number | null }>;
+};
+
+type AdminSeedItem = {
+  id?: string;
+  quantity?: number;
+  variant?: { id?: number; size?: string; color?: string };
+  product?: AdminSeedItemProduct;
+};
+
+type AdminOrderSeedPayload = {
+  items?: AdminSeedItem[];
+};
+
+function decodeAdminOrderSeed(raw: string | null): AdminOrderSeedPayload | null {
+  if (!raw) return null;
+
+  try {
+    if (typeof window === "undefined" || typeof window.atob !== "function") {
+      return null;
+    }
+    const json = decodeURIComponent(escape(window.atob(raw)));
+    const parsed = JSON.parse(json) as AdminOrderSeedPayload;
+    return parsed && Array.isArray(parsed.items) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSeedProduct(product: AdminSeedItemProduct | undefined): CartProduct | null {
+  if (!product?.id || !product.name) return null;
+  return {
+    id: String(product.id),
+    name: String(product.name),
+    sku: String(product.sku ?? product.id),
+    price: Number(product.price ?? 0),
+    stock: Number(product.stock ?? 0),
+    category: String(product.category ?? ""),
+    images: Array.isArray(product.images) ? product.images.filter((image: unknown): image is string => typeof image === "string") : [],
+    variants: Array.isArray(product.variants) && product.variants.length
+      ? product.variants.map((variant: { id?: number; size: string; color: string; stock?: number | null }) => ({
+          id: typeof variant.id === "number" ? variant.id : undefined,
+          size: variant.size,
+          color: variant.color,
+          stock: typeof variant.stock === "number" ? variant.stock : null,
+        }))
+      : [{ size: "One Size", color: "Default", stock: Number(product.stock ?? 0) }],
+  };
+}
 
 const MANUAL_PAYMENT_METHODS: PaymentMethodId[] = ["esewa", "khalti", "fonepay"];
 
@@ -190,7 +248,7 @@ function resolveCheckoutItemColor(item: CartState["items"][number]) {
 
 export default function Checkout() {
   const [, setLocation] = useLocation();
-  const { items, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
+  const { items, clearCart, addItem, hasHydrated = true } = useCartStore((state: CartState) => state);
   const { toast } = useToast();
   const fonepayStatusQuery = useQuery({
     queryKey: ["payments", "fonepay", "status"],
@@ -208,6 +266,10 @@ export default function Checkout() {
   const [address, setAddress] = useState("");
   const [landmark, setLandmark] = useState("");
   const [phone, setPhone] = useState("");
+  const [adminSeedPending, setAdminSeedPending] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).has("admin_order_seed");
+  });
   const fonepayGateway = fonepayStatusQuery.data?.data;
   const fonepayAnyAvailable = Boolean(fonepayGateway?.web.available || fonepayGateway?.qr.available);
   const isFonepayUnavailable =
@@ -217,6 +279,39 @@ export default function Checkout() {
     if (paymentMethod !== "fonepay" || !isFonepayUnavailable) return;
     setPaymentMethod("cash_on_delivery");
   }, [isFonepayUnavailable, paymentMethod]);
+
+  useEffect(() => {
+    if (!hasHydrated || !adminSeedPending || typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const rawSeed = params.get("admin_order_seed");
+    const seed = decodeAdminOrderSeed(rawSeed);
+
+    if (!seed?.items?.length) {
+      setAdminSeedPending(false);
+      return;
+    }
+
+    clearCart();
+    for (const seedItem of seed.items) {
+      const product = normalizeSeedProduct(seedItem.product);
+      if (!product) continue;
+      addItem(
+        product,
+        {
+          id: typeof seedItem.variant?.id === "number" ? seedItem.variant.id : undefined,
+          size: typeof seedItem.variant?.size === "string" && seedItem.variant.size.trim() ? seedItem.variant.size : "One Size",
+          color: typeof seedItem.variant?.color === "string" && seedItem.variant.color.trim() ? seedItem.variant.color : "Default",
+        },
+        Math.max(1, Number(seedItem.quantity ?? 1)),
+      );
+    }
+
+    params.delete("admin_order_seed");
+    const nextSearch = params.toString();
+    window.history.replaceState(window.history.state, "", nextSearch ? `${window.location.pathname}?${nextSearch}` : window.location.pathname);
+    setAdminSeedPending(false);
+  }, [addItem, adminSeedPending, clearCart, hasHydrated]);
 
   useEffect(() => {
     try {
@@ -371,7 +466,7 @@ export default function Checkout() {
     return null;
   }
 
-  if (items.length === 0 && step !== 3) {
+  if (items.length === 0 && step !== 3 && !adminSeedPending) {
     setLocation("/cart");
     return null;
   }
