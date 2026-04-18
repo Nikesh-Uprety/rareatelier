@@ -57,7 +57,7 @@ const MAX_IMAGE_SIZE_LABEL = "30MB";
 export default function AdminImagesPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [provider, setProvider] = useState<"local" | "cloudinary" | "tigris">("tigris");
+  const [provider, setProvider] = useState<"cloudinary" | "tigris">("tigris");
   const [category, setCategory] = useState<ImageCategory>("product");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -496,6 +496,7 @@ export default function AdminImagesPage() {
             <input
               ref={bulkInputRef}
               type="file"
+              data-testid="admin-images-upload-input"
               accept="image/*"
               multiple
               className="hidden"
@@ -507,6 +508,7 @@ export default function AdminImagesPage() {
             <Button
               type="button"
               variant="outline"
+              data-testid="admin-images-upload-open"
               className="h-9 min-w-[160px] px-5"
               onClick={() => bulkInputRef.current?.click()}
             >
@@ -738,6 +740,7 @@ export default function AdminImagesPage() {
                     }}
                   >
                     <img
+                      data-testid={`admin-image-thumb-${id}`}
                       src={thumbnailUrl}
                       alt={displayName ?? ""}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -890,6 +893,7 @@ export default function AdminImagesPage() {
                   <ChevronLeft className="h-5 w-5" />
                 </button>
                 <img
+                  data-testid="admin-image-preview"
                   src={getAssetPreviewUrl(previewAsset) || undefined}
                   alt={previewAsset.filename ?? "Preview"}
                   className="max-h-[75vh] w-auto max-w-full rounded-xl object-contain"

@@ -4,6 +4,7 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   buildStorefrontPresetImageUrl,
+  STOREFRONT_CARD_FALLBACK_IMAGE,
   getStorefrontImagePresetOptions,
   type StorefrontImagePreset,
 } from "@/lib/storefrontImage";
@@ -54,6 +55,8 @@ export default function StorefrontCardImage({
   const [isHovered, setIsHovered] = useState(false);
   const [isPrimaryLoaded, setIsPrimaryLoaded] = useState(false);
   const [isSecondaryLoaded, setIsSecondaryLoaded] = useState(false);
+  const [primaryHasError, setPrimaryHasError] = useState(false);
+  const [secondaryHasError, setSecondaryHasError] = useState(false);
   const [canHover, setCanHover] = useState(false);
   const [isNearViewport, setIsNearViewport] = useState(prioritize);
   const [shouldLoadSecondary, setShouldLoadSecondary] = useState(false);
@@ -97,6 +100,8 @@ export default function StorefrontCardImage({
   useEffect(() => {
     setIsPrimaryLoaded(false);
     setIsSecondaryLoaded(false);
+    setPrimaryHasError(false);
+    setSecondaryHasError(false);
     setIsHovered(false);
     setIsNearViewport(prioritize);
     setShouldLoadSecondary(false);
@@ -139,7 +144,16 @@ export default function StorefrontCardImage({
     return () => window.clearTimeout(timeout);
   }, [canHover, hasSecondarySource, isNearViewport, shouldLoadSecondary]);
 
-  const shouldRenderSecondary = canHover && hasSecondarySource && shouldLoadSecondary;
+  const resolvedPrimarySrc =
+    primaryHasError ? STOREFRONT_CARD_FALLBACK_IMAGE : primaryImageUrl;
+  const resolvedSecondarySrc =
+    secondaryHasError ? resolvedPrimarySrc : secondaryImageUrl || resolvedPrimarySrc;
+
+  const shouldRenderSecondary =
+    canHover &&
+    hasSecondarySource &&
+    shouldLoadSecondary &&
+    resolvedSecondarySrc !== resolvedPrimarySrc;
 
   const primaryStateClass =
     shouldRenderSecondary && isHovered
@@ -178,7 +192,7 @@ export default function StorefrontCardImage({
         />
 
         <img
-          src={primaryImageUrl}
+          src={resolvedPrimarySrc}
           alt={alt}
           loading={prioritize ? "eager" : "lazy"}
           decoding={prioritize ? "sync" : "async"}
@@ -187,6 +201,11 @@ export default function StorefrontCardImage({
           height={primaryDimensions.height}
           sizes={sizes}
           onLoad={() => setIsPrimaryLoaded(true)}
+          onError={() => {
+            if (!primaryHasError) {
+              setPrimaryHasError(true);
+            }
+          }}
           className={cn(
             "absolute inset-0 h-full w-full transition-[transform,opacity,filter] duration-500 ease-out",
             primaryStateClass,
@@ -201,7 +220,7 @@ export default function StorefrontCardImage({
               <Skeleton className="absolute inset-0 rounded-none opacity-30" />
             ) : null}
             <img
-              src={secondaryImageUrl}
+              src={resolvedSecondarySrc}
               alt={`${alt} alternate view`}
               loading="lazy"
               decoding="async"
@@ -209,6 +228,11 @@ export default function StorefrontCardImage({
               height={secondaryDimensions.height}
               sizes={sizes}
               onLoad={() => setIsSecondaryLoaded(true)}
+              onError={() => {
+                if (!secondaryHasError) {
+                  setSecondaryHasError(true);
+                }
+              }}
               className={cn(
                 "absolute inset-0 h-full w-full transition-[transform,opacity,filter] duration-500 ease-out",
                 secondaryStateClass,

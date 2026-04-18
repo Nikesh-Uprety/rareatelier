@@ -13,7 +13,25 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
-import { Search, Receipt, Clock, MapPin, Truck, Mail, Phone, Package, ChevronRight, CheckCircle2, Globe, XCircle, Trash2, Copy, ExternalLink, Link2 } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  Globe,
+  Link2,
+  Loader2,
+  MapPin,
+  Package,
+  Phone,
+  QrCode,
+  Receipt,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Truck,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { format } from "date-fns";
@@ -33,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import {
   exportOrdersCSV,
+  fetchAdminOrderFonepayAudit,
   fetchAdminOrdersPage,
   fetchAdminOrdersTrend,
   deleteAdminOrder,
@@ -40,7 +59,7 @@ import {
   verifyOrderPayment,
   fetchBillByOrder,
 } from "@/lib/adminApi";
-import type { AdminOrder, AdminBill } from "@/lib/adminApi";
+import type { AdminBill, AdminOrder, AdminOrderFonepayAudit } from "@/lib/adminApi";
 import { ExportButton } from "@/components/admin/ExportButton";
 import { useToast } from "@/hooks/use-toast";
 import { formatPrice } from "@/lib/format";
@@ -63,6 +82,32 @@ function buildOrderTrackingUrl(trackingToken?: string | null) {
   if (!trackingToken) return null;
   if (typeof window === "undefined") return `/orders/track/${trackingToken}`;
   return `${window.location.origin}/orders/track/${trackingToken}`;
+}
+
+function formatFonepayStageLabel(stage: string): string {
+  return stage
+    .split("_")
+    .map((part) => {
+      const normalized = part.toLowerCase();
+      if (normalized === "qr") return "QR";
+      if (normalized === "prn") return "PRN";
+      return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+    })
+    .join(" ");
+}
+
+function getFonepayStatusBadgeClass(status: string): string {
+  const normalized = status.toLowerCase();
+  if (normalized === "success" || normalized === "verified") {
+    return "bg-[#E8F3EB] text-[#2C5234] border-[#2C5234]/20 dark:bg-green-950 dark:text-green-300 dark:border-green-900";
+  }
+  if (normalized === "pending") {
+    return "bg-[#FFF4E5] text-[#8C5A14] border-[#8C5A14]/20 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-900";
+  }
+  if (normalized === "failed" || normalized === "error" || normalized === "rejected") {
+    return "bg-[#FDECEC] text-[#9A2D2D] border-[#9A2D2D]/20 dark:bg-red-950 dark:text-red-300 dark:border-red-900";
+  }
+  return "bg-muted text-foreground border-border";
 }
 
 const ADMIN_ORDER_COLOR_SWATCHES: Record<string, string> = {
@@ -251,6 +296,7 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       queryClient.invalidateQueries({ queryKey: ["bill"] });
       queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders", "fonepay-audit", variables.id] });
       toast({ title: "Order status updated" });
     },
     onError: (error) => {
@@ -274,6 +320,7 @@ export default function AdminOrders() {
       queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
       queryClient.invalidateQueries({ queryKey: ["bill"] });
       queryClient.invalidateQueries({ queryKey: ["bill", "order", variables.id] });
+      queryClient.invalidateQueries({ queryKey: ["admin", "orders", "fonepay-audit", variables.id] });
       toast({ title: "Payment verification updated" });
     },
     onError: (error) => {
@@ -418,6 +465,44 @@ export default function AdminOrders() {
     staleTime: 0,
     retry: false,
   });
+
+  const isFonepayOrder = selectedOrder?.paymentMethod === "fonepay";
+
+  const {
+    data: fonepayAudit,
+    isLoading: fonepayAuditLoading,
+  } = useQuery<AdminOrderFonepayAudit | null>({
+    queryKey: ["admin", "orders", "fonepay-audit", selectedOrder?.id],
+    enabled: Boolean(selectedOrder?.id && isFonepayOrder),
+    queryFn: () => {
+      if (!selectedOrder?.id) return Promise.resolve(null);
+      return fetchAdminOrderFonepayAudit(selectedOrder.id);
+    },
+    staleTime: 30_000,
+    retry: false,
+  });
+
+  const fonepayRuntime = fonepayAudit?.runtimeStatus ?? null;
+  const fonepayIssues = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...(fonepayRuntime?.web.issues ?? []),
+          ...(fonepayRuntime?.qr.issues ?? []),
+        ]),
+      ),
+    [fonepayRuntime],
+  );
+  const fonepayWarnings = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...(fonepayRuntime?.web.warnings ?? []),
+          ...(fonepayRuntime?.qr.warnings ?? []),
+        ]),
+      ),
+    [fonepayRuntime],
+  );
 
   const STATUS_TABS = ['All', 'Pending', 'Processing', 'Completed', 'Cancelled', 'POS'];
 
@@ -1135,6 +1220,207 @@ export default function AdminOrders() {
                     )}
                   </div>
                 </div>
+
+                {isFonepayOrder && (
+                  <div
+                    className="space-y-3 xl:col-span-2"
+                    data-testid="admin-order-fonepay-audit"
+                  >
+                    <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-[#2C3E2D] dark:text-foreground/80">
+                      <QrCode className="h-4 w-4" /> Fonepay Audit
+                    </h4>
+                    <div className="grid gap-4 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.2fr)]">
+                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 shadow-sm dark:border-border dark:bg-muted/30">
+                        {fonepayAuditLoading ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Loading Fonepay readiness...
+                          </div>
+                        ) : fonepayRuntime ? (
+                          <div className="space-y-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] uppercase tracking-wider",
+                                  fonepayRuntime.web.available
+                                    ? "bg-[#E8F3EB] text-[#2C5234]"
+                                    : "bg-[#FDECEC] text-[#9A2D2D]",
+                                )}
+                              >
+                                Redirect {fonepayRuntime.web.available ? "ready" : "blocked"}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] uppercase tracking-wider",
+                                  fonepayRuntime.qr.available
+                                    ? "bg-[#E8F3EB] text-[#2C5234]"
+                                    : "bg-[#FDECEC] text-[#9A2D2D]",
+                                )}
+                              >
+                                Dynamic QR {fonepayRuntime.qr.available ? "ready" : "blocked"}
+                              </Badge>
+                              {fonepayAudit?.latestPrn ? (
+                                <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                  PRN {fonepayAudit.latestPrn.slice(-10)}
+                                </Badge>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-2 text-sm">
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                  Recommended Mode
+                                </div>
+                                <div className="mt-1 font-medium capitalize">
+                                  {fonepayRuntime.recommendedMode === "qr"
+                                    ? "Dynamic QR"
+                                    : fonepayRuntime.recommendedMode === "redirect"
+                                      ? "Hosted redirect"
+                                      : "Unavailable"}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                  Callback URL
+                                </div>
+                                <div className="mt-1 break-all text-xs text-foreground">
+                                  {fonepayRuntime.callbackUrl ?? "Not resolved"}
+                                </div>
+                                <div className="mt-1 text-[11px] text-muted-foreground">
+                                  Source: {fonepayRuntime.callbackUrlSource === "env" ? "Environment" : "Derived per request"}
+                                </div>
+                              </div>
+                              <div className="rounded-lg border border-[#E5E5E0] bg-muted/30 p-3 text-xs text-muted-foreground dark:border-border">
+                                Bank selection and credentials stay on the hosted Fonepay side. Rare Atelier only stores the order, gateway readiness, and verification trail.
+                              </div>
+                            </div>
+
+                            {fonepayIssues.length > 0 ? (
+                              <div className="rounded-lg border border-[#F7D4D4] bg-[#FFF6F6] p-3 dark:border-red-900 dark:bg-red-950/30">
+                                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#9A2D2D] dark:text-red-300">
+                                  <AlertTriangle className="h-3.5 w-3.5" />
+                                  Gateway issues
+                                </div>
+                                <div className="mt-2 space-y-2 text-xs text-[#7A2424] dark:text-red-200">
+                                  {fonepayIssues.map((issue) => (
+                                    <p key={issue}>{issue}</p>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+
+                            {fonepayWarnings.length > 0 ? (
+                              <div className="rounded-lg border border-[#F1E3B7] bg-[#FFF9E6] p-3 dark:border-yellow-900 dark:bg-yellow-950/30">
+                                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-[#8C5A14] dark:text-yellow-200">
+                                  <ShieldCheck className="h-3.5 w-3.5" />
+                                  Warnings
+                                </div>
+                                <div className="mt-2 space-y-2 text-xs text-[#7A5710] dark:text-yellow-100">
+                                  {fonepayWarnings.map((warning) => (
+                                    <p key={warning}>{warning}</p>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            No Fonepay readiness data available for this order yet.
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-[#E5E5E0] bg-white/85 p-4 shadow-sm dark:border-border dark:bg-muted/30">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                              Event Timeline
+                            </div>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Initiation, callback, and QR verification events stay attached to this order for support and sandbox debugging.
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                            {fonepayAudit?.events.length ?? 0} events
+                          </Badge>
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                          {fonepayAuditLoading ? (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading event history...
+                            </div>
+                          ) : (fonepayAudit?.events.length ?? 0) === 0 ? (
+                            <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                              No Fonepay audit events yet. The next redirect or QR action will appear here automatically.
+                            </div>
+                          ) : (
+                            fonepayAudit?.events.map((event, index) => (
+                              <div
+                                key={event.id}
+                                data-testid={`admin-order-fonepay-event-${index}`}
+                                className="rounded-xl border border-border/60 bg-white/90 p-4 shadow-[0_18px_38px_-30px_rgba(15,23,42,0.45)] dark:bg-card/70"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                        {event.flow.toUpperCase()}
+                                      </Badge>
+                                      <span className="text-sm font-semibold text-foreground">
+                                        {formatFonepayStageLabel(event.stage)}
+                                      </span>
+                                      <Badge
+                                        variant="outline"
+                                        className={cn(
+                                          "text-[10px] uppercase tracking-wider",
+                                          getFonepayStatusBadgeClass(event.status),
+                                        )}
+                                      >
+                                        {event.status}
+                                      </Badge>
+                                    </div>
+                                    {event.message ? (
+                                      <p className="text-sm text-muted-foreground">{event.message}</p>
+                                    ) : null}
+                                  </div>
+                                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                                    {event.createdAt
+                                      ? format(new Date(event.createdAt), "MMM d, yyyy • h:mm a")
+                                      : "—"}
+                                  </span>
+                                </div>
+
+                                {(event.prn || event.uid || event.bankCode) ? (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {event.prn ? (
+                                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                        PRN {event.prn.slice(-10)}
+                                      </Badge>
+                                    ) : null}
+                                    {event.uid ? (
+                                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                        UID {event.uid}
+                                      </Badge>
+                                    ) : null}
+                                    {event.bankCode ? (
+                                      <Badge variant="outline" className="text-[10px] uppercase tracking-wider">
+                                        Bank {event.bankCode}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Additional Actions */}
                 {selectedOrder.status === "completed" && (

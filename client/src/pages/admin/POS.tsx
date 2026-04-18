@@ -22,8 +22,11 @@ import {
   fetchAdminCustomers,
   createAdminCustomer,
   fetchPlatforms,
+  initiateAdminPosFonepaySession,
+  verifyAdminPosFonepaySession,
 } from "@/lib/adminApi";
 import { fetchProductById } from "@/lib/api";
+import { getFonepayQrPreviewSource, resolveFonepayQrPreviewSource } from "@/lib/fonepay";
 import { formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -95,6 +98,15 @@ interface CartItem {
   size?: string | null;
   sku?: string | null;
   availableStock: number;
+}
+
+interface PosFonepaySession {
+  orderId: string;
+  prn: string;
+  amount: string;
+  qrPreviewSrc: string | null;
+  merchantName: string | null;
+  expiresAt: string | null;
 }
 
 function getProductVariants(product: AdminProduct): ProductVariantOption[] {
@@ -238,6 +250,9 @@ export default function AdminPOS() {
     }
   });
   const [showQR, setShowQR] = useState(false);
+  const [fonepaySession, setFonepaySession] = useState<PosFonepaySession | null>(null);
+  const [generatingFonepayQr, setGeneratingFonepayQr] = useState(false);
+  const [pollingFonepayQr, setPollingFonepayQr] = useState(false);
   const [cashRollTick, setCashRollTick] = useState(0);
   const [showPaidCashIcon, setShowPaidCashIcon] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -305,6 +320,14 @@ export default function AdminPOS() {
       setSelectedCategory(categories[0]);
     }
   }, [categories, selectedCategory]);
+
+  useEffect(() => {
+    if (paymentMethod !== "fonepay" && fonepaySession) {
+      setFonepaySession(null);
+      setGeneratingFonepayQr(false);
+      setPollingFonepayQr(false);
+    }
+  }, [fonepaySession, paymentMethod]);
 
   const filteredProducts = useMemo(() => {
     if (!products) return [];
@@ -730,74 +753,85 @@ export default function AdminPOS() {
   };
 
   // Checkout
+  const resetPosSaleState = () => {
+    setCart([]);
+    setCustomerName("Walk-in Customer");
+    setCustomerPhone("");
+    setCashReceived("");
+    setDiscount("0");
+    setNotes("");
+    setPlatformSource("pos");
+    setIsPaid(true);
+    setDeliveryRequired(false);
+    setDeliveryProvider("");
+    setDeliveryLocation("");
+    setDeliveryAddress("");
+    setSelectedCustomer(null);
+    setSocialCustomerName("");
+    setSocialCustomerPhone("");
+    setSocialCustomerEmail("");
+    setSocialDeliveryLocation("");
+    setShowSocialCustomerDialog(false);
+    setFonepaySession(null);
+    setGeneratingFonepayQr(false);
+    setPollingFonepayQr(false);
+  };
+
+  const handleBillCompleted = (newBill: AdminBill) => {
+    setCompletedBill(newBill);
+    resetPosSaleState();
+
+    queryClient.invalidateQueries({ queryKey: ["admin", "products", "pos"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
+    queryClient.invalidateQueries({ queryKey: ["admin", "bills"] });
+  };
+
+  const buildPosCheckoutPayload = () => ({
+    customerName: isSocialDeliverySource
+      ? socialCustomerName.trim()
+      : selectedCustomer
+        ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
+        : (customerName || "Walk-in Customer"),
+    customerEmail: isSocialDeliverySource
+      ? (socialCustomerEmail.trim() || undefined)
+      : selectedCustomer?.email || undefined,
+    customerPhone: isSocialDeliverySource
+      ? socialCustomerPhone.trim()
+      : "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
+    items: cart.map((i) => ({
+      productId: i.productId,
+      productName: i.productName,
+      variantId: i.variantId ?? null,
+      variantColor: i.variantColor ?? "",
+      color: i.variantColor ?? "",
+      size: i.size ?? "",
+      selectedSize: i.size ?? "",
+      sku: i.sku ?? "",
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      lineTotal: i.lineTotal,
+    })),
+    paymentMethod,
+    source: platformSource,
+    isPaid,
+    deliveryRequired: isSocialDeliverySource ? true : deliveryRequired,
+    deliveryProvider: (isSocialDeliverySource || deliveryRequired) ? (deliveryProvider || null) : null,
+    deliveryLocation: isSocialDeliverySource
+      ? socialDeliveryLocation.trim()
+      : (deliveryLocation || null),
+    deliveryAddress: (isSocialDeliverySource || deliveryRequired) ? (deliveryAddress || null) : null,
+    cashReceived: paymentMethod === "cash" ? cashReceivedNum : null,
+    discountAmount,
+    notes: notes || undefined,
+  });
+
   const chargeMutation = useMutation({
-    mutationFn: () =>
-      createPosBill({
-        customerName: isSocialDeliverySource
-          ? socialCustomerName.trim()
-          : selectedCustomer
-            ? `${selectedCustomer.firstName} ${selectedCustomer.lastName}`
-            : (customerName || "Walk-in Customer"),
-        customerEmail: isSocialDeliverySource
-          ? (socialCustomerEmail.trim() || undefined)
-          : selectedCustomer?.email || undefined,
-        customerPhone: isSocialDeliverySource
-          ? socialCustomerPhone.trim()
-          : "phoneNumber" in (selectedCustomer || {}) ? (selectedCustomer as any).phoneNumber : customerPhone || undefined,
-        items: cart.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          variantId: i.variantId ?? null,
-          variantColor: i.variantColor ?? "",
-          color: i.variantColor ?? "",
-          size: i.size ?? "",
-          selectedSize: i.size ?? "",
-          sku: i.sku ?? "",
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          lineTotal: i.lineTotal,
-        })),
-        paymentMethod,
-        source: platformSource,
-        isPaid,
-        deliveryRequired: isSocialDeliverySource ? true : deliveryRequired,
-        deliveryProvider: (isSocialDeliverySource || deliveryRequired) ? (deliveryProvider || null) : null,
-        deliveryLocation: isSocialDeliverySource
-          ? socialDeliveryLocation.trim()
-          : (deliveryLocation || null),
-        deliveryAddress: (isSocialDeliverySource || deliveryRequired) ? (deliveryAddress || null) : null,
-        cashReceived: paymentMethod === "cash" ? cashReceivedNum : null,
-        discountAmount: discountAmount,
-        notes: notes || undefined,
-      }),
+    mutationFn: () => createPosBill(buildPosCheckoutPayload()),
 
     onSuccess: (newBill) => {
-      setCompletedBill(newBill);
-      setCart([]);
-      setCustomerName("Walk-in Customer");
-      setCustomerPhone("");
-      setCashReceived("");
-      setDiscount("0");
-      setNotes("");
-      setPlatformSource("pos");
-      setIsPaid(true);
-      setDeliveryRequired(false);
-      setDeliveryProvider("");
-      setDeliveryLocation("");
-      setDeliveryAddress("");
-      setSelectedCustomer(null);
-      setSocialCustomerName("");
-      setSocialCustomerPhone("");
-      setSocialCustomerEmail("");
-      setSocialDeliveryLocation("");
-      setShowSocialCustomerDialog(false);
-
-      queryClient.invalidateQueries({ queryKey: ["admin", "products", "pos"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "orders"] });
-      queryClient.invalidateQueries({ queryKey: ["admin", "bills"] });
-
+      handleBillCompleted(newBill);
       toast({ title: "Checkout successful" });
     },
 
@@ -811,6 +845,65 @@ export default function AdminPOS() {
     }
   });
 
+  const handleStartFonepayPayment = async () => {
+    setGeneratingFonepayQr(true);
+
+    try {
+      const payload = buildPosCheckoutPayload();
+      const result = await initiateAdminPosFonepaySession({
+        orderId: fonepaySession?.orderId,
+        ...payload,
+        paymentMethod: "fonepay",
+        isPaid: true,
+      });
+
+      if (!result.success || !result.data) {
+        toast({
+          title: result.error || "Failed to start Fonepay payment",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const immediatePreview = getFonepayQrPreviewSource(result.data.qrPayload);
+      setFonepaySession({
+        orderId: result.data.orderId,
+        prn: result.data.prn,
+        amount: result.data.amount,
+        qrPreviewSrc: immediatePreview,
+        merchantName: result.data.qrPayload.merchantName,
+        expiresAt: result.data.qrPayload.expiresAt,
+      });
+
+      try {
+        const resolvedPreview = await resolveFonepayQrPreviewSource(result.data.qrPayload);
+        setFonepaySession((current) =>
+          current && current.prn === result.data?.prn
+            ? { ...current, qrPreviewSrc: resolvedPreview }
+            : current,
+        );
+      } catch {
+        setFonepaySession((current) =>
+          current && current.prn === result.data?.prn
+            ? { ...current, qrPreviewSrc: immediatePreview }
+            : current,
+        );
+      }
+
+      toast({
+        title: "Fonepay QR ready",
+        description: "Ask the customer to scan the live QR. The bill will be issued automatically after payment.",
+      });
+    } catch (error) {
+      toast({
+        title: error instanceof Error ? error.message : "Failed to start Fonepay payment",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingFonepayQr(false);
+    }
+  };
+
   const handleCheckout = () => {
     if (isSocialDeliverySource && !hasValidSocialDetails()) {
       setShowSocialCustomerDialog(true);
@@ -821,6 +914,12 @@ export default function AdminPOS() {
       });
       return;
     }
+
+    if (paymentMethod === "fonepay") {
+      void handleStartFonepayPayment();
+      return;
+    }
+
     chargeMutation.mutate();
   };
 
@@ -924,6 +1023,47 @@ export default function AdminPOS() {
       deliveryProvider.trim(),
     );
   };
+
+  useEffect(() => {
+    if (!fonepaySession?.prn) return;
+
+    let cancelled = false;
+
+    const poll = async () => {
+      setPollingFonepayQr(true);
+
+      try {
+        const result = await verifyAdminPosFonepaySession(fonepaySession.prn);
+        if (cancelled || !result.success || !result.data) return;
+
+        if (result.data.paymentStatus && result.data.bill) {
+          handleBillCompleted(result.data.bill);
+          toast({
+            title: "Fonepay payment confirmed",
+            description: "POS bill issued successfully.",
+          });
+          return;
+        }
+      } catch {
+        if (cancelled) return;
+      } finally {
+        if (!cancelled) {
+          setPollingFonepayQr(false);
+        }
+      }
+    };
+
+    void poll();
+    const intervalId = window.setInterval(() => {
+      void poll();
+    }, 4000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      setPollingFonepayQr(false);
+    };
+  }, [fonepaySession?.prn, toast]);
 
   // ── Loading session? Show skeleton ──────────────────
   if (sessionLoading) {
@@ -1891,16 +2031,89 @@ export default function AdminPOS() {
                 </div>
               )}
 
-              {(paymentMethod === "fonepay" || paymentMethod === "bank_transfer") && (
+              {paymentMethod === "fonepay" && (
+                <div className="rounded-xl border border-[#E5E5E0] dark:border-border bg-muted/10 p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Live Fonepay QR</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generate a dynamic QR and issue the bill automatically after payment clears.
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      {pollingFonepayQr ? "Waiting for payment" : fonepaySession ? "QR active" : "Ready"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-dashed border-[#D9DED8] bg-white/90 p-4 dark:border-border dark:bg-card">
+                    {fonepaySession?.qrPreviewSrc ? (
+                      <div className="space-y-3">
+                        <div className="flex justify-center">
+                          <button
+                            type="button"
+                            className="bg-white rounded-xl border border-[#E5E5E0] dark:border-border p-3 shadow-sm"
+                            onClick={() => setShowQR(true)}
+                          >
+                            <OptimizedImage
+                              src={fonepaySession.qrPreviewSrc}
+                              alt="Fonepay dynamic QR"
+                              className="w-full max-w-[220px] rounded-lg"
+                            />
+                          </button>
+                        </div>
+                        <div className="space-y-1 text-xs text-muted-foreground">
+                          <div>
+                            Exact amount: <span className="font-semibold text-foreground">NPR {fonepaySession.amount}</span>
+                          </div>
+                          <div>
+                            Session ref: <span className="font-semibold text-foreground">{fonepaySession.prn.slice(-10)}</span>
+                          </div>
+                          {fonepaySession.merchantName ? (
+                            <div>
+                              Merchant: <span className="font-semibold text-foreground">{fonepaySession.merchantName}</span>
+                            </div>
+                          ) : null}
+                          {fonepaySession.expiresAt ? (
+                            <div>
+                              Valid until: <span className="font-semibold text-foreground">{fonepaySession.expiresAt}</span>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex min-h-[220px] flex-col items-center justify-center gap-3 text-center">
+                        {(generatingFonepayQr || pollingFonepayQr) ? (
+                          <>
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#2C3E2D]/20 border-t-[#2C3E2D]" />
+                            <p className="text-sm font-medium text-foreground">
+                              {generatingFonepayQr ? "Preparing the live QR..." : "Checking payment status..."}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <Smartphone className="h-7 w-7 text-muted-foreground" />
+                            <p className="text-sm font-medium text-foreground">
+                              Generate the Fonepay QR when the customer is ready to scan.
+                            </p>
+                            <p className="max-w-xs text-xs text-muted-foreground">
+                              This is the recommended POS flow for fast Nepal in-store payments.
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {paymentMethod === "bank_transfer" && (
                 <div className="rounded-xl border border-[#E5E5E0] dark:border-border bg-muted/10 p-4 space-y-3">
-                  <p className="text-sm font-medium text-center">
-                    Scan to pay via Fonepay / Bank Transfer
-                  </p>
+                  <p className="text-sm font-medium text-center">Scan to pay via Bank Transfer</p>
                   <div className="flex justify-center">
                     <div className="bg-white rounded-xl border border-[#E5E5E0] dark:border-border p-3 shadow-sm">
                       <OptimizedImage
                         src={BANK_QR_IMAGE_PATH}
-                        alt="Fonepay or Bank Transfer QR"
+                        alt="Bank Transfer QR"
                         className="w-full max-w-[220px] rounded-lg"
                       />
                     </div>
@@ -2007,17 +2220,27 @@ export default function AdminPOS() {
 
               <Button
                 className="w-full bg-[#2C3E2D] hover:bg-[#1A251B] text-white h-12 text-base font-medium"
-                loading={chargeMutation.isPending}
-                loadingText="Processing..."
+                loading={chargeMutation.isPending || generatingFonepayQr}
+                loadingText={paymentMethod === "fonepay" ? "Generating QR..." : "Processing..."}
                 disabled={
                   cart.length === 0 ||
                   (paymentMethod === "cash" && cashReceivedNum < total) ||
-                  (isSocialDeliverySource && !hasValidSocialDetails())
+                  (isSocialDeliverySource && !hasValidSocialDetails()) ||
+                  pollingFonepayQr
                 }
                 onClick={handleCheckout}
               >
-                <CheckCircle2 className="mr-2 h-5 w-5" />
-                Charge {formatPrice(total)}
+                {paymentMethod === "fonepay" ? (
+                  <>
+                    <Smartphone className="mr-2 h-5 w-5" />
+                    {fonepaySession ? "Refresh Fonepay QR" : `Generate Fonepay QR for ${formatPrice(total)}`}
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-2 h-5 w-5" />
+                    Charge {formatPrice(total)}
+                  </>
+                )}
               </Button>
 
               {paymentMethod === "esewa" && (
@@ -2045,14 +2268,19 @@ export default function AdminPOS() {
           <div className="flex flex-col items-center gap-4 py-4">
             <div className="bg-white border-2 border-[#2C3E2D] rounded-xl p-4 shadow-sm">
               <OptimizedImage
-                src={ESEWA_QR_IMAGE_PATH}
-                alt="eSewa QR"
+                src={paymentMethod === "fonepay" && fonepaySession?.qrPreviewSrc ? fonepaySession.qrPreviewSrc : ESEWA_QR_IMAGE_PATH}
+                alt={paymentMethod === "fonepay" ? "Fonepay QR" : "eSewa QR"}
                 className="w-full max-w-[200px] rounded-lg"
               />
             </div>
-            <p className="text-sm font-medium">Scan to pay via eSewa</p>
+            <p className="text-sm font-medium">
+              Scan to pay via {paymentMethod === "fonepay" ? "Fonepay" : "eSewa"}
+            </p>
             <p className="text-sm text-muted-foreground">
-              Total Amount: <span className="font-bold text-foreground">{formatPrice(total)}</span>
+              Total Amount:{" "}
+              <span className="font-bold text-foreground">
+                {paymentMethod === "fonepay" && fonepaySession ? `NPR ${fonepaySession.amount}` : formatPrice(total)}
+              </span>
             </p>
           </div>
           <DialogFooter>

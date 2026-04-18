@@ -694,13 +694,15 @@ export default function Products() {
                           ratio={isStuffyClone ? 5 / 6 : 3 / 5}
                           sizes={cardSizes}
                           prioritize={shouldPrioritize}
+                          primaryPreset="productCardPreview"
+                          secondaryPreset="productCardPreviewHover"
                           hoverMode={isStuffyClone ? "slide" : "fade"}
                           aspectClassName={`shop-card-frame rounded-none border ${
                             isStuffyClone
                               ? "border-neutral-100 bg-white"
                               : "border-neutral-100 bg-white"
                           }`}
-                          imageClassName="object-cover"
+                          imageClassName="object-contain"
                           renderOverlay={() => (
                             <>
                               {showNewInBadge ? (

@@ -3,13 +3,10 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, ImageIcon, Check, X } from "lucide-react";
+import { Loader2, ImageIcon, Check, X, ImageOff } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  fetchAdminImages,
-  fetchAdminStorefrontImageLibrary,
-  type AdminImageAsset,
-} from "@/lib/adminApi";
+import { fetchAdminImages, type AdminImageAsset } from "@/lib/adminApi";
+import { buildStorefrontImageUrl } from "@/lib/storefrontImage";
 
 /**
  * Stacking: admin full-screen overlays + layout use z-40–z-70. Radix Dialog defaults to z-50,
@@ -19,6 +16,27 @@ import {
 const PORTAL_Z_BACKDROP = 10000;
 const PORTAL_Z_PANEL = 10001;
 
+type LibraryCategory =
+  | "all"
+  | "product"
+  | "model"
+  | "website"
+  | "landing_page"
+  | "collection_page"
+  | "payment_qr"
+  | "our_services";
+
+const CATEGORY_TABS: Array<{ value: LibraryCategory; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "product", label: "Products" },
+  { value: "model", label: "Models" },
+  { value: "website", label: "Website" },
+  { value: "landing_page", label: "Landing" },
+  { value: "collection_page", label: "Collections" },
+  { value: "payment_qr", label: "Payment QR" },
+  { value: "our_services", label: "Services" },
+];
+
 interface MediaLibraryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,8 +45,19 @@ interface MediaLibraryProps {
   selectedUrl?: string;
   selectedUrls?: string[];
   mode?: "single" | "multiple";
-  /** When undefined or "all", fetches images from all categories. Otherwise filters by this category. */
+  /** When undefined or "all", shows category tabs. Otherwise locks to this category. */
   category?: string;
+}
+
+function getThumbUrl(url: string, thumbnailUrl?: string | null): string {
+  if (thumbnailUrl && thumbnailUrl !== url) return thumbnailUrl;
+  const resized = buildStorefrontImageUrl(url, {
+    width: 320,
+    height: 320,
+    fit: "cover",
+    quality: 60,
+  });
+  return resized || url;
 }
 
 export function MediaLibrary({
@@ -41,14 +70,20 @@ export function MediaLibrary({
   mode = "single",
   category,
 }: MediaLibraryProps) {
-  type ProviderFilter = "all" | "cloudinary" | "tigris" | "local";
+  type ProviderFilter = "all" | "cloudinary" | "tigris";
   const [mounted, setMounted] = React.useState(false);
   const [offset, setOffset] = React.useState(0);
   const [accumulated, setAccumulated] = React.useState<AdminImageAsset[]>([]);
   const [hasMore, setHasMore] = React.useState(true);
   const [providerFilter, setProviderFilter] = React.useState<ProviderFilter>("all");
+  const [categoryTab, setCategoryTab] = React.useState<LibraryCategory>("all");
+  const [erroredUrls, setErroredUrls] = React.useState<Set<string>>(new Set());
 
-  const pageSize = 120;
+  const pageSize = 60;
+
+  const parentCategory = typeof category === "string" ? category : "";
+  const parentCategoryLocked = parentCategory.length > 0 && parentCategory !== "all";
+  const effectiveCategory = parentCategoryLocked ? parentCategory : categoryTab;
 
   React.useEffect(() => {
     setMounted(true);
@@ -73,53 +108,20 @@ export function MediaLibrary({
   }, [open]);
 
   const { data: pageAssets = [], isLoading, isFetching, isError } = useQuery<AdminImageAsset[]>({
-    queryKey: ["admin", "images", { category: category ?? "all", provider: providerFilter, limit: pageSize, offset }],
+    queryKey: [
+      "admin",
+      "images",
+      { category: effectiveCategory, provider: providerFilter, limit: pageSize, offset },
+    ],
     queryFn: async () => {
       try {
-        const assets = await fetchAdminImages({
-          ...(category && category !== "all" ? { category } : {}),
+        return await fetchAdminImages({
+          ...(effectiveCategory && effectiveCategory !== "all" ? { category: effectiveCategory } : {}),
           ...(providerFilter !== "all" ? { provider: providerFilter } : {}),
           limit: pageSize,
           offset,
         });
-
-        if (assets.length === 0 && offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
-          const local = await fetchAdminStorefrontImageLibrary();
-          return local.map((item) => ({
-            id: item.relPath,
-            url: item.url,
-            thumbnailUrl: item.url,
-            previewUrl: item.url,
-            provider: "local",
-            category: "local",
-            publicId: null,
-            filename: item.filename,
-            bytes: null,
-            width: null,
-            height: null,
-            createdAt: "",
-          }));
-        }
-
-        return assets;
       } catch {
-        if (offset === 0 && (providerFilter === "all" || providerFilter === "local")) {
-          const local = await fetchAdminStorefrontImageLibrary();
-          return local.map((item) => ({
-            id: item.relPath,
-            url: item.url,
-            thumbnailUrl: item.url,
-            previewUrl: item.url,
-            provider: "local",
-            category: "local",
-            publicId: null,
-            filename: item.filename,
-            bytes: null,
-            width: null,
-            height: null,
-            createdAt: "",
-          }));
-        }
         throw new Error("Failed to load media library");
       }
     },
@@ -131,7 +133,8 @@ export function MediaLibrary({
     setOffset(0);
     setAccumulated([]);
     setHasMore(true);
-  }, [open, category, providerFilter]);
+    setErroredUrls(new Set());
+  }, [open, effectiveCategory, providerFilter]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -157,7 +160,7 @@ export function MediaLibrary({
         .map((asset) => ({
           id: asset.id,
           url: asset.url,
-          thumbnailUrl: asset.thumbnailUrl ?? asset.url,
+          thumbnailUrl: asset.thumbnailUrl ?? null,
           filename: asset.filename ?? asset.url.split("/").pop() ?? "image",
           category: asset.category || "uncategorized",
           provider: asset.provider || "unknown",
@@ -226,13 +229,30 @@ export function MediaLibrary({
           <p className="text-sm text-muted-foreground mt-1">
             Select an image from previously uploaded assets.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(["all", "cloudinary", "tigris", "local"] as const).map((provider) => (
+
+          {!parentCategoryLocked && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {CATEGORY_TABS.map((tab) => (
+                <Button
+                  key={tab.value}
+                  type="button"
+                  variant={categoryTab === tab.value ? "default" : "outline"}
+                  className="h-7 rounded-full px-3 text-[10px] uppercase tracking-[0.16em]"
+                  onClick={() => setCategoryTab(tab.value)}
+                >
+                  {tab.label}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {(["all", "cloudinary", "tigris"] as const).map((provider) => (
               <Button
                 key={provider}
                 type="button"
                 variant={providerFilter === provider ? "default" : "outline"}
-                className="h-8 rounded-full px-3 text-[10px] uppercase tracking-[0.18em]"
+                className="h-7 rounded-full px-3 text-[10px] uppercase tracking-[0.18em]"
                 onClick={() => setProviderFilter(provider)}
               >
                 {provider}
@@ -272,6 +292,8 @@ export function MediaLibrary({
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-2">
                 {images.map((img) => {
                   const isSelected = effectiveSelected.has(img.url);
+                  const isErrored = erroredUrls.has(img.url);
+                  const thumbSrc = getThumbUrl(img.url, img.thumbnailUrl);
                   return (
                     <button
                       key={img.id}
@@ -294,16 +316,31 @@ export function MediaLibrary({
                         isSelected && "ring-2 ring-primary bg-primary/5 shadow-md scale-[0.98]",
                       )}
                     >
-                      <img
-                        src={img.thumbnailUrl ?? img.url}
-                        alt=""
-                        className={cn(
-                          "h-full w-full object-cover transition-transform duration-300 group-hover:scale-105",
-                          isSelected && "opacity-90",
-                        )}
-                        loading="lazy"
-                        decoding="async"
-                      />
+                      {isErrored ? (
+                        <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-neutral-100 to-neutral-200 text-neutral-400 dark:from-neutral-900 dark:to-neutral-800">
+                          <ImageOff className="h-6 w-6" />
+                          <span className="mt-1 text-[9px] uppercase tracking-[0.14em]">Unavailable</span>
+                        </div>
+                      ) : (
+                        <img
+                          src={thumbSrc}
+                          alt=""
+                          className={cn(
+                            "h-full w-full object-cover transition-transform duration-300 group-hover:scale-105",
+                            isSelected && "opacity-90",
+                          )}
+                          loading="lazy"
+                          decoding="async"
+                          onError={() => {
+                            setErroredUrls((prev) => {
+                              if (prev.has(img.url)) return prev;
+                              const next = new Set(prev);
+                              next.add(img.url);
+                              return next;
+                            });
+                          }}
+                        />
+                      )}
                       {isSelected && (
                         <div className="absolute inset-0 flex items-center justify-center bg-primary/10">
                           <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg">

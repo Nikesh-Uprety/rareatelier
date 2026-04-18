@@ -54,7 +54,7 @@ type ImageCategory =
   | "payment_qr"
   | "our_services";
 
-type ProviderKey = "cloudinary" | "tigris" | "local";
+type ProviderKey = "cloudinary" | "tigris";
 type ViewMode = "grid" | "list";
 type ExpiryMode = "none" | "custom";
 
@@ -81,11 +81,6 @@ const PROVIDER_META: Record<
     label: "Tigris",
     quality: "High",
     description: "Crisp output for retail and merchandising needs.",
-  },
-  local: {
-    label: "Local",
-    quality: "Standard",
-    description: "Local workspace storage for quick testing.",
   },
 };
 

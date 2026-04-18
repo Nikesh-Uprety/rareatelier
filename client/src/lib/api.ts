@@ -122,6 +122,72 @@ type OrderMutationResponse = {
   attemptsRemaining?: number;
 };
 
+export interface FonepayWebPaymentInit {
+  success: boolean;
+  data?: {
+    prn: string;
+    paymentUrl: string;
+    amount: string;
+  };
+  error?: string;
+}
+
+export interface FonepayQrPayload {
+  imageUrl: string | null;
+  imageDataUrl: string | null;
+  rawQrText: string | null;
+  expiresAt: string | null;
+  merchantName: string | null;
+}
+
+export interface FonepayQrPaymentInit {
+  success: boolean;
+  data?: {
+    prn: string;
+    amount: string;
+    qrPayload: FonepayQrPayload;
+    qrData: unknown;
+  };
+  error?: string;
+}
+
+export interface FonepayQrVerification {
+  success: boolean;
+  data?: {
+    status: string;
+    paymentStatus: boolean;
+    raw: unknown;
+  };
+  error?: string;
+}
+
+export interface FonepayStatusResponse {
+  success: boolean;
+  data?: {
+    merchantCode: string | null;
+    environment: "sandbox" | "live" | "unknown";
+    callbackUrl: string | null;
+    callbackUrlSource: "env" | "derived";
+    clientUrl: string | null;
+    shopperAction: "hosted_bank_selection";
+    recommendedMode: "redirect" | "qr" | null;
+    web: {
+      available: boolean;
+      issues: string[];
+      warnings: string[];
+      requiresPublicCallback: boolean;
+      hostedLogin: boolean;
+    };
+    qr: {
+      available: boolean;
+      issues: string[];
+      warnings: string[];
+      exactAmountLocked: boolean;
+    };
+  };
+  error?: string;
+}
+
 type JsonResponse<T> = T & {
   success: boolean;
   error?: string;
@@ -513,6 +579,40 @@ export async function createCheckoutSession(orderId: string): Promise<{
     error?: string;
   };
   return json;
+}
+
+export async function createFonepayWebPayment(
+  orderId: string,
+  options?: { remarks1?: string; remarks2?: string },
+): Promise<FonepayWebPaymentInit> {
+  const res = await apiRequest("POST", "/api/payments/fonepay/web/initiate", {
+    orderId,
+    remarks1: options?.remarks1,
+    remarks2: options?.remarks2,
+  });
+  return (await res.json()) as FonepayWebPaymentInit;
+}
+
+export async function createFonepayQrPayment(
+  orderId: string,
+  options?: { remarks1?: string; remarks2?: string },
+): Promise<FonepayQrPaymentInit> {
+  const res = await apiRequest("POST", "/api/payments/fonepay/qr", {
+    orderId,
+    remarks1: options?.remarks1,
+    remarks2: options?.remarks2,
+  });
+  return (await res.json()) as FonepayQrPaymentInit;
+}
+
+export async function verifyFonepayQrPayment(prn: string): Promise<FonepayQrVerification> {
+  const res = await apiRequest("GET", `/api/payments/fonepay/qr/${encodeURIComponent(prn)}`);
+  return (await res.json()) as FonepayQrVerification;
+}
+
+export async function fetchFonepayStatus(): Promise<FonepayStatusResponse> {
+  const res = await apiRequest("GET", "/api/payments/fonepay/status");
+  return (await res.json()) as FonepayStatusResponse;
 }
 
 export async function simulateStripePaymentSuccess(orderId: string): Promise<{

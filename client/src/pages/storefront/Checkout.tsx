@@ -3,20 +3,29 @@ import { Link, useLocation } from "wouter";
 import { type CartState, useCartStore } from "@/store/cart";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Trash2, ShoppingBag, Banknote, BadgePercent, Sparkles, ArrowLeft } from "lucide-react";
 import { DeliveryLocationSelect } from "@/components/DeliveryLocationSelect";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   cacheLatestOrder,
   cachePendingCheckout,
   clearPendingCheckout,
   confirmOrderVerification,
   createOrder,
+  fetchFonepayStatus,
   requestOrderVerification,
   type OrderInput,
   validatePromoCode,
 } from "@/lib/api";
+import {
+  FONEPAY_PROVIDER_CHARGE_NOTE,
+  FONEPAY_QR_BENEFIT_RATE,
+  FONEPAY_QR_PROMO_CEILING_RATE,
+  FONEPAY_RARE_ATELIER_FEE_NPR,
+  getFonepayEstimatedQrSavings,
+} from "@/lib/fonepay";
 import { formatPrice } from "@/lib/format";
 import { buildStorefrontPresetImageUrl, getStorefrontImagePresetOptions } from "@/lib/storefrontImage";
 import { StorefrontSeo } from "@/components/seo/StorefrontSeo";
@@ -183,6 +192,11 @@ export default function Checkout() {
   const [, setLocation] = useLocation();
   const { items, clearCart, hasHydrated = true } = useCartStore((state: CartState) => state);
   const { toast } = useToast();
+  const fonepayStatusQuery = useQuery({
+    queryKey: ["payments", "fonepay", "status"],
+    queryFn: fetchFonepayStatus,
+    staleTime: 30_000,
+  });
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [formError, setFormError] = useState<string | null>(null);
@@ -194,6 +208,15 @@ export default function Checkout() {
   const [address, setAddress] = useState("");
   const [landmark, setLandmark] = useState("");
   const [phone, setPhone] = useState("");
+  const fonepayGateway = fonepayStatusQuery.data?.data;
+  const fonepayAnyAvailable = Boolean(fonepayGateway?.web.available || fonepayGateway?.qr.available);
+  const isFonepayUnavailable =
+    fonepayStatusQuery.isError || (fonepayStatusQuery.isSuccess && !fonepayAnyAvailable);
+
+  useEffect(() => {
+    if (paymentMethod !== "fonepay" || !isFonepayUnavailable) return;
+    setPaymentMethod("cash_on_delivery");
+  }, [isFonepayUnavailable, paymentMethod]);
 
   useEffect(() => {
     try {
@@ -283,6 +306,7 @@ export default function Checkout() {
   }, [subtotal, appliedPromo]);
 
   const total = subtotal + shipping - discountAmount;
+  const fonepayEstimatedSavings = getFonepayEstimatedQrSavings(total);
   const verificationResendRemainingSeconds = verificationResendAvailableAt
     ? Math.max(0, Math.ceil((verificationResendAvailableAt - verificationTimerNow) / 1000))
     : 0;
@@ -457,7 +481,10 @@ export default function Checkout() {
       setStep(2);
       toast({
         title: "Proceed to payment",
-        description: "Upload your payment screenshot to complete and create the order.",
+        description:
+          paymentMethod === "fonepay"
+            ? "Continue to the Fonepay handoff to choose hosted checkout or a live exact-amount QR."
+            : "Upload your payment screenshot to complete and create the order.",
       });
       setLocation(`/checkout/payment?method=${paymentMethod}`);
       return;
@@ -942,7 +969,7 @@ export default function Checkout() {
                   Payment Option <span className="text-red-500">*</span>
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Choose how you&apos;d like to complete the order. Online methods move you to payment proof, while cash on delivery finishes directly from checkout.
+                  Choose how you&apos;d like to complete the order. Online methods move you to the correct payment handoff, while cash on delivery finishes directly from checkout.
                 </p>
               </div>
               <span className="hidden text-[10px] font-bold uppercase tracking-[0.24em] text-muted-foreground md:block">
@@ -954,16 +981,38 @@ export default function Checkout() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {PAYMENT_OPTIONS.map((opt) => {
                   const isSelected = paymentMethod === opt.id;
+                  const isFonepayOption = opt.id === "fonepay";
+                  const isDisabled = isFonepayOption && isFonepayUnavailable;
+                  const availabilityMessage = isFonepayOption
+                    ? fonepayStatusQuery.isError
+                      ? "Availability check failed. Please use another payment method for now."
+                      : fonepayGateway?.qr.available && fonepayGateway?.web.available
+                        ? "Hosted bank redirect and live QR are both available."
+                        : fonepayGateway?.qr.available
+                          ? "Live exact-amount QR is available right now."
+                          : fonepayGateway?.web.available
+                            ? "Hosted bank redirect is available right now."
+                            : fonepayGateway?.web.issues[0] || fonepayGateway?.qr.issues[0] || null
+                    : null;
+                  const benefitDescription = isFonepayOption
+                    ? `Estimated QR savings for this cart: NPR ${fonepayEstimatedSavings} at ${Math.round(FONEPAY_QR_BENEFIT_RATE * 100)}% when the current partner offer is active.`
+                    : null;
                   return (
                     <button
                       key={opt.id}
                       type="button"
                       data-testid={`checkout-payment-${opt.id}`}
-                      onClick={() => setPaymentMethod(opt.id)}
+                      onClick={() => {
+                        if (isDisabled) return;
+                        setPaymentMethod(opt.id);
+                      }}
+                      disabled={isDisabled}
                       className={`group relative flex min-h-[104px] flex-col justify-between border px-5 py-4 text-left transition-all ${
-                        isSelected
-                          ? "border-zinc-900 bg-zinc-50"
-                          : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50/60"
+                        isDisabled
+                          ? "cursor-not-allowed border-zinc-200 bg-zinc-100/70 opacity-70"
+                          : isSelected
+                            ? "border-zinc-900 bg-zinc-50"
+                            : "border-zinc-200 bg-white hover:border-zinc-400 hover:bg-zinc-50/60"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -1000,6 +1049,39 @@ export default function Checkout() {
                         <span className="block text-sm font-semibold uppercase tracking-[0.16em] text-zinc-900">
                           {opt.label}
                         </span>
+                        {availabilityMessage ? (
+                          <span
+                            className={`block text-[11px] leading-5 ${
+                              isDisabled ? "text-red-600" : "text-muted-foreground"
+                            }`}
+                          >
+                            {availabilityMessage}
+                          </span>
+                        ) : null}
+                        {isFonepayOption ? (
+                          <div
+                            data-testid="checkout-fonepay-benefits"
+                            className="mt-3 flex flex-col gap-2 text-left"
+                          >
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="secondary">
+                                {Math.round(FONEPAY_QR_BENEFIT_RATE * 100)}% QR benefit
+                              </Badge>
+                              <Badge variant="outline">
+                                Promo windows up to {Math.round(FONEPAY_QR_PROMO_CEILING_RATE * 100)}%
+                              </Badge>
+                              <Badge variant="outline">
+                                Rare Atelier fee NPR {FONEPAY_RARE_ATELIER_FEE_NPR}
+                              </Badge>
+                            </div>
+                            <span className="block text-[11px] leading-5 text-muted-foreground">
+                              {benefitDescription}
+                            </span>
+                            <span className="block text-[11px] leading-5 text-muted-foreground">
+                              {FONEPAY_PROVIDER_CHARGE_NOTE}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </button>
                   );
@@ -1188,7 +1270,10 @@ export default function Checkout() {
                   <div className="w-24 h-32 bg-muted shrink-0 relative rounded-sm overflow-hidden">
                     {checkoutImage ? (
                       <img
-                        src={buildStorefrontPresetImageUrl(checkoutImage, "galleryThumb") || checkoutImage}
+                        src={
+                          buildStorefrontPresetImageUrl(checkoutImage, "galleryThumb") ||
+                          checkoutImage
+                        }
                         alt={item.product.name}
                         className="w-full h-full object-cover"
                         loading="lazy"

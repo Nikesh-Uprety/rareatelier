@@ -1557,12 +1557,6 @@ export class PgStorage implements IStorage {
   }
 
   async createOrder(data: CreateOrderInput): Promise<Order> {
-    // IMPORTANT:
-    // Some deployed/staged DBs don't have `orders.delivery_location`.
-    // Using drizzle's insert with the full `orders` definition can still attempt
-    // to reference that missing column. To stay backward compatible, we
-    // explicitly omit it from the INSERT and store the selected location in
-    // `location_coordinates` instead.
     const result = await db.execute(
       sql`
         INSERT INTO "orders" (
@@ -1579,6 +1573,7 @@ export class PgStorage implements IStorage {
           "status",
           "payment_method",
           "location_coordinates",
+          "delivery_location",
           "promo_code",
           "promo_discount_amount",
           "source",
@@ -1600,6 +1595,7 @@ export class PgStorage implements IStorage {
           'pending',
           ${data.paymentMethod ?? "cash_on_delivery"},
           ${data.locationCoordinates ?? null},
+          ${data.deliveryLocation ?? null},
           ${data.promoCode ?? null},
           ${data.promoDiscountAmount ?? 0},
           ${data.source ?? "website"},
@@ -4695,6 +4691,8 @@ export class MemStorage implements IStorage {
       id: crypto.randomUUID(),
       category: data.category,
       url: data.url ?? null,
+      thumbnailUrl: data.thumbnailUrl ?? null,
+      previewUrl: data.previewUrl ?? null,
       provider: data.provider,
       assetType: data.assetType ?? "file",
       publicId: data.publicId ?? null,

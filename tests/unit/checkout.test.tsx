@@ -31,6 +31,7 @@ const mockCartState = {
 
 const createOrderMock = vi.fn();
 const validatePromoCodeMock = vi.fn();
+const fetchFonepayStatusMock = vi.fn();
 const cacheLatestOrderMock = vi.fn();
 const cachePendingCheckoutMock = vi.fn();
 const clearPendingCheckoutMock = vi.fn();
@@ -52,6 +53,7 @@ vi.mock("@/hooks/use-toast", () => ({
 vi.mock("@/lib/api", () => ({
   createOrder: (...args: unknown[]) => createOrderMock(...args),
   validatePromoCode: (...args: unknown[]) => validatePromoCodeMock(...args),
+  fetchFonepayStatus: (...args: unknown[]) => fetchFonepayStatusMock(...args),
   cacheLatestOrder: (...args: unknown[]) => cacheLatestOrderMock(...args),
   cachePendingCheckout: (...args: unknown[]) => cachePendingCheckoutMock(...args),
   clearPendingCheckout: (...args: unknown[]) => clearPendingCheckoutMock(...args),
@@ -69,17 +71,43 @@ const SAVED_FORM_DATA = {
 
 describe("Checkout", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     setLocationMock.mockReset();
     clearCartMock.mockReset();
     toastMock.mockReset();
     createOrderMock.mockReset();
     validatePromoCodeMock.mockReset();
+    fetchFonepayStatusMock.mockReset();
     cacheLatestOrderMock.mockReset();
     cachePendingCheckoutMock.mockReset();
     clearPendingCheckoutMock.mockReset();
+    fetchFonepayStatusMock.mockResolvedValue({
+      success: true,
+      data: {
+        merchantCode: "NBQM",
+        environment: "sandbox",
+        callbackUrl: "https://rare.test/api/payments/fonepay/callback",
+        callbackUrlSource: "derived",
+        clientUrl: "https://rare.test",
+        shopperAction: "hosted_bank_selection",
+        recommendedMode: "qr",
+        web: {
+          available: true,
+          issues: [],
+          warnings: [],
+          requiresPublicCallback: true,
+          hostedLogin: true,
+        },
+        qr: {
+          available: true,
+          issues: [],
+          warnings: [],
+          exactAmountLocked: true,
+        },
+      },
+    });
     useCartStoreMock.mockImplementation(() => mockCartState);
     localStorage.clear();
-    vi.restoreAllMocks();
     Object.defineProperty(window, "location", {
       value: new URL("http://localhost/?returning=1"),
       writable: true,
@@ -250,5 +278,38 @@ describe("Checkout", () => {
       );
       expect(setLocationMock).toHaveBeenCalledWith("/checkout/payment?method=esewa");
     });
+  });
+
+  it("disables Fonepay when the gateway status reports no available flow", async () => {
+    fetchFonepayStatusMock.mockResolvedValueOnce({
+      success: true,
+      data: {
+        merchantCode: "NBQM",
+        environment: "sandbox",
+        callbackUrl: "http://localhost:5000/api/payments/fonepay/callback",
+        callbackUrlSource: "derived",
+        clientUrl: "http://localhost:5000",
+        shopperAction: "hosted_bank_selection",
+        recommendedMode: null,
+        web: {
+          available: false,
+          issues: ["Hosted Fonepay cannot return to localhost."],
+          warnings: [],
+          requiresPublicCallback: true,
+          hostedLogin: true,
+        },
+        qr: {
+          available: false,
+          issues: ["Dynamic QR merchant credentials are missing."],
+          warnings: [],
+          exactAmountLocked: true,
+        },
+      },
+    });
+
+    renderWithProviders(<Checkout />);
+
+    expect(await screen.findByText("Hosted Fonepay cannot return to localhost.")).toBeInTheDocument();
+    expect(screen.getByTestId("checkout-payment-fonepay")).toBeDisabled();
   });
 });
